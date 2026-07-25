@@ -70,6 +70,11 @@ shared-state 的权威源码在 `hermes-authoring/mcp/shared_state_mcp.py`；部
 服务按“根 `.env` → profile `.env`”加载，后者优先；默认 profile 不重复加载同一文件。
 新增 profile 或重建服务后必须检查这两个 `EnvironmentFile` 的顺序。
 
+- companion 不承载 OpenAI-compatible API，profile `.env` 必须显式设置
+  `API_SERVER_ENABLED=false` 并清空继承的 `API_SERVER_KEY`，避免与 lingjun 抢占 8642。
+- 当前本机代理会破坏 Weixin iLink/CDN 的 TLS 隧道；根和 lingjun 的 `NO_PROXY`
+  必须包含 `ilinkai.weixin.qq.com`、`novac2c.cdn.weixin.qq.com`。
+
 ### Kanban 工具暴露
 
 Kanban 工具门禁同时兼容旧根字段 `config.toolsets` 和当前
