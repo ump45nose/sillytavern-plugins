@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["${CRM_BIND_ADDRESS:-127.0.0.1}:${CRM_HOST_PORT:-8080}:8080"]
     volumes: ["crm-data:/data"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]

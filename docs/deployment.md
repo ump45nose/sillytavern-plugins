@@ -10,6 +10,8 @@ https://crm.example.com/auth/callback
 
 `PUBLIC_BASE_URL` 必须与公网源完全一致，且 `GITHUB_ALLOWED_USER_IDS` 使用不可变的 GitHub 数字用户 ID，不使用登录名。为 `WECHAT_WEBHOOK_SECRET` 和 `OAUTH_JWT_SIGNING_KEY` 分别生成随机长密钥。
 
+`CRM_BIND_ADDRESS` 和 `CRM_HOST_PORT` 只控制宿主机端口映射；应用容器内仍监听 `PORT=8080`。仅供同机 Hermes 使用时保持绑定 `127.0.0.1`，需要接入容器化反向代理时再绑定 NAS 内网地址并配置防火墙。
+
 首次启动与升级：
 
 ```bash
