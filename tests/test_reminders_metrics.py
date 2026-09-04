@@ -27,6 +27,9 @@ def test_weekly_generation_caps_at_three_and_prioritizes_important_date():
     generated = ReminderService(repository).generate_weekly(now)
     assert len(generated) == 3
     assert important.id in {item.id for item in generated}
+    # 同一周重复调度不得为剩余联系人继续追加，周预算仍为三条。
+    ReminderService(repository).generate_weekly(now + timedelta(days=1))
+    assert len(repository.list_reminders()) == 3
 
 
 def test_weekly_metrics_uses_controllable_actions_only():

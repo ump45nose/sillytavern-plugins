@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -10,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import String, cast, create_engine, event, or_, select, text
+from sqlalchemy import String, cast, create_engine, event, func, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -141,6 +142,68 @@ class CrmRepository:
                 return False
             session.delete(person)
             return True
+
+    def merge_people(self, source_person_id: str, target_person_id: str) -> tuple[Person, dict]:
+        """事务化合并人物资料与全部业务记录，并删除来源人物。"""
+
+        if source_person_id == target_person_id:
+            raise ValueError("source and target person must differ")
+        with self.transaction() as session:
+            source = self._require_person(session, source_person_id)
+            target = self._require_person(session, target_person_id)
+            before = {"source": self.to_dict(source), "target": self.to_dict(target)}
+
+            # 稳定字段以目标人物为准，目标缺失时才从来源补齐。
+            target.aliases = sorted(
+                set(target.aliases) | set(source.aliases) | {source.display_name}
+            )
+            merged_contacts = {key: list(values) for key, values in target.contact_methods.items()}
+            for key, values in source.contact_methods.items():
+                merged_contacts[key] = sorted(set(merged_contacts.get(key, [])) | set(values))
+            target.contact_methods = merged_contacts
+            organizations = {
+                json.dumps(item, ensure_ascii=False, sort_keys=True): item
+                for item in [*target.organizations, *source.organizations]
+            }
+            target.organizations = list(organizations.values())
+            target.tags = sorted(set(target.tags) | set(source.tags))
+            target.pronouns = target.pronouns or source.pronouns
+            target.relationship_to_me = target.relationship_to_me or source.relationship_to_me
+            target.contact_interval_days = (
+                target.contact_interval_days or source.contact_interval_days
+            )
+            target.profile_notes = target.profile_notes or source.profile_notes
+            if source.last_interaction_at and (
+                target.last_interaction_at is None
+                or source.last_interaction_at > target.last_interaction_at
+            ):
+                target.last_interaction_at = source.last_interaction_at
+
+            # 先重绑互动和提醒；Fact 的复合唯一键需要逐条去重后再迁移。
+            for interaction in session.scalars(
+                select(Interaction).where(Interaction.person_id == source.id)
+            ):
+                interaction.person_id = target.id
+            for reminder in session.scalars(
+                select(Reminder).where(Reminder.person_id == source.id)
+            ):
+                reminder.person_id = target.id
+            for fact in list(session.scalars(select(Fact).where(Fact.person_id == source.id))):
+                duplicate = session.scalar(
+                    select(Fact).where(
+                        Fact.person_id == target.id,
+                        Fact.fact_type == fact.fact_type,
+                        Fact.content_hash == fact.content_hash,
+                    )
+                )
+                if duplicate is not None:
+                    session.delete(fact)
+                else:
+                    fact.person_id = target.id
+            session.flush()
+            session.delete(source)
+            session.flush()
+            return target, before
 
     @staticmethod
     def _complete_eligible_reminders(session: Session, interaction: Interaction) -> list[Reminder]:
@@ -406,6 +469,21 @@ class CrmRepository:
                     )
                 )
                 is not None
+            )
+
+    def count_follow_ups_created_between(self, start: datetime, end: datetime) -> int:
+        """统计本周由提醒策略创建的主动联系项，维持跨进程调用预算。"""
+
+        with self._sessions() as session:
+            return int(
+                session.scalar(
+                    select(func.count(Reminder.id)).where(
+                        Reminder.reminder_type == "follow_up",
+                        Reminder.created_at >= ensure_utc(start),
+                        Reminder.created_at < ensure_utc(end),
+                    )
+                )
+                or 0
             )
 
     def import_wechat_batch(

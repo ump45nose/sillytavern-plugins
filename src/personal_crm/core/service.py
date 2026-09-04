@@ -89,6 +89,11 @@ class CrmService:
 
         return self.repo.search_people(query, limit)
 
+    def merge_people(self, source_person_id: str, target_person_id: str):
+        """合并重复人物，目标资料优先并保留双方全部业务历史。"""
+
+        return self.repo.merge_people(source_person_id, target_person_id)
+
     def record_interaction(
         self,
         *,

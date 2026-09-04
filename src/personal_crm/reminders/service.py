@@ -48,6 +48,8 @@ class ReminderService:
                 reason=template.reason,
                 suggested_message=template.suggested_message,
                 recurrence_rule="yearly",
+                created_at=current,
+                updated_at=current,
             )
 
     def generate_weekly(self, now: datetime | None = None, limit: int = 3) -> list[Any]:
@@ -60,7 +62,13 @@ class ReminderService:
         selected = self.repo.list_open_important_reminders(
             current, current + timedelta(days=7), limit
         )
-        remaining = limit - len(selected)
+        week_start = (current - timedelta(days=current.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        generated_this_week = self.repo.count_follow_ups_created_between(
+            week_start, week_start + timedelta(days=7)
+        )
+        remaining = limit - len(selected) - generated_this_week
         if remaining <= 0:
             return selected
 
@@ -83,6 +91,8 @@ class ReminderService:
                 due_at=due_at,
                 reason=f"距离上次互动已达到 {person.contact_interval_days} 天",
                 suggested_message="最近想到你，近来怎么样？",
+                created_at=current,
+                updated_at=current,
             )
             selected.append(reminder)
         return selected

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -9,6 +12,7 @@ from fastapi.responses import RedirectResponse
 
 from personal_crm.core import CrmService
 from personal_crm.mcp import http_app
+from personal_crm.reminders import ReminderService
 from personal_crm.storage import CrmRepository
 from personal_crm.webhook import create_router
 
@@ -21,15 +25,36 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
     runtime = settings or Settings()
     repo = repository or CrmRepository(runtime.database_url)
     service = CrmService(repo)
+    reminder_service = ReminderService(repo)
     mcp_application = http_app(service, runtime)
+
+    async def run_reminder_scheduler() -> None:
+        """定期补齐本周提醒；持久化周预算保证重复执行不会超额。"""
+
+        while True:
+            try:
+                reminder_service.generate_weekly()
+            except Exception:
+                # 后台生成失败不能拖垮查询服务，日志只记录异常而不包含人物内容。
+                logging.getLogger(__name__).exception("每周提醒生成失败")
+            await asyncio.sleep(max(runtime.reminder_poll_seconds, 60))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """把 FastMCP 的生命周期纳入主 ASGI 应用。"""
 
         del app
+        scheduler_task = None
         async with mcp_application.lifespan(mcp_application):
-            yield
+            if runtime.reminder_scheduler_enabled:
+                scheduler_task = asyncio.create_task(run_reminder_scheduler())
+            try:
+                yield
+            finally:
+                if scheduler_task is not None:
+                    scheduler_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await scheduler_task
 
     app = FastAPI(title="Personal CRM", lifespan=lifespan)
     app.state.repository = repo

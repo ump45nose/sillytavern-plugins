@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     github_read_only_user_ids: str = ""
     oauth_jwt_signing_key: str = ""
     allowed_client_redirect_uris: str = "http://localhost:*,http://127.0.0.1:*"
+    reminder_scheduler_enabled: bool = True
+    reminder_poll_seconds: int = 3600
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 

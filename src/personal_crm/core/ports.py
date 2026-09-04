@@ -18,6 +18,9 @@ class RepositoryPort(Protocol):
     def search_people(self, query: str = "", limit: int = 50) -> list[Any]:
         """搜索人物。"""
 
+    def merge_people(self, source_person_id: str, target_person_id: str) -> tuple[Any, dict]:
+        """合并重复人物及其业务记录。"""
+
     def record_interaction(self, **values: Any) -> tuple[Any, bool, int]:
         """记录互动并返回实体、是否新增和完成提醒数。"""
 
@@ -55,6 +58,9 @@ class ReminderRepositoryPort(Protocol):
 
     def has_open_follow_up(self, person_id: str) -> bool:
         """判断是否已有未完成的跟进提醒。"""
+
+    def count_follow_ups_created_between(self, start: datetime, end: datetime) -> int:
+        """统计本周已生成的主动联系提醒。"""
 
     def create_reminder(self, **values: Any) -> Any:
         """创建新提醒。"""

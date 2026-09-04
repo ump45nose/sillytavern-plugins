@@ -146,3 +146,38 @@ def test_backup_and_integrity(tmp_path):
     CrmService(repository).create_person("备份对象")
     target = repository.backup(tmp_path / "backup.db")
     assert target.exists() and repository.integrity_check() == "ok"
+
+
+def test_person_merge_preserves_history_and_deduplicates_facts(crm):
+    """验证人物合并保留互动提醒，并处理目标侧已有的相同 Fact。"""
+
+    repository, service = crm
+    target = service.create_person(
+        "主联系人", aliases=["目标别名"], contact_methods={"email": ["a@example.com"]}
+    )
+    source = service.create_person(
+        "重复联系人", aliases=["来源别名"], contact_methods={"wxid": ["wxid_source"]}
+    )
+    service.record_fact(person_id=target.id, fact_type="preference", content="喜欢茶")
+    service.record_fact(person_id=source.id, fact_type="preference", content="喜欢茶")
+    service.record_fact(person_id=source.id, fact_type="boundary", content="不喜欢临时邀约")
+    interaction, _, _ = service.record_interaction(
+        person_id=source.id,
+        occurred_at=datetime(2026, 9, 4, tzinfo=UTC),
+        direction="mutual",
+        summary="见面聊天",
+    )
+    reminder = service.create_reminder(
+        person_id=source.id,
+        due_at=datetime(2026, 10, 1, tzinfo=UTC),
+        reason="下次联系",
+    )
+
+    merged, before = service.merge_people(source.id, target.id)
+    assert before["source"]["id"] == source.id
+    assert repository.get_person(source.id) is None
+    assert {"目标别名", "来源别名", "重复联系人"} <= set(merged.aliases)
+    assert merged.contact_methods["wxid"] == ["wxid_source"]
+    assert repository.list_interactions(target.id)[0].id == interaction.id
+    assert repository.get_reminder(reminder.id).person_id == target.id
+    assert len(repository.list_facts(target.id)) == 2
