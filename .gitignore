@@ -10,5 +10,6 @@ dist/
 build/
 *.egg-info/
 .env
+connector.env
 data/
 connector-state/
