@@ -1,13 +1,16 @@
 """MCP 工具注册和本地调用测试。"""
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
+from fastmcp.server.auth.oidc_proxy import OIDCConfiguration
 from fastmcp.server.auth.redirect_validation import validate_redirect_uri
 
 from personal_crm.app.server import create_app
 from personal_crm.app.settings import Settings
 from personal_crm.core import CrmService
-from personal_crm.mcp import create_mcp
+from personal_crm.mcp import _auth_check, create_mcp
 from personal_crm.storage import CrmRepository
 
 
@@ -44,17 +47,78 @@ async def test_mcp_registers_required_tools_and_calls_person_flow():
     assert search.structured_content["result"][0]["display_name"] == "MCP 联系人"
 
 
-def test_oauth_requires_allowed_github_user_ids():
-    """验证生产 OAuth 不允许遗漏 GitHub 用户白名单。"""
+def oidc_settings(tmp_path, **overrides):
+    """构造不包含真实秘密的 Authelia OIDC 测试配置。"""
+
+    values = {
+        "public_base_url": "https://crm.example.com",
+        "oidc_discovery_url": "https://auth.example.com/.well-known/openid-configuration",
+        "oidc_client_id": "personal-crm",
+        "oidc_client_secret": "test-client-secret",
+        "oidc_authorized_usernames": "yuwk",
+        "oauth_jwt_signing_key": "j" * 32,
+        "oauth_storage_encryption_key": "s" * 32,
+        "oauth_storage_path": str(tmp_path / "oauth"),
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+@pytest.fixture
+def mock_oidc_discovery(monkeypatch):
+    """隔离网络并返回满足 OIDC 严格校验的 Authelia 元数据。"""
+
+    metadata = OIDCConfiguration.model_validate(
+        {
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/api/oidc/authorization",
+            "token_endpoint": "https://auth.example.com/api/oidc/token",
+            "jwks_uri": "https://auth.example.com/jwks.json",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+            "scopes_supported": ["openid", "profile", "offline_access"],
+        }
+    )
+    monkeypatch.setattr(
+        OIDCConfiguration,
+        "get_oidc_configuration",
+        classmethod(lambda cls, config_url, *, strict, timeout_seconds: metadata),
+    )
+
+
+def test_oauth_requires_authorized_oidc_usernames(tmp_path):
+    """验证生产 OAuth 不允许遗漏 Authelia 用户白名单。"""
 
     service = CrmService(CrmRepository("sqlite:///:memory:"))
-    settings = Settings(
-        public_base_url="https://crm.example.com",
-        github_client_id="client",
-        github_client_secret="secret",
+    settings = oidc_settings(
+        tmp_path,
+        oidc_authorized_usernames="",
     )
-    with pytest.raises(ValueError, match="GITHUB_ALLOWED_USER_IDS"):
+    with pytest.raises(ValueError, match="OIDC_AUTHORIZED_USERNAMES"):
         create_mcp(service, settings)
+
+
+def test_oidc_authorization_uses_upstream_preferred_username(tmp_path):
+    """验证 OIDCProxy 的嵌套上游用户名控制读写权限。"""
+
+    settings = oidc_settings(
+        tmp_path,
+        oidc_authorized_usernames="yuwk,reader",
+        oidc_read_only_usernames="reader",
+    )
+    read_check = _auth_check(settings, write=False)
+    write_check = _auth_check(settings, write=True)
+    owner = SimpleNamespace(
+        token=SimpleNamespace(claims={"upstream_claims": {"preferred_username": "yuwk"}})
+    )
+    reader = SimpleNamespace(token=SimpleNamespace(claims={"preferred_username": "reader"}))
+    stranger = SimpleNamespace(token=SimpleNamespace(claims={"preferred_username": "other"}))
+    assert read_check(owner)
+    assert write_check(owner)
+    assert read_check(reader)
+    assert not write_check(reader)
+    assert not read_check(stranger)
 
 
 def test_default_oauth_redirect_allowlist_supports_agents_and_ai_vendors():
@@ -122,16 +186,12 @@ def test_streamable_http_mcp_initialize():
     assert "personal-crm" in response.text
 
 
-def test_oauth_discovery_compatibility_endpoint():
+def test_oauth_discovery_compatibility_endpoint(
+    tmp_path, mock_oidc_discovery
+):
     """验证无后缀发现端点直接返回 ChatGPT 可消费的资源元数据。"""
 
-    settings = Settings(
-        public_base_url="https://crm.example.com",
-        github_client_id="client",
-        github_client_secret="secret",
-        github_allowed_user_ids="12345678",
-        oauth_jwt_signing_key="a-long-local-only-test-signing-key",
-    )
+    settings = oidc_settings(tmp_path)
     repository = CrmRepository("sqlite:///:memory:")
     with TestClient(create_app(settings, repository)) as client:
         response = client.get("/.well-known/oauth-protected-resource", follow_redirects=False)
@@ -140,3 +200,4 @@ def test_oauth_discovery_compatibility_endpoint():
     assert response.json() == metadata.json()
     assert metadata.status_code == 200
     assert metadata.json()["resource"] == "https://crm.example.com/mcp"
+    assert metadata.json()["scopes_supported"] == ["openid", "profile", "offline_access"]
