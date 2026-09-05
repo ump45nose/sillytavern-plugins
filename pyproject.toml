@@ -6,12 +6,17 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.13,<2",
+  # OAuth 协议栈与已通过 ChatGPT 验收的 SmartSearch 镜像保持一致。
+  "authlib==1.7.2",
   "fastapi>=0.115,<1",
-  "fastmcp>=2.0,<4",
+  # 与已通过 ChatGPT 网页端 OAuth 验收的 SmartSearch 保持完全一致，避免认证协议实现漂移。
+  "fastmcp==3.4.4",
   "httpx>=0.27,<1",
+  "mcp==1.28.1",
   "python-dotenv>=1.0,<2",
   "pydantic-settings>=2.6,<3",
   "sqlalchemy>=2.0,<3",
+  "starlette==1.3.1",
   "uvicorn[standard]>=0.30,<1",
 ]
 
