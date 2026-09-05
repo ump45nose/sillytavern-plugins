@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from fastmcp.server.auth.redirect_validation import validate_redirect_uri
 
 from personal_crm.app.server import create_app
 from personal_crm.app.settings import Settings
@@ -56,14 +57,41 @@ def test_oauth_requires_allowed_github_user_ids():
         create_mcp(service, settings)
 
 
-def test_default_oauth_redirect_allowlist_supports_agents_and_chatgpt():
-    """验证默认回调白名单同时覆盖本机 Agent 与 ChatGPT 官方回调。"""
+def test_default_oauth_redirect_allowlist_supports_agents_and_ai_vendors():
+    """验证默认白名单覆盖本机 Agent 与 GPT、Claude、Grok 厂商域名。"""
 
     redirect_uris = Settings().client_redirect_uris
     assert "http://localhost:*" in redirect_uris
     assert "http://127.0.0.1:*" in redirect_uris
-    assert "https://chatgpt.com/connector/oauth/*" in redirect_uris
-    assert "https://chatgpt.com/connector_platform_oauth_redirect" in redirect_uris
+    for vendor_pattern in {
+        "https://chatgpt.com/*",
+        "https://*.chatgpt.com/*",
+        "https://openai.com/*",
+        "https://*.openai.com/*",
+        "https://claude.ai/*",
+        "https://*.claude.ai/*",
+        "https://anthropic.com/*",
+        "https://*.anthropic.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*",
+        "https://x.ai/*",
+        "https://*.x.ai/*",
+        "https://x.com/*",
+        "https://*.x.com/*",
+    }:
+        assert vendor_pattern in redirect_uris
+    # 使用真实形态的路径验证主域名和子域名，而不只检查配置字符串是否存在。
+    for callback_uri in {
+        "https://chatgpt.com/backend-api/aip/connectors/mcp/oauth_config",
+        "https://oauth.openai.com/connector/callback",
+        "https://claude.ai/api/mcp/auth_callback",
+        "https://console.anthropic.com/oauth/callback",
+        "https://grok.com/oauth/callback",
+        "https://console.x.ai/oauth/callback",
+        "https://x.com/i/oauth/callback",
+    }:
+        assert validate_redirect_uri(callback_uri, redirect_uris)
+    assert not validate_redirect_uri("https://evil.example/oauth/callback", redirect_uris)
 
 
 def test_streamable_http_mcp_initialize():
