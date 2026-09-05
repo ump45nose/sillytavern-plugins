@@ -6,6 +6,7 @@ import hmac
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
@@ -330,6 +331,28 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
 
 
 def http_app(service: Any, settings: Any):
-    """返回仅使用 Streamable HTTP 的 ASGI 应用。"""
+    """返回适配公网 Agent 客户端的无状态 Streamable HTTP ASGI 应用。"""
 
-    return create_mcp(service, settings).http_app(path="/mcp", transport="streamable-http")
+    public_hostname = urlsplit(settings.public_base_url).hostname
+    # Cloudflare/Nginx 保留公网 Host；本地与容器名只用于健康检查和离线验收。
+    allowed_hosts = ["localhost", "127.0.0.1", "personal-crm"]
+    if public_hostname:
+        allowed_hosts.insert(0, public_hostname)
+    # 显式覆盖 ChatGPT、Claude、Grok 的网页来源，避免浏览器客户端被来源保护误拒绝。
+    allowed_origins = [
+        "https://chatgpt.com",
+        "https://claude.ai",
+        "https://claude.com",
+        "https://grok.com",
+        "https://x.ai",
+        "https://x.com",
+    ]
+    return create_mcp(service, settings).http_app(
+        path="/mcp",
+        transport="streamable-http",
+        # ChatGPT 的 OAuth 回调会立即初始化并枚举工具；无状态模式避免等待 GET 事件流超时。
+        stateless_http=True,
+        json_response=False,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )

@@ -177,7 +177,7 @@ def test_default_oauth_redirect_allowlist_supports_agents_and_ai_vendors():
 
 
 def test_streamable_http_mcp_initialize():
-    """验证真实 /mcp 传输可完成 JSON-RPC initialize 握手。"""
+    """验证无状态 /mcp 可完成初始化和工具枚举，不依赖长期 GET 会话。"""
 
     repository = CrmRepository("sqlite:///:memory:")
     # 上下文管理器会启动父 ASGI 与 FastMCP 共享的 lifespan。
@@ -199,9 +199,20 @@ def test_streamable_http_mcp_initialize():
                 },
             },
         )
+        tools_response = client.post(
+            "/mcp",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+            },
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
+    assert "mcp-session-id" not in response.headers
     assert "personal-crm" in response.text
+    assert tools_response.status_code == 200
+    assert "search_people" in tools_response.text
 
 
 def test_oauth_discovery_compatibility_endpoint(
