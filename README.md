@@ -41,7 +41,7 @@ uv run personal-crm backup /safe/path/personal-crm.db
 - P0：四表、迁移、Repository、事务、备份恢复和领域测试已实现。
 - P1：十四个 MCP 工具、本地 `initialize` 与工具调用已实现。
 - P2：每周三条上限、重要日期优先、cadence、自动完成和周绩效已实现。
-- P3：GitHub OAuth 与用户 ID 白名单代码、反代样例已实现；NAS 公网部署以及 Hermes、Codex、Claude 实机鉴权仍待环境验收。
+- P3：Authelia OIDCProxy 与用户名白名单代码、反代样例已实现；各客户端实机鉴权需分别验收。
 - P4：Webhook 共享密钥、严格输入、幂等事务及合成数据测试已实现。
 - P5：五人白名单映射、真实微信 4.1.11 消息流、隐私裁剪、稳定批次和失败重试已实机验证；launchd 常驻与完整 90 天回填仍需持续验收。
 - P6：两周样品期尚未开始，必须在真实使用后再决定扩展数据模型。
@@ -50,7 +50,7 @@ uv run personal-crm backup /safe/path/personal-crm.db
 
 ## 安全与权限
 
-公网模式使用 FastMCP 的 GitHub OAuth Provider。GitHub OAuth 本身申请 `read:user`、`user:email`；CRM 的有效权限由配置映射：`GITHUB_ALLOWED_USER_IDS` 对应 `crm:read` 和 `crm:write`，其中列入 `GITHUB_READ_ONLY_USER_IDS` 的账号仅有 `crm:read`。这两个 CRM scope 是服务端权限语义，不会伪装成 GitHub 签发的自定义 scope。
+公网模式使用与 SmartSearch 相同的 FastMCP `OIDCProxy` 对接 Authelia。上游申请 `openid profile offline_access`，并从 `preferred_username` 映射 CRM 权限：`OIDC_AUTHORIZED_USERNAMES` 可读写，列入 `OIDC_READ_ONLY_USERNAMES` 的账号只读。动态 MCP 客户端仍由 OIDCProxy 管理，Authelia 只需登记固定的 `personal-crm` 客户端。
 
 只向反代暴露 `/mcp`、OAuth 路由、`/healthz` 和精确的微信 Webhook 路径。所有秘密仅从环境变量或密钥管理注入；数据库和日志不得出现完整微信正文。
 

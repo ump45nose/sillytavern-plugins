@@ -2,13 +2,13 @@
 
 ## NAS Docker
 
-从 `.env.example` 创建仅管理员可读的 `.env`。GitHub OAuth App 的 callback URL 配为：
+从 `.env.example` 创建仅管理员可读的 `.env`。在 Authelia 中为 CRM 创建独立 OIDC client，callback URL 配为：
 
 ```text
 https://crm.example.com/auth/callback
 ```
 
-`PUBLIC_BASE_URL` 必须与公网源完全一致，且 `GITHUB_ALLOWED_USER_IDS` 使用不可变的 GitHub 数字用户 ID，不使用登录名。为 `WECHAT_WEBHOOK_SECRET` 和 `OAUTH_JWT_SIGNING_KEY` 分别生成随机长密钥。
+`PUBLIC_BASE_URL` 必须与公网源完全一致。OIDC client 使用授权码、刷新令牌、PKCE S256 和 `client_secret_basic`；scope 为 `openid profile offline_access`，claims policy 必须签发 `preferred_username`。为 `WECHAT_WEBHOOK_SECRET`、`OAUTH_JWT_SIGNING_KEY` 和 `OAUTH_STORAGE_ENCRYPTION_KEY` 分别生成随机长密钥，且不要复用 OIDC client secret。
 
 `CRM_BIND_ADDRESS` 和 `CRM_HOST_PORT` 只控制宿主机端口映射；应用容器内仍监听 `PORT=8080`。仅供同机 Hermes 使用时保持绑定 `127.0.0.1`，需要接入容器化反向代理时再绑定 NAS 内网地址并配置防火墙。
 
@@ -27,7 +27,7 @@ HTTPS 反代参考 `deploy/nginx/personal-crm.conf.example`。MCP 流式端点�
 部署后的独立验收顺序：
 
 1. 未登录请求 `/mcp` 返回 401，资源发现文档可访问。
-2. 白名单用户完成 GitHub 登录，非白名单用户无法调用工具。
+2. 白名单用户完成 Authelia 登录，非白名单用户无法调用工具。
 3. 只读用户能查询，但修改工具被拒绝。
 4. Hermes、Codex、Claude 分别完成 `initialize → tools/list → tools/call`。
 

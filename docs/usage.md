@@ -16,7 +16,7 @@ uv run personal-crm integrity
 uv run personal-crm backup /safe/path/personal-crm-backup.db
 ```
 
-本地开发省略 OAuth 配置时，`/mcp` 无鉴权，方便用五个真实联系人验证字段。公网部署必须完整配置 GitHub OAuth 和数字用户 ID 白名单。
+本地开发省略 OAuth 配置时，`/mcp` 无鉴权，方便用五个真实联系人验证字段。公网部署必须完整配置 Authelia OIDC 和用户名白名单。
 
 MCP 提供人物、互动、Fact、Reminder 与周绩效共十四个工具。所有修改工具返回实体 ID 和修改前后摘要；不提供 SQL 工具，也不会自动发送建议话术。
 
