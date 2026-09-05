@@ -32,6 +32,7 @@ CHATLOG_SCOPES=/Users/your-name/Library/Application Support/personal-crm/wechat/
 CHATLOG_PAGE_SIZE=200
 CHATLOG_WINDOW_SECONDS=86400
 CHATLOG_OVERLAP_SECONDS=300
+WECHAT_FACT_EXTRACTION=true
 CHATLOG_POLL_SECONDS=60
 CHATLOG_TIMEOUT=120
 CRM_WEBHOOK_URL=https://crm.example.com/api/v1/webhooks/wechat
@@ -57,6 +58,10 @@ CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --dry-run
 对整个批次（包括空窗口）返回成功且无错误项时，才会原子推进 checkpoint。
 chatlog 读取失败、NAS 5xx 或进程重启均不会丢失水位。
 
-Connector 在解析 `record` 后立即丢弃原始 `content`，不在日志、checkpoint 或
-Webhook 中保存正文。首版只生成“发生一次微信互动”的降级描述，不从正文自动抽取
-Fact；摘要/Fact Agent 将作为后续独立模块接入。
+Connector 在解析 `record` 时只在当前调用栈内使用原始 `content`，随后立即丢弃，
+不在日志、checkpoint 或 Webhook 中保存正文。`WECHAT_FACT_EXTRACTION=true` 会启用
+高置信规则抽取器：仅处理对方明确自述的偏好、边界、人生事件、组织和联系方式，
+并只外发受限结构化 Fact；出站消息、卡片、链接和超长内容不抽取。抽取器通过独立
+Protocol 隔离，后续可替换成本地模型或 Agent，同时保持原文不离开 Mac 的边界。
+启用时还会为每个实际出现消息的白名单会话生成一个可幂等去重的 `contact` Fact，
+用于记录微信来源身份并验证 Fact 链路；它不包含内部账号或会话 ID。
