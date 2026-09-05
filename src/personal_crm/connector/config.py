@@ -23,6 +23,7 @@ class ConnectorConfig:
     chatlog_page_size: int = 200
     chatlog_window_seconds: int = 86400
     chatlog_overlap_seconds: int = 300
+    fact_extraction_enabled: bool = False
     poll_seconds: float = 60.0
     webhook_url: str = ""
     webhook_token: str = ""
@@ -47,6 +48,14 @@ class ConnectorConfig:
             value = os.getenv(name)
             return datetime.fromisoformat(value.replace("Z", "+00:00")) if value else None
 
+        def enabled(name: str, default: bool = False) -> bool:
+            """解析显式布尔开关，未知值保持安全默认。"""
+
+            value = os.getenv(name)
+            if value is None:
+                return default
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+
         contacts = {x.strip() for x in os.getenv("WECHAT_CONTACTS", "").split(",") if x.strip()}
         return cls(
             source_type=os.getenv("WECHAT_SOURCE", "chatlog"),
@@ -58,6 +67,7 @@ class ConnectorConfig:
             chatlog_page_size=int(os.getenv("CHATLOG_PAGE_SIZE", "200")),
             chatlog_window_seconds=int(os.getenv("CHATLOG_WINDOW_SECONDS", "86400")),
             chatlog_overlap_seconds=int(os.getenv("CHATLOG_OVERLAP_SECONDS", "300")),
+            fact_extraction_enabled=enabled("WECHAT_FACT_EXTRACTION"),
             poll_seconds=float(os.getenv("CHATLOG_POLL_SECONDS", "60")),
             webhook_url=os.getenv("CRM_WEBHOOK_URL", ""),
             webhook_token=os.getenv("CRM_WEBHOOK_TOKEN", ""),

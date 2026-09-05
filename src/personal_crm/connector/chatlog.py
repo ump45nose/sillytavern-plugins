@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConnectorConfig, as_datetime
+from .fact_extractor import FactExtractor, NullFactExtractor, RuleBasedFactExtractor
 
 
 class ChatlogSourceError(RuntimeError):
@@ -28,8 +29,15 @@ class SourceBatch:
 class ChatlogMessageSource:
     """通过 stdin/stdout 调用本机 message-stream-v1，不开放入站端口。"""
 
-    def __init__(self, config: ConnectorConfig) -> None:
+    def __init__(
+        self, config: ConnectorConfig, fact_extractor: FactExtractor | None = None
+    ) -> None:
+        """装配消息源和只在本机运行的可替换 Fact 抽取器。"""
+
         self.config = config
+        self.fact_extractor = fact_extractor or (
+            RuleBasedFactExtractor() if config.fact_extraction_enabled else NullFactExtractor()
+        )
 
     def _verified_executable(self) -> Path:
         """验证可执行文件路径及可选 SHA-256，避免静默运行被替换的二进制。"""
@@ -113,9 +121,8 @@ class ChatlogMessageSource:
             end = min(end, self.config.until)
         return start, max(start, end)
 
-    @staticmethod
-    def _event(record: dict[str, Any], scope: dict[str, str]) -> dict[str, Any] | None:
-        """把真实消息立即裁剪为无正文事件，原始 content 不离开当前调用栈。"""
+    def _event(self, record: dict[str, Any], scope: dict[str, str]) -> dict[str, Any] | None:
+        """本机抽取 Fact 后立即裁剪正文，原始 content 不离开当前调用栈。"""
 
         occurred_at = as_datetime(record.get("ts"))
         if occurred_at is None:
@@ -130,13 +137,21 @@ class ChatlogMessageSource:
         event_id = hashlib.sha256(
             json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
+        direction = "outbound" if record.get("is_self") is True else "inbound"
+        try:
+            # 抽取器只接触当前栈中的正文，输出只能是受限结构化 Fact。
+            facts = self.fact_extractor.extract(str(record.get("content") or ""), direction)
+        except Exception:
+            # Fact 是增强信息；抽取失败不能阻断互动同步或推进重试风暴。
+            facts = []
         return {
             "id": event_id,
             "contact": scope["person_name"],
             "wxid": scope["requested_id"],
             "timestamp": occurred_at.isoformat(),
-            "direction": "outbound" if record.get("is_self") is True else "inbound",
+            "direction": direction,
             "message_type": str(record.get("msg_type") or "消息"),
+            "facts": facts,
         }
 
     def read(self, state: dict[str, Any]) -> SourceBatch:
@@ -174,6 +189,7 @@ class ChatlogMessageSource:
             raise ChatlogSourceError(type(error).__name__) from error
 
         events: list[dict[str, Any]] = []
+        identity_fact_scopes: set[int] = set()
         complete = False
         try:
             for line in completed.stdout.splitlines():
@@ -187,6 +203,19 @@ class ChatlogMessageSource:
                         raise ChatlogSourceError("scope_mismatch")
                     event = self._event(frame.get("record") or {}, scopes[scope_index])
                     if event:
+                        if (
+                            self.config.fact_extraction_enabled
+                            and scope_index not in identity_fact_scopes
+                        ):
+                            # 每个读取批次只附带一次来源身份 Fact，供无语义命中时验证链路。
+                            event["facts"].append(
+                                {
+                                    "fact_type": "contact",
+                                    "content": f"微信联系人：{scopes[scope_index]['requested_id']}",
+                                    "confidence": 1.0,
+                                }
+                            )
+                            identity_fact_scopes.add(scope_index)
                         events.append(event)
                 elif frame_type == "complete":
                     complete = True
