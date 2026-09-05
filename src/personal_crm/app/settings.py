@@ -13,11 +13,14 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8080
     public_base_url: str = ""
-    github_client_id: str = ""
-    github_client_secret: str = ""
-    github_allowed_user_ids: str = ""
-    github_read_only_user_ids: str = ""
+    oidc_discovery_url: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_authorized_usernames: str = ""
+    oidc_read_only_usernames: str = ""
     oauth_jwt_signing_key: str = ""
+    oauth_storage_encryption_key: str = ""
+    oauth_storage_path: str = "/data/oauth"
     # 兼容本机 Agent，以及 GPT、Claude、Grok 官方主域名和所有子域名回调。
     allowed_client_redirect_uris: str = (
         "http://localhost:*,http://127.0.0.1:*,"
@@ -36,9 +39,14 @@ class Settings(BaseSettings):
 
     @property
     def oauth_enabled(self) -> bool:
-        """仅在公网 URL 与 GitHub 凭据完整时启用 OAuth。"""
+        """仅在公网 URL 与 Authelia OIDC 凭据完整时启用 OAuth。"""
 
-        return bool(self.public_base_url and self.github_client_id and self.github_client_secret)
+        return bool(
+            self.public_base_url
+            and self.oidc_discovery_url
+            and self.oidc_client_id
+            and self.oidc_client_secret
+        )
 
     @staticmethod
     def _csv(value: str) -> set[str]:
@@ -47,16 +55,16 @@ class Settings(BaseSettings):
         return {item.strip() for item in value.split(",") if item.strip()}
 
     @property
-    def allowed_user_ids(self) -> set[str]:
-        """允许读取 CRM 的 GitHub 数字用户 ID。"""
+    def authorized_usernames(self) -> set[str]:
+        """允许读取 CRM 的 Authelia 用户名。"""
 
-        return self._csv(self.github_allowed_user_ids)
+        return self._csv(self.oidc_authorized_usernames)
 
     @property
-    def read_only_user_ids(self) -> set[str]:
-        """只能调用读取工具的 GitHub 数字用户 ID。"""
+    def read_only_usernames(self) -> set[str]:
+        """只能调用读取工具的 Authelia 用户名。"""
 
-        return self._csv(self.github_read_only_user_ids)
+        return self._csv(self.oidc_read_only_usernames)
 
     @property
     def client_redirect_uris(self) -> list[str]:
