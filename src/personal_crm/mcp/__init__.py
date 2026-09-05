@@ -10,7 +10,11 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
-from key_value.aio.stores.filetree import FileTreeStore
+from key_value.aio.stores.filetree import (
+    FileTreeStore,
+    FileTreeV1CollectionSanitizationStrategy,
+    FileTreeV1KeySanitizationStrategy,
+)
 from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
 
 from personal_crm.core.domain import ensure_utc, utcnow
@@ -77,7 +81,14 @@ def _provider(settings: Any) -> tuple[OIDCProxy | None, FileTreeStore | None]:
     storage_path = Path(settings.oauth_storage_path)
     storage_path.mkdir(parents=True, exist_ok=True, mode=0o700)
     storage_path.chmod(0o700)
-    raw_store = FileTreeStore(data_directory=storage_path)
+    # CIMD 的 client_id 是 URL；必须清洗斜杠等文件名字符，否则写入会形成不存在的子目录。
+    raw_store = FileTreeStore(
+        data_directory=storage_path,
+        key_sanitization_strategy=FileTreeV1KeySanitizationStrategy(storage_path),
+        collection_sanitization_strategy=FileTreeV1CollectionSanitizationStrategy(
+            storage_path
+        ),
+    )
     encrypted_store = FernetEncryptionWrapper(
         raw_store,
         source_material=settings.oauth_storage_encryption_key,

@@ -10,7 +10,7 @@ from fastmcp.server.auth.redirect_validation import validate_redirect_uri
 from personal_crm.app.server import create_app
 from personal_crm.app.settings import Settings
 from personal_crm.core import CrmService
-from personal_crm.mcp import _auth_check, create_mcp
+from personal_crm.mcp import _auth_check, _provider, create_mcp
 from personal_crm.storage import CrmRepository
 
 
@@ -119,6 +119,24 @@ def test_oidc_authorization_uses_upstream_preferred_username(tmp_path):
     assert read_check(reader)
     assert not write_check(reader)
     assert not read_check(stranger)
+
+
+@pytest.mark.asyncio
+async def test_oidc_storage_accepts_cimd_url_client_id(tmp_path, mock_oidc_discovery):
+    """验证 ChatGPT CIMD URL 经文件名清洗后可持久化，不会被斜杠拆成目录。"""
+
+    _provider_instance, raw_store = _provider(oidc_settings(tmp_path))
+    assert raw_store is not None
+    await raw_store.put(
+        key="https://chatgpt.com/oauth/client.json",
+        value={"registered": True},
+        collection="mcp-oauth-proxy-clients",
+    )
+    stored = await raw_store.get(
+        key="https://chatgpt.com/oauth/client.json",
+        collection="mcp-oauth-proxy-clients",
+    )
+    assert stored == {"registered": True}
 
 
 def test_default_oauth_redirect_allowlist_supports_agents_and_ai_vendors():
