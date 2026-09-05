@@ -11,6 +11,7 @@ import pytest
 
 from personal_crm.connector.chatlog import ChatlogMessageSource, ChatlogSourceError
 from personal_crm.connector.checkpoint import load, save
+from personal_crm.connector.cli import _output
 from personal_crm.connector.config import ConnectorConfig
 from personal_crm.connector.sync import WeChatConnector
 
@@ -277,3 +278,14 @@ def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):
 
     with pytest.raises(ChatlogSourceError, match="incomplete_stream"):
         ChatlogMessageSource(chatlog_config(tmp_path, scopes)).read({})
+
+
+def test_watch_output_only_contains_batch_aggregates(tmp_path):
+    """验证常驻日志不落人物名、互动摘要或其他逐条数据。"""
+
+    connector, _ = make_connector(tmp_path, [event()])
+    result = connector.sync_once(dry_run=True)
+    output = _output(result, compact=True)
+    assert output["interaction_count"] == 1
+    assert "interactions" not in output
+    assert "Alice" not in json.dumps(output)
