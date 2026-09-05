@@ -25,15 +25,26 @@ MCP 提供人物、互动、Fact、Reminder 与周绩效共十四个工具。所
 为 Connector 单独创建不提交到 Git 的 `connector.env`：
 
 ```dotenv
-WELINK_BASE_URL=http://127.0.0.1:18790
-WELINK_PATH=/api/messages
+WECHAT_SOURCE=chatlog
+CHATLOG_EXECUTABLE=/Users/your-name/Library/Application Support/personal-crm/bin/chatlog-keeper
+CHATLOG_EXPECTED_SHA256=replace-with-release-sha256
+CHATLOG_SCOPES=/Users/your-name/Library/Application Support/personal-crm/wechat/whitelist-scopes.json
+CHATLOG_PAGE_SIZE=200
+CHATLOG_WINDOW_SECONDS=86400
+CHATLOG_OVERLAP_SECONDS=300
+CHATLOG_POLL_SECONDS=60
+CHATLOG_TIMEOUT=120
 CRM_WEBHOOK_URL=https://crm.example.com/api/v1/webhooks/wechat
 CRM_WEBHOOK_TOKEN=replace-with-webhook-secret
 CRM_CHECKPOINT=/Users/your-name/Library/Application Support/personal-crm/checkpoint.json
-WECHAT_CONTACTS=wxid_alice,wxid_bob
+WECHAT_CONTACTS=visible_wechat_id_alice,visible_wechat_id_bob
 WECHAT_SINCE=2026-06-06T00:00:00Z
-WELINK_TIMEOUT=15
 ```
+
+`CHATLOG_SCOPES` 是权限 `0600` 的本地 JSON 数组，每项包含
+`requested_id/person_name/account_id/conversation_id/conversation_type`。其中
+`requested_id` 必须与 `WECHAT_CONTACTS` 完全一致；账号和内部会话 ID 只留在 Mac，
+不会写入 Webhook。二进制应从已审计 Release 固定到私有目录，并配置 SHA-256。
 
 先做不推进 checkpoint 的 dry run：
 
@@ -41,6 +52,11 @@ WELINK_TIMEOUT=15
 CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --dry-run
 ```
 
-确认输出只包含摘要和结构化 Fact 后，再去掉 `--dry-run`。只有 NAS 对整个批次返回成功且无错误项时，Connector 才会原子推进 checkpoint。WeLink 断网、NAS 5xx 或进程重启均会重试相同数据。
+确认输出只包含摘要后，再去掉 `--dry-run`。常驻模式使用
+`personal-crm-wechat --watch`。Connector 按一天窗口回填并保留五分钟重叠；只有 NAS
+对整个批次（包括空窗口）返回成功且无错误项时，才会原子推进 checkpoint。
+chatlog 读取失败、NAS 5xx 或进程重启均不会丢失水位。
 
-Connector 不在日志或 Webhook 中放入原始 `text`/`content`。若 WeLink 没有提供独立摘要，它只生成“发生一次微信互动”的降级描述；Fact 只接受上游明确给出的结构化结果。
+Connector 在解析 `record` 后立即丢弃原始 `content`，不在日志、checkpoint 或
+Webhook 中保存正文。首版只生成“发生一次微信互动”的降级描述，不从正文自动抽取
+Fact；摘要/Fact Agent 将作为后续独立模块接入。
