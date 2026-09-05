@@ -1,4 +1,4 @@
-"""从本机 WeLink 读取摘要并可靠推送到 NAS。"""
+"""从本机微信数据源读取裁剪事件并可靠推送到 NAS。"""
 
 from __future__ import annotations
 
@@ -6,10 +6,12 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
+from .chatlog import ChatlogMessageSource, ChatlogSourceError, SourceBatch
 from .checkpoint import load, save
 from .config import ConnectorConfig, as_datetime
 
@@ -28,12 +30,25 @@ class SyncResult:
 class WeChatConnector:
     """只出站运行的 Mac 微信连接器。"""
 
-    def __init__(self, config: ConnectorConfig, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        config: ConnectorConfig,
+        client: Any | None = None,
+        source: Any | None = None,
+    ) -> None:
+        """装配 Webhook 客户端及可替换的本地消息源。"""
+
         self.config = config
         self.client = client or httpx.Client(timeout=config.timeout)
+        self.source = source or (
+            ChatlogMessageSource(config) if config.source_type == "chatlog" else None
+        )
 
-    def _get(self) -> list[dict[str, Any]]:
-        """读取 WeLink，并兼容常见 list/data/items/messages 响应外壳。"""
+    def _get(self, state: dict[str, Any]) -> SourceBatch:
+        """读取配置的数据源；保留 WeLink 作为显式兼容模式。"""
+
+        if self.source is not None:
+            return self.source.read(state)
 
         response = self.client.get(
             self.config.adapter_base_url.rstrip("/") + "/" + self.config.adapter_path.lstrip("/")
@@ -41,11 +56,11 @@ class WeChatConnector:
         response.raise_for_status()
         body = response.json()
         if isinstance(body, list):
-            return body
+            return SourceBatch(events=body, until=datetime.now(UTC))
         for key in ("data", "items", "messages", "interactions"):
             if isinstance(body, dict) and isinstance(body.get(key), list):
-                return body[key]
-        return []
+                return SourceBatch(events=body[key], until=datetime.now(UTC))
+        return SourceBatch(events=[], until=datetime.now(UTC))
 
     @staticmethod
     def _key(event: dict[str, Any]) -> str:
@@ -114,7 +129,10 @@ class WeChatConnector:
 
         state = load(self.config.checkpoint_path)
         try:
-            events = self._get()
+            source_batch = self._get(state)
+            events = source_batch.events
+        except ChatlogSourceError as error:
+            return SyncResult("", [], [], False, [f"chatlog: {error}"])
         except Exception as error:
             return SyncResult("", [], [], False, [f"welink: {type(error).__name__}"])
 
@@ -146,7 +164,7 @@ class WeChatConnector:
                     "channel": "wechat",
                     "direction": direction,
                     "summary": self._safe_summary(event, person_name),
-                    "source_reference": f"welink:{event_key}",
+                    "source_reference": f"{self.config.source_type}:wechat:{event_key}",
                     "source_event_key": event_key,
                 }
             )
@@ -157,18 +175,28 @@ class WeChatConnector:
         batch_id = str(
             uuid.uuid5(
                 uuid.NAMESPACE_URL,
-                "personal-crm:welink:" + json.dumps(batch_seed, sort_keys=True),
+                f"personal-crm:{self.config.source_type}:"
+                + json.dumps(
+                    {
+                        "event_keys": batch_seed,
+                        "empty_window_until": (
+                            source_batch.until.isoformat() if not batch_seed else None
+                        ),
+                    },
+                    sort_keys=True,
+                ),
             )
         )
         payload = {
             "batch_id": batch_id,
-            "source": "welink",
+            "source": self.config.source_type,
             "interactions": interactions,
             "facts": facts,
         }
         if dry_run:
             return SyncResult(batch_id, interactions, facts, False, [])
-        if not interactions and not facts:
+        # chatlog 的空窗口也发送给 NAS 确认可用性，成功后才能推进回填水位。
+        if not interactions and not facts and self.config.source_type != "chatlog":
             return SyncResult(batch_id, interactions, facts, False, [])
         if not self.config.webhook_url:
             return SyncResult(batch_id, interactions, facts, False, ["未配置 CRM_WEBHOOK_URL"])
@@ -195,6 +223,7 @@ class WeChatConnector:
             {
                 "keys": list(known_keys | set(batch_seed)),
                 "last_batch_id": batch_id,
+                "last_synced_at": source_batch.until.isoformat(),
             },
         )
         return SyncResult(batch_id, interactions, facts, True, [])

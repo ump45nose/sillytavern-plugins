@@ -4,10 +4,12 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from personal_crm.connector.chatlog import ChatlogMessageSource, ChatlogSourceError
 from personal_crm.connector.checkpoint import load, save
 from personal_crm.connector.config import ConnectorConfig
 from personal_crm.connector.sync import WeChatConnector
@@ -63,7 +65,10 @@ def event(contact="Alice", timestamp="2026-09-04T01:00:00+00:00", text="secret")
 def make_connector(tmp_path, events, posts=None, **kwargs):
     """使用临时 checkpoint 创建连接器，确保测试不污染用户目录。"""
     config = ConnectorConfig(
-        webhook_url="http://nas/hook", checkpoint_path=str(tmp_path / "cp.json"), **kwargs
+        source_type="welink",
+        webhook_url="http://nas/hook",
+        checkpoint_path=str(tmp_path / "cp.json"),
+        **kwargs,
     )
     return WeChatConnector(config, FakeClient(events, posts)), config
 
@@ -133,6 +138,7 @@ def test_success_advances_and_same_batch_retry_is_idempotent(tmp_path):
     assert first.sent and uuid.UUID(first.batch_id)
     state = load(config.checkpoint_path)
     assert state["keys"] and state["last_batch_id"]
+    assert state["last_synced_at"]
     assert connector.sync_once().interactions == []
     assert len(connector.client.posted) == 1
 
@@ -175,7 +181,99 @@ def test_welink_read_failure_does_not_raise_or_advance(tmp_path):
         def get(self, url):
             raise httpx.ConnectError("offline")
 
-    config = ConnectorConfig(checkpoint_path=str(tmp_path / "cp.json"))
+    config = ConnectorConfig(source_type="welink", checkpoint_path=str(tmp_path / "cp.json"))
     result = WeChatConnector(config, OfflineClient([])).sync_once()
     assert not result.sent and result.errors == ["welink: ConnectError"]
     assert not Path(config.checkpoint_path).exists()
+
+
+def chatlog_config(tmp_path, scopes_path, **kwargs):
+    """构造 chatlog 测试配置，二进制调用由 monkeypatch 接管。"""
+
+    return ConnectorConfig(
+        source_type="chatlog",
+        chatlog_executable=__file__,
+        chatlog_scopes_path=str(scopes_path),
+        allowed_contacts={"Alice"},
+        since=datetime(2026, 9, 4, tzinfo=UTC),
+        checkpoint_path=str(tmp_path / "cp.json"),
+        **kwargs,
+    )
+
+
+def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatch):
+    """验证 NDJSON 记录按 scope 对齐，且原始 content 在适配层立即丢弃。"""
+
+    scopes = tmp_path / "scopes.json"
+    scopes.write_text(
+        json.dumps(
+            [
+                {
+                    "requested_id": "Alice",
+                    "person_name": "Alice",
+                    "account_id": "account",
+                    "conversation_id": "conversation",
+                    "conversation_type": "direct",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    stdout = "\n".join(
+        json.dumps(frame)
+        for frame in (
+            {"protocol": "message-stream-v1", "version": 1, "frame": "ready"},
+            {
+                "protocol": "message-stream-v1",
+                "version": 1,
+                "frame": "record",
+                "scope_index": 0,
+                "record": {
+                    "ts": 1_788_480_000,
+                    "content": "secret",
+                    "msg_type": 1,
+                    "is_self": True,
+                    "server_id": "server-1",
+                    "source_offset": "offset-1",
+                },
+            },
+            {"protocol": "message-stream-v1", "version": 1, "frame": "complete"},
+        )
+    )
+    monkeypatch.setattr(
+        "personal_crm.connector.chatlog.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=stdout, stderr="", returncode=0),
+    )
+
+    batch = ChatlogMessageSource(chatlog_config(tmp_path, scopes)).read({})
+    assert len(batch.events) == 1
+    assert batch.events[0]["contact"] == "Alice"
+    assert batch.events[0]["direction"] == "outbound"
+    assert "content" not in batch.events[0]
+    assert "secret" not in json.dumps(batch.events[0])
+
+
+def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):
+    """验证缺少 complete 帧时整批失败，禁止推进任何同步水位。"""
+
+    scopes = tmp_path / "scopes.json"
+    scopes.write_text(
+        json.dumps(
+            [
+                {
+                    "requested_id": "Alice",
+                    "account_id": "account",
+                    "conversation_id": "conversation",
+                    "conversation_type": "direct",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "personal_crm.connector.chatlog.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout="", stderr="", returncode=0),
+    )
+
+    with pytest.raises(ChatlogSourceError, match="incomplete_stream"):
+        ChatlogMessageSource(chatlog_config(tmp_path, scopes)).read({})
