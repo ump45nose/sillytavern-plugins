@@ -13,6 +13,7 @@ from personal_crm.connector.chatlog import ChatlogMessageSource, ChatlogSourceEr
 from personal_crm.connector.checkpoint import load, save
 from personal_crm.connector.cli import _output
 from personal_crm.connector.config import ConnectorConfig
+from personal_crm.connector.fact_extractor import RuleBasedFactExtractor
 from personal_crm.connector.sync import WeChatConnector
 
 
@@ -252,6 +253,77 @@ def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatc
     assert batch.events[0]["direction"] == "outbound"
     assert "content" not in batch.events[0]
     assert "secret" not in json.dumps(batch.events[0])
+
+
+def test_rule_based_fact_extractor_only_accepts_explicit_inbound_statements():
+    """验证高置信自述可抽取，自己发送、卡片和普通闲聊不会生成 Fact。"""
+
+    extractor = RuleBasedFactExtractor()
+    assert extractor.extract("我喜欢手冲咖啡。", "inbound") == [
+        {"fact_type": "preference", "content": "喜欢手冲咖啡", "confidence": 0.92}
+    ]
+    assert extractor.extract("我准备换工作", "inbound") == [
+        {"fact_type": "life_event", "content": "换工作", "confidence": 0.9}
+    ]
+    assert extractor.extract("我喜欢手冲咖啡。", "outbound") == []
+    assert extractor.extract("<msg>我喜欢手冲咖啡</msg>", "inbound") == []
+
+
+def test_chatlog_enabled_extraction_keeps_raw_text_out_of_event(tmp_path, monkeypatch):
+    """验证启用抽取后仅保留结构化事实，完整微信正文仍不会进入事件。"""
+
+    scopes = tmp_path / "scopes.json"
+    scopes.write_text(
+        json.dumps(
+            [
+                {
+                    "requested_id": "Alice",
+                    "person_name": "Alice",
+                    "account_id": "account",
+                    "conversation_id": "conversation",
+                    "conversation_type": "direct",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    original = "我喜欢手冲咖啡。这句尾巴不应整体外发"
+    stdout = "\n".join(
+        json.dumps(frame)
+        for frame in (
+            {"protocol": "message-stream-v1", "version": 1, "frame": "ready"},
+            {
+                "protocol": "message-stream-v1",
+                "version": 1,
+                "frame": "record",
+                "scope_index": 0,
+                "record": {
+                    "ts": 1_788_480_000,
+                    "content": original,
+                    "msg_type": 1,
+                    "is_self": False,
+                    "server_id": "server-2",
+                    "source_offset": "offset-2",
+                },
+            },
+            {"protocol": "message-stream-v1", "version": 1, "frame": "complete"},
+        )
+    )
+    monkeypatch.setattr(
+        "personal_crm.connector.chatlog.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=stdout, stderr="", returncode=0),
+    )
+    config = chatlog_config(tmp_path, scopes)
+    config.fact_extraction_enabled = True
+
+    event_payload = ChatlogMessageSource(config).read({}).events[0]
+    assert [item["fact_type"] for item in event_payload["facts"]] == [
+        "preference",
+        "contact",
+    ]
+    assert event_payload["facts"][1]["content"] == "微信联系人：Alice"
+    assert original not in json.dumps(event_payload, ensure_ascii=False)
+    assert "content" not in event_payload
 
 
 def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):
