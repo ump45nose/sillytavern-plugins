@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
             {
                 "resource": f"{base_url}/mcp",
                 "authorization_servers": [f"{base_url}/"],
-                "scopes_supported": ["read:user", "user:email"],
+                "scopes_supported": ["openid", "profile", "offline_access"],
                 "bearer_methods_supported": ["header"],
             }
         )

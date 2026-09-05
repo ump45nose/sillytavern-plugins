@@ -1,13 +1,17 @@
-"""Personal CRM 的 FastMCP 工具、资源与 GitHub OAuth 装配。"""
+"""Personal CRM 的 FastMCP 工具、资源与 Authelia OIDC 装配。"""
 
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
-from fastmcp.server.auth.providers.github import GitHubProvider
+from fastmcp.server.auth.oidc_proxy import OIDCProxy
+from key_value.aio.stores.filetree import FileTreeStore
+from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
 
 from personal_crm.core.domain import ensure_utc, utcnow
 from personal_crm.metrics import weekly_metrics
@@ -20,7 +24,7 @@ def _row(service, entity: Any | None) -> dict[str, Any] | None:
 
 
 def _auth_check(settings: Any, *, write: bool):
-    """按 GitHub 数字用户 ID 映射 CRM 读写权限。"""
+    """按 Authelia 的 preferred_username 映射 CRM 读写权限。"""
 
     if not getattr(settings, "oauth_enabled", False):
         return None
@@ -31,42 +35,86 @@ def _auth_check(settings: Any, *, write: bool):
         token = context.token
         if token is None:
             return False
-        user_id = str(token.claims.get("sub") or token.client_id)
-        if user_id not in settings.allowed_user_ids:
+        claims = dict(token.claims) if isinstance(token.claims, dict) else {}
+        # OIDCProxy 把上游身份放入 upstream_claims；兼容直接声明以便测试和升级。
+        upstream_claims = claims.get("upstream_claims")
+        if isinstance(upstream_claims, dict):
+            for key, value in upstream_claims.items():
+                claims.setdefault(key, value)
+        username = claims.get("preferred_username")
+        if not isinstance(username, str):
             return False
-        return not (write and user_id in settings.read_only_user_ids)
+        authorized = any(
+            hmac.compare_digest(username, candidate)
+            for candidate in settings.authorized_usernames
+        )
+        if not authorized:
+            return False
+        return not (
+            write
+            and any(
+                hmac.compare_digest(username, candidate)
+                for candidate in settings.read_only_usernames
+            )
+        )
 
     return check
 
 
-def _provider(settings: Any) -> GitHubProvider | None:
-    """在生产配置完整时创建 FastMCP GitHub OAuth Provider。"""
+def _provider(settings: Any) -> tuple[OIDCProxy | None, FileTreeStore | None]:
+    """在生产配置完整时创建与 SmartSearch 同构的 Authelia OIDCProxy。"""
 
     if not getattr(settings, "oauth_enabled", False):
-        return None
-    if not settings.allowed_user_ids:
-        raise ValueError("GITHUB_ALLOWED_USER_IDS is required when OAuth is enabled")
+        return None, None
+    if not settings.authorized_usernames:
+        raise ValueError("OIDC_AUTHORIZED_USERNAMES is required when OAuth is enabled")
+    if len(settings.oauth_jwt_signing_key) < 32:
+        raise ValueError("OAUTH_JWT_SIGNING_KEY must contain at least 32 characters")
+    if len(settings.oauth_storage_encryption_key) < 32:
+        raise ValueError("OAUTH_STORAGE_ENCRYPTION_KEY must contain at least 32 characters")
+
     base_url = settings.public_base_url.rstrip("/")
-    return GitHubProvider(
-        client_id=settings.github_client_id,
-        client_secret=settings.github_client_secret,
+    storage_path = Path(settings.oauth_storage_path)
+    storage_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    storage_path.chmod(0o700)
+    raw_store = FileTreeStore(data_directory=storage_path)
+    encrypted_store = FernetEncryptionWrapper(
+        raw_store,
+        source_material=settings.oauth_storage_encryption_key,
+        salt="personal-crm-oauth-v1",
+        raise_on_decryption_error=True,
+    )
+    provider = OIDCProxy(
+        config_url=settings.oidc_discovery_url,
+        client_id=settings.oidc_client_id,
+        client_secret=settings.oidc_client_secret,
         base_url=base_url,
+        resource_base_url=base_url,
         issuer_url=base_url,
-        required_scopes=["read:user", "user:email"],
+        redirect_path="/auth/callback",
+        required_scopes=["openid", "profile", "offline_access"],
+        verify_id_token=True,
         allowed_client_redirect_uris=settings.client_redirect_uris,
-        jwt_signing_key=settings.oauth_jwt_signing_key or None,
+        client_storage=encrypted_store,
+        jwt_signing_key=settings.oauth_jwt_signing_key,
+        token_endpoint_auth_method="client_secret_basic",
         require_authorization_consent=True,
         enable_cimd=True,
+        forward_resource=False,
+        token_expiry_threshold_seconds=30,
     )
+    return provider, raw_store
 
 
 def create_mcp(service: Any, settings: Any) -> FastMCP:
     """创建完整 MCP 服务；本地无 OAuth 配置时便于离线测试。"""
 
+    provider, _oauth_store = _provider(settings)
+
     server = FastMCP(
         "personal-crm",
         instructions="只读微信摘要，不代发消息；修改工具会返回 before/after。",
-        auth=_provider(settings),
+        auth=provider,
     )
     read_auth = _auth_check(settings, write=False)
     write_auth = _auth_check(settings, write=True)
