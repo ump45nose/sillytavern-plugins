@@ -18,7 +18,12 @@ class Settings(BaseSettings):
     github_allowed_user_ids: str = ""
     github_read_only_user_ids: str = ""
     oauth_jwt_signing_key: str = ""
-    allowed_client_redirect_uris: str = "http://localhost:*,http://127.0.0.1:*"
+    # 同时支持本机 Agent 回调与 ChatGPT 官方的动态/稳定 OAuth 回调地址。
+    allowed_client_redirect_uris: str = (
+        "http://localhost:*,http://127.0.0.1:*,"
+        "https://chatgpt.com/connector/oauth/*,"
+        "https://chatgpt.com/connector_platform_oauth_redirect"
+    )
     reminder_scheduler_enabled: bool = True
     reminder_poll_seconds: int = 3600
 
