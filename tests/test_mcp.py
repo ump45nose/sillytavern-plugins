@@ -56,6 +56,16 @@ def test_oauth_requires_allowed_github_user_ids():
         create_mcp(service, settings)
 
 
+def test_default_oauth_redirect_allowlist_supports_agents_and_chatgpt():
+    """验证默认回调白名单同时覆盖本机 Agent 与 ChatGPT 官方回调。"""
+
+    redirect_uris = Settings().client_redirect_uris
+    assert "http://localhost:*" in redirect_uris
+    assert "http://127.0.0.1:*" in redirect_uris
+    assert "https://chatgpt.com/connector/oauth/*" in redirect_uris
+    assert "https://chatgpt.com/connector_platform_oauth_redirect" in redirect_uris
+
+
 def test_streamable_http_mcp_initialize():
     """验证真实 /mcp 传输可完成 JSON-RPC initialize 握手。"""
 
@@ -85,7 +95,7 @@ def test_streamable_http_mcp_initialize():
 
 
 def test_oauth_discovery_compatibility_endpoint():
-    """验证固定发现端点会跳转到 FastMCP 的权威资源元数据。"""
+    """验证无后缀发现端点直接返回 ChatGPT 可消费的资源元数据。"""
 
     settings = Settings(
         public_base_url="https://crm.example.com",
@@ -98,7 +108,7 @@ def test_oauth_discovery_compatibility_endpoint():
     with TestClient(create_app(settings, repository)) as client:
         response = client.get("/.well-known/oauth-protected-resource", follow_redirects=False)
         metadata = client.get("/.well-known/oauth-protected-resource/mcp")
-    assert response.status_code == 307
-    assert response.headers["location"] == "/.well-known/oauth-protected-resource/mcp"
+    assert response.status_code == 200
+    assert response.json() == metadata.json()
     assert metadata.status_code == 200
     assert metadata.json()["resource"] == "https://crm.example.com/mcp"
