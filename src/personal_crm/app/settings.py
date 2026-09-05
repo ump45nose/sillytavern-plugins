@@ -18,11 +18,16 @@ class Settings(BaseSettings):
     github_allowed_user_ids: str = ""
     github_read_only_user_ids: str = ""
     oauth_jwt_signing_key: str = ""
-    # 同时支持本机 Agent 回调与 ChatGPT 官方的动态/稳定 OAuth 回调地址。
+    # 兼容本机 Agent，以及 GPT、Claude、Grok 官方主域名和所有子域名回调。
     allowed_client_redirect_uris: str = (
         "http://localhost:*,http://127.0.0.1:*,"
-        "https://chatgpt.com/connector/oauth/*,"
-        "https://chatgpt.com/connector_platform_oauth_redirect"
+        "https://chatgpt.com/*,https://*.chatgpt.com/*,"
+        "https://openai.com/*,https://*.openai.com/*,"
+        "https://claude.ai/*,https://*.claude.ai/*,"
+        "https://anthropic.com/*,https://*.anthropic.com/*,"
+        "https://grok.com/*,https://*.grok.com/*,"
+        "https://x.ai/*,https://*.x.ai/*,"
+        "https://x.com/*,https://*.x.com/*"
     )
     reminder_scheduler_enabled: bool = True
     reminder_poll_seconds: int = 3600
