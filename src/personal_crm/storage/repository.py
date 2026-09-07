@@ -269,6 +269,69 @@ class CrmRepository:
                 statement = statement.where(Interaction.person_id == person_id)
             return list(session.scalars(statement))
 
+    def daily_summary(self, start: datetime, end: datetime) -> dict[str, Any]:
+        """按半开时间窗汇总关系变化，不返回互动、事实或提醒正文。"""
+
+        start_utc, end_utc = ensure_utc(start), ensure_utc(end)
+        if start_utc >= end_utc:
+            raise ValueError("daily summary start must be earlier than end")
+        with self._sessions() as session:
+            # 互动按实际发生时间归日；补录时间不会改变历史所属日期。
+            interaction_rows = session.execute(
+                select(Interaction, Person.display_name)
+                .join(Person, Person.id == Interaction.person_id)
+                .where(Interaction.occurred_at >= start_utc, Interaction.occurred_at < end_utc)
+                .order_by(Interaction.occurred_at)
+            ).all()
+            # 事实按观察时间归日；只暴露类别和人物，不暴露内容。
+            fact_rows = session.execute(
+                select(Fact, Person.display_name)
+                .join(Person, Person.id == Fact.person_id)
+                .where(Fact.observed_at >= start_utc, Fact.observed_at < end_utc)
+                .order_by(Fact.observed_at)
+            ).all()
+            # 提醒状态变化按更新时间归日，pending 不视为用户已完成的变化。
+            reminder_rows = session.execute(
+                select(Reminder, Person.display_name)
+                .join(Person, Person.id == Reminder.person_id)
+                .where(Reminder.updated_at >= start_utc, Reminder.updated_at < end_utc)
+                .where(Reminder.status != ReminderStatus.PENDING.value)
+                .order_by(Reminder.updated_at)
+            ).all()
+
+        def counts(values: list[str]) -> dict[str, int]:
+            """生成键稳定的分类计数，便于下游确定性渲染。"""
+
+            result: dict[str, int] = {}
+            for value in values:
+                result[value] = result.get(value, 0) + 1
+            return dict(sorted(result.items()))
+
+        people = sorted({name for _item, name in interaction_rows})
+        fact_people = sorted({name for _item, name in fact_rows})
+        reminder_people = sorted({name for _item, name in reminder_rows})
+        return {
+            "window_start": start_utc.isoformat(),
+            "window_end": end_utc.isoformat(),
+            "interactions": {
+                "count": len(interaction_rows),
+                "person_count": len(people),
+                "people": people,
+                "directions": counts([item.direction for item, _name in interaction_rows]),
+                "channels": counts([item.channel for item, _name in interaction_rows]),
+            },
+            "facts": {
+                "count": len(fact_rows),
+                "people": fact_people,
+                "types": counts([item.fact_type for item, _name in fact_rows]),
+            },
+            "reminder_changes": {
+                "count": len(reminder_rows),
+                "people": reminder_people,
+                "statuses": counts([item.status for item, _name in reminder_rows]),
+            },
+        }
+
     @staticmethod
     def fact_hash(content: str) -> str:
         """以去首尾空白后的文本生成稳定事实哈希。"""
