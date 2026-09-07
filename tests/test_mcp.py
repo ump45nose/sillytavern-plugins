@@ -1,5 +1,6 @@
 """MCP 工具注册和本地调用测试。"""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +26,7 @@ async def test_mcp_registers_required_tools_and_calls_person_flow():
         "get_person",
         "upsert_person",
         "list_interactions",
+        "get_daily_summary",
         "record_interaction",
         "list_facts",
         "add_fact",
@@ -45,6 +47,39 @@ async def test_mcp_registers_required_tools_and_calls_person_flow():
     assert result.structured_content["after"]["display_name"] == "MCP 联系人"
     search = await server.call_tool("search_people", {"query": "MCP"}, run_middleware=False)
     assert search.structured_content["result"][0]["display_name"] == "MCP 联系人"
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_excludes_private_text_and_groups_changes():
+    """验证每日 MCP 汇总只有计数和人物名，不返回互动或事实正文。"""
+
+    service = CrmService(CrmRepository("sqlite:///:memory:"))
+    person = service.create_person("张三")
+    interaction, _created, _completed = service.record_interaction(
+        person_id=person.id,
+        occurred_at=datetime(2026, 9, 6, 12, tzinfo=UTC),
+        direction="mutual",
+        summary="不应出现在每日汇总里的私密摘要",
+    )
+    service.record_fact(
+        person_id=person.id,
+        fact_type="preference",
+        content="不应出现在每日汇总里的事实正文",
+        observed_at=datetime(2026, 9, 6, 12, 5, tzinfo=UTC),
+        source_interaction_id=interaction.id,
+    )
+    server = create_mcp(service, Settings())
+    result = await server.call_tool(
+        "get_daily_summary",
+        {"day": "2026-09-06", "timezone": "Asia/Shanghai"},
+        run_middleware=False,
+    )
+    summary = result.structured_content
+    assert summary["interactions"]["count"] == 1
+    assert summary["interactions"]["people"] == ["张三"]
+    assert summary["facts"]["count"] == 1
+    assert "私密摘要" not in str(summary)
+    assert "事实正文" not in str(summary)
 
 
 def oidc_settings(tmp_path, **overrides):
