@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hmac
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
@@ -179,6 +180,21 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
         """按时间倒序列出互动。"""
 
         return [_row(service, item) for item in service.repo.list_interactions(person_id, limit)]
+
+    @server.tool(auth=read_auth)
+    def get_daily_summary(day: str, timezone: str = "Asia/Shanghai") -> dict[str, Any]:
+        """返回指定业务日的紧凑关系变化；不泄露互动、事实或提醒正文。"""
+
+        try:
+            business_day = datetime.strptime(day, "%Y-%m-%d").date()
+            zone = ZoneInfo(timezone)
+        except (ValueError, ZoneInfoNotFoundError) as error:
+            raise ValueError("day 或 timezone 无效") from error
+        # 业务日窗口先在用户时区构造，再由仓储统一转换成 UTC 查询。
+        start = datetime.combine(business_day, time.min, zone)
+        end = start + timedelta(days=1)
+        summary = service.repo.daily_summary(start, end)
+        return {"date": day, "timezone": timezone, **summary}
 
     @server.tool(auth=write_auth)
     def record_interaction(
