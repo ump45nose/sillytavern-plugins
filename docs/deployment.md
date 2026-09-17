@@ -46,7 +46,13 @@ docker compose exec crm uv run --no-dev personal-crm integrity
 
 ## Mac launchd
 
-先按 `docs/usage.md` 创建独立 `connector.env`，再复制并修改 plist 中的绝对路径：
+先按 `docs/usage.md` 创建独立 `connector.env`，并将固定校验的导出器、白名单映射和可选 checkpoint 放入 `~/Library/Application Support/personal-crm`。推荐使用安装脚本，它会按当前用户生成绝对路径，并覆盖从另一台 Mac 迁移来的旧路径：
+
+```bash
+./deploy/launchd/install-macos.sh
+```
+
+也可手动复制并修改 plist：
 
 ```bash
 cp deploy/launchd/com.personal-crm.wechat.plist.example \
