@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.db
+*.db-wal
+*.db-shm
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -11,5 +13,6 @@ build/
 *.egg-info/
 .env
 connector.env
+connector.env.*
 data/
 connector-state/
