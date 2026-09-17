@@ -10,7 +10,7 @@ support_dir="${user_home}/Library/Application Support/personal-crm"
 logs_dir="${support_dir}/logs"
 agent_dir="${user_home}/Library/LaunchAgents"
 env_path="${project_root}/connector.env"
-binary_path="${support_dir}/bin/chatlog-keeper-v0.3.6-preview"
+binary_path="${support_dir}/bin/chatlog-keeper-v0.3.7-preview"
 scopes_path="${support_dir}/wechat/whitelist-scopes.json"
 checkpoint_path="${support_dir}/checkpoint.json"
 plist_path="${agent_dir}/${label}.plist"
@@ -30,6 +30,7 @@ mkdir -p "${logs_dir}" "${agent_dir}"
 chmod 600 "${env_path}" "${scopes_path}"
 chmod 700 "${binary_path}"
 [[ -e "${checkpoint_path}" ]] && chmod 600 "${checkpoint_path}"
+binary_sha256="$(shasum -a 256 "${binary_path}" | awk '{print $1}')"
 
 cp "${project_root}/deploy/launchd/${label}.plist.example" "${plist_path}"
 PLIST_PATH="${plist_path}" \
@@ -37,6 +38,7 @@ PROGRAM_PATH="${project_root}/.venv/bin/personal-crm-wechat" \
 PROJECT_ROOT="${project_root}" \
 ENV_PATH="${env_path}" \
 BINARY_PATH="${binary_path}" \
+BINARY_SHA256="${binary_sha256}" \
 SCOPES_PATH="${scopes_path}" \
 CHECKPOINT_PATH="${checkpoint_path}" \
 LOG_PATH="${logs_dir}/wechat.log" \
@@ -58,6 +60,7 @@ value["EnvironmentVariables"] = {
     "CRM_ENV_FILE": os.environ["ENV_PATH"],
     # dotenv 不覆盖进程环境，以下三项负责接管旧 Mac 配置中的绝对路径。
     "CHATLOG_EXECUTABLE": os.environ["BINARY_PATH"],
+    "CHATLOG_EXPECTED_SHA256": os.environ["BINARY_SHA256"],
     "CHATLOG_SCOPES": os.environ["SCOPES_PATH"],
     "CRM_CHECKPOINT": os.environ["CHECKPOINT_PATH"],
 }
