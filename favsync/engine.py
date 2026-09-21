@@ -41,6 +41,7 @@ class Engine:
     def cookie_sync(self):
         if not self.cfg["cookiecloud"]["enabled"]:
             return True
+        started = time.time()
         # Dedicated connection: the daemon cookie thread never shares SQLite objects.
         db = Store(self.cfg["state_dir"])
         try:
@@ -50,11 +51,16 @@ class Engine:
             complete = all(status == "ok" for status in results.values())
             db.setting("cookiecloud_status", "ok" if complete else "partial")
             db.setting("cookiecloud_last_success", str(time.time()))
+            db.record_execution("cookiecloud", started, complete)
             return complete
         except SyncError as exc:
             db.setting("cookiecloud_status", exc.code)
+            db.record_execution("cookiecloud", started, False)
             log.warning("cookiecloud: %s (previous cookie retained)", exc.code)
             return False
+        except Exception:
+            db.record_execution("cookiecloud", started, False)
+            raise
         finally:
             db.close()
 
@@ -83,6 +89,16 @@ class Engine:
             return "missing"
 
     def cycle(self):
+        started = time.time()
+        try:
+            success = self._cycle()
+        except Exception:
+            self.store.record_execution("content", started, False)
+            raise
+        self.store.record_execution("content", started, success)
+        return success
+
+    def _cycle(self):
         self.attempted.clear()
         failures = False
         for source, section, adapter in self.sources():

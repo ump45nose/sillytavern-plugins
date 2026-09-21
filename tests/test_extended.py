@@ -64,6 +64,18 @@ class ExtendedSmoke(unittest.TestCase):
                                           "tags_character": ["Hero"]}),
                          {"artist": ["Alice"], "group": ["Circle"], "character": ["Hero"]})
 
+    def test_execution_history_records_simple_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(directory)
+            try:
+                store.record_execution("content", 1.0, True)
+                store.record_execution("cookiecloud", 2.0, False)
+                history = store.status()["execution_history"]
+                self.assertEqual([(row["kind"], row["result"]) for row in history],
+                                 [("cookiecloud", "failed"), ("content", "success")])
+            finally:
+                store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

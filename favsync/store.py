@@ -41,6 +41,10 @@ class Store:
         CREATE TABLE IF NOT EXISTS eh_names (
           account TEXT NOT NULL, item_id TEXT NOT NULL, relative_path TEXT NOT NULL,
           PRIMARY KEY(account,item_id), UNIQUE(account,relative_path));
+        CREATE TABLE IF NOT EXISTS execution_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          kind TEXT NOT NULL, started_at REAL NOT NULL, finished_at REAL NOT NULL,
+          result TEXT NOT NULL CHECK(result IN ('success','failed')));
         """)
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
         if "bundle_status" not in columns:
@@ -54,6 +58,13 @@ class Store:
 
     def close(self):
         self.db.close()
+
+    def record_execution(self, kind, started_at, success):
+        with self.db:
+            self.db.execute("INSERT INTO execution_history(kind,started_at,finished_at,result) VALUES(?,?,?,?)",
+                            (kind, started_at, time.time(), "success" if success else "failed"))
+            self.db.execute("DELETE FROM execution_history WHERE id NOT IN "
+                            "(SELECT id FROM execution_history ORDER BY id DESC LIMIT 100)")
 
     def source(self, name, account):
         with self.db:
@@ -196,4 +207,6 @@ class Store:
             "cookiecloud_platforms": {name: self.setting("cookiecloud_status:" + name)
                                       for name in ("x", "xhs", "eh")
                                       if self.setting("cookiecloud_status:" + name) is not None},
+            "execution_history": [dict(r) for r in self.db.execute(
+                "SELECT kind,started_at,finished_at,result FROM execution_history ORDER BY id DESC LIMIT 20")],
         }
