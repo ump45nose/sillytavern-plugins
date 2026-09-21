@@ -1,0 +1,8 @@
+*
+!pyproject.toml
+!favsync/
+!favsync/**
+!Dockerfile.bili-sync
+!Dockerfile.xhs-downloader
+!bili-sync-v2.11.1-flat.patch
+favsync/**/__pycache__

@@ -1,0 +1,88 @@
+services:
+  favsync:
+    build: .
+    image: local/favsync:0.1.0
+    restart: unless-stopped
+    init: true
+    # The host SOCKS/HTTP mixed proxy listens on loopback. Host networking also
+    # gives future download adapters the same default proxy path.
+    network_mode: host
+    user: "${PUID:-1000}:${PGID:-1000}"
+    command: ["--config", "/app/config.toml", "run"]
+    environment:
+      HOME: /data/state/home
+      TZ: Asia/Taipei
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./state:/data/state
+      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}:/downloads
+      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/EH:/eh-downloads
+      - ./secrets:/run/favsync-secrets:ro
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  cookiecloud:
+    profiles: [cookiecloud]
+    image: easychen/cookiecloud:latest
+    restart: unless-stopped
+    ports:
+      - "${COOKIECLOUD_BIND:-127.0.0.1}:${COOKIECLOUD_PORT:-18088}:8088"
+    volumes:
+      - cookiecloud-data:/data/api/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  xhs-downloader:
+    profiles: [extended]
+    build:
+      context: .
+      dockerfile: Dockerfile.xhs-downloader
+    image: local/xhs-downloader:2.8
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5556:5556"
+    user: "${PUID:-1000}:${PGID:-1001}"
+    command: ["python", "main.py", "api"]
+    environment:
+      TZ: Asia/Taipei
+    volumes:
+      - ./state/xhs-downloader:/app/Volume
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  bili-sync:
+    profiles: [extended]
+    build:
+      context: .
+      dockerfile: Dockerfile.bili-sync
+    image: local/bili-sync-rs:2.11.1-flat1
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1001}"
+    ports:
+      - "192.168.31.201:12345:12345"
+    environment:
+      TZ: Asia/Taipei
+      BILI_SYNC_FLAT_OUTPUT: "1"
+      BILI_SYNC_MIN_FREE_BYTES: "214748364800"
+    volumes:
+      - ./state/bili-sync:/app/.config/bili-sync
+      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/Bilibili:/downloads/Bilibili
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+volumes:
+  cookiecloud-data:

@@ -1,0 +1,140 @@
+diff --git a/crates/bili_sync/src/config/current.rs b/crates/bili_sync/src/config/current.rs
+index cf7b8f1..6073550 100644
+--- a/crates/bili_sync/src/config/current.rs
++++ b/crates/bili_sync/src/config/current.rs
+@@ -121,8 +121,8 @@ impl Default for Config {
+             filter_option: FilterOption::default(),
+             danmaku_option: DanmakuOption::default(),
+             skip_option: SkipOption::default(),
+-            video_name: "{{title}}".to_owned(),
+-            page_name: "{{bvid}}".to_owned(),
++            video_name: "{{upper_name}}_{{title}}".to_owned(),
++            page_name: "{{upper_name}}_{{title}}".to_owned(),
+             notifiers: None,
+             favorite_default_path: default_favorite_path(),
+             collection_default_path: default_collection_path(),
+diff --git a/crates/bili_sync/src/config/item.rs b/crates/bili_sync/src/config/item.rs
+index 9e582d2..09f405f 100644
+--- a/crates/bili_sync/src/config/item.rs
++++ b/crates/bili_sync/src/config/item.rs
+@@ -60,7 +60,7 @@ impl Default for ConcurrentLimit {
+     }
+ }
+
+-#[derive(Serialize, Deserialize, Clone, Default)]
++#[derive(Serialize, Deserialize, Clone)]
+ pub struct SkipOption {
+     pub no_poster: bool,
+     pub no_video_nfo: bool,
+@@ -69,6 +69,12 @@ pub struct SkipOption {
+     pub no_subtitle: bool,
+ }
+
++impl Default for SkipOption {
++    fn default() -> Self {
++        Self { no_poster: true, no_video_nfo: true, no_upper: true, no_danmaku: true, no_subtitle: false }
++    }
++}
++
+ #[derive(Serialize, Deserialize, Clone)]
+ #[serde(untagged)]
+ pub enum Trigger {
+@@ -78,7 +84,7 @@ pub enum Trigger {
+
+ impl Default for Trigger {
+     fn default() -> Self {
+-        Trigger::Interval(1200)
++        Trigger::Interval(28800)
+     }
+ }
+
+diff --git a/crates/bili_sync/src/workflow.rs b/crates/bili_sync/src/workflow.rs
+index af3bef3..6abc36b 100644
+--- a/crates/bili_sync/src/workflow.rs
++++ b/crates/bili_sync/src/workflow.rs
+@@ -12,6 +12,7 @@ use sea_orm::TransactionTrait;
+ use sea_orm::entity::prelude::*;
+ use tokio::fs;
+ use tokio::sync::Semaphore;
++use sysinfo::Disks;
+
+ use crate::adapter::{VideoSource, VideoSourceEnum};
+ use crate::bilibili::{BestStream, BiliClient, BiliError, Dimension, PageInfo, Video, VideoInfo};
+@@ -333,6 +334,9 @@ pub async fn download_video_pages(
+             bail!(e);
+         }
+     }
++    if std::env::var("BILI_SYNC_FLAT_OUTPUT").as_deref() == Ok("1") {
++        let _ = fs::remove_dir(&base_path).await;
++    }
+     let mut video_active_model: video::ActiveModel = video_model.into();
+     video_active_model.download_status = Set(status.into());
+     video_active_model.path = Set(base_path.to_string_lossy().to_string());
+@@ -405,6 +409,7 @@ pub async fn download_page(
+     let mut status = PageStatus::from(page_model.download_status);
+     let separate_status = status.should_run();
+     let is_single_page = video_model.single_page.context("single_page is null")?;
++    let flat_output = std::env::var("BILI_SYNC_FLAT_OUTPUT").as_deref() == Ok("1");
+     // 未记录路径时填充，已经填充过路径时使用现有的
+     let (base_path, base_name) = if let Some(old_video_path) = &page_model.path
+         && !old_video_path.is_empty()
+@@ -414,7 +419,7 @@ pub async fn download_page(
+             .file_name()
+             .context("invalid page path format")?
+             .to_string_lossy();
+-        if is_single_page {
++        if flat_output || is_single_page {
+             // 单页下的路径是 {base_path}/{base_name}.mp4
+             (
+                 old_video_path.parent().context("invalid page path format")?,
+@@ -434,6 +439,26 @@ pub async fn download_page(
+                     .to_string(),
+             )
+         }
++    } else if flat_output {
++        let root = base_path.parent().context("invalid flat output path")?;
++        let rendered = cx.template.path_safe_render(
++            "page",
++            &serde_json::json!({
++                "bvid": &video_model.bvid,
++                "title": &video_model.name,
++                "upper_name": &video_model.upper_name,
++                "upper_mid": &video_model.upper_id,
++                "ptitle": &page_model.name,
++                "pid": page_model.pid,
++                "pubtime": video_model.pubtime.and_utc().format(&cx.config.time_format).to_string(),
++                "fav_time": video_model.favtime.and_utc().format(&cx.config.time_format).to_string(),
++            }),
++        )?;
++        let mut name = if is_single_page { rendered } else { format!("{}_P{:0>2}", rendered, page_model.pid) };
++        if root.join(format!("{}.mp4", name)).exists() {
++            name = format!("{}_{}", name, video_model.bvid);
++        }
++        (root, name)
+     } else {
+         (
+             base_path,
+@@ -444,7 +469,7 @@ pub async fn download_page(
+         )
+     };
+     let base_path = dunce::canonicalize(base_path).context("canonicalize base path failed")?;
+-    let (poster_path, video_path, nfo_path, danmaku_path, fanart_path, subtitle_path) = if is_single_page {
++    let (poster_path, video_path, nfo_path, danmaku_path, fanart_path, subtitle_path) = if flat_output || is_single_page {
+         (
+             base_path.join(format!("{}-poster.jpg", &base_name)),
+             base_path.join(format!("{}.mp4", &base_name)),
+@@ -488,6 +513,14 @@ pub async fn download_page(
+         dimension,
+         ..Default::default()
+     };
++    if separate_status[1] {
++        let minimum = std::env::var("BILI_SYNC_MIN_FREE_BYTES").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
++        let free = Disks::new_with_refreshed_list().iter()
++            .filter(|disk| video_path.starts_with(disk.mount_point()))
++            .max_by_key(|disk| disk.mount_point().as_os_str().len())
++            .map(|disk| disk.available_space()).unwrap_or(0);
++        if free < minimum { bail!("paused_low_disk"); }
++    }
+     let (res_1, res_2, res_3, res_4, res_5) = tokio::join!(
+         // 下载分页封面
+         fetch_page_poster(
