@@ -23,6 +23,8 @@ def main(argv=None):
         commands.add_parser(name)
     commands.add_parser("telegram-accounts")
     commands.add_parser("pixiv-login", help="authorize Pixiv once and persist token plus UID automatically")
+    xhs_resume = commands.add_parser("xhs-resume", help="manually clear the persistent Xiaohongshu safety fuse")
+    xhs_resume.add_argument("--account", default="personal")
     commands.add_parser('telegram-relayout', help='migrate existing Telegram downloads to the configured flat directory')
     review = commands.add_parser('x-review', help='download an explicit review sample without changing the likes baseline')
     review.add_argument('--source', choices=('likes', 'bookmarks'), default='likes')
@@ -73,6 +75,16 @@ def main(argv=None):
                 except requests.RequestException:
                     result["external_services"]["wallabag"] = "unreachable"
                 print(json.dumps(result, ensure_ascii=False, indent=2))
+            finally:
+                db.close()
+            return 0
+        if args.command == "xhs-resume":
+            db = Store(cfg["state_dir"])
+            try:
+                previous = db.xhs_fuse(args.account)
+                db.clear_xhs_fuse(args.account)
+                print(json.dumps({"account": args.account, "cleared": bool(previous),
+                                  "previous": previous}, ensure_ascii=False))
             finally:
                 db.close()
             return 0

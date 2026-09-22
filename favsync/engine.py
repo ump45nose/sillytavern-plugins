@@ -18,6 +18,8 @@ from .journal import append_entry
 
 
 log = logging.getLogger("favsync")
+XHS_FUSE_ERRORS = {"auth_required", "verification_required", "rate_limited",
+                   "risk_control_suspected", "xhs_account_changed"}
 
 
 class Engine:
@@ -106,6 +108,9 @@ class Engine:
 
     def _cycle(self):
         self.attempted.clear()
+        for adapter in set(self.adapters.values()):
+            if hasattr(adapter, "begin_run"):
+                adapter.begin_run()
         failures = False
         for source, section, adapter in self.sources():
             account = section["account"]
@@ -127,7 +132,13 @@ class Engine:
                 log.info("%s: awaiting_start_date", source)
                 continue
             x_source = source.startswith("x_") and not source.startswith("xhs_")
+            xhs_source = source.startswith("xhs_")
             digest = cookies.fingerprint(self.cfg) if x_source else None
+            if xhs_source and (fuse := self.store.xhs_fuse(account)):
+                failures = True
+                self.store.update(source, account, scan_status="paused_risk", error=fuse["reason"])
+                log.warning("%s: paused_risk (%s); run xhs-resume after review", source, fuse["reason"])
+                continue
             try:
                 if x_source:
                     self.check_x(account)
@@ -174,7 +185,11 @@ class Engine:
                 log.info("%s: %s, discovered=%d", source, outcome, len(records))
             except SyncError as exc:
                 failures = True
-                self.store.update(source, account, scan_status="incomplete", error=exc.code)
+                if xhs_source and exc.code in XHS_FUSE_ERRORS:
+                    self.store.set_xhs_fuse(account, exc.code)
+                    self.store.update(source, account, scan_status="paused_risk", error=exc.code)
+                else:
+                    self.store.update(source, account, scan_status="incomplete", error=exc.code)
                 log.warning("%s: %s", source, exc.code)
                 if x_source and exc.code == "auth_required":
                     self.store.setting("x_blocked_cookie", digest)
@@ -182,7 +197,8 @@ class Engine:
                     self.store.setting("telegram_blocked_session:" + account, self.telegram_session_digest(account))
                 if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
                     self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
-                if exc.code in ("auth_required", "rate_limited", "x_account_changed", "eh_account_changed",
+                if exc.code in ("auth_required", "rate_limited", "verification_required", "risk_control_suspected",
+                                "x_account_changed", "eh_account_changed",
                                 "xhs_account_changed", "pixiv_account_changed", "wallabag_account_changed",
                                 "telegram_account_changed", "telegram_session_in_use"):
                     continue
@@ -198,7 +214,11 @@ class Engine:
                     failures = True
             except SyncError as exc:
                 failures = True
-                self.store.update(source, account, error=exc.code)
+                if source.startswith("xhs_") and exc.code in XHS_FUSE_ERRORS:
+                    self.store.set_xhs_fuse(account, exc.code)
+                    self.store.update(source, account, scan_status="paused_risk", error=exc.code)
+                else:
+                    self.store.update(source, account, error=exc.code)
                 if x_source and exc.code == "auth_required":
                     self.store.setting("x_blocked_cookie", digest)
                 elif source == "telegram" and exc.code == "auth_required":
@@ -222,6 +242,9 @@ class Engine:
             staging = folder / f".partial-{account}-{item['item_id']}"
             staging.mkdir(exist_ok=True)
             if item["bundle_status"] in ("pending", "failed", "paused_low_disk"):
+                if hasattr(adapter, "take_bundle_slot") and not adapter.take_bundle_slot():
+                    log.info("%s: bundle request budget exhausted; remaining items deferred", source)
+                    break
                 if not self.disk_ready():
                     self.store.bundle_result(item, "paused_low_disk")
                     self.store.update(source, account, scan_status="paused_low_disk", error="low_disk")
@@ -232,9 +255,14 @@ class Engine:
                     self.store.bundle_result(item)
                     log.info("%s: item=%s bundle downloaded", source, item["item_id"])
                 except SyncError as exc:
+                    if exc.code == "deferred_request_budget":
+                        log.info("%s: detail request budget exhausted; remaining items deferred", source)
+                        break
                     self.store.bundle_result(item, exc.code)
                     success = False
                     log.warning("%s: item=%s %s", source, item["item_id"], exc.code)
+                    if item["platform"] == "xhs" and exc.code in XHS_FUSE_ERRORS:
+                        raise
                 except OSError:
                     self.store.bundle_result(item, "filesystem_error")
                     success = False

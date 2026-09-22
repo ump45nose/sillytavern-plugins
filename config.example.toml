@@ -58,17 +58,23 @@ output_dir = "/eh-downloads"
 strict_original = true
 
 [xhs_favorites]
-enabled = false # 首次启用回填当前接口可见的全部收藏。
+enabled = false # 受限增量同步；不自动回填整个历史收藏。
 account = "personal"
 
 [xhs_likes]
-enabled = false # 首次启用回填当前接口可见的全部点赞。
+enabled = false # 受限增量同步；不自动回填整个历史点赞。
 account = "personal"
 
 [xhs]
 output_dir = "/downloads/Xiaohongshu"
 cli_binary = "xhs"
 downloader_url = "http://127.0.0.1:5556"
+max_pages_per_run = 2
+max_new_items_per_run = 5
+max_detail_items_per_run = 5
+request_delay_min_seconds = 15
+request_delay_max_seconds = 30
+detail_cache_ttl_seconds = 86400
 
 [pixiv_art_public]
 enabled = false

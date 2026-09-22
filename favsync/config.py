@@ -118,6 +118,22 @@ def load(path):
     xhs.setdefault("cli_binary", "xhs")
     xhs.setdefault("downloader_url", "http://127.0.0.1:5556")
     xhs.setdefault("staging_dir", str(Path(cfg["state_dir"]) / "xhs-staging"))
+    xhs.setdefault("max_pages_per_run", 2)
+    xhs.setdefault("max_new_items_per_run", 5)
+    xhs.setdefault("max_detail_items_per_run", 5)
+    xhs.setdefault("request_delay_min_seconds", 15)
+    xhs.setdefault("request_delay_max_seconds", 30)
+    xhs.setdefault("detail_cache_ttl_seconds", 86400)
+    for name in ("max_pages_per_run", "max_new_items_per_run", "max_detail_items_per_run"):
+        if not isinstance(xhs[name], int) or not 1 <= xhs[name] <= 10:
+            raise ValueError(f"xhs.{name} must be between 1 and 10")
+    for name in ("request_delay_min_seconds", "request_delay_max_seconds"):
+        if not isinstance(xhs[name], (int, float)) or xhs[name] < 0:
+            raise ValueError(f"xhs.{name} must be non-negative")
+    if xhs["request_delay_min_seconds"] > xhs["request_delay_max_seconds"]:
+        raise ValueError("xhs request delay range is invalid")
+    if not isinstance(xhs["detail_cache_ttl_seconds"], int) or xhs["detail_cache_ttl_seconds"] < 0:
+        raise ValueError("xhs.detail_cache_ttl_seconds must be non-negative")
     pixiv = cfg.setdefault("pixiv", {})
     pixiv.setdefault("uid", "")
     pixiv.setdefault("start_date", "")

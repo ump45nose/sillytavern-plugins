@@ -22,8 +22,9 @@ Bilibili WebUI 位于 `http://192.168.31.201:12345`。认证 token 保存在
 读取；不要从容器日志取 token。添加指定收藏夹，保存路径选择 `/downloads/Bilibili`。下游补丁默认每 8 小时
 扫描、使用 `作者_标题` 平铺命名，只保存视频和字幕。
 
-EH 首次完整扫描只建立基线，不下载旧收藏。小红书首次启用会回填接口当前可见的
-全部点赞或收藏。启用相应配置后，先以前台方式执行并检查结果：
+EH 首次完整扫描只建立基线，不下载旧收藏。小红书使用受限增量模式：每轮最多读取
+2 页、接纳 5 条新笔记、查询 5 条详情；遇到一整页均为已见 ID 时立即停止。它不再
+自动回填整个历史列表。启用相应配置后，先以前台方式执行并检查结果：
 
 ```bash
 docker compose --profile extended run --rm favsync --config /app/config.toml sync-once
@@ -32,6 +33,17 @@ docker compose --profile extended run --rm favsync --config /app/config.toml sta
 
 验收后再用 `docker compose --profile extended up -d --build` 启动常驻任务。低于
 200 GiB 时暂停新下载，恢复到 220 GiB 后继续；远端取消收藏不会删除本地文件。
+
+小红书的 `auth_required`、验证码、461/471、429、IP 限制、账号变化或连续详情异常会
+写入持久安全熔断。Cookie 更新和容器重启都不会自动解除。处理登录/验证并检查原因后，
+先保持两个来源关闭，手工清除熔断，再前台启用一项做小批量验收：
+
+```bash
+docker compose run --rm favsync --config /app/config.toml xhs-resume --account personal
+```
+
+详情解析成功后会短期缓存；媒体下载失败不会在同一轮反复查询作品页面。两个来源共享
+单轮详情额度和 15–30 秒随机请求间隔。真实浏览器/CDP 也不能消除平台风控风险。
 
 ## 开始使用
 

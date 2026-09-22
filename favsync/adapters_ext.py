@@ -10,10 +10,12 @@ import json
 import os
 import http.cookiejar
 from pathlib import Path
+import random
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import quote, urlparse
 import xml.etree.ElementTree as ET
 import zipfile
@@ -62,6 +64,8 @@ def _json_command(argv, timeout, env=None):
         text = result.stderr.decode("utf-8", "replace").lower()
         if any(x in text for x in ("verification", "captcha", "461", "471", "登录")):
             raise SyncError("verification_required")
+        if any(x in text for x in ("429", "rate limit", "too many requests", "频率")):
+            raise SyncError("rate_limited")
         raise SyncError("scan_incomplete")
     raise SyncError("invalid_export")
 
@@ -69,6 +73,30 @@ def _json_command(argv, timeout, env=None):
 class XhsAdapter:
     def __init__(self, cfg, store=None):
         self.cfg, self.store = cfg, store
+        self.begin_run()
+
+    def begin_run(self):
+        self._identity_cache = None
+        self._last_request_at = 0.0
+        self._discover_remaining = self.cfg["xhs"]["max_new_items_per_run"]
+        self._detail_remaining = self.cfg["xhs"]["max_detail_items_per_run"]
+        self._bundle_remaining = self.cfg["xhs"]["max_detail_items_per_run"]
+        self._detail_failures = 0
+
+    def _pace(self):
+        low = float(self.cfg["xhs"]["request_delay_min_seconds"])
+        high = float(self.cfg["xhs"]["request_delay_max_seconds"])
+        if self._last_request_at:
+            wait = random.uniform(low, high) - (time.monotonic() - self._last_request_at)
+            if wait > 0:
+                time.sleep(wait)
+        self._last_request_at = time.monotonic()
+
+    def take_bundle_slot(self):
+        if self._bundle_remaining <= 0:
+            return False
+        self._bundle_remaining -= 1
+        return True
 
     def _env(self):
         env = os.environ.copy()
@@ -112,18 +140,34 @@ class XhsAdapter:
         self.identity()
         kind = "favorites" if source == "xhs_favorites" else "likes"
         records, seen_cursors, cursor_value = [], set(), ""
-        while True:
+        account = self.cfg[source]["account"]
+        for _page in range(self.cfg["xhs"]["max_pages_per_run"]):
+            if self._discover_remaining <= 0:
+                break
             argv = [self.cfg["xhs"]["cli_binary"], kind, "--json"]
             if cursor_value:
                 argv += ["--cursor", cursor_value]
+            self._pace()
             payload = _json_command(argv, self.cfg["command_timeout_seconds"], self._env())
             if not payload.get("ok"):
-                code = (payload.get("error") or {}).get("code", "scan_incomplete")
-                if code in ("not_authenticated", "unauthenticated", "login_required", "auth_required"):
+                code = str((payload.get("error") or {}).get("code", "scan_incomplete")).lower()
+                if code in ("not_authenticated", "unauthenticated", "login_required", "auth_required", "session_expired"):
                     raise SyncError("auth_required")
-                raise SyncError("verification_required" if code in ("verification_required", "ip_blocked") else "scan_incomplete")
+                if code in ("verification_required", "captcha_required", "ip_blocked", "461", "471"):
+                    raise SyncError("verification_required")
+                if code in ("rate_limited", "too_many_requests", "429"):
+                    raise SyncError("rate_limited")
+                raise SyncError("scan_incomplete")
             data = payload.get("data") or {}
-            records.extend(self._note(n) for n in data.get("notes", []))
+            page_records = [self._note(n) for n in data.get("notes", [])]
+            page_seen = self.store.seen_ids(source, account, (r["id"] for r in page_records))
+            fresh = [r for r in page_records if r["id"] not in page_seen]
+            selected = fresh[:self._discover_remaining]
+            records.extend(selected)
+            self._discover_remaining -= len(selected)
+            # A complete already-seen page is the durable incremental boundary.
+            if page_records and len(page_seen) == len(page_records):
+                break
             if not data.get("has_more"):
                 break
             next_cursor = str(data.get("cursor") or "")
@@ -134,6 +178,9 @@ class XhsAdapter:
         return records, None
 
     def identity(self):
+        if self._identity_cache is not None:
+            return self._identity_cache
+        self._pace()
         payload = _json_command([self.cfg["xhs"]["cli_binary"], "status", "--json"],
                                 self.cfg["command_timeout_seconds"], self._env())
         if not payload.get("ok"):
@@ -143,6 +190,7 @@ class XhsAdapter:
         user_id = str(user.get("id") or user.get("user_id") or "").strip()
         if not user_id or user.get("guest"):
             raise SyncError("auth_required")
+        self._identity_cache = user_id
         return user_id
 
     def download_bundle(self, item, staging):
@@ -152,18 +200,30 @@ class XhsAdapter:
         # The downloader runs in a bridged container, where the host's
         # 127.0.0.1 proxy would point back at the container itself. Its direct
         # route is usable; Favsync still applies the host proxy to media fetches.
-        body = {"url": locator["url"], "download": False, "cookie": cookie,
-                "proxy": None, "check_record": False}
         session = requests.Session(); session.trust_env = False
-        try:
-            response = session.post(self.cfg["xhs"]["downloader_url"].rstrip("/") + "/xhs/detail",
-                                    json=body, timeout=self.cfg["command_timeout_seconds"])
-            response.raise_for_status(); payload = response.json()
-        except Exception:
-            raise SyncError("xhs_downloader_unavailable") from None
-        data = payload.get("data")
-        if not data:
-            raise SyncError("content_unavailable")
+        data = self.store.xhs_detail(item["account"], item["item_id"],
+                                     self.cfg["xhs"]["detail_cache_ttl_seconds"])
+        if data is None:
+            if self._detail_remaining <= 0:
+                raise SyncError("deferred_request_budget")
+            self._detail_remaining -= 1
+            self._pace()
+            body = {"url": locator["url"], "download": False, "cookie": cookie,
+                    "proxy": None, "check_record": False}
+            try:
+                response = session.post(self.cfg["xhs"]["downloader_url"].rstrip("/") + "/xhs/detail",
+                                        json=body, timeout=self.cfg["command_timeout_seconds"])
+                response.raise_for_status(); payload = response.json()
+            except Exception:
+                raise SyncError("xhs_downloader_unavailable") from None
+            data = payload.get("data")
+            if not data:
+                self._detail_failures += 1
+                if self._detail_failures >= 2:
+                    raise SyncError("risk_control_suspected")
+                raise SyncError("content_unavailable")
+            self._detail_failures = 0
+            self.store.save_xhs_detail(item["account"], item["item_id"], data)
         urls = []
         def walk(value, key=""):
             if isinstance(value, dict):
@@ -175,6 +235,7 @@ class XhsAdapter:
         walk(data)
         urls = list(dict.fromkeys(urls))
         if not urls:
+            self.store.delete_xhs_detail(item["account"], item["item_id"])
             raise SyncError("media_unavailable")
         author = str(data.get("作者昵称") or locator.get("author") or "作者未知")
         raw_published = str(data.get("发布时间") or "")
@@ -201,10 +262,15 @@ class XhsAdapter:
                 with session.get(url, headers={"Cookie": cookie, "Referer": locator["url"]},
                                  proxies={"http": proxy, "https": proxy} if proxy else None,
                                  stream=True, timeout=120) as media:
+                    if media.status_code in (401, 403, 404):
+                        self.store.delete_xhs_detail(item["account"], item["item_id"])
+                        raise SyncError("media_url_expired")
                     media.raise_for_status()
                     with target.open("wb") as out:
                         for chunk in media.iter_content(1024 * 1024):
                             if chunk: out.write(chunk)
+            except SyncError:
+                raise
             except Exception:
                 raise SyncError("download_failed") from None
             if not target.stat().st_size or not _valid_media(target):

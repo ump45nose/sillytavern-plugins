@@ -52,6 +52,10 @@ class Store:
           account TEXT NOT NULL, entry_id TEXT NOT NULL, fingerprint TEXT,
           filename TEXT NOT NULL, attachment_status TEXT,
           PRIMARY KEY(account,entry_id), UNIQUE(account,filename));
+        CREATE TABLE IF NOT EXISTS xhs_details (
+          account TEXT NOT NULL, item_id TEXT NOT NULL, payload TEXT NOT NULL,
+          updated_at REAL NOT NULL,
+          PRIMARY KEY(account,item_id));
         """)
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
         if "bundle_status" not in columns:
@@ -90,6 +94,54 @@ class Store:
                 self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (key, value))
         row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         return row[0] if row else None
+
+    def delete_setting(self, key):
+        with self.db:
+            self.db.execute("DELETE FROM settings WHERE key=?", (key,))
+
+    def xhs_fuse(self, account):
+        value = self.setting("xhs_fuse:" + account)
+        return json.loads(value) if value else None
+
+    def set_xhs_fuse(self, account, reason):
+        self.setting("xhs_fuse:" + account, json.dumps({"reason": reason, "at": time.time()}))
+
+    def clear_xhs_fuse(self, account):
+        self.delete_setting("xhs_fuse:" + account)
+
+    def seen_ids(self, source, account, item_ids):
+        item_ids = list(dict.fromkeys(str(item_id) for item_id in item_ids if item_id))
+        if not item_ids:
+            return set()
+        placeholders = ",".join("?" for _ in item_ids)
+        rows = self.db.execute(
+            f"SELECT item_id FROM seen WHERE source=? AND account=? AND item_id IN ({placeholders})",
+            (source, account, *item_ids),
+        )
+        return {row[0] for row in rows}
+
+    def xhs_detail(self, account, item_id, max_age):
+        row = self.db.execute(
+            "SELECT payload,updated_at FROM xhs_details WHERE account=? AND item_id=?",
+            (account, item_id),
+        ).fetchone()
+        if not row or time.time() - row[1] > max_age:
+            return None
+        try:
+            return json.loads(row[0])
+        except ValueError:
+            return None
+
+    def save_xhs_detail(self, account, item_id, payload):
+        with self.db:
+            self.db.execute(
+                "INSERT OR REPLACE INTO xhs_details(account,item_id,payload,updated_at) VALUES(?,?,?,?)",
+                (account, item_id, json.dumps(payload, ensure_ascii=False), time.time()),
+            )
+
+    def delete_xhs_detail(self, account, item_id):
+        with self.db:
+            self.db.execute("DELETE FROM xhs_details WHERE account=? AND item_id=?", (account, item_id))
 
     def ingest(self, source, account, records, baseline=False, cursor=None, start_date=""):
         """One transaction: complete baseline OR seen + durable queue + scan cursor."""
@@ -277,4 +329,6 @@ class Store:
                 "SELECT kind,started_at,finished_at,result FROM execution_history ORDER BY id DESC LIMIT 20")],
             "wallabag_exports": [dict(r) for r in self.db.execute(
                 "SELECT attachment_status,count(*) AS count FROM wallabag_exports GROUP BY attachment_status")],
+            "xhs_fuses": {row[0].split(":", 1)[1]: json.loads(row[1])
+                           for row in self.db.execute("SELECT key,value FROM settings WHERE key LIKE 'xhs_fuse:%'")},
         }
