@@ -73,8 +73,12 @@ def login(cfg):
     """Run gallery-dl OAuth, hide the token, and persist the detected UID."""
     print("浏览器完成 Pixiv 登录后，复制回调页地址栏中的完整 URL（或 code）到这里。")
     print("授权码仅用于本次交换；refresh token 不会显示在终端。")
+    argv = [sys.executable, "-m", "gallery_dl"]
+    if proxy := proxy_url(cfg, "pixiv"):
+        argv += ["--proxy", proxy.replace("socks5://", "socks5h://")]
+    argv += ["oauth:pixiv"]
     process = subprocess.Popen(
-        [sys.executable, "-m", "gallery_dl", "oauth:pixiv"],
+        argv,
         stdin=None, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1,
     )
