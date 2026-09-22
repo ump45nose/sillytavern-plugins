@@ -134,6 +134,13 @@ docker compose exec favsync favsync --config /app/config.toml status
 
 `sync-once` 有失败返回非零；日期未填或来源关闭为正常待配置状态。`status` 展示来源扫描状态、点赞基线时间、附件状态数量、下载错误类别、待保存正文数和 Cookie 同步时间。它还展示最近 20 次内容同步及 CookieCloud 执行结果，只记录 `success` 或 `failed`；SQLite 最多保留 100 条。扫描完成不等于附件全部成功；请同时检查 `assets`、`download_errors` 和本地文件。
 
+当前 NAS 另由 Lingjun Hermes Cron `favsync-daily-summary`（ID `d11d29184eec`）每天
+09:10 将过去 24 小时的简单成功/失败和当前来源异常发送到 Telegram 运维 topic
+`telegram:1766985794:11829`。它是 no-agent 任务，不调用模型，也不触发下载；只通过
+`docker exec` 读取 `status` 的脱敏 JSON。部署脚本来源为
+`scripts/hermes_favsync_daily_summary.py`，运行副本位于
+`/home/hermes/.hermes/profiles/lingjun/scripts/favsync_daily_summary.py`。
+
 没有启动服务时也可运行 `docker compose run --rm favsync --config /app/config.toml status`。`state/worker.lock` 防止多个写入进程并发；状态查询可与常驻进程同时执行。
 
 ## 下载规则
