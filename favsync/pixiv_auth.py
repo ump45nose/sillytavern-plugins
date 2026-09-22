@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pickle
 import sqlite3
 import subprocess
 import sys
@@ -21,8 +22,9 @@ def _cached_refresh_token(cache_file):
                 "SELECT value FROM data WHERE key LIKE ? ORDER BY rowid DESC LIMIT 1",
                 ("gallery_dl.extractor.pixiv._refresh_token_cache-%",),
             ).fetchone()
-        token = json.loads(row[0]) if row else None
-    except (OSError, sqlite3.Error, ValueError, TypeError):
+        value = row[0] if row else None
+        token = pickle.loads(value) if isinstance(value, bytes) else json.loads(value)
+    except (OSError, sqlite3.Error, ValueError, TypeError, pickle.UnpicklingError, EOFError):
         token = None
     if not isinstance(token, str) or not token:
         raise SyncError("pixiv_authorization_not_saved")
@@ -69,8 +71,27 @@ def _identity(cfg, refresh_token):
             "name": str(user.get("name") or "")}
 
 
+def _save_identity(cfg, identity):
+    destination = Path(cfg["state_dir"]) / "pixiv-account.json"
+    temp = destination.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(identity, ensure_ascii=False) + "\n")
+    os.chmod(temp, 0o600)
+    os.replace(temp, destination)
+
+
 def login(cfg):
     """Run gallery-dl OAuth, hide the token, and persist the detected UID."""
+    home = Path(os.environ.get("HOME", "~")).expanduser()
+    cache_file = home / ".cache" / "gallery-dl" / "cache.sqlite3"
+    try:
+        identity = _identity(cfg, _cached_refresh_token(cache_file))
+    except SyncError:
+        identity = None
+    if identity:
+        _save_identity(cfg, identity)
+        print(f"Pixiv 已登录：UID {identity['uid']}；后续 access token 自动刷新。")
+        return 0
+
     print("浏览器完成 Pixiv 登录后，复制回调页地址栏中的完整 URL（或 code）到这里。")
     print("授权码仅用于本次交换；refresh token 不会显示在终端。")
     argv = [sys.executable, "-m", "gallery_dl"]
@@ -97,13 +118,7 @@ def login(cfg):
     if process.wait() != 0:
         raise SyncError("pixiv_authorization_failed")
 
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-    cache_file = home / ".cache" / "gallery-dl" / "cache.sqlite3"
     identity = _identity(cfg, _cached_refresh_token(cache_file))
-    destination = Path(cfg["state_dir"]) / "pixiv-account.json"
-    temp = destination.with_suffix(".json.tmp")
-    temp.write_text(json.dumps(identity, ensure_ascii=False) + "\n")
-    os.chmod(temp, 0o600)
-    os.replace(temp, destination)
+    _save_identity(cfg, identity)
     print(f"Pixiv 登录完成：UID {identity['uid']}；后续 access token 自动刷新。")
     return 0
