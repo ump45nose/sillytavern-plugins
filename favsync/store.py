@@ -102,7 +102,7 @@ class Store:
                 fresh = self.db.execute(
                     "INSERT OR IGNORE INTO seen VALUES(?,?,?,?,?)",
                     (source, account, r["id"], now, int(baseline))).rowcount
-                if baseline or (source == "x_likes" and not fresh):
+                if baseline or (not fresh and (source == "x_likes" or source.startswith("pixiv_"))):
                     continue
                 bundle = "pending" if r.get("bundle") else "none"
                 new_item = self.db.execute("INSERT OR IGNORE INTO items(platform,account,item_id,body,locator,bundle_status) VALUES(?,?,?,?,?,?)",
