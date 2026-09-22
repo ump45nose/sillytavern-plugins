@@ -22,6 +22,7 @@ def main(argv=None):
     for name in ("run", "sync-once", "status"):
         commands.add_parser(name)
     commands.add_parser("telegram-accounts")
+    commands.add_parser("pixiv-login", help="authorize Pixiv once and persist token plus UID automatically")
     commands.add_parser('telegram-relayout', help='migrate existing Telegram downloads to the configured flat directory')
     review = commands.add_parser('x-review', help='download an explicit review sample without changing the likes baseline')
     review.add_argument('--source', choices=('likes', 'bookmarks'), default='likes')
@@ -36,6 +37,9 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
         cfg = load(args.config)
+        if args.command == "pixiv-login":
+            from .pixiv_auth import login as pixiv_login
+            return pixiv_login(cfg)
         if args.command == "telegram-accounts":
             print(json.dumps([{"account": p["account"], "enabled": p["enabled"],
                                "start_date": str(p["start_date"]),

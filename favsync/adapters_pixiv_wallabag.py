@@ -67,12 +67,24 @@ class PixivAdapter:
             token = path.read_text().strip()
         except OSError:
             token = ""
-        if not token:
+        # pixiv-login stores the refresh token in gallery-dl's persistent,
+        # mode-0600 cache.  Keep compatibility with an explicit legacy file.
+        return token or "cache"
+
+    def _uid(self):
+        if uid := str(self.cfg["pixiv"].get("uid") or ""):
+            return uid
+        try:
+            payload = json.loads((Path(self.cfg["state_dir"]) / "pixiv-account.json").read_text())
+            uid = str(payload.get("uid") or "")
+        except (OSError, ValueError, TypeError):
+            uid = ""
+        if not uid.isdigit():
             raise SyncError("auth_required")
-        return token
+        return uid
 
     def identity(self):
-        return self.cfg["pixiv"]["uid"]
+        return self._uid()
 
     @contextmanager
     def config_file(self, destination=None):
@@ -123,9 +135,7 @@ class PixivAdapter:
         return events
 
     def scan(self, source, cursor=0, start=None):
-        uid = self.cfg["pixiv"]["uid"]
-        if not uid:
-            raise SyncError("configuration_required")
+        uid = self._uid()
         novel = "novel" in source
         private = source.endswith("private")
         kind = "novels" if novel else "artworks"

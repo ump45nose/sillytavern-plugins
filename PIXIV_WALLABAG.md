@@ -10,20 +10,21 @@ Pixiv 使用 gallery-dl 的官方 Pixiv 提取器。公开/私密插画收藏与
 提取器返回的作品类型，不按页数猜测。小说强制 `full-series=false`，只保存被收藏篇目；
 `novel_embeds` 只控制正文插图。
 
-先获取 OAuth refresh token。此命令会在终端显示敏感 token，不要把输出发到聊天或写入日志：
+首次只需要完成一次 Pixiv 浏览器授权。程序会把 refresh token 直接写入 gallery-dl 的
+持久化缓存、自动识别 UID，并且不会在终端显示 token：
 
 ```bash
 cd /home/yuwk/favsync
-docker compose run --rm --entrypoint gallery-dl favsync oauth:pixiv
-install -m 600 /dev/null secrets/pixiv-refresh-token
-# 在本机编辑 secrets/pixiv-refresh-token，只放一行 refresh token。
+docker compose run --rm favsync --config /app/config.toml pixiv-login
 ```
 
-然后编辑 `config.toml`：
+授权完成后无需填写 UID。Pixiv 的短期 access token 由 gallery-dl 在每次需要时自动刷新；
+只有用户撤销授权、账号安全操作导致 refresh token 失效时，才需要重新执行登录命令。
+启用所需来源：
 
 ```toml
 [pixiv]
-uid = "你的数字 UID"
+uid = "" # pixiv-login 自动识别；仅在需要显式覆盖时填写。
 refresh_token_file = "/run/favsync-secrets/pixiv-refresh-token"
 picture_dir = "/downloads/Pixiv/picture"
 novel_dir = "/downloads/Pixiv/noval"
@@ -79,7 +80,9 @@ docker compose --profile wallabag up -d wallabag
 docker compose ps wallabag
 ```
 
-当前 NAS 地址是 `http://192.168.31.201:18081`。部署生成的账号和 API 客户端凭据只保存在
+当前浏览器地址是 `https://wallabag-home.172906573.xyz:28443`，局域网后端仍只监听
+`192.168.31.201:18081`。SQLite 与站内图片分别持久化到 `state/wallabag/data` 和
+`state/wallabag/images`；重建容器不会重建账号、API 客户端或文章。部署生成的账号和 API 客户端凭据只保存在
 以下被 Git 忽略、权限为 0600 的本机文件中：
 
 ```bash
@@ -92,9 +95,10 @@ cat /home/yuwk/favsync/secrets/wallabag.json
 与其他用途共用账号时可配置标签列表。
 更换 Wallabag 用户时应使用新的本地 `account` 标签；沿用旧标签会报 `wallabag_account_changed`。
 
-在 Chrome 安装 Wallabagger 后填写同一 Wallabag 地址，以及 `secrets/wallabag.json` 中的
-client ID、client secret、username 和 password。对动态页面或登录后页面，启用 Wallabagger 的
-“保存时从浏览器获取正文”选项，让扩展提交当前已加载内容。保存后应在 Wallabag 列表中看到条目；
+在 Chrome 安装 Wallabagger 后，打开扩展设置并选择“从文件加载”，导入本机生成的
+`private/wallabagger-import.json`。文件已经包含域名、专用账号、API 客户端和“默认从浏览器获取正文”；
+首次仍需点击一次“检查 URL”并接受 Chrome 对该域名的访问权限，这是浏览器权限确认，无法由配置文件静默代替。
+保存后应在 Wallabag 列表中看到条目；
 这一步与 NAS EPUB 导出是两个独立状态。浏览器无法访问 NAS 时，扩展应显示失败。
 
 Favsync 完整分页读取 API，正文 HTML 指纹变化时覆盖同一个稳定文件，不因标题或标签变化制造副本：

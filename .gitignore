@@ -19,3 +19,4 @@ X_REVIEW_30.md
 *.db-wal
 secrets/*
 !secrets/.gitkeep
+private/
