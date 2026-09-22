@@ -50,15 +50,20 @@ def _json_command(argv, timeout, env=None):
                                 timeout=timeout, check=False, env=env)
     except (OSError, subprocess.TimeoutExpired):
         raise SyncError("tool_unavailable") from None
+    try:
+        payload = json.loads(result.stdout)
+    except ValueError:
+        payload = None
+    # Some xiaohongshu-cli commands intentionally return a non-zero code with
+    # a structured JSON error.  Preserve that code for the adapter to classify.
+    if payload is not None:
+        return payload
     if result.returncode:
         text = result.stderr.decode("utf-8", "replace").lower()
         if any(x in text for x in ("verification", "captcha", "461", "471", "登录")):
             raise SyncError("verification_required")
         raise SyncError("scan_incomplete")
-    try:
-        return json.loads(result.stdout)
-    except ValueError:
-        raise SyncError("invalid_export") from None
+    raise SyncError("invalid_export")
 
 
 class XhsAdapter:
