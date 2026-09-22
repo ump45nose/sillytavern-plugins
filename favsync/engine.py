@@ -113,9 +113,16 @@ class Engine:
             if not section["enabled"]:
                 self.store.update(source, account, scan_status="disabled")
                 continue
-            dated = source in ("telegram", "x_bookmarks")
-            start = start_timestamp(section.get("start_date", ""), self.cfg["timezone"]) if dated else None
+            pixiv_source = source.startswith("pixiv_")
+            dated = source in ("telegram", "x_bookmarks") or pixiv_source
+            configured_date = (self.cfg["pixiv"].get("start_date", "") if pixiv_source
+                               else section.get("start_date", ""))
+            start = start_timestamp(configured_date, self.cfg["timezone"]) if dated else None
             if dated and start is None:
+                self.store.update(source, account, scan_status="awaiting_start_date", error=None)
+                log.info("%s: awaiting_start_date", source)
+                continue
+            if pixiv_source and time.time() < start:
                 self.store.update(source, account, scan_status="awaiting_start_date", error=None)
                 log.info("%s: awaiting_start_date", source)
                 continue
@@ -126,7 +133,8 @@ class Engine:
                     self.check_x(account)
                 elif self.store.setting("telegram_blocked_session:" + account) == self.telegram_session_digest(account):
                     raise SyncError("auth_required")
-                baseline = source in ("x_likes", "eh_favorites") and state["baseline_at"] is None
+                baseline = ((source in ("x_likes", "eh_favorites") or pixiv_source)
+                            and state["baseline_at"] is None)
                 self.store.update(source, account, scan_status="initializing_baseline" if baseline else "scanning", error=None)
                 # Changing the date rescans historical Telegram messages idempotently.
                 cursor = state["cursor"] if state["start_date"] == str(section.get("start_date", "")) else 0
@@ -157,7 +165,7 @@ class Engine:
                     self.store.ingest_wallabag(source, account, records)
                 else:
                     self.store.ingest(source, account, records, baseline=baseline,
-                                      cursor=cursor, start_date=str(section.get("start_date", "")))
+                                      cursor=cursor, start_date=str(configured_date))
                 if bad_dates:
                     self.store.update(source, account, scan_status="incomplete", error="bookmark_time_unknown")
                     log.warning("%s: %d items deferred (bookmark_time_unknown)", source, bad_dates)

@@ -25,6 +25,7 @@ docker compose run --rm favsync --config /app/config.toml pixiv-login
 ```toml
 [pixiv]
 uid = "" # pixiv-login 自动识别；仅在需要显式覆盖时填写。
+start_date = "2026-09-22" # 当天首次完整扫描只建基线，之后下载新收藏。
 refresh_token_file = "/run/favsync-secrets/pixiv-refresh-token"
 picture_dir = "/downloads/Pixiv/picture"
 novel_dir = "/downloads/Pixiv/noval"
@@ -53,6 +54,10 @@ account = "personal"
 `ComicInfo.xml` 的 ZIP，并在正式改名之前检查页数和 CRC。动图默认关闭；启用后保存到
 `picture/ugoira`，首版不转换格式。文件名前缀是
 `作者_系列名(如有)_标题_作品ID`，多页追加 `_p001` 等稳定页号。
+
+Pixiv 当前接口不提供可靠的历史收藏操作时间。`start_date` 是自动化启用边界：日期到达后，
+每个可见性来源首次完整扫描只记录已有作品 ID，不下载；其后首次出现的收藏才进入下载队列。
+它不会用作品发布时间替代收藏时间，也不能恢复基线建立前当天早些时候的收藏。
 
 前台首轮验收：
 

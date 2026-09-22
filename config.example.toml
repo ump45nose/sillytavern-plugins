@@ -88,6 +88,7 @@ account = "personal"
 
 [pixiv]
 uid = ""
+start_date = "" # YYYY-MM-DD；当天首次完整扫描仅建基线，之后下载新收藏。
 refresh_token_file = "/run/favsync-secrets/pixiv-refresh-token"
 cookie_file = ""
 picture_dir = "/downloads/Pixiv/picture"
@@ -106,6 +107,7 @@ output_dir = "/downloads/Wallabag"
 tags = [] # 专用保存账号可留空；否则填写 ["novel"]。
 per_page = 50
 min_content_chars = 100
+export_timeout_seconds = 180
 
 [cookiecloud]
 enabled = true

@@ -120,6 +120,8 @@ def load(path):
     xhs.setdefault("staging_dir", str(Path(cfg["state_dir"]) / "xhs-staging"))
     pixiv = cfg.setdefault("pixiv", {})
     pixiv.setdefault("uid", "")
+    pixiv.setdefault("start_date", "")
+    start_timestamp(pixiv["start_date"], cfg["timezone"])
     if pixiv["uid"] and not str(pixiv["uid"]).isdigit():
         raise ValueError("pixiv.uid must be numeric")
     pixiv["uid"] = str(pixiv["uid"])
@@ -136,12 +138,15 @@ def load(path):
     wallabag.setdefault("tags", [])
     wallabag.setdefault("per_page", 50)
     wallabag.setdefault("min_content_chars", 100)
+    wallabag.setdefault("export_timeout_seconds", 180)
     if not isinstance(wallabag["tags"], list) or any(not isinstance(tag, str) for tag in wallabag["tags"]):
         raise ValueError("wallabag.tags must be an array of strings")
     if not isinstance(wallabag["per_page"], int) or not 1 <= wallabag["per_page"] <= 100:
         raise ValueError("wallabag.per_page must be between 1 and 100")
     if not isinstance(wallabag["min_content_chars"], int) or wallabag["min_content_chars"] < 1:
         raise ValueError("wallabag.min_content_chars must be positive")
+    if not isinstance(wallabag["export_timeout_seconds"], int) or wallabag["export_timeout_seconds"] < 30:
+        raise ValueError("wallabag.export_timeout_seconds must be at least 30")
     download_root = Path(cfg["download_dir"]).resolve()
     for name in ("picture_dir", "novel_dir"):
         if not Path(pixiv[name]).resolve().is_relative_to(download_root):

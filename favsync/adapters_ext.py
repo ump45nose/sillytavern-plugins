@@ -101,6 +101,10 @@ class XhsAdapter:
                             "naming": {"group": author, "date": published}}}
 
     def scan(self, source, cursor=0, start=None):
+        # The list commands can currently exit with an internal traceback when
+        # web_session has expired.  Check the structured status endpoint first
+        # so the scheduler reports auth_required instead of scan_incomplete.
+        self.identity()
         kind = "favorites" if source == "xhs_favorites" else "likes"
         records, seen_cursors, cursor_value = [], set(), ""
         while True:

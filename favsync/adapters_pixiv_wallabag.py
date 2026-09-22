@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from html.parser import HTMLParser
 import hashlib
+import html
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -120,14 +121,19 @@ class PixivAdapter:
     def _events(self, url):
         with self.config_file() as config, tempfile.TemporaryFile() as output:
             command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
-                    self.cfg["command_timeout_seconds"], output)
+                    self.cfg["command_timeout_seconds"], output, warnings_are_errors=False)
             output.seek(0)
             try:
                 events = json.load(output)
             except ValueError:
                 raise SyncError("invalid_export") from None
         errors = [event[-1] for event in events if isinstance(event, list) and event and event[0] == -1]
-        if errors:
+        usable = [event for event in events if isinstance(event, list) and event and event[0] in (1, 2, 3)
+                  and isinstance(event[-1], dict) and str(event[-1].get("id") or "").isdigit()]
+        # Deleted and My-Pixiv-only bookmarks appear as per-work errors while
+        # pagination itself completes.  They are outside the interface-visible
+        # download set and must not prevent a baseline from committing.
+        if errors and not usable:
             names = {str(error.get("error", "")) for error in errors if isinstance(error, dict)}
             if names & {"AuthenticationError", "AuthorizationError"}:
                 raise SyncError("auth_required")
@@ -313,9 +319,10 @@ class WallabagAdapter:
 
     def _get(self, path, **kwargs):
         headers = {"Authorization": "Bearer " + self._token()}
+        timeout = kwargs.pop("timeout", 120)
         try:
             response = self._session().get(self.cfg["wallabag"]["base_url"].rstrip("/") + path,
-                                           headers=headers, timeout=120, **kwargs)
+                                           headers=headers, timeout=timeout, **kwargs)
         except requests.RequestException:
             raise SyncError("network_failure") from None
         if response.status_code in (401, 403):
@@ -347,9 +354,11 @@ class WallabagAdapter:
                 normalized = re.sub(r"\s+", " ", text).strip()
                 normalized_html = re.sub(r"\s+", " ", str(entry.get("content") or "")).strip()
                 fingerprint = hashlib.sha256(normalized_html.encode()).hexdigest()
-                suspicious = (len(normalized) < self.cfg["wallabag"]["min_content_chars"] or
-                              ("password" in str(entry.get("content") or "").lower() and
-                               "<form" in str(entry.get("content") or "").lower()))
+                html = str(entry.get("content") or "")
+                password_form = bool(re.search(
+                    r"<form\b[^>]*>.*?<input\b[^>]*type\s*=\s*['\"]?password\b",
+                    html, flags=re.IGNORECASE | re.DOTALL))
+                suspicious = len(normalized) < self.cfg["wallabag"]["min_content_chars"] or password_form
                 records.append({"id": entry_id, "text": "", "assets": [], "bundle": True,
                                 "locator": {"title": str(entry.get("title") or entry_id),
                                             "url": str(entry.get("url") or ""),
@@ -410,6 +419,48 @@ class WallabagAdapter:
         except zipfile.BadZipFile:
             raise SyncError("epub_invalid") from None
 
+    def _fallback_epub(self, item, destination):
+        """Create a readable text EPUB when wallabag's PHPePub export stalls."""
+        try:
+            entry = self._get(f"/api/entries/{item['item_id']}.json", params={"detail": "full"}).json()
+        except ValueError:
+            raise SyncError("invalid_export") from None
+        text, _ = _html_summary(str(entry.get("content") or ""))
+        if len(text) < self.cfg["wallabag"]["min_content_chars"]:
+            raise SyncError("invalid_content")
+        title = str(entry.get("title") or item["item_id"])
+        source = str(entry.get("url") or "")
+        paragraphs = "".join(f"<p>{html.escape(part)}</p>" for part in text.split("\n") if part.strip())
+        xhtml = ("<?xml version='1.0' encoding='utf-8'?>"
+                 "<html xmlns='http://www.w3.org/1999/xhtml'><head>"
+                 f"<title>{html.escape(title)}</title></head><body><h1>{html.escape(title)}</h1>"
+                 f"<p><a href='{html.escape(source, quote=True)}'>{html.escape(source)}</a></p>"
+                 f"{paragraphs}</body></html>")
+        container = ("<?xml version='1.0'?>"
+                     "<container version='1.0' xmlns='urn:oasis:names:tc:opendocument:xmlns:container'>"
+                     "<rootfiles><rootfile full-path='OEBPS/content.opf' "
+                     "media-type='application/oebps-package+xml'/></rootfiles></container>")
+        opf = ("<?xml version='1.0' encoding='utf-8'?>"
+               "<package xmlns='http://www.idpf.org/2007/opf' unique-identifier='id' version='2.0'>"
+               "<metadata xmlns:dc='http://purl.org/dc/elements/1.1/'>"
+               f"<dc:identifier id='id'>wallabag-{item['item_id']}</dc:identifier>"
+               f"<dc:title>{html.escape(title)}</dc:title><dc:language>zh</dc:language></metadata>"
+               "<manifest><item id='content' href='content.xhtml' media-type='application/xhtml+xml'/>"
+               "<item id='ncx' href='toc.ncx' media-type='application/x-dtbncx+xml'/></manifest>"
+               "<spine toc='ncx'><itemref idref='content'/></spine></package>")
+        ncx = ("<?xml version='1.0' encoding='utf-8'?>"
+               "<ncx xmlns='http://www.daisy.org/z3986/2005/ncx/' version='2005-1'>"
+               f"<head><meta name='dtb:uid' content='wallabag-{item['item_id']}'/></head>"
+               f"<docTitle><text>{html.escape(title)}</text></docTitle><navMap>"
+               "<navPoint id='n1' playOrder='1'><navLabel><text>正文</text></navLabel>"
+               "<content src='content.xhtml'/></navPoint></navMap></ncx>")
+        with zipfile.ZipFile(destination, "w") as archive:
+            archive.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            archive.writestr("META-INF/container.xml", container)
+            archive.writestr("OEBPS/content.xhtml", xhtml)
+            archive.writestr("OEBPS/content.opf", opf)
+            archive.writestr("OEBPS/toc.ncx", ncx)
+
     def download_bundle(self, item, staging):
         locator = json.loads(item["locator"])
         if locator.get("invalid_content"):
@@ -418,15 +469,21 @@ class WallabagAdapter:
         proposed = component(locator.get("title") or item["item_id"], 180) + f"_[{item['item_id']}].epub"
         filename = self.store.wallabag_path(item["account"], item["item_id"], proposed)
         partial = staging / "entry.epub.part"
-        response = self._get(f"/api/entries/{item['item_id']}/export.epub", stream=True)
         try:
-            with partial.open("wb") as stream:
-                for chunk in response.iter_content(1024 * 1024):
-                    if chunk:
-                        stream.write(chunk)
-                stream.flush(); os.fsync(stream.fileno())
-        finally:
-            response.close()
+            response = self._get(f"/api/entries/{item['item_id']}/export.epub", stream=True,
+                                 timeout=self.cfg["wallabag"]["export_timeout_seconds"])
+            try:
+                with partial.open("wb") as stream:
+                    for chunk in response.iter_content(1024 * 1024):
+                        if chunk:
+                            stream.write(chunk)
+                    stream.flush(); os.fsync(stream.fileno())
+            finally:
+                response.close()
+        except SyncError as exc:
+            if exc.code != "network_failure":
+                raise
+            self._fallback_epub(item, partial)
         attachment_status = self._validate_epub(
             partial, self.cfg["wallabag"]["min_content_chars"], int(locator.get("image_count") or 0))
         final = output / filename
