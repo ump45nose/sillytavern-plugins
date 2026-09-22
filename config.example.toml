@@ -16,6 +16,8 @@ telegram = true
 x = true
 eh = true
 xhs = true
+pixiv = true
+wallabag = false
 cookiecloud = false # 本机 CookieCloud 默认直连。
 
 [storage]
@@ -67,6 +69,43 @@ account = "personal"
 output_dir = "/downloads/Xiaohongshu"
 cli_binary = "xhs"
 downloader_url = "http://127.0.0.1:5556"
+
+[pixiv_art_public]
+enabled = false
+account = "personal"
+
+[pixiv_art_private]
+enabled = false
+account = "personal"
+
+[pixiv_novel_public]
+enabled = false
+account = "personal"
+
+[pixiv_novel_private]
+enabled = false
+account = "personal"
+
+[pixiv]
+uid = ""
+refresh_token_file = "/run/favsync-secrets/pixiv-refresh-token"
+cookie_file = ""
+picture_dir = "/downloads/Pixiv/picture"
+novel_dir = "/downloads/Pixiv/noval"
+ugoira_enabled = false
+novel_embeds = true
+
+[wallabag_entries]
+enabled = false
+account = "personal"
+
+[wallabag]
+base_url = "http://192.168.31.201:18081"
+credentials_file = "/run/favsync-secrets/wallabag.json"
+output_dir = "/downloads/Wallabag"
+tags = [] # 专用保存账号可留空；否则填写 ["novel"]。
+per_page = 50
+min_content_chars = 100
 
 [cookiecloud]
 enabled = true

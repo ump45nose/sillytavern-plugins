@@ -46,7 +46,10 @@ def main(argv=None):
             db = Store(cfg["state_dir"])
             try:
                 result = db.status()
-                result["configured_enabled"] = {s: cfg[s]["enabled"] for s in ("telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes")}
+                result["configured_enabled"] = {s: cfg[s]["enabled"] for s in (
+                    "telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
+                    "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
+                    "wallabag_entries")}
                 result["telegram_accounts"] = [{"account": p["account"], "enabled": p["enabled"]} for p in telegram_accounts(cfg)]
                 try:
                     result["storage"].update({"free_bytes": shutil.disk_usage(cfg["download_dir"]).free,
@@ -60,6 +63,11 @@ def main(argv=None):
                     result["external_services"] = {"xhs_downloader": "ok" if response.ok else "http_error"}
                 except requests.RequestException:
                     result["external_services"] = {"xhs_downloader": "unreachable"}
+                try:
+                    response = session.get(cfg["wallabag"]["base_url"].rstrip("/") + "/", timeout=3)
+                    result["external_services"]["wallabag"] = "ok" if response.ok else "http_error"
+                except requests.RequestException:
+                    result["external_services"]["wallabag"] = "unreachable"
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             finally:
                 db.close()

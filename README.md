@@ -1,8 +1,10 @@
 # favsync
 
-配置驱动的轻量收藏下载器：Telegram Saved Messages、X 书签/点赞，以及可选的 EH、小红书和 Bilibili 下载服务。
+配置驱动的轻量收藏下载器：Telegram Saved Messages、X 书签/点赞，以及可选的 EH、小红书、Bilibili、Pixiv 收藏和 Wallabag EPUB 导出。
 
 Python 3.11 调度、SQLite 状态，底层使用固定提交的完整 gallery-dl、xiaohongshu-cli、XHS-Downloader 2.8、tdl 0.20.4 和带平铺补丁的 bili-sync 2.11.1；CookieCloud 提供 Chrome Cookie 同步。
+
+Pixiv 与 Wallabag 的部署、凭据和验收步骤见 [PIXIV_WALLABAG.md](PIXIV_WALLABAG.md)。两者复用现有 SQLite、8 小时调度、磁盘保护和执行结果记录，不增加新的队列或搜索服务。
 
 ## EH、小红书和 Bilibili
 

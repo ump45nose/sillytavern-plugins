@@ -6,10 +6,15 @@ import tomllib
 from urllib.parse import urlparse
 
 
-SOURCES = ("telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes")
+SOURCES = ("telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
+           "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
+           "wallabag_entries")
 SOURCE_PLATFORM = {"telegram": "telegram", "x_bookmarks": "x", "x_likes": "x",
-                   "eh_favorites": "eh", "xhs_favorites": "xhs", "xhs_likes": "xhs"}
-APPLICATIONS = ("telegram", "x", "eh", "xhs", "cookiecloud")
+                   "eh_favorites": "eh", "xhs_favorites": "xhs", "xhs_likes": "xhs",
+                   "pixiv_art_public": "pixiv", "pixiv_art_private": "pixiv",
+                   "pixiv_novel_public": "pixiv", "pixiv_novel_private": "pixiv",
+                   "wallabag_entries": "wallabag"}
+APPLICATIONS = ("telegram", "x", "eh", "xhs", "pixiv", "wallabag", "cookiecloud")
 
 
 def telegram_accounts(cfg):
@@ -113,6 +118,36 @@ def load(path):
     xhs.setdefault("cli_binary", "xhs")
     xhs.setdefault("downloader_url", "http://127.0.0.1:5556")
     xhs.setdefault("staging_dir", str(Path(cfg["state_dir"]) / "xhs-staging"))
+    pixiv = cfg.setdefault("pixiv", {})
+    pixiv.setdefault("uid", "")
+    if pixiv["uid"] and not str(pixiv["uid"]).isdigit():
+        raise ValueError("pixiv.uid must be numeric")
+    pixiv["uid"] = str(pixiv["uid"])
+    pixiv.setdefault("refresh_token_file", "/run/favsync-secrets/pixiv-refresh-token")
+    pixiv.setdefault("cookie_file", "")
+    pixiv.setdefault("picture_dir", str(Path(cfg["download_dir"]) / "Pixiv" / "picture"))
+    pixiv.setdefault("novel_dir", str(Path(cfg["download_dir"]) / "Pixiv" / "noval"))
+    pixiv.setdefault("ugoira_enabled", False)
+    pixiv.setdefault("novel_embeds", True)
+    wallabag = cfg.setdefault("wallabag", {})
+    wallabag.setdefault("base_url", "http://127.0.0.1:18081")
+    wallabag.setdefault("credentials_file", "/run/favsync-secrets/wallabag.json")
+    wallabag.setdefault("output_dir", str(Path(cfg["download_dir"]) / "Wallabag"))
+    wallabag.setdefault("tags", [])
+    wallabag.setdefault("per_page", 50)
+    wallabag.setdefault("min_content_chars", 100)
+    if not isinstance(wallabag["tags"], list) or any(not isinstance(tag, str) for tag in wallabag["tags"]):
+        raise ValueError("wallabag.tags must be an array of strings")
+    if not isinstance(wallabag["per_page"], int) or not 1 <= wallabag["per_page"] <= 100:
+        raise ValueError("wallabag.per_page must be between 1 and 100")
+    if not isinstance(wallabag["min_content_chars"], int) or wallabag["min_content_chars"] < 1:
+        raise ValueError("wallabag.min_content_chars must be positive")
+    download_root = Path(cfg["download_dir"]).resolve()
+    for name in ("picture_dir", "novel_dir"):
+        if not Path(pixiv[name]).resolve().is_relative_to(download_root):
+            raise ValueError(f"pixiv.{name} must be below download_dir")
+    if not Path(wallabag["output_dir"]).resolve().is_relative_to(download_root):
+        raise ValueError("wallabag.output_dir must be below download_dir")
     cc = cfg.setdefault("cookiecloud", {})
     cc.setdefault("enabled", False)
     cc.setdefault("interval_seconds", 28800)

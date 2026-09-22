@@ -9,6 +9,7 @@ import shutil
 from . import cookies
 from .adapters import TelegramAdapter, XAdapter
 from .adapters_ext import EhAdapter, XhsAdapter
+from .adapters_pixiv_wallabag import PixivAdapter, WallabagAdapter
 from .common import SyncError, atomic_write
 from .config import SOURCES, start_timestamp, telegram_accounts
 from .store import Store
@@ -26,6 +27,8 @@ class Engine:
         self.adapters = adapters or {"telegram": TelegramAdapter(cfg), "x": XAdapter(cfg)}
         self.adapters.setdefault("eh", EhAdapter(cfg, self.store))
         self.adapters.setdefault("xhs", XhsAdapter(cfg, self.store))
+        self.adapters.setdefault("pixiv", PixivAdapter(cfg, self.store))
+        self.adapters.setdefault("wallabag", WallabagAdapter(cfg, self.store))
         self.attempted = set()
 
     def sources(self):
@@ -37,6 +40,9 @@ class Engine:
         yield "eh_favorites", self.cfg["eh_favorites"], self.adapters["eh"]
         for name in ("xhs_favorites", "xhs_likes"):
             yield name, self.cfg[name], self.adapters["xhs"]
+        for name in ("pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private"):
+            yield name, self.cfg[name], self.adapters["pixiv"]
+        yield "wallabag_entries", self.cfg["wallabag_entries"], self.adapters["wallabag"]
 
     def cookie_sync(self):
         if not self.cfg["cookiecloud"]["enabled"]:
@@ -125,8 +131,11 @@ class Engine:
                 # Changing the date rescans historical Telegram messages idempotently.
                 cursor = state["cursor"] if state["start_date"] == str(section.get("start_date", "")) else 0
                 records, cursor = adapter.scan(source, cursor=cursor, start=start)
-                if source == "eh_favorites" or source.startswith("xhs_"):
-                    platform = "eh" if source == "eh_favorites" else "xhs"
+                if (source == "eh_favorites" or source.startswith("xhs_") or
+                        source.startswith("pixiv_") or source == "wallabag_entries"):
+                    platform = ("eh" if source == "eh_favorites" else
+                                "xhs" if source.startswith("xhs_") else
+                                "pixiv" if source.startswith("pixiv_") else "wallabag")
                     current_identity = adapter.identity()
                     identity_key = f"{platform}_identity:{account}"
                     previous_identity = self.store.setting(identity_key)
@@ -144,8 +153,11 @@ class Engine:
                     if previous and previous != peer:
                         raise SyncError("telegram_account_changed")
                     self.store.setting("tg_identity:" + account, peer)
-                self.store.ingest(source, account, records, baseline=baseline,
-                                  cursor=cursor, start_date=str(section.get("start_date", "")))
+                if source == "wallabag_entries":
+                    self.store.ingest_wallabag(source, account, records)
+                else:
+                    self.store.ingest(source, account, records, baseline=baseline,
+                                      cursor=cursor, start_date=str(section.get("start_date", "")))
                 if bad_dates:
                     self.store.update(source, account, scan_status="incomplete", error="bookmark_time_unknown")
                     log.warning("%s: %d items deferred (bookmark_time_unknown)", source, bad_dates)
@@ -163,7 +175,8 @@ class Engine:
                 if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
                     self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
                 if exc.code in ("auth_required", "rate_limited", "x_account_changed", "eh_account_changed",
-                                "xhs_account_changed", "telegram_account_changed", "telegram_session_in_use"):
+                                "xhs_account_changed", "pixiv_account_changed", "wallabag_account_changed",
+                                "telegram_account_changed", "telegram_session_in_use"):
                     continue
             except Exception as exc:
                 # Avoid tracebacks/exception messages containing third-party payloads.

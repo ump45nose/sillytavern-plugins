@@ -33,6 +33,10 @@ def platform_root(cfg, platform):
         return Path(cfg['xhs']['output_dir'])
     if platform == 'eh' and cfg.get('eh', {}).get('output_dir'):
         return Path(cfg['eh']['output_dir'])
+    if platform == 'pixiv':
+        return Path(cfg['download_dir']) / 'Pixiv'
+    if platform == 'wallabag' and cfg.get('wallabag', {}).get('output_dir'):
+        return Path(cfg['wallabag']['output_dir'])
     name = {'telegram': 'Telegram', 'x': 'Twitter', 'xhs': 'Xiaohongshu'}.get(platform, platform.capitalize())
     return Path(cfg['download_dir']) / name
 

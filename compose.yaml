@@ -84,5 +84,26 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
+  wallabag:
+    profiles: [wallabag]
+    image: wallabag/wallabag:2.6.14
+    restart: unless-stopped
+    ports:
+      - "${WALLABAG_BIND:-127.0.0.1}:${WALLABAG_PORT:-18081}:80"
+    environment:
+      TZ: Asia/Taipei
+      SYMFONY__ENV__DATABASE_DRIVER: pdo_sqlite
+      SYMFONY__ENV__DOMAIN_NAME: "${WALLABAG_URL:-http://127.0.0.1:18081}"
+      SYMFONY__ENV__SERVER_NAME: Favsync wallabag
+      SYMFONY__ENV__FOSUSER_REGISTRATION: "false"
+    volumes:
+      - ./state/wallabag/data:/var/www/wallabag/data
+      - ./state/wallabag/images:/var/www/wallabag/web/assets/images
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
 volumes:
   cookiecloud-data:

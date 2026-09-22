@@ -45,6 +45,13 @@ class Store:
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           kind TEXT NOT NULL, started_at REAL NOT NULL, finished_at REAL NOT NULL,
           result TEXT NOT NULL CHECK(result IN ('success','failed')));
+        CREATE TABLE IF NOT EXISTS pixiv_names (
+          account TEXT NOT NULL, item_id TEXT NOT NULL, stem TEXT NOT NULL,
+          PRIMARY KEY(account,item_id), UNIQUE(account,stem));
+        CREATE TABLE IF NOT EXISTS wallabag_exports (
+          account TEXT NOT NULL, entry_id TEXT NOT NULL, fingerprint TEXT,
+          filename TEXT NOT NULL, attachment_status TEXT,
+          PRIMARY KEY(account,entry_id), UNIQUE(account,filename));
         """)
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
         if "bundle_status" not in columns:
@@ -124,6 +131,34 @@ class Store:
             if cursor is not None:
                 self.db.execute("UPDATE sources SET cursor=? WHERE name=? AND account=?", (cursor, source, account))
 
+    def ingest_wallabag(self, source, account, records):
+        """Commit a complete Wallabag page walk while preserving failed exports."""
+        now = time.time()
+        with self.db:
+            for record in records:
+                item_id = record["id"]
+                self.db.execute("INSERT OR IGNORE INTO seen VALUES(?,?,?,?,0)",
+                                (source, account, item_id, now))
+                locator = json.dumps(record["locator"], ensure_ascii=False)
+                item = self.db.execute(
+                    "SELECT bundle_status,error,text_done FROM items WHERE platform='wallabag' AND account=? AND item_id=?",
+                    (account, item_id)).fetchone()
+                if item is None:
+                    self.db.execute("""INSERT INTO items(platform,account,item_id,body,locator,bundle_status)
+                                      VALUES('wallabag',?,?,?,?, 'pending')""",
+                                    (account, item_id, "", locator))
+                    continue
+                exported = self.db.execute(
+                    "SELECT fingerprint FROM wallabag_exports WHERE account=? AND entry_id=?",
+                    (account, item_id)).fetchone()
+                changed = exported is None or exported[0] != record["locator"]["fingerprint"]
+                self.db.execute("""UPDATE items SET locator=?,bundle_status=?,error=?,text_done=?
+                                  WHERE platform='wallabag' AND account=? AND item_id=?""",
+                                (locator, "pending" if changed else item[0], None if changed else item[1],
+                                 0 if changed else item[2], account, item_id))
+            self.db.execute("""UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,blocked_cookie=NULL
+                              WHERE name=? AND account=?""", (now, source, account))
+
     def pending(self, source, account):
         platform = SOURCE_PLATFORM.get(source)
         return self.db.execute("""SELECT DISTINCT i.* FROM items i JOIN seen s
@@ -168,6 +203,37 @@ class Store:
             self.db.execute("UPDATE xhs_names SET stem=? WHERE account=? AND item_id=?", (stem,account,item_id))
         return stem
 
+    def pixiv_stem(self, account, item_id, proposed):
+        row = self.db.execute("SELECT stem FROM pixiv_names WHERE account=? AND item_id=?",
+                              (account, item_id)).fetchone()
+        if row:
+            return row[0]
+        collision = self.db.execute("SELECT 1 FROM pixiv_names WHERE account=? AND stem=?",
+                                    (account, proposed)).fetchone()
+        stem = proposed if not collision else proposed + "_" + item_id.replace(":", "-")
+        with self.db:
+            self.db.execute("INSERT INTO pixiv_names VALUES(?,?,?)", (account, item_id, stem))
+        return stem
+
+    def wallabag_path(self, account, entry_id, proposed):
+        row = self.db.execute("SELECT filename FROM wallabag_exports WHERE account=? AND entry_id=?",
+                              (account, entry_id)).fetchone()
+        if row:
+            return row[0]
+        collision = self.db.execute("SELECT 1 FROM wallabag_exports WHERE account=? AND filename=?",
+                                    (account, proposed)).fetchone()
+        filename = proposed if not collision else f"{Path(proposed).stem}_{entry_id}.epub"
+        with self.db:
+            self.db.execute("INSERT INTO wallabag_exports(account,entry_id,filename) VALUES(?,?,?)",
+                            (account, entry_id, filename))
+        return filename
+
+    def wallabag_export_result(self, account, entry_id, fingerprint, attachment_status):
+        with self.db:
+            self.db.execute("""UPDATE wallabag_exports SET fingerprint=?,attachment_status=?
+                              WHERE account=? AND entry_id=?""",
+                            (fingerprint, attachment_status, account, entry_id))
+
     def eh_path(self, account, item_id, artist, title, output_dir):
         row = self.db.execute("SELECT relative_path FROM eh_names WHERE account=? AND item_id=?",
                               (account,item_id)).fetchone()
@@ -209,4 +275,6 @@ class Store:
                                       if self.setting("cookiecloud_status:" + name) is not None},
             "execution_history": [dict(r) for r in self.db.execute(
                 "SELECT kind,started_at,finished_at,result FROM execution_history ORDER BY id DESC LIMIT 20")],
+            "wallabag_exports": [dict(r) for r in self.db.execute(
+                "SELECT attachment_status,count(*) AS count FROM wallabag_exports GROUP BY attachment_status")],
         }
