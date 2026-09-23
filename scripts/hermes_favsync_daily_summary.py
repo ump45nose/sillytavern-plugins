@@ -79,10 +79,14 @@ def main() -> int:
             label = SOURCE_LABELS.get(str(source.get("name")), str(source.get("name")))
             detail = str(error or scan_status)
             problems.append(f"{label}={detail}")
+    skipped = []
     for bundle in status.get("bundle_errors", []):
         platform = str(bundle.get("platform") or "unknown")
         error = str(bundle.get("error") or "unknown")
         count = bundle.get("count", 0)
+        if bundle.get("bundle_status") == "skipped_invalid":
+            skipped.append(f"{platform} 正文不足（{count} 条）")
+            continue
         problems.append(f"{platform} 下载失败={error}（{count} 条）")
     for asset in status.get("download_errors", []):
         platform = str(asset.get("platform") or "unknown")
@@ -96,6 +100,8 @@ def main() -> int:
         if service_status != "ok":
             problems.append(f"{service}={service_status}")
     lines.append("当前异常：" + ("；".join(problems) if problems else "无"))
+    if skipped:
+        lines.append("已跳过：" + "；".join(skipped))
     print("\n".join(lines))
     return 0
 

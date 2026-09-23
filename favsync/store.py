@@ -65,6 +65,11 @@ class Store:
         xhs_columns = {r[1] for r in self.db.execute("PRAGMA table_info(xhs_names)")}
         if "stem" not in xhs_columns:
             self.db.execute("ALTER TABLE xhs_names ADD COLUMN stem TEXT")
+        # Old invalid Wallabag entries were retried every cycle. Keep their
+        # locator so a later content change can requeue them.
+        self.db.execute("""UPDATE items SET bundle_status='skipped_invalid',text_done=1
+                           WHERE platform='wallabag' AND bundle_status='failed'
+                           AND error='invalid_content'""")
         self.db.commit()
 
     def close(self):
@@ -184,7 +189,7 @@ class Store:
                 self.db.execute("UPDATE sources SET cursor=? WHERE name=? AND account=?", (cursor, source, account))
 
     def ingest_wallabag(self, source, account, records):
-        """Commit a complete Wallabag page walk while preserving failed exports."""
+        """Commit a complete page walk; retry invalid entries only after repair."""
         now = time.time()
         with self.db:
             for record in records:
@@ -192,22 +197,30 @@ class Store:
                 self.db.execute("INSERT OR IGNORE INTO seen VALUES(?,?,?,?,0)",
                                 (source, account, item_id, now))
                 locator = json.dumps(record["locator"], ensure_ascii=False)
+                invalid = bool(record["locator"].get("invalid_content"))
                 item = self.db.execute(
                     "SELECT bundle_status,error,text_done FROM items WHERE platform='wallabag' AND account=? AND item_id=?",
                     (account, item_id)).fetchone()
                 if item is None:
-                    self.db.execute("""INSERT INTO items(platform,account,item_id,body,locator,bundle_status)
-                                      VALUES('wallabag',?,?,?,?, 'pending')""",
-                                    (account, item_id, "", locator))
+                    self.db.execute("""INSERT INTO items(platform,account,item_id,body,locator,
+                                      bundle_status,error,text_done) VALUES('wallabag',?,?,?,?,?,?,?)""",
+                                    (account, item_id, "", locator,
+                                     "skipped_invalid" if invalid else "pending",
+                                     "invalid_content" if invalid else None, int(invalid)))
                     continue
                 exported = self.db.execute(
                     "SELECT fingerprint FROM wallabag_exports WHERE account=? AND entry_id=?",
                     (account, item_id)).fetchone()
                 changed = exported is None or exported[0] != record["locator"]["fingerprint"]
+                if invalid:
+                    bundle_status, error, text_done = "skipped_invalid", "invalid_content", 1
+                elif changed or item[0] == "skipped_invalid":
+                    bundle_status, error, text_done = "pending", None, 0
+                else:
+                    bundle_status, error, text_done = item
                 self.db.execute("""UPDATE items SET locator=?,bundle_status=?,error=?,text_done=?
                                   WHERE platform='wallabag' AND account=? AND item_id=?""",
-                                (locator, "pending" if changed else item[0], None if changed else item[1],
-                                 0 if changed else item[2], account, item_id))
+                                (locator, bundle_status, error, text_done, account, item_id))
             self.db.execute("""UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,blocked_cookie=NULL
                               WHERE name=? AND account=?""", (now, source, account))
 
@@ -225,10 +238,12 @@ class Store:
                                (item["platform"], item["account"], item["item_id"])).fetchall()
 
     def bundle_result(self, item, error=None):
-        status = "done" if not error else ("paused_low_disk" if error == "paused_low_disk" else "failed")
+        status = ("done" if not error else "skipped_invalid"
+                  if item["platform"] == "wallabag" and error == "invalid_content" else
+                  "paused_low_disk" if error == "paused_low_disk" else "failed")
         with self.db:
             self.db.execute("UPDATE items SET bundle_status=?,error=?,text_done=? WHERE platform=? AND account=? AND item_id=?",
-                            (status, error, 0 if error else 1,
+                            (status, error, 1 if status in ("done", "skipped_invalid") else 0,
                              item["platform"], item["account"], item["item_id"]))
 
     def xhs_ordinal(self, account, author, published, item_id):
@@ -316,7 +331,7 @@ class Store:
             "assets": [dict(r) for r in self.db.execute("SELECT platform,account,status,count(*) AS count FROM assets GROUP BY platform,account,status")],
             "download_errors": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM assets WHERE error IS NOT NULL GROUP BY platform,account,error")],
             "bundles": [dict(r) for r in self.db.execute("SELECT platform,account,bundle_status,count(*) AS count FROM items GROUP BY platform,account,bundle_status")],
-            "bundle_errors": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM items WHERE error IS NOT NULL GROUP BY platform,account,error")],
+            "bundle_errors": [dict(r) for r in self.db.execute("SELECT platform,account,bundle_status,error,count(*) AS count FROM items WHERE error IS NOT NULL GROUP BY platform,account,bundle_status,error")],
             "text_pending": self.db.execute("SELECT count(*) FROM items WHERE text_done=0").fetchone()[0],
             "storage": {"paused_low_disk": self.setting("low_disk_paused") == "1",
                         "free_bytes": int(self.setting("disk_free_bytes") or 0)},

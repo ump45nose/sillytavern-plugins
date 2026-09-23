@@ -97,6 +97,25 @@ class PixivWallabagSmoke(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_wallabag_invalid_content_stays_out_of_queue_until_repaired(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(directory)
+            try:
+                store.source("wallabag_entries", "personal")
+                record = {"id": "4", "locator": {"fingerprint": "short", "title": "Chapter",
+                                                  "invalid_content": True, "content_chars": 97}}
+                store.ingest_wallabag("wallabag_entries", "personal", [record])
+                self.assertEqual(list(store.pending("wallabag_entries", "personal")), [])
+                store.ingest_wallabag("wallabag_entries", "personal", [record])
+                self.assertEqual(list(store.pending("wallabag_entries", "personal")), [])
+                row = store.db.execute("SELECT bundle_status,error FROM items WHERE item_id='4'").fetchone()
+                self.assertEqual(tuple(row), ("skipped_invalid", "invalid_content"))
+                record["locator"].update(fingerprint="repaired", invalid_content=False, content_chars=250)
+                store.ingest_wallabag("wallabag_entries", "personal", [record])
+                self.assertEqual([r["item_id"] for r in store.pending("wallabag_entries", "personal")], ["4"])
+            finally:
+                store.close()
+
     def test_epub_body_and_image_completeness_are_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "entry.epub"

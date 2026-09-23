@@ -106,7 +106,7 @@ cat /home/yuwk/favsync/secrets/wallabag.json
 保存后应在 Wallabag 列表中看到条目；
 这一步与 NAS EPUB 导出是两个独立状态。浏览器无法访问 NAS 时，扩展应显示失败。
 
-Favsync 完整分页读取 API，正文 HTML 指纹变化时覆盖同一个稳定文件，不因标题或标签变化制造副本：
+Favsync 完整分页读取 API，正文 HTML 指纹变化时覆盖同一个稳定文件，不因标题或标签变化制造副本。正文不足最低字数或明显是登录页的条目记为 `skipped_invalid`，不反复下载；Wallabag 中的正文修复后，下一轮会自动重新入队：
 
 ```text
 /vol3/1000/Picture/Downloads/Wallabag/标题_[条目ID].epub

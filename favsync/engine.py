@@ -259,6 +259,10 @@ class Engine:
                         log.info("%s: detail request budget exhausted; remaining items deferred", source)
                         break
                     self.store.bundle_result(item, exc.code)
+                    if item["platform"] == "wallabag" and exc.code == "invalid_content":
+                        shutil.rmtree(staging, ignore_errors=True)
+                        log.info("%s: item=%s skipped_invalid", source, item["item_id"])
+                        continue
                     success = False
                     log.warning("%s: item=%s %s", source, item["item_id"], exc.code)
                     if item["platform"] == "xhs" and exc.code in XHS_FUSE_ERRORS:
