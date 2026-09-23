@@ -79,6 +79,16 @@ def main() -> int:
             label = SOURCE_LABELS.get(str(source.get("name")), str(source.get("name")))
             detail = str(error or scan_status)
             problems.append(f"{label}={detail}")
+    for bundle in status.get("bundle_errors", []):
+        platform = str(bundle.get("platform") or "unknown")
+        error = str(bundle.get("error") or "unknown")
+        count = bundle.get("count", 0)
+        problems.append(f"{platform} 下载失败={error}（{count} 条）")
+    for asset in status.get("download_errors", []):
+        platform = str(asset.get("platform") or "unknown")
+        error = str(asset.get("error") or "unknown")
+        count = asset.get("count", 0)
+        problems.append(f"{platform} 附件失败={error}（{count} 个）")
     storage = status.get("storage") or {}
     if storage.get("paused_low_disk"):
         problems.append("存储=paused_low_disk")
