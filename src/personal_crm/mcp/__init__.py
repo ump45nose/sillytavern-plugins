@@ -51,8 +51,7 @@ def _auth_check(settings: Any, *, write: bool):
         if not isinstance(username, str):
             return False
         authorized = any(
-            hmac.compare_digest(username, candidate)
-            for candidate in settings.authorized_usernames
+            hmac.compare_digest(username, candidate) for candidate in settings.authorized_usernames
         )
         if not authorized:
             return False
@@ -87,9 +86,7 @@ def _provider(settings: Any) -> tuple[OIDCProxy | None, FileTreeStore | None]:
     raw_store = FileTreeStore(
         data_directory=storage_path,
         key_sanitization_strategy=FileTreeV1KeySanitizationStrategy(storage_path),
-        collection_sanitization_strategy=FileTreeV1CollectionSanitizationStrategy(
-            storage_path
-        ),
+        collection_sanitization_strategy=FileTreeV1CollectionSanitizationStrategy(storage_path),
     )
     encrypted_store = FernetEncryptionWrapper(
         raw_store,
@@ -126,7 +123,7 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
 
     server = FastMCP(
         "personal-crm",
-        instructions="只读微信摘要，不代发消息；修改工具会返回 before/after。",
+        instructions="可读取指定日期的微信聊天原文，不代发消息；修改工具会返回 before/after。",
         auth=provider,
     )
     read_auth = _auth_check(settings, write=False)
@@ -180,6 +177,31 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
         """按时间倒序列出互动。"""
 
         return [_row(service, item) for item in service.repo.list_interactions(person_id, limit)]
+
+    @server.tool(auth=read_auth)
+    def get_daily_chat_records(
+        day: str,
+        timezone: str = "Asia/Shanghai",
+        offset: int = 0,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        """分页返回当天微信聊天原文；不在 CRM 内压缩或生成摘要。"""
+
+        try:
+            business_day = datetime.strptime(day, "%Y-%m-%d").date()
+            zone = ZoneInfo(timezone)
+        except (ValueError, ZoneInfoNotFoundError) as error:
+            raise ValueError("day 或 timezone 无效") from error
+        start = datetime.combine(business_day, time.min, zone)
+        rows = service.repo.daily_chat_records(start, start + timedelta(days=1), offset, limit)
+        return {
+            "date": day,
+            "timezone": timezone,
+            "offset": offset,
+            "limit": limit,
+            "records": rows,
+            "next_offset": offset + len(rows) if len(rows) == limit else None,
+        }
 
     @server.tool(auth=read_auth)
     def get_daily_summary(day: str, timezone: str = "Asia/Shanghai") -> dict[str, Any]:

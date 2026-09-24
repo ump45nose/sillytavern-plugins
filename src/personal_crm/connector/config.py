@@ -20,6 +20,7 @@ class ConnectorConfig:
     chatlog_scopes_path: str = (
         "~/Library/Application Support/personal-crm/wechat/whitelist-scopes.json"
     )
+    chatlog_scope_mode: str = "configured"
     chatlog_page_size: int = 200
     chatlog_window_seconds: int = 86400
     chatlog_overlap_seconds: int = 300
@@ -64,6 +65,7 @@ class ConnectorConfig:
             chatlog_executable=os.getenv("CHATLOG_EXECUTABLE", cls.chatlog_executable),
             chatlog_expected_sha256=os.getenv("CHATLOG_EXPECTED_SHA256", ""),
             chatlog_scopes_path=os.getenv("CHATLOG_SCOPES", cls.chatlog_scopes_path),
+            chatlog_scope_mode=os.getenv("CHATLOG_SCOPE_MODE", "configured"),
             chatlog_page_size=int(os.getenv("CHATLOG_PAGE_SIZE", "200")),
             chatlog_window_seconds=int(os.getenv("CHATLOG_WINDOW_SECONDS", "86400")),
             chatlog_overlap_seconds=int(os.getenv("CHATLOG_OVERLAP_SECONDS", "300")),

@@ -1,6 +1,6 @@
 # personal-crm
 
-面向个人 Agent 的模块化个人 CRM。NAS 保存唯一 SQLite 数据源并提供 Webhook 与 MCP；Mac Connector 通过本机 `chatlog-keeper message-stream-v1` 只读微信数据库，仅向 NAS 推送无正文互动摘要和本机定位引用。系统不自动发微信，也不包含 RPA、自动回复或代发能力。
+面向个人 Agent 的模块化个人 CRM。NAS 保存唯一 SQLite 数据源并提供 Webhook 与 MCP；Mac Connector 通过本机 `chatlog-keeper message-stream-v1` 只读微信数据库，可将单聊原文写入 NAS，供 MCP 按日期分页读取。系统不自动发微信，也不包含 RPA、自动回复或代发能力。
 
 ## 架构
 

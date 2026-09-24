@@ -17,7 +17,7 @@ from personal_crm.storage import CrmRepository
 
 @pytest.mark.asyncio
 async def test_mcp_registers_required_tools_and_calls_person_flow():
-    """验证十四个公共工具存在，且本地模式可完成建档和搜索。"""
+    """验证公共工具存在，且本地模式可完成建档和搜索。"""
 
     service = CrmService(CrmRepository("sqlite:///:memory:"))
     server = create_mcp(service, Settings())
@@ -27,6 +27,7 @@ async def test_mcp_registers_required_tools_and_calls_person_flow():
         "upsert_person",
         "list_interactions",
         "get_daily_summary",
+        "get_daily_chat_records",
         "record_interaction",
         "list_facts",
         "add_fact",
@@ -80,6 +81,30 @@ async def test_daily_summary_excludes_private_text_and_groups_changes():
     assert summary["facts"]["count"] == 1
     assert "私密摘要" not in str(summary)
     assert "事实正文" not in str(summary)
+
+
+@pytest.mark.asyncio
+async def test_daily_chat_records_returns_full_text_in_pages():
+    """验证指定业务日可分页取回原文，且不会裁剪长消息。"""
+
+    service = CrmService(CrmRepository("sqlite:///:memory:"))
+    person = service.create_person("张三")
+    body = "今日聊天正文" * 300
+    service.record_interaction(
+        person_id=person.id,
+        occurred_at=datetime(2026, 9, 6, 12, tzinfo=UTC),
+        direction="inbound",
+        channel="wechat",
+        summary=f"消息内容：{body}",
+    )
+    server = create_mcp(service, Settings())
+    result = await server.call_tool(
+        "get_daily_chat_records",
+        {"day": "2026-09-06", "limit": 1},
+        run_middleware=False,
+    )
+    assert result.structured_content["records"][0]["content"] == body
+    assert result.structured_content["next_offset"] == 1
 
 
 def oidc_settings(tmp_path, **overrides):
@@ -250,9 +275,7 @@ def test_streamable_http_mcp_initialize():
     assert "search_people" in tools_response.text
 
 
-def test_oauth_discovery_compatibility_endpoint(
-    tmp_path, mock_oidc_discovery
-):
+def test_oauth_discovery_compatibility_endpoint(tmp_path, mock_oidc_discovery):
     """验证无后缀发现端点直接返回 ChatGPT 可消费的资源元数据。"""
 
     settings = oidc_settings(tmp_path)

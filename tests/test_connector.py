@@ -203,8 +203,8 @@ def chatlog_config(tmp_path, scopes_path, **kwargs):
     )
 
 
-def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatch):
-    """验证 NDJSON 记录按 scope 对齐，且原始 content 在适配层立即丢弃。"""
+def test_chatlog_stream_maps_scope_and_preserves_raw_content(tmp_path, monkeypatch):
+    """验证 NDJSON 记录按 scope 对齐，且完整原文进入待同步事件。"""
 
     scopes = tmp_path / "scopes.json"
     scopes.write_text(
@@ -251,8 +251,7 @@ def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatc
     assert len(batch.events) == 1
     assert batch.events[0]["contact"] == "Alice"
     assert batch.events[0]["direction"] == "outbound"
-    assert "content" not in batch.events[0]
-    assert "secret" not in json.dumps(batch.events[0])
+    assert batch.events[0]["content"] == "secret"
 
 
 def test_rule_based_fact_extractor_only_accepts_explicit_inbound_statements():
@@ -269,8 +268,8 @@ def test_rule_based_fact_extractor_only_accepts_explicit_inbound_statements():
     assert extractor.extract("<msg>我喜欢手冲咖啡</msg>", "inbound") == []
 
 
-def test_chatlog_enabled_extraction_keeps_raw_text_out_of_event(tmp_path, monkeypatch):
-    """验证启用抽取后仅保留结构化事实，完整微信正文仍不会进入事件。"""
+def test_chatlog_enabled_extraction_preserves_raw_text(tmp_path, monkeypatch):
+    """验证启用事实抽取后，原始正文仍可进入互动记录。"""
 
     scopes = tmp_path / "scopes.json"
     scopes.write_text(
@@ -322,8 +321,7 @@ def test_chatlog_enabled_extraction_keeps_raw_text_out_of_event(tmp_path, monkey
         "contact",
     ]
     assert event_payload["facts"][1]["content"] == "微信联系人：Alice"
-    assert original not in json.dumps(event_payload, ensure_ascii=False)
-    assert "content" not in event_payload
+    assert event_payload["content"] == original
 
 
 def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):
@@ -350,6 +348,50 @@ def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):
 
     with pytest.raises(ChatlogSourceError, match="incomplete_stream"):
         ChatlogMessageSource(chatlog_config(tmp_path, scopes)).read({})
+
+
+def test_all_direct_directory_is_chunked_and_excludes_groups(tmp_path, monkeypatch):
+    """验证动态目录跳过群聊，并按消息协议的 128 会话上限分批。"""
+
+    scopes = tmp_path / "scopes.json"
+    scopes.write_text("[]", encoding="utf-8")
+    calls = []
+    directory = {
+        "available": True,
+        "conversations": [
+            {
+                "account_id": "account",
+                "conversation_id": f"wxid_{index:03d}",
+                "conversation_type": "direct",
+                "label": f"联系人 {index}",
+            }
+            for index in range(129)
+        ]
+        + [
+            {
+                "account_id": "account",
+                "conversation_id": "group",
+                "conversation_type": "group",
+                "label": "群聊",
+            }
+        ],
+    }
+
+    def fake_run(args, **kwargs):
+        """返回目录或完整的空消息流，并记录请求中的会话数。"""
+
+        if "directory" in args:
+            return SimpleNamespace(stdout=json.dumps(directory), stderr="", returncode=0)
+        request = json.loads(kwargs["input"])
+        calls.append(request["scopes"])
+        return SimpleNamespace(stdout='{"frame":"complete"}', stderr="", returncode=0)
+
+    monkeypatch.setattr("personal_crm.connector.chatlog.subprocess.run", fake_run)
+    config = chatlog_config(tmp_path, scopes)
+    config.chatlog_scope_mode = "all_direct"
+    assert ChatlogMessageSource(config).read({}).events == []
+    assert [len(chunk) for chunk in calls] == [128, 1]
+    assert all(scope["conversation_type"] == "direct" for chunk in calls for scope in chunk)
 
 
 def test_watch_output_only_contains_batch_aggregates(tmp_path):

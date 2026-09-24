@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class WebhookInteraction(BaseModel):
-    """只允许互动摘要字段，主动拒绝 raw/text/content 等完整正文。"""
+    """接收互动记录；summary 可承载带明确前缀的原始消息正文。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,7 +22,7 @@ class WebhookInteraction(BaseModel):
     interaction_type: str = "message"
     channel: str = "wechat"
     direction: str
-    summary: str = Field(min_length=1, max_length=1000)
+    summary: str = Field(min_length=1)
     source_reference: str | None = Field(default=None, max_length=1000)
     source_event_key: str = Field(min_length=1, max_length=128)
 

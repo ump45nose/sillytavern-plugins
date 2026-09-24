@@ -269,6 +269,40 @@ class CrmRepository:
                 statement = statement.where(Interaction.person_id == person_id)
             return list(session.scalars(statement))
 
+    def daily_chat_records(
+        self, start: datetime, end: datetime, offset: int = 0, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """按发生时间分页返回业务日完整微信记录，供下游自行处理原文。"""
+
+        if offset < 0 or not 1 <= limit <= 500:
+            raise ValueError("invalid page")
+        with self._sessions() as session:
+            rows = session.execute(
+                select(Interaction, Person.display_name)
+                .join(Person, Person.id == Interaction.person_id)
+                .where(
+                    Interaction.channel == "wechat",
+                    Interaction.occurred_at >= ensure_utc(start),
+                    Interaction.occurred_at < ensure_utc(end),
+                )
+                .order_by(Interaction.occurred_at, Interaction.id)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.id,
+                    "person_name": name,
+                    "occurred_at": item.occurred_at.isoformat(),
+                    "direction": item.direction,
+                    "message_type": item.interaction_type,
+                    "content": item.summary.removeprefix("消息内容：")
+                    if item.summary.startswith("消息内容：")
+                    else None,
+                }
+                for item, name in rows
+            ]
+
     def daily_summary(self, start: datetime, end: datetime) -> dict[str, Any]:
         """按半开时间窗汇总关系变化，不返回互动、事实或提醒正文。"""
 
@@ -310,6 +344,15 @@ class CrmRepository:
         people = sorted({name for _item, name in interaction_rows})
         fact_people = sorted({name for _item, name in fact_rows})
         reminder_people = sorted({name for _item, name in reminder_rows})
+        content_summaries: dict[str, list[str]] = {}
+        for item, name in interaction_rows:
+            # 日聚合仅提供有限条目；完整聊天原文仍保留在逐条互动记录中。
+            value = item.summary.strip()
+            if not value.startswith("消息内容："):
+                continue
+            values = content_summaries.setdefault(name, [])
+            if value not in values and len(values) < 5:
+                values.append(value.removeprefix("消息内容："))
         return {
             "window_start": start_utc.isoformat(),
             "window_end": end_utc.isoformat(),
@@ -330,6 +373,7 @@ class CrmRepository:
                 "people": reminder_people,
                 "statuses": counts([item.status for item, _name in reminder_rows]),
             },
+            "content_summaries": content_summaries,
         }
 
     @staticmethod
@@ -581,7 +625,6 @@ class CrmRepository:
         interaction_by_key: dict[str, Interaction] = {}
         with self.transaction() as session:
             for item in interactions:
-                person = self._resolve_person(session, item["person_name"], item.get("wxid"))
                 event_key = item["source_event_key"]
                 existing = session.scalar(
                     select(Interaction).where(
@@ -590,9 +633,16 @@ class CrmRepository:
                     )
                 )
                 if existing:
+                    # 历史批次仅有通用互动描述时，用同一事件的新原文补齐。
+                    incoming = item["summary"].strip()
+                    if incoming.startswith("消息内容：") and not existing.summary.startswith(
+                        "消息内容："
+                    ):
+                        existing.summary = incoming
                     duplicates += 1
                     interaction_by_key[event_key] = existing
                     continue
+                person = self._resolve_person(session, item["person_name"], item.get("wxid"))
                 interaction = Interaction(
                     person_id=person.id,
                     occurred_at=ensure_utc(item["occurred_at"]),

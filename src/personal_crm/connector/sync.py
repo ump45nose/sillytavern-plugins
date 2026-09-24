@@ -81,17 +81,22 @@ class WeChatConnector:
         occurred_at = as_datetime(
             event.get("timestamp") or event.get("created_at") or event.get("time")
         )
-        if self.config.allowed_contacts and contact not in self.config.allowed_contacts:
+        if (
+            self.config.chatlog_scope_mode != "all_direct"
+            and self.config.allowed_contacts
+            and contact not in self.config.allowed_contacts
+        ):
             return False
         if self.config.since and (not occurred_at or occurred_at < self.config.since):
             return False
         return not (self.config.until and occurred_at and occurred_at > self.config.until)
 
-    @staticmethod
-    def _safe_summary(event: dict[str, Any], person_name: str) -> str:
-        """使用上游摘要或无正文的降级描述，禁止把原始消息伪装成摘要。"""
+    def _safe_summary(self, event: dict[str, Any], person_name: str) -> str:
+        """原样传递正文，明确标记为内容而非生成的摘要。"""
 
         source_text = str(event.get("text") or event.get("content") or "").strip()
+        if source_text and self.config.source_type == "chatlog":
+            return f"消息内容：{source_text}"
         candidate = str(event.get("summary") or "").strip()
         if candidate and candidate != source_text and len(candidate) <= 1000:
             return candidate
