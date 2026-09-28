@@ -42,11 +42,12 @@ docker compose run --rm favsync --config /app/config.toml status
 docker compose up -d favsync favsync-api
 ```
 
-片单 API 默认绑定本机；当前 NAS 配置为 `192.168.31.201:18082`。API 首次启动
-会在 `state/film-api-token` 生成权限为 `0600` 的令牌，不在日志显示。读取令牌后可调用：
+片单 API 默认绑定本机；当前 NAS 配置为 `192.168.31.201:18082`。在项目的
+`.env` 中设置 `FILM_API_TOKEN`（建议文件权限 `0600`），Compose 仅将它传给
+`favsync-api` 容器；未设置时服务拒绝启动。令牌不写入源码或日志。调用示例：
 
 ```bash
-read -r FILM_API_TOKEN < state/film-api-token
+FILM_API_TOKEN="$(sed -n 's/^FILM_API_TOKEN=//p' .env)"
 curl -H "Authorization: Bearer $FILM_API_TOKEN" \
   'http://192.168.31.201:18082/v1/films?downloaded=false&limit=50'
 curl -X PATCH -H "Authorization: Bearer $FILM_API_TOKEN" \

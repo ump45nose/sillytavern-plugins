@@ -40,6 +40,7 @@ services:
     environment:
       HOME: /data/state/home
       TZ: Asia/Taipei
+      FILM_API_TOKEN: ${FILM_API_TOKEN:?set FILM_API_TOKEN in .env}
     volumes:
       - ./config.toml:/app/config.toml:ro
       - ./state:/data/state

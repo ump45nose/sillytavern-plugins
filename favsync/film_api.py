@@ -7,9 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import hmac
 import json
 import os
-from pathlib import Path
 import re
-import secrets
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
@@ -17,26 +15,12 @@ from .film_store import get_film, list_films, set_downloaded
 from .store import Store
 
 
-def ensure_token(state_dir):
-    path = Path(state_dir) / "film-api-token"
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        pass
-    else:
-        with os.fdopen(fd, "w") as f:
-            f.write(secrets.token_urlsafe(32) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
-    token = path.read_text().strip()
-    if len(token) < 32 or (path.stat().st_mode & 0o077):
-        raise ValueError("film API token is missing or not private")
-    return token
-
-
 def serve(cfg):
     store = Store(cfg["state_dir"])
-    token = ensure_token(cfg["state_dir"])
+    token = os.environ.get("FILM_API_TOKEN", "")
+    if not token:
+        store.close()
+        raise ValueError("FILM_API_TOKEN is required")
     timezone = ZoneInfo(cfg["timezone"])
     host = cfg["film_api"]["bind_host"]
     port = cfg["film_api"]["port"]
