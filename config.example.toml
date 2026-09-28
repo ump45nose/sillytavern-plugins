@@ -19,6 +19,7 @@ xhs = true
 pixiv = true
 wallabag = false
 cookiecloud = false # 本机 CookieCloud 默认直连。
+bili = false # B 站接口沿用 bili-sync 凭据，默认直连。
 
 [storage]
 min_free_bytes = 214748364800 # 200 GiB；低于该值暂停新文件。
@@ -119,6 +120,16 @@ tags = [] # 专用保存账号可留空；否则填写 ["novel"]。
 per_page = 50
 min_content_chars = 100
 export_timeout_seconds = 180
+
+[film_watchlist]
+enabled = false # 开启后只生成影视片单，不下载收藏夹里的 B 站视频。
+account = "personal"
+folder_id = 0 # 填 B 站收藏夹完整 ID；当前“电影”为 4117812456。
+bili_sync_db = "/data/state/bili-sync/data.sqlite" # 只读复用 bili-sync 登录态。
+
+[film_api]
+bind_host = "127.0.0.1" # NAS 部署可改成 192.168.31.201。
+port = 18082
 
 [cookiecloud]
 enabled = true

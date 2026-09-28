@@ -24,6 +24,42 @@ Bilibili WebUI 位于 `http://192.168.31.201:12345`。认证 token 保存在
 读取；不要从容器日志取 token。添加指定收藏夹，保存路径选择 `/downloads/Bilibili`。下游补丁默认每 8 小时
 扫描、使用 `作者_标题` 平铺命名，只保存视频和字幕。
 
+### B 站影视片单
+
+`[film_watchlist]` 是独立的元数据来源，不会让 bili-sync 下载“电影”收藏夹的视频。
+当前账号下该收藏夹的完整 ID 是 `4117812456`，可在配置中更换。Favsync 只读复用
+bili-sync SQLite 中已维护的登录凭据，完整分页读取标题和简介；两者没有共用写入状态。
+每条视频只从**标题**中的《》提取片名，简介仅用于提取明确标注的首次上映或首播日期。
+同名同年作品合并，不确定日期保持 `null`。`released` 按配置时区与已记录日期计算，
+代表计划日期已到，并非对实际公映的外部核实。移出收藏夹不会删除片单。
+
+首次前台验收时暂停常驻 Favsync，再运行：
+
+```bash
+docker compose stop favsync
+docker compose run --rm favsync --config /app/config.toml sync-once --source film_watchlist
+docker compose run --rm favsync --config /app/config.toml status
+docker compose up -d favsync favsync-api
+```
+
+片单 API 默认绑定本机；当前 NAS 配置为 `192.168.31.201:18082`。API 首次启动
+会在 `state/film-api-token` 生成权限为 `0600` 的令牌，不在日志显示。读取令牌后可调用：
+
+```bash
+read -r FILM_API_TOKEN < state/film-api-token
+curl -H "Authorization: Bearer $FILM_API_TOKEN" \
+  'http://192.168.31.201:18082/v1/films?downloaded=false&limit=50'
+curl -X PATCH -H "Authorization: Bearer $FILM_API_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"downloaded":true}' \
+  'http://192.168.31.201:18082/v1/films/1/downloaded'
+unset FILM_API_TOKEN
+```
+
+`GET /v1/films` 支持 `offset`、`limit`（最大 200）、`downloaded=true|false`、
+`released=true|false|unknown`；`GET /v1/films/{id}` 返回单项。
+`PATCH /v1/films/{id}/downloaded` 只接受布尔值。`downloaded` 新建时为 `false`，
+后续由媒体库侧写回；Favsync 重扫不会覆盖它。首版只提供接口，不自动检查 Emby。
+
 EH 首次完整扫描只建立基线，不下载旧收藏。小红书使用受限增量模式：每轮最多读取
 2 页、接纳 5 条新笔记、查询 5 条详情；遇到一整页均为已见 ID 时立即停止。它不再
 自动回填整个历史列表。启用相应配置后，先以前台方式执行并检查结果：

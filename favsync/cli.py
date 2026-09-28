@@ -25,7 +25,8 @@ def main(argv=None):
             cmd.add_argument("--source", choices=("telegram", "telegram_notice", "x_bookmarks", "x_likes",
                                                     "eh_favorites", "xhs_favorites", "xhs_likes",
                                                     "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public",
-                                                    "pixiv_novel_private", "wallabag_entries"))
+                                                    "pixiv_novel_private", "wallabag_entries", "film_watchlist"))
+    commands.add_parser("film-api", help="serve the authenticated film watchlist API")
     commands.add_parser("telegram-accounts")
     commands.add_parser("pixiv-login", help="authorize Pixiv once and persist token plus UID automatically")
     xhs_resume = commands.add_parser("xhs-resume", help="manually clear the persistent Xiaohongshu safety fuse")
@@ -60,7 +61,7 @@ def main(argv=None):
                 result["configured_enabled"] = {s: cfg[s]["enabled"] for s in (
                     "telegram", "telegram_notice", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
                     "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
-                    "wallabag_entries")}
+                    "wallabag_entries", "film_watchlist")}
                 result["telegram_accounts"] = [{"account": p["account"], "enabled": p["enabled"]} for p in telegram_accounts(cfg)]
                 try:
                     result["storage"].update({"free_bytes": shutil.disk_usage(cfg["download_dir"]).free,
@@ -79,9 +80,19 @@ def main(argv=None):
                     result["external_services"]["wallabag"] = "ok" if response.ok else "http_error"
                 except requests.RequestException:
                     result["external_services"]["wallabag"] = "unreachable"
+                if cfg["film_watchlist"]["enabled"]:
+                    try:
+                        response = session.get(f"http://{cfg['film_api']['bind_host']}:{cfg['film_api']['port']}/health", timeout=2)
+                        result["external_services"]["film_api"] = "ok" if response.ok else "http_error"
+                    except requests.RequestException:
+                        result["external_services"]["film_api"] = "unreachable"
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             finally:
                 db.close()
+            return 0
+        if args.command == "film-api":
+            from .film_api import serve
+            serve(cfg)
             return 0
         if args.command == "xhs-resume":
             db = Store(cfg["state_dir"])
@@ -132,7 +143,7 @@ def main(argv=None):
                 elif args.command == "run":
                     engine.run()
                 else:
-                    cookie_ok = engine.cookie_sync()
+                    cookie_ok = True if args.source == "film_watchlist" else engine.cookie_sync()
                     cycle_ok = engine.cycle(args.source)
                     return 0 if cookie_ok and cycle_ok else 1
             finally:

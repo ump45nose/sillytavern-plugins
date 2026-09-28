@@ -30,6 +30,29 @@ services:
         max-size: 10m
         max-file: "3"
 
+  favsync-api:
+    image: local/favsync:0.1.0
+    restart: on-failure
+    init: true
+    network_mode: host
+    user: "${PUID:-1000}:${PGID:-1000}"
+    command: ["--config", "/app/config.toml", "film-api"]
+    environment:
+      HOME: /data/state/home
+      TZ: Asia/Taipei
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./state:/data/state
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   cookiecloud:
     profiles: [cookiecloud]
     image: easychen/cookiecloud:latest

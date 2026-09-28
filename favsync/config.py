@@ -8,13 +8,13 @@ from urllib.parse import urlparse
 
 SOURCES = ("telegram", "telegram_notice", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
            "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
-           "wallabag_entries")
+           "wallabag_entries", "film_watchlist")
 SOURCE_PLATFORM = {"telegram": "telegram", "telegram_notice": "telegram_notice", "x_bookmarks": "x", "x_likes": "x",
                    "eh_favorites": "eh", "xhs_favorites": "xhs", "xhs_likes": "xhs",
                    "pixiv_art_public": "pixiv", "pixiv_art_private": "pixiv",
                    "pixiv_novel_public": "pixiv", "pixiv_novel_private": "pixiv",
-                   "wallabag_entries": "wallabag"}
-APPLICATIONS = ("telegram", "x", "eh", "xhs", "pixiv", "wallabag", "cookiecloud")
+                   "wallabag_entries": "wallabag", "film_watchlist": "film"}
+APPLICATIONS = ("telegram", "x", "eh", "xhs", "pixiv", "wallabag", "bili", "cookiecloud")
 
 
 def telegram_accounts(cfg):
@@ -63,6 +63,7 @@ def load(path):
     proxy.setdefault("default_enabled", True)
     applications = proxy.setdefault("applications", {})
     applications.setdefault("cookiecloud", False)
+    applications.setdefault("bili", False)
     if not isinstance(proxy["default_enabled"], bool):
         raise ValueError("proxy.default_enabled must be boolean")
     if not isinstance(applications, dict) or any(
@@ -161,6 +162,20 @@ def load(path):
     wallabag.setdefault("per_page", 50)
     wallabag.setdefault("min_content_chars", 100)
     wallabag.setdefault("export_timeout_seconds", 180)
+    films = cfg["film_watchlist"]
+    films.setdefault("folder_id", 0)
+    films.setdefault("bili_sync_db", str(Path(cfg["state_dir"]) / "bili-sync" / "data.sqlite"))
+    if not isinstance(films["folder_id"], int) or films["folder_id"] < 0:
+        raise ValueError("film_watchlist.folder_id must be a non-negative integer")
+    if films["enabled"] and not films["folder_id"]:
+        raise ValueError("film_watchlist.folder_id is required when enabled")
+    api = cfg.setdefault("film_api", {})
+    api.setdefault("bind_host", "127.0.0.1")
+    api.setdefault("port", 18082)
+    if not isinstance(api["bind_host"], str) or not api["bind_host"]:
+        raise ValueError("film_api.bind_host is required")
+    if not isinstance(api["port"], int) or not 1 <= api["port"] <= 65535:
+        raise ValueError("film_api.port must be 1..65535")
     if not isinstance(wallabag["tags"], list) or any(not isinstance(tag, str) for tag in wallabag["tags"]):
         raise ValueError("wallabag.tags must be an array of strings")
     if not isinstance(wallabag["per_page"], int) or not 1 <= wallabag["per_page"] <= 100:

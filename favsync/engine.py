@@ -10,6 +10,8 @@ from . import cookies
 from .adapters import TelegramAdapter, XAdapter
 from .adapters_ext import EhAdapter, XhsAdapter
 from .adapters_pixiv_wallabag import PixivAdapter, WallabagAdapter
+from .film_watchlist import FilmWatchlistAdapter
+from .film_store import ingest_bilibili
 from .common import SyncError, atomic_write
 from .config import SOURCES, start_timestamp, telegram_accounts, telegram_config
 from .store import Store
@@ -32,6 +34,7 @@ class Engine:
         self.adapters.setdefault("xhs", XhsAdapter(cfg, self.store))
         self.adapters.setdefault("pixiv", PixivAdapter(cfg, self.store))
         self.adapters.setdefault("wallabag", WallabagAdapter(cfg, self.store))
+        self.adapters.setdefault("films", FilmWatchlistAdapter(cfg))
         self.attempted = set()
 
     def sources(self):
@@ -49,6 +52,7 @@ class Engine:
         for name in ("pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private"):
             yield name, self.cfg[name], self.adapters["pixiv"]
         yield "wallabag_entries", self.cfg["wallabag_entries"], self.adapters["wallabag"]
+        yield "film_watchlist", self.cfg["film_watchlist"], self.adapters["films"]
 
     def cookie_sync(self):
         if not self.cfg["cookiecloud"]["enabled"]:
@@ -102,12 +106,13 @@ class Engine:
 
     def cycle(self, only_source=None):
         started = time.time()
+        execution_kind = "content" if only_source is None else "source:" + only_source
         try:
             success = self._cycle(only_source)
         except Exception:
-            self.store.record_execution("content", started, False)
+            self.store.record_execution(execution_kind, started, False)
             raise
-        self.store.record_execution("content", started, success)
+        self.store.record_execution(execution_kind, started, success)
         return success
 
     def _cycle(self, only_source=None):
@@ -123,6 +128,30 @@ class Engine:
             state = self.store.source(source, account)
             if not section["enabled"]:
                 self.store.update(source, account, scan_status="disabled")
+                continue
+            if source == "film_watchlist":
+                try:
+                    self.store.update(source, account, scan_status="scanning", error=None)
+                    key = "bili_identity:" + account
+                    previous = self.store.setting(key)
+                    if previous and previous != adapter.identity():
+                        raise SyncError("bili_account_changed")
+                    identity, folder_name, videos = adapter.scan()
+                    stats = ingest_bilibili(self.store.db, account, videos)
+                    self.store.setting(key, identity)
+                    self.store.setting("film_watchlist_last_result", str(stats))
+                    self.store.update(source, account, scan_status="complete",
+                                      last_scan=time.time(), error=None)
+                    log.info("film_watchlist: complete folder=%s videos=%d titles=%d without_title=%d",
+                             folder_name, stats["videos"], stats["titles"], stats["without_title"])
+                except SyncError as exc:
+                    failures = True
+                    self.store.update(source, account, scan_status="incomplete", error=exc.code)
+                    log.warning("film_watchlist: %s", exc.code)
+                except Exception as exc:
+                    failures = True
+                    self.store.update(source, account, scan_status="incomplete", error="internal_error")
+                    log.error("film_watchlist: internal_error (%s)", type(exc).__name__)
                 continue
             pixiv_source = source.startswith("pixiv_")
             dated = source in ("telegram", "x_bookmarks") or pixiv_source

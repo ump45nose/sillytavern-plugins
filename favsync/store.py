@@ -4,6 +4,7 @@ import re
 import sqlite3
 import time
 from .config import SOURCE_PLATFORM
+from .film_store import init_schema, film_status
 
 
 class Store:
@@ -65,6 +66,7 @@ class Store:
           filename TEXT NOT NULL, status TEXT NOT NULL,
           PRIMARY KEY(source,account,item_id));
         """)
+        init_schema(self.db)
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
         if "bundle_status" not in columns:
             self.db.execute("ALTER TABLE items ADD COLUMN bundle_status TEXT NOT NULL DEFAULT 'none'")
@@ -417,4 +419,5 @@ class Store:
                 "SELECT value FROM settings WHERE key LIKE 'xhs_observation:%' ORDER BY key")],
             "markdown_exports": [dict(row) for row in self.db.execute(
                 "SELECT source,status,count(*) AS count FROM markdown_exports GROUP BY source,status")],
+            "film_watchlist": film_status(self.db),
         }

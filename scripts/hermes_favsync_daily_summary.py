@@ -25,8 +25,10 @@ SOURCE_LABELS = {
     "pixiv_novel_public": "Pixiv 公开小说",
     "pixiv_novel_private": "Pixiv 私密小说",
     "wallabag_entries": "Wallabag",
+    "film_watchlist": "B 站影视片单",
 }
-KIND_LABELS = {"content": "内容同步", "cookiecloud": "Cookie 同步"}
+KIND_LABELS = {"content": "内容同步", "cookiecloud": "Cookie 同步",
+               "source:film_watchlist": "B 站影视片单手动同步"}
 NORMAL_STATES = {"complete", "disabled", "awaiting_start_date", "idle"}
 
 
