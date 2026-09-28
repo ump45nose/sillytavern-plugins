@@ -1,6 +1,8 @@
 # favsync
 
-配置驱动的轻量收藏下载器：Telegram Saved Messages、X 书签/点赞，以及可选的 EH、小红书、Bilibili、Pixiv 收藏和 Wallabag EPUB 导出。
+配置驱动的轻量收藏下载器：Telegram Saved Messages 与 Bot 投递、X 书签/点赞，以及可选的 EH、小红书、Bilibili、Pixiv 收藏和 Wallabag EPUB 导出。
+
+从新版部署起，X 书签、小红书收藏以及发给 `@yuwk_notice_bot` 的新消息在媒体完成后各生成一份独立 Markdown，正文和本地图片/视频链接位于同一文件。X/小红书点赞与 Telegram Saved Messages 的新记录只下载媒体。历史 `收藏.md` 与旧文件保持不变；来源间共享媒体的帖子只有成为书签/收藏后才生成 Markdown。
 
 Python 3.11 调度、SQLite 状态，底层使用固定提交的完整 gallery-dl、xiaohongshu-cli、XHS-Downloader 2.8、tdl 0.20.4 和带平铺补丁的 bili-sync 2.11.1；CookieCloud 提供 Chrome Cookie 同步。
 
@@ -34,7 +36,7 @@ docker compose --profile extended run --rm favsync --config /app/config.toml sta
 验收后再用 `docker compose --profile extended up -d --build` 启动常驻任务。低于
 200 GiB 时暂停新下载，恢复到 220 GiB 后继续；远端取消收藏不会删除本地文件。
 
-小红书的 `auth_required`、验证码、461/471、429、IP 限制、账号变化或连续详情异常会
+小红书的 `auth_required`、验证码、461/471、429、IP 限制、账号变化或首个空详情会
 写入持久安全熔断。Cookie 更新和容器重启都不会自动解除。处理登录/验证并检查原因后，
 先保持两个来源关闭，手工清除熔断，再前台启用一项做小批量验收：
 
@@ -43,7 +45,7 @@ docker compose run --rm favsync --config /app/config.toml xhs-resume --account p
 ```
 
 详情解析成功后会短期缓存；媒体下载失败不会在同一轮反复查询作品页面。两个来源共享
-单轮详情额度和 15–30 秒随机请求间隔。真实浏览器/CDP 也不能消除平台风控风险。
+单轮详情额度和 15–30 秒随机请求间隔。`status.xhs_observations` 分别显示每来源的扫描页数、新 ID、详情请求、媒体成功数与首个错误。真实浏览器/CDP 也不能消除平台风控风险。
 
 ## 开始使用
 
@@ -68,7 +70,8 @@ docker compose build
 | `*.account` | 本地账号标签；两个 X 来源必须一致，首版只连接一个 X 账号 |
 | `interval_seconds` | 列表扫描间隔，默认 28800 秒（8 小时）；上一轮未结束时不并发启动下一轮 |
 | `command_timeout_seconds` | 单次导出或单个附件下载超时，默认 3600 秒；超大视频可调大 |
-| `markdown_scope` | 本机设为 `platform`，各平台根目录一份 `收藏.md`，每条帖子完成后追加正文和媒体链接；不再生成独立 TXT |
+| `markdown_scope` | 仅供旧 `收藏.md` 历史记录恢复使用；新目标消息逐条写入同目录 Markdown |
+| `telegram_notice` | 选择已有 tdl 登录账号及 Bot 用户名，只读取该账号发给 Bot、且在新版部署后出现的消息 |
 | `download_dir` / `.env` 的 `DOWNLOAD_ROOT` | 全部平台共用容器 `/downloads`，本机根目录 `/vol3/1000/Picture/Downloads`；禁止另设 Telegram 独立下载根目录 |
 | `proxy.url` | 统一代理地址；当前 NAS 默认 `socks5://127.0.0.1:7890` |
 | `proxy.default_enabled` | 默认 `true`，以后加入的平台自动继承代理 |
@@ -191,11 +194,11 @@ Twitter 同样平铺：标签去掉井号并拼接，作者名称占群名位置
     标签_作者_2026-09-18_personal_帖子ID.jpg
 ```
 
-两个 `收藏.md` 分别汇总该平台所有账号，每条消息/帖子一条列表项，包含正文、来源及日期；图片用 Markdown 预览，视频和普通附件提供本地链接。链接相对于 MD，整个平台目录一起移动后仍可使用。正文为空时显示“无正文”，不产生空 TXT。旧 `save_text` 开关已移除，文本统一进入 MD。
+上例中的两个 `收藏.md` 是旧版历史汇总，保持原样。新版新目标内容采用与媒体同目录的逐条 `.md`，图片可预览，视频是本地相对链接；正文为空则只保留媒体。旧 `save_text` 开关已移除。
 
-只有该帖子所有附件完成后才追加，失败待补齐后再写；纯文字帖子可直接追加。MD 使用隐藏的帖子 ID 完成标记去重，写入后 fsync，再提交数据库状态；重启、跨来源复用及文件写完但数据库尚未更新时不会重复追加。中断的不完整尾部可恢复。MD 是程序管理的追加文件，请另存副本做手工编辑，不要删除隐藏标记。已保存帖子不追踪之后的编辑。
+只有目标消息所有附件完成后才写新版逐条 MD，失败待补齐后再写；纯文字目标消息可直接写入。文件以临时文件原子替换，并在 SQLite 中记下来源关系与导出状态。历史 `收藏.md` 仍用隐藏标记去重，请勿删除标记。已保存内容不追踪之后的编辑。
 
-书签、点赞和评审中的同一 X 帖子共享同一份文件及同一条 MD 记录。媒体先写入平台目录下隐藏的 `.partial-账号-ID`，完成后原子移入正式路径。不要删除 `state`：其中包含点赞基线、队列、Cookie 和 Telegram 会话。
+书签、点赞和评审中的同一 X 帖子共享媒体；新逐条 MD 仅在它进入书签时创建。媒体先写入平台目录下隐藏的 `.partial-账号-ID`，完成后原子移入正式路径。不要删除 `state`：其中包含点赞基线、队列、Cookie 和 Telegram 会话。
 
 备份时先停止服务，再备份 `state/`、`secrets/`、`config.toml`、`.env` 和统一根目录下本服务管理的平台文件；使用可选 CookieCloud 时也备份其数据卷。没有要求新增 PostgreSQL、Redis 或其他共享中间件。
 

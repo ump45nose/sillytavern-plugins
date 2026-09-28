@@ -1,7 +1,7 @@
 # 路径相对于配置文件；容器内使用下列绝对路径。
 state_dir = "/data/state"
 download_dir = "/downloads" # 所有平台共用；宿主机根目录由 .env 的 DOWNLOAD_ROOT 设置。
-markdown_scope = "platform" # 每个平台根目录各一份 收藏.md，自动追加正文及媒体链接。
+markdown_scope = "platform" # 历史 收藏.md 保留；新目标内容改为逐条 Markdown。
 timezone = "Asia/Taipei"
 interval_seconds = 28800
 command_timeout_seconds = 3600
@@ -29,6 +29,11 @@ enabled = true
 account = "personal"
 start_date = "" # 填 YYYY-MM-DD；为空时不下载，不以转发原文发布时间过滤。
 tdl_binary = "tdl"
+
+[telegram_notice]
+enabled = false # 从启用后开始读取发给 Bot 的新消息；需要同账号的 tdl 登录会话。
+account = "personal"
+chat = "@yuwk_notice_bot"
 
 # 可选：额外 Telegram 账号，独立会话、游标和下载目录；未写字段继承主账号。
 # [[telegram.accounts]]

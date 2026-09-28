@@ -37,14 +37,14 @@ def platform_root(cfg, platform):
         return Path(cfg['download_dir']) / 'Pixiv'
     if platform == 'wallabag' and cfg.get('wallabag', {}).get('output_dir'):
         return Path(cfg['wallabag']['output_dir'])
-    name = {'telegram': 'Telegram', 'x': 'Twitter', 'xhs': 'Xiaohongshu'}.get(platform, platform.capitalize())
+    name = {'telegram': 'Telegram', 'telegram_notice': 'Telegram', 'x': 'Twitter', 'xhs': 'Xiaohongshu'}.get(platform, platform.capitalize())
     return Path(cfg['download_dir']) / name
 
 
 def paths(cfg, item, asset=None):
     if asset is None:
         return platform_root(cfg, item['platform']) / '收藏.md'
-    if item['platform'] in ('telegram', 'x'):
+    if item['platform'] in ('telegram', 'telegram_notice', 'x'):
         root = platform_root(cfg, item['platform'])
         stem = telegram_stem(item)
         # Account labels may be 64 bytes. Bound the human-readable prefix so

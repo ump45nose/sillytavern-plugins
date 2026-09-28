@@ -11,10 +11,11 @@ from .adapters import TelegramAdapter, XAdapter
 from .adapters_ext import EhAdapter, XhsAdapter
 from .adapters_pixiv_wallabag import PixivAdapter, WallabagAdapter
 from .common import SyncError, atomic_write
-from .config import SOURCES, start_timestamp, telegram_accounts
+from .config import SOURCES, start_timestamp, telegram_accounts, telegram_config
 from .store import Store
 from .layout import paths
-from .journal import append_entry
+from .journal import append_entry, write_item_markdown
+from .layout import platform_root
 
 
 log = logging.getLogger("favsync")
@@ -37,6 +38,9 @@ class Engine:
         for profile in telegram_accounts(self.cfg):
             adapter = self.adapters["telegram"] if profile["account"] == self.cfg["telegram"]["account"] else TelegramAdapter({**self.cfg, "telegram": profile})
             yield "telegram", profile, adapter
+        notice = self.cfg["telegram_notice"]
+        notice_cfg = telegram_config(self.cfg, notice["account"])
+        yield "telegram_notice", notice, TelegramAdapter(notice_cfg)
         for name in ("x_bookmarks", "x_likes"):
             yield name, self.cfg[name], self.adapters["x"]
         yield "eh_favorites", self.cfg["eh_favorites"], self.adapters["eh"]
@@ -96,23 +100,25 @@ class Engine:
         except FileNotFoundError:
             return "missing"
 
-    def cycle(self):
+    def cycle(self, only_source=None):
         started = time.time()
         try:
-            success = self._cycle()
+            success = self._cycle(only_source)
         except Exception:
             self.store.record_execution("content", started, False)
             raise
         self.store.record_execution("content", started, success)
         return success
 
-    def _cycle(self):
+    def _cycle(self, only_source=None):
         self.attempted.clear()
         for adapter in set(self.adapters.values()):
             if hasattr(adapter, "begin_run"):
                 adapter.begin_run()
         failures = False
         for source, section, adapter in self.sources():
+            if only_source and source != only_source:
+                continue
             account = section["account"]
             state = self.store.source(source, account)
             if not section["enabled"]:
@@ -123,6 +129,8 @@ class Engine:
             configured_date = (self.cfg["pixiv"].get("start_date", "") if pixiv_source
                                else section.get("start_date", ""))
             start = start_timestamp(configured_date, self.cfg["timezone"]) if dated else None
+            if source == "telegram_notice":
+                start = float(self.store.setting("markdown_v2_since"))
             if dated and start is None:
                 self.store.update(source, account, scan_status="awaiting_start_date", error=None)
                 log.info("%s: awaiting_start_date", source)
@@ -133,8 +141,12 @@ class Engine:
                 continue
             x_source = source.startswith("x_") and not source.startswith("xhs_")
             xhs_source = source.startswith("xhs_")
+            if xhs_source and hasattr(adapter, "begin_source"):
+                adapter.begin_source(source, account)
             digest = cookies.fingerprint(self.cfg) if x_source else None
             if xhs_source and (fuse := self.store.xhs_fuse(account)):
+                if hasattr(adapter, "observe"):
+                    adapter.observe(error=fuse["reason"])
                 failures = True
                 self.store.update(source, account, scan_status="paused_risk", error=fuse["reason"])
                 log.warning("%s: paused_risk (%s); run xhs-resume after review", source, fuse["reason"])
@@ -142,7 +154,7 @@ class Engine:
             try:
                 if x_source:
                     self.check_x(account)
-                elif self.store.setting("telegram_blocked_session:" + account) == self.telegram_session_digest(account):
+                elif source in ("telegram", "telegram_notice") and self.store.setting("telegram_blocked_session:" + account) == self.telegram_session_digest(account):
                     raise SyncError("auth_required")
                 baseline = ((source in ("x_likes", "eh_favorites") or pixiv_source)
                             and state["baseline_at"] is None)
@@ -166,12 +178,14 @@ class Engine:
                     bad_dates = sum(r["action_time"] is None for r in records)
                     records = [r for r in records if r["action_time"] is not None and r["action_time"] >= start]
                 # Bind Saved Messages state to the actual peer ID when there are results.
-                if source == "telegram" and getattr(adapter, "account_id", None):
+                if source in ("telegram", "telegram_notice") and getattr(adapter, "account_id", None):
                     peer = adapter.account_id
-                    previous = self.store.setting("tg_identity:" + account)
+                    identity_key = ("tg_identity:" + account if source == "telegram" else
+                                    "tg_identity:" + source + ":" + account)
+                    previous = self.store.setting(identity_key)
                     if previous and previous != peer:
                         raise SyncError("telegram_account_changed")
-                    self.store.setting("tg_identity:" + account, peer)
+                    self.store.setting(identity_key, peer)
                 if source == "wallabag_entries":
                     self.store.ingest_wallabag(source, account, records)
                 else:
@@ -185,6 +199,8 @@ class Engine:
                 log.info("%s: %s, discovered=%d", source, outcome, len(records))
             except SyncError as exc:
                 failures = True
+                if xhs_source and hasattr(adapter, "observe"):
+                    adapter.observe(error=exc.code)
                 if xhs_source and exc.code in XHS_FUSE_ERRORS:
                     self.store.set_xhs_fuse(account, exc.code)
                     self.store.update(source, account, scan_status="paused_risk", error=exc.code)
@@ -193,7 +209,7 @@ class Engine:
                 log.warning("%s: %s", source, exc.code)
                 if x_source and exc.code == "auth_required":
                     self.store.setting("x_blocked_cookie", digest)
-                elif source == "telegram" and exc.code == "auth_required":
+                elif source in ("telegram", "telegram_notice") and exc.code == "auth_required":
                     self.store.setting("telegram_blocked_session:" + account, self.telegram_session_digest(account))
                 if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
                     self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
@@ -205,6 +221,8 @@ class Engine:
             except Exception as exc:
                 # Avoid tracebacks/exception messages containing third-party payloads.
                 failures = True
+                if xhs_source and hasattr(adapter, "observe"):
+                    adapter.observe(error="internal_error")
                 self.store.update(source, account, scan_status="incomplete", error="internal_error")
                 log.error("%s: internal_error (%s)", source, type(exc).__name__)
                 continue
@@ -212,8 +230,12 @@ class Engine:
             try:
                 if not self.drain(source, account, adapter):
                     failures = True
+                if source in ("x_bookmarks", "xhs_favorites", "telegram_notice") and not self.publish_markdown(source, account):
+                    failures = True
             except SyncError as exc:
                 failures = True
+                if xhs_source and hasattr(adapter, "observe"):
+                    adapter.observe(error=exc.code)
                 if source.startswith("xhs_") and exc.code in XHS_FUSE_ERRORS:
                     self.store.set_xhs_fuse(account, exc.code)
                     self.store.update(source, account, scan_status="paused_risk", error=exc.code)
@@ -221,12 +243,14 @@ class Engine:
                     self.store.update(source, account, error=exc.code)
                 if x_source and exc.code == "auth_required":
                     self.store.setting("x_blocked_cookie", digest)
-                elif source == "telegram" and exc.code == "auth_required":
+                elif source in ("telegram", "telegram_notice") and exc.code == "auth_required":
                     self.store.setting("telegram_blocked_session:" + account, self.telegram_session_digest(account))
                 if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
                     self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
             except OSError:
                 failures = True
+                if xhs_source and hasattr(adapter, "observe"):
+                    adapter.observe(error="filesystem_error")
                 self.store.update(source, account, error="filesystem_error")
                 log.error("%s: filesystem_error", source)
         return not failures
@@ -258,6 +282,8 @@ class Engine:
                     if exc.code == "deferred_request_budget":
                         log.info("%s: detail request budget exhausted; remaining items deferred", source)
                         break
+                    if item["platform"] == "xhs" and hasattr(adapter, "observe"):
+                        adapter.observe(error=exc.code)
                     self.store.bundle_result(item, exc.code)
                     if item["platform"] == "wallabag" and exc.code == "invalid_content":
                         shutil.rmtree(staging, ignore_errors=True)
@@ -309,8 +335,35 @@ class Engine:
                 pass
             assets = self.store.assets(item)
             if all(a['status'] == 'done' for a in assets):
-                append_entry(self.cfg, item, assets)
+                if self.store.is_legacy_item(source, account, item["item_id"]):
+                    append_entry(self.cfg, item, assets)
                 self.store.text_done(item)
+        return success
+
+    def publish_markdown(self, source, account):
+        success = True
+        for item in self.store.markdown_pending(source, account):
+            try:
+                if item["platform"] == "xhs":
+                    if item["bundle_status"] != "done":
+                        continue
+                    root = platform_root(self.cfg, "xhs")
+                    media = self.store.xhs_media_files(item, root)
+                    stem = self.store.xhs_name_stem(item)
+                    if not media or not stem:
+                        raise OSError("media_missing")
+                else:
+                    assets = self.store.assets(item)
+                    if any(asset["status"] != "done" for asset in assets):
+                        continue
+                    media = [paths(self.cfg, item, asset) for asset in assets]
+                    stem = None
+                target = write_item_markdown(self.cfg, item, media, stem=stem)
+                self.store.markdown_result(source, account, item["item_id"],
+                                           target.name if target else "", "written" if target else "no_text")
+            except OSError:
+                success = False
+                log.warning("%s: item=%s markdown_write_failed", source, item["item_id"])
         return success
 
     def disk_ready(self):

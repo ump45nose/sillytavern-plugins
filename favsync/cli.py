@@ -20,7 +20,12 @@ def main(argv=None):
     parser.add_argument("--config", default="config.toml")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("run", "sync-once", "status"):
-        commands.add_parser(name)
+        cmd = commands.add_parser(name)
+        if name == "sync-once":
+            cmd.add_argument("--source", choices=("telegram", "telegram_notice", "x_bookmarks", "x_likes",
+                                                    "eh_favorites", "xhs_favorites", "xhs_likes",
+                                                    "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public",
+                                                    "pixiv_novel_private", "wallabag_entries"))
     commands.add_parser("telegram-accounts")
     commands.add_parser("pixiv-login", help="authorize Pixiv once and persist token plus UID automatically")
     xhs_resume = commands.add_parser("xhs-resume", help="manually clear the persistent Xiaohongshu safety fuse")
@@ -53,7 +58,7 @@ def main(argv=None):
             try:
                 result = db.status()
                 result["configured_enabled"] = {s: cfg[s]["enabled"] for s in (
-                    "telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
+                    "telegram", "telegram_notice", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
                     "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
                     "wallabag_entries")}
                 result["telegram_accounts"] = [{"account": p["account"], "enabled": p["enabled"]} for p in telegram_accounts(cfg)]
@@ -128,7 +133,7 @@ def main(argv=None):
                     engine.run()
                 else:
                     cookie_ok = engine.cookie_sync()
-                    cycle_ok = engine.cycle()
+                    cycle_ok = engine.cycle(args.source)
                     return 0 if cookie_ok and cycle_ok else 1
             finally:
                 engine.store.close()

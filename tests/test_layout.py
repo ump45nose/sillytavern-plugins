@@ -58,7 +58,7 @@ class LayoutSmoke(unittest.TestCase):
             finally:
                 engine.store.close()
 
-    def test_journal_replaces_individual_text_files(self):
+    def test_saved_messages_do_not_create_new_text_files(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / 'c.toml').write_text('state_dir="state"\ndownload_dir="out"\n')
@@ -72,6 +72,6 @@ class LayoutSmoke(unittest.TestCase):
                                                            {'id': '3', 'text': 'body', 'locator': {}, 'assets': []}])
                 self.assertTrue(engine.drain('telegram', 'personal', None))
                 self.assertFalse(list((root / 'out').glob('**/*.txt')))
-                self.assertEqual((root/'out/Telegram/收藏.md').read_text().count('\n- **'), 3)
+                self.assertFalse((root/'out/Telegram/收藏.md').exists())
             finally:
                 engine.store.close()

@@ -14,6 +14,7 @@ TIMEZONE = ZoneInfo("Asia/Taipei")
 CONTAINER = "favsync-favsync-1"
 SOURCE_LABELS = {
     "telegram": "Telegram",
+    "telegram_notice": "Telegram Bot 投递",
     "x_bookmarks": "X 书签",
     "x_likes": "X 点赞",
     "eh_favorites": "EH 收藏",

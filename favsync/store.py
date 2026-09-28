@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 import sqlite3
 import time
 from .config import SOURCE_PLATFORM
@@ -56,6 +57,13 @@ class Store:
           account TEXT NOT NULL, item_id TEXT NOT NULL, payload TEXT NOT NULL,
           updated_at REAL NOT NULL,
           PRIMARY KEY(account,item_id));
+        CREATE TABLE IF NOT EXISTS xhs_media (
+          account TEXT NOT NULL, item_id TEXT NOT NULL, filename TEXT NOT NULL,
+          PRIMARY KEY(account,item_id,filename));
+        CREATE TABLE IF NOT EXISTS markdown_exports (
+          source TEXT NOT NULL, account TEXT NOT NULL, item_id TEXT NOT NULL,
+          filename TEXT NOT NULL, status TEXT NOT NULL,
+          PRIMARY KEY(source,account,item_id));
         """)
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
         if "bundle_status" not in columns:
@@ -70,6 +78,7 @@ class Store:
         self.db.execute("""UPDATE items SET bundle_status='skipped_invalid',text_done=1
                            WHERE platform='wallabag' AND bundle_status='failed'
                            AND error='invalid_content'""")
+        self.db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES('markdown_v2_since',?)", (str(time.time()),))
         self.db.commit()
 
     def close(self):
@@ -148,6 +157,56 @@ class Store:
         with self.db:
             self.db.execute("DELETE FROM xhs_details WHERE account=? AND item_id=?", (account, item_id))
 
+    def update_body(self, item, body):
+        with self.db:
+            self.db.execute("UPDATE items SET body=? WHERE platform=? AND account=? AND item_id=?",
+                            (body, item["platform"], item["account"], item["item_id"]))
+
+    def save_xhs_media(self, item, paths):
+        with self.db:
+            self.db.execute("DELETE FROM xhs_media WHERE account=? AND item_id=?",
+                            (item["account"], item["item_id"]))
+            self.db.executemany("INSERT INTO xhs_media(account,item_id,filename) VALUES(?,?,?)",
+                                [(item["account"], item["item_id"], path.name) for path in paths])
+
+    def xhs_media_files(self, item, root):
+        names = [row[0] for row in self.db.execute(
+            "SELECT filename FROM xhs_media WHERE account=? AND item_id=? ORDER BY filename",
+            (item["account"], item["item_id"]))]
+        if not names:
+            row = self.db.execute("SELECT stem FROM xhs_names WHERE account=? AND item_id=?",
+                                  (item["account"], item["item_id"])).fetchone()
+            if row and row[0] and Path(root).is_dir():
+                pattern = re.compile(re.escape(row[0]) + r"(?:_\d{3})?\.(?:jpg|jpeg|png|webp|heic|mp4|mov)$", re.I)
+                names = [path.name for path in Path(root).iterdir() if path.is_file() and pattern.fullmatch(path.name)]
+                if names:
+                    self.save_xhs_media(item, sorted(Path(root) / name for name in names))
+        return [Path(root) / name for name in names]
+
+    def xhs_name_stem(self, item):
+        row = self.db.execute("SELECT stem FROM xhs_names WHERE account=? AND item_id=?",
+                              (item["account"], item["item_id"])).fetchone()
+        return row[0] if row else None
+
+    def markdown_pending(self, source, account):
+        cutoff = float(self.setting("markdown_v2_since") or 0)
+        platform = SOURCE_PLATFORM[source]
+        return self.db.execute("""SELECT i.* FROM seen s JOIN items i
+          ON i.platform=? AND i.account=s.account AND i.item_id=s.item_id
+          LEFT JOIN markdown_exports m ON m.source=s.source AND m.account=s.account AND m.item_id=s.item_id
+          WHERE s.source=? AND s.account=? AND s.first_seen_at>=? AND s.baseline=0 AND m.item_id IS NULL
+          ORDER BY s.first_seen_at,i.item_id""", (platform, source, account, cutoff)).fetchall()
+
+    def is_legacy_item(self, source, account, item_id):
+        row = self.db.execute("SELECT first_seen_at FROM seen WHERE source=? AND account=? AND item_id=?",
+                              (source, account, item_id)).fetchone()
+        return bool(row and row[0] < float(self.setting("markdown_v2_since") or 0))
+
+    def markdown_result(self, source, account, item_id, filename, status):
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO markdown_exports VALUES(?,?,?,?,?)",
+                            (source, account, item_id, filename, status))
+
     def ingest(self, source, account, records, baseline=False, cursor=None, start_date=""):
         """One transaction: complete baseline OR seen + durable queue + scan cursor."""
         now = time.time()
@@ -178,6 +237,9 @@ class Store:
                         fresh_locator['naming'] = naming
                     self.db.execute('UPDATE items SET locator=? WHERE platform=? AND account=? AND item_id=?',
                                     (json.dumps(fresh_locator), platform, account, r['id']))
+                    if r.get("text"):
+                        self.db.execute("UPDATE items SET body=? WHERE platform=? AND account=? AND item_id=? AND body=''",
+                                        (r["text"], platform, account, r["id"]))
                 for number, filename in (r["assets"] if new_item else []):
                     self.db.execute("INSERT OR IGNORE INTO assets(platform,account,item_id,number,filename) VALUES(?,?,?,?,?)",
                                     (platform, account, r["id"], number, filename))
@@ -346,4 +408,8 @@ class Store:
                 "SELECT attachment_status,count(*) AS count FROM wallabag_exports GROUP BY attachment_status")],
             "xhs_fuses": {row[0].split(":", 1)[1]: json.loads(row[1])
                            for row in self.db.execute("SELECT key,value FROM settings WHERE key LIKE 'xhs_fuse:%'")},
+            "xhs_observations": [json.loads(row[0]) for row in self.db.execute(
+                "SELECT value FROM settings WHERE key LIKE 'xhs_observation:%' ORDER BY key")],
+            "markdown_exports": [dict(row) for row in self.db.execute(
+                "SELECT source,status,count(*) AS count FROM markdown_exports GROUP BY source,status")],
         }

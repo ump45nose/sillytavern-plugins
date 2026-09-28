@@ -81,7 +81,27 @@ class XhsAdapter:
         self._discover_remaining = self.cfg["xhs"]["max_new_items_per_run"]
         self._detail_remaining = self.cfg["xhs"]["max_detail_items_per_run"]
         self._bundle_remaining = self.cfg["xhs"]["max_detail_items_per_run"]
-        self._detail_failures = 0
+        self._observation = None
+
+    def begin_source(self, source, account):
+        self._observation = {"source": source, "account": account, "started_at": time.time(),
+                             "scan_pages": 0, "new_ids": 0, "detail_requests": 0,
+                             "media_success": 0, "first_error": None}
+        self._save_observation()
+
+    def _save_observation(self):
+        if self.store is not None and self._observation is not None:
+            key = "xhs_observation:" + self._observation["source"] + ":" + self._observation["account"]
+            self.store.setting(key, json.dumps(self._observation))
+
+    def observe(self, field=None, error=None):
+        if self._observation is None:
+            return
+        if field:
+            self._observation[field] += 1
+        if error and self._observation["first_error"] is None:
+            self._observation["first_error"] = error
+        self._save_observation()
 
     def _pace(self):
         low = float(self.cfg["xhs"]["request_delay_min_seconds"])
@@ -126,10 +146,13 @@ class XhsAdapter:
         except (ValueError, TypeError, OSError):
             published = "日期待定"
         token = note.get("xsec_token") or note.get("xsecToken") or ""
+        body = next((value.strip() for value in
+                     (note.get("desc"), note.get("description"), note.get("content"), note.get("note_desc"))
+                     if isinstance(value, str) and value.strip()), "")
         url = f"https://www.xiaohongshu.com/explore/{item_id}"
         if token:
             url += "?xsec_token=" + quote(token, safe="") + "&xsec_source=pc_user"
-        return {"id": item_id, "text": "", "assets": [], "bundle": True,
+        return {"id": item_id, "text": body, "assets": [], "bundle": True,
                 "locator": {"url": url, "author": author, "published": published,
                             "naming": {"group": author, "date": published}}}
 
@@ -149,6 +172,7 @@ class XhsAdapter:
                 argv += ["--cursor", cursor_value]
             self._pace()
             payload = _json_command(argv, self.cfg["command_timeout_seconds"], self._env())
+            self.observe("scan_pages")
             if not payload.get("ok"):
                 code = str((payload.get("error") or {}).get("code", "scan_incomplete")).lower()
                 if code in ("not_authenticated", "unauthenticated", "login_required", "auth_required", "session_expired"):
@@ -164,6 +188,8 @@ class XhsAdapter:
             fresh = [r for r in page_records if r["id"] not in page_seen]
             selected = fresh[:self._discover_remaining]
             records.extend(selected)
+            for _ in selected:
+                self.observe("new_ids")
             self._discover_remaining -= len(selected)
             # A complete already-seen page is the durable incremental boundary.
             if page_records and len(page_seen) == len(page_records):
@@ -208,21 +234,28 @@ class XhsAdapter:
                 raise SyncError("deferred_request_budget")
             self._detail_remaining -= 1
             self._pace()
+            self.observe("detail_requests")
             body = {"url": locator["url"], "download": False, "cookie": cookie,
                     "proxy": None, "check_record": False}
             try:
                 response = session.post(self.cfg["xhs"]["downloader_url"].rstrip("/") + "/xhs/detail",
                                         json=body, timeout=self.cfg["command_timeout_seconds"])
+                if response.status_code in (401, 403):
+                    raise SyncError("auth_required")
+                if response.status_code in (461, 471):
+                    raise SyncError("verification_required")
+                if response.status_code == 429:
+                    raise SyncError("rate_limited")
                 response.raise_for_status(); payload = response.json()
+            except SyncError:
+                raise
             except Exception:
                 raise SyncError("xhs_downloader_unavailable") from None
             data = payload.get("data")
             if not data:
-                self._detail_failures += 1
-                if self._detail_failures >= 2:
-                    raise SyncError("risk_control_suspected")
-                raise SyncError("content_unavailable")
-            self._detail_failures = 0
+                # The downloader may return HTTP 200 for a challenge or an
+                # expired session. Stop at the first unexplained empty detail.
+                raise SyncError("risk_control_suspected")
             self.store.save_xhs_detail(item["account"], item["item_id"], data)
         urls = []
         def walk(value, key=""):
@@ -264,7 +297,11 @@ class XhsAdapter:
                                  stream=True, timeout=120) as media:
                     if media.status_code in (401, 403, 404):
                         self.store.delete_xhs_detail(item["account"], item["item_id"])
-                        raise SyncError("media_url_expired")
+                        raise SyncError("auth_required" if media.status_code in (401, 403) else "media_url_expired")
+                    if media.status_code in (461, 471):
+                        raise SyncError("verification_required")
+                    if media.status_code == 429:
+                        raise SyncError("rate_limited")
                     media.raise_for_status()
                     with target.open("wb") as out:
                         for chunk in media.iter_content(1024 * 1024):
@@ -283,6 +320,11 @@ class XhsAdapter:
             final = output / target.name
             os.replace(target, final)
             final_paths.append(final)
+            self.observe("media_success")
+        description = data.get("作品描述")
+        if isinstance(description, str) and description.strip():
+            self.store.update_body(item, description.strip())
+        self.store.save_xhs_media(item, final_paths)
         try:
             staging.rmdir()
         except OSError:

@@ -6,10 +6,10 @@ import tomllib
 from urllib.parse import urlparse
 
 
-SOURCES = ("telegram", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
+SOURCES = ("telegram", "telegram_notice", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
            "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
            "wallabag_entries")
-SOURCE_PLATFORM = {"telegram": "telegram", "x_bookmarks": "x", "x_likes": "x",
+SOURCE_PLATFORM = {"telegram": "telegram", "telegram_notice": "telegram_notice", "x_bookmarks": "x", "x_likes": "x",
                    "eh_favorites": "eh", "xhs_favorites": "xhs", "xhs_likes": "xhs",
                    "pixiv_art_public": "pixiv", "pixiv_art_private": "pixiv",
                    "pixiv_novel_public": "pixiv", "pixiv_novel_private": "pixiv",
@@ -101,6 +101,12 @@ def load(path):
         if not isinstance(profile["enabled"], bool):
             raise ValueError("Telegram enabled must be boolean")
         start_timestamp(profile["start_date"], cfg["timezone"])
+    notice = cfg["telegram_notice"]
+    notice.setdefault("chat", "@yuwk_notice_bot")
+    if not re.fullmatch(r"@[A-Za-z0-9_]{5,32}", notice["chat"]):
+        raise ValueError("telegram_notice.chat must be a Telegram username")
+    if notice["account"] not in labels:
+        raise ValueError("telegram_notice.account must reference a configured Telegram account")
     x = cfg.setdefault("x", {})
     x.setdefault("username", "")
     if x["username"] and not re.fullmatch(r"[A-Za-z0-9_]{1,15}", x["username"]):

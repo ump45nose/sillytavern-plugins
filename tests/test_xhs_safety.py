@@ -106,6 +106,38 @@ class XhsSafetySmoke(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_favorited_note_writes_one_markdown_with_local_media(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cfg = self.config(directory)
+            engine = Engine(cfg)
+            try:
+                record = {"id": "note1", "text": "", "assets": [], "bundle": True,
+                          "locator": {"url": "https://example.invalid/note1",
+                                      "naming": {"group": "作者", "date": "2026-09-28"}}}
+                engine.store.source("xhs_likes", "personal")
+                engine.store.ingest("xhs_likes", "personal", [record])
+                item = engine.store.pending("xhs_likes", "personal")[0]
+                root = Path(cfg["xhs"]["output_dir"])
+                root.mkdir(parents=True)
+                engine.store.xhs_ordinal("personal", "作者", "2026-09-28", "note1")
+                engine.store.xhs_stem("personal", "作者", "2026-09-28", "note1", "作者_2026-09-28_1", root)
+                media = root / "作者_2026-09-28_1.jpg"
+                media.write_bytes(b"image")
+                engine.store.save_xhs_media(item, [media])
+                engine.store.update_body(item, "笔记正文")
+                engine.store.bundle_result(item)
+                self.assertFalse(list(root.glob("*.md")))
+                engine.store.source("xhs_favorites", "personal")
+                engine.store.ingest("xhs_favorites", "personal", [record])
+                self.assertTrue(engine.publish_markdown("xhs_favorites", "personal"))
+                note = root / "作者_2026-09-28_1.md"
+                self.assertIn("笔记正文", note.read_text())
+                self.assertIn("![图片 1](", note.read_text())
+                self.assertTrue(engine.publish_markdown("xhs_favorites", "personal"))
+                self.assertEqual(len(list(root.glob("*.md"))), 1)
+            finally:
+                engine.store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

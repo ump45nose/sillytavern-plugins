@@ -131,7 +131,10 @@ class Smoke(unittest.TestCase):
         self.assertGreater(seen[0], 0)
         self.assertEqual(seen[1], 0)
         folder = Path(self.cfg["download_dir"]) / "Twitter"
-        self.assertIn("原文", (folder / "收藏.md").read_text())
+        self.assertFalse((folder / "收藏.md").exists())
+        note = next(folder.glob("*_personal_11.md"))
+        self.assertIn("![图片 1]", note.read_text())
+        self.assertIn("[▶ 视频 2]", note.read_text())
         self.assertTrue(list(folder.glob("*_personal_11_002.mp4")))
 
     def test_dates_empty_boundary_unknown_and_text_only(self):
@@ -148,7 +151,7 @@ class Smoke(unittest.TestCase):
         self.assertFalse(self.engine.cycle())
         ids = [r[0] for r in self.engine.store.db.execute("SELECT item_id FROM items ORDER BY item_id")]
         self.assertEqual(ids, ["2", "3"])
-        self.assertIn("x:personal:3:end", (Path(self.cfg["download_dir"]) / "Twitter/收藏.md").read_text())
+        self.assertEqual(len(list((Path(self.cfg["download_dir"]) / "Twitter").glob("*_personal_3.md"))), 1)
 
     def test_auth_pause_cookie_change_and_telegram_isolation(self):
         self.cfg["telegram"].update(enabled=True, start_date="2020-01-01")
@@ -201,6 +204,25 @@ class Smoke(unittest.TestCase):
             (staging / "001.jpg").write_bytes(b"fixture")
         with patch("favsync.adapters.command", download_command):
             self.assertTrue(adapter.download(item, {"filename": "001.jpg"}, staging).is_file())
+
+    def test_notice_bot_uses_own_cursor_and_only_outgoing_text(self):
+        adapter = TelegramAdapter(self.cfg)
+        start = start_timestamp("2020-01-01", self.cfg["timezone"])
+        def export_command(args, timeout):
+            self.assertEqual(args[args.index("-c") + 1], "@yuwk_notice_bot")
+            Path(args[args.index("-o") + 1]).write_text(json.dumps({"id": 456, "messages": [
+                {"id": 1, "date": start, "text": "转给 Bot", "file": "", "raw": {"Out": True}},
+                {"id": 2, "date": start + 1, "text": "Bot 的回复", "file": "", "raw": {"Out": False}}]}))
+        with patch("favsync.adapters.command", export_command):
+            records, cursor = adapter.scan("telegram_notice", start=start)
+        self.assertEqual(cursor, 2)
+        self.assertEqual([r["text"] for r in records], ["转给 Bot"])
+        self.engine.store.source("telegram_notice", "personal")
+        self.engine.store.ingest("telegram_notice", "personal", records)
+        self.assertTrue(self.engine.publish_markdown("telegram_notice", "personal"))
+        folder = Path(self.cfg["download_dir"]) / "Telegram"
+        self.assertIn("转给 Bot", next(folder.glob("*.md")).read_text())
+        self.assertFalse((folder / "收藏.md").exists())
 
     def test_cookiecloud_both_ciphers_filter_and_failed_sync_keeps_cookie(self):
         payload = {"cookie_data": {"x.com": [

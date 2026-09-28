@@ -172,6 +172,9 @@ class TelegramAdapter:
         with tempfile.TemporaryDirectory(dir=self.cfg["state_dir"]) as directory:
             target = Path(directory) / "export.json"
             args = self.base() + ["chat", "export", "--all", "--with-content", "--raw", "-o", str(target)]
+            notice = source == "telegram_notice"
+            if notice:
+                args += ["-c", self.cfg["telegram_notice"]["chat"]]
             if cursor:
                 args += ["-T", "id", "-i", f"{cursor + 1},2147483646"]
             else:
@@ -183,20 +186,26 @@ class TelegramAdapter:
                 self.account_id = dialog
                 records = []
                 maximum = cursor
-                wanted = {self.origin(m.get('raw', {}))[0] for m in data['messages']}
-                names = self.chat_names(wanted - {None})
+                wanted = {self.origin(m.get('raw', {}))[0] for m in data['messages']} if not notice else set()
+                names = self.chat_names(wanted - {None}) if not notice else {}
                 for msg in data["messages"]:
                     item_id = str(int(msg["id"]))
                     maximum = max(maximum, int(item_id))
                     created = int(msg["date"])
                     if created < start:
                         continue
+                    if notice and not (msg.get("raw") or {}).get("Out", msg.get("out", False)):
+                        continue
                     filename = msg.get("file", "")
                     assets = [(1, "001." + safe_extension(Path(filename).suffix))] if filename else []
+                    naming = (self.naming(msg, names) if not notice else
+                              {"date": datetime.fromtimestamp(created, ZoneInfo(self.cfg["timezone"])).strftime("%Y-%m-%d"),
+                               "tags": list(dict.fromkeys(re.findall(r'(?<!\w)#[\w]+', msg.get("text", "")))),
+                               "group": "notice_bot", "topic": ""})
                     records.append({"id": item_id, "text": msg.get("text", ""),
                                     "action_time": created, "assets": assets,
                                     "locator": {"dialog": dialog, "message": int(item_id),
-                                                "naming": self.naming(msg, names)}})
+                                                "naming": naming}})
                 return records, maximum
             except (OSError, ValueError, KeyError, TypeError):
                 raise SyncError("invalid_export") from None
