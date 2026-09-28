@@ -91,6 +91,11 @@ class Store:
             self.db.execute("DELETE FROM execution_history WHERE id NOT IN "
                             "(SELECT id FROM execution_history ORDER BY id DESC LIMIT 100)")
 
+    def last_execution_finished(self, kind):
+        row = self.db.execute("SELECT finished_at FROM execution_history WHERE kind=? ORDER BY id DESC LIMIT 1",
+                              (kind,)).fetchone()
+        return float(row[0]) if row else None
+
     def source(self, name, account):
         with self.db:
             self.db.execute("INSERT OR IGNORE INTO sources(name,account) VALUES(?,?)", (name, account))

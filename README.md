@@ -68,7 +68,7 @@ docker compose build
 | `x.username` | 自己的 X 用户名，不含 `@`，启用点赞时必填 |
 | `x_likes.enabled` | 准备好后设为 `true`；初次只建基线，不下载历史点赞 |
 | `*.account` | 本地账号标签；两个 X 来源必须一致，首版只连接一个 X 账号 |
-| `interval_seconds` | 列表扫描间隔，默认 28800 秒（8 小时）；上一轮未结束时不并发启动下一轮 |
+| `interval_seconds` | 列表扫描间隔，默认 28800 秒（8 小时）；重启会参考上次完成时间，不会立即额外扫一轮；上一轮未结束时不并发启动下一轮 |
 | `command_timeout_seconds` | 单次导出或单个附件下载超时，默认 3600 秒；超大视频可调大 |
 | `markdown_scope` | 仅供旧 `收藏.md` 历史记录恢复使用；新目标消息逐条写入同目录 Markdown |
 | `telegram_notice` | 选择已有 tdl 登录账号及 Bot 用户名，只读取该账号发给 Bot、且在新版部署后出现的消息 |

@@ -382,6 +382,12 @@ class Engine:
         worker = threading.Thread(target=self.cookie_loop, args=(stop,), daemon=True)
         worker.start()
         try:
+            last_content = self.store.last_execution_finished("content")
+            if last_content is not None:
+                remaining = self.cfg["interval_seconds"] - (time.time() - last_content)
+                if remaining > 0:
+                    log.info("content: next scheduled cycle in %d seconds", int(remaining))
+                    stop.wait(remaining)
             while True:
                 started = time.monotonic()
                 self.cycle()
