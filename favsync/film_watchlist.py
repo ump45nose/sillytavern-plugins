@@ -23,6 +23,19 @@ FULL_DATE = re.compile(
     r"|[-/.]\s*(?P<month_num>\d{1,2})\s*[-/.]\s*(?P<day_num>\d{1,2}))(?!\d)"
 )
 YEAR = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
+COUNTRIES = tuple(sorted((
+    "中国香港", "中国澳门", "中国台湾", "中国大陆", "克罗地亚", "沙特阿拉伯", "阿联酋",
+    "新西兰", "澳大利亚", "俄罗斯", "乌克兰", "白俄罗斯", "哈萨克斯坦", "乌兹别克斯坦",
+    "巴基斯坦", "孟加拉国", "斯里兰卡", "印度尼西亚", "马来西亚", "新加坡",
+    "菲律宾", "柬埔寨", "泰国", "越南", "缅甸", "尼泊尔", "蒙古", "印度",
+    "卡塔尔", "土耳其", "伊朗", "伊拉克", "以色列", "埃及", "南非", "尼日利亚",
+    "摩洛哥", "阿尔及利亚", "肯尼亚", "墨西哥", "阿根廷", "巴西", "智利",
+    "哥伦比亚", "加拿大", "美国", "英国", "爱尔兰", "法国", "德国", "意大利",
+    "西班牙", "葡萄牙", "荷兰", "比利时", "瑞士", "奥地利", "瑞典", "挪威",
+    "丹麦", "芬兰", "冰岛", "波兰", "捷克", "匈牙利", "罗马尼亚", "希腊",
+    "塞尔维亚", "斯洛文尼亚", "波黑", "保加利亚", "日本", "韩国", "朝鲜",
+    "中国",
+), key=len, reverse=True))
 
 
 def film_titles(video_title: str) -> list[tuple[str, str]]:
@@ -63,6 +76,30 @@ def release_info(intro: str) -> tuple[str | None, int | None]:
         first = min(dates)
         return first.isoformat(), first.year
     return None, min(years) if years else None
+
+
+def country_info(video_title: str, intro: str) -> str | None:
+    """Use a release-line territory first, then an explicit title prefix."""
+    text = unicodedata.normalize("NFKC", intro or "")
+    for cue in DATE_LABEL.finditer(text):
+        line = text[cue.end():].splitlines()[0][:100]
+        # A nearby release year is required; unrelated parenthesized text in
+        # the description must not become the film's country.
+        year = YEAR.search(line)
+        if not year or year.start() > 8:
+            continue
+        for match in re.finditer(r"\(([^()]*)\)", line[year.end():]):
+            label = match.group(1).strip()
+            if label in {"全球", "全世界", "国际", "未定", "待定"}:
+                continue
+            for country in COUNTRIES:
+                if label == country or label in (country + "电视台", country + "院线"):
+                    return country
+    prefix = unicodedata.normalize("NFKC", video_title or "").split("《", 1)[0]
+    for country in COUNTRIES:
+        if country in prefix:
+            return country
+    return None
 
 
 class FilmWatchlistAdapter:

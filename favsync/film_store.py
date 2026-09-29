@@ -6,7 +6,7 @@ from datetime import date
 import sqlite3
 import time
 
-from .film_watchlist import film_titles, release_info
+from .film_watchlist import country_info, film_titles, release_info
 
 
 def init_schema(db: sqlite3.Connection):
@@ -17,6 +17,7 @@ def init_schema(db: sqlite3.Connection):
           normalized_title TEXT NOT NULL,
           release_year INTEGER,
           release_date TEXT,
+          country TEXT,
           downloaded INTEGER NOT NULL DEFAULT 0 CHECK(downloaded IN (0,1)),
           created_at REAL NOT NULL,
           updated_at REAL NOT NULL
@@ -33,6 +34,7 @@ def init_schema(db: sqlite3.Connection):
           url TEXT NOT NULL,
           release_year INTEGER,
           release_date TEXT,
+          country TEXT,
           active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
           updated_at REAL NOT NULL,
           PRIMARY KEY(platform,account,external_id,normalized_title)
@@ -43,6 +45,15 @@ def init_schema(db: sqlite3.Connection):
           new_id INTEGER NOT NULL REFERENCES films(id)
         );
     """)
+    film_columns = {row[1] for row in db.execute("PRAGMA table_info(films)")}
+    if "country" not in film_columns:
+        db.execute("ALTER TABLE films ADD COLUMN country TEXT")
+    source_columns = {row[1] for row in db.execute("PRAGMA table_info(film_sources)")}
+    if "country" not in source_columns:
+        db.execute("ALTER TABLE film_sources ADD COLUMN country TEXT")
+        db.execute("""UPDATE film_sources SET country=(
+                   SELECT country FROM films WHERE films.id=film_sources.film_id)
+                   WHERE platform='manual'""")
 
 
 def _new_film(db, title, normalized, year, now):
@@ -79,14 +90,15 @@ def ingest_bilibili(db, account: str, items: list[dict]) -> dict:
             skipped += 1
             continue
         release_date, year = release_info(item["intro"])
+        country = country_info(item["title"], item["intro"])
         for title, normalized in titles:
             extracted.append((item["bvid"], item["title"], title, normalized,
-                              release_date, year))
+                              release_date, year, country))
     with db:
         db.execute("UPDATE film_sources SET active=0 WHERE platform='bilibili' AND account=?", (account,))
         touched = set()
         moved = []
-        for bvid, source_title, title, normalized, release_date, year in extracted:
+        for bvid, source_title, title, normalized, release_date, year, country in extracted:
             origin = db.execute(
                 "SELECT film_id FROM film_sources WHERE platform='bilibili' AND account=? "
                 "AND external_id=? AND normalized_title=?", (account, bvid, normalized),
@@ -122,14 +134,15 @@ def ingest_bilibili(db, account: str, items: list[dict]) -> dict:
                 film_id = _new_film(db, title, normalized, year, now)
             db.execute("""INSERT INTO film_sources
                 (platform,account,external_id,normalized_title,film_id,source_title,url,
-                 release_year,release_date,active,updated_at)
-                VALUES('bilibili',?,?,?,?,?,?,?,?,1,?)
+                 release_year,release_date,country,active,updated_at)
+                VALUES('bilibili',?,?,?,?,?,?,?,?,?,1,?)
                 ON CONFLICT(platform,account,external_id,normalized_title) DO UPDATE SET
                   film_id=excluded.film_id,source_title=excluded.source_title,
                   url=excluded.url,release_year=excluded.release_year,
-                  release_date=excluded.release_date,active=1,updated_at=excluded.updated_at""",
+                  release_date=excluded.release_date,country=excluded.country,
+                  active=1,updated_at=excluded.updated_at""",
                 (account, bvid, normalized, film_id, source_title,
-                 f"https://www.bilibili.com/video/{bvid}", year, release_date, now),
+                 f"https://www.bilibili.com/video/{bvid}", year, release_date, country, now),
             )
             touched.add(film_id)
             if existing_id and existing_id != film_id:
@@ -141,6 +154,12 @@ def ingest_bilibili(db, account: str, items: list[dict]) -> dict:
                     "SELECT 1 FROM film_sources WHERE film_id=? LIMIT 1", (old_id,)).fetchone():
                 _merge(db, old_id, new_id, now)
         for film_id in touched:
+            country_row = db.execute("""SELECT country FROM film_sources
+                WHERE film_id=? AND active=1 AND country IS NOT NULL
+                ORDER BY CASE WHEN platform='manual' THEN 0 ELSE 1 END,
+                         release_date ASC, updated_at DESC LIMIT 1""", (film_id,)).fetchone()
+            db.execute("UPDATE films SET country=?,updated_at=? WHERE id=?",
+                       (country_row[0] if country_row else None, now, film_id))
             dates = [row[0] for row in db.execute(
                 "SELECT release_date FROM film_sources WHERE film_id=? AND active=1 AND release_date IS NOT NULL",
                 (film_id,),
@@ -161,6 +180,7 @@ def _row_to_film(db, row, today: date):
     return {
         "id": row["id"], "title": row["title"], "release_year": row["release_year"],
         "release_date": release,
+        "country": row["country"],
         "released": date.fromisoformat(release) <= today if release else None,
         "downloaded": bool(row["downloaded"]),
         "active": any(source["active"] for source in sources),
