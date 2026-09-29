@@ -25,25 +25,9 @@ import requests
 from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
+from .media import valid_media
+from .sources import ScanResult
 
-
-def _valid_media(path):
-    try:
-        head = path.read_bytes()[:16]
-    except OSError:
-        return False
-    suffix = path.suffix.lower()
-    if suffix in (".jpg", ".jpeg"):
-        return head.startswith(b"\xff\xd8\xff")
-    if suffix == ".png":
-        return head.startswith(b"\x89PNG\r\n\x1a\n")
-    if suffix == ".webp":
-        return head.startswith(b"RIFF") and head[8:12] == b"WEBP"
-    if suffix == ".gif":
-        return head.startswith((b"GIF87a", b"GIF89a"))
-    if suffix in (".mp4", ".mov", ".heic"):
-        return len(head) >= 12 and head[4:8] == b"ftyp"
-    return False
 
 
 def _json_command(argv, timeout, env=None):
@@ -163,9 +147,11 @@ class XhsAdapter:
         self.identity()
         kind = "favorites" if source == "xhs_favorites" else "likes"
         records, seen_cursors, cursor_value = [], set(), ""
+        reason = "page_limit"
         account = self.cfg[source]["account"]
         for _page in range(self.cfg["xhs"]["max_pages_per_run"]):
             if self._discover_remaining <= 0:
+                reason = "request_budget"
                 break
             argv = [self.cfg["xhs"]["cli_binary"], kind, "--json"]
             if cursor_value:
@@ -186,22 +172,29 @@ class XhsAdapter:
             page_records = [self._note(n) for n in data.get("notes", [])]
             page_seen = self.store.seen_ids(source, account, (r["id"] for r in page_records))
             fresh = [r for r in page_records if r["id"] not in page_seen]
+            retry_ids = self.store.retry_ids("xhs", account, page_seen)
+            records.extend(r for r in page_records if r["id"] in retry_ids)
             selected = fresh[:self._discover_remaining]
             records.extend(selected)
             for _ in selected:
                 self.observe("new_ids")
             self._discover_remaining -= len(selected)
+            if len(selected) < len(fresh):
+                reason = "request_budget"
+                break
             # A complete already-seen page is the durable incremental boundary.
             if page_records and len(page_seen) == len(page_records):
+                reason = "seen_boundary"
                 break
             if not data.get("has_more"):
+                reason = "end"
                 break
             next_cursor = str(data.get("cursor") or "")
             if not next_cursor or next_cursor in seen_cursors:
                 raise SyncError("scan_incomplete")
             seen_cursors.add(next_cursor)
             cursor_value = next_cursor
-        return records, None
+        return ScanResult(records, reason=reason)
 
     def identity(self):
         if self._identity_cache is not None:
@@ -310,7 +303,7 @@ class XhsAdapter:
                 raise
             except Exception:
                 raise SyncError("download_failed") from None
-            if not target.stat().st_size or not _valid_media(target):
+            if not target.stat().st_size or not valid_media(target):
                 raise SyncError("download_invalid_file")
             results.append(target)
         final_paths = []
@@ -455,7 +448,7 @@ class EhAdapter:
                     self.cfg["command_timeout_seconds"], warnings_are_errors=True)
         images = sorted(p for p in staging.iterdir() if p.is_file() and p.suffix.lower() not in (".zip", ".xml", ".part"))
         expected = int((metas[0] if metas else {}).get("filecount") or len(file_meta))
-        if len(images) != expected or any(not p.stat().st_size or not _valid_media(p) for p in images):
+        if len(images) != expected or any(not p.stat().st_size or not valid_media(p) for p in images):
             raise SyncError("incomplete_gallery")
         meta = metas[0]; tags = self._tags(meta)
         artist = component((tags.get("artist") or ["Unknown"])[0]) or "Unknown"

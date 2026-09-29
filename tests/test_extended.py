@@ -11,7 +11,7 @@ from favsync.adapters_ext import EhAdapter
 class ExtendedSmoke(unittest.TestCase):
     def test_source_mapping_baseline_and_xhs_stable_ordinal(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = Store(directory)
+            store = Store(directory, initialize=True)
             try:
                 store.source("eh_favorites", "personal")
                 record = {"id": "123", "text": "", "assets": [], "bundle": True, "locator": {"url": "fixture"}}
@@ -66,7 +66,7 @@ class ExtendedSmoke(unittest.TestCase):
 
     def test_execution_history_records_simple_results(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = Store(directory)
+            store = Store(directory, initialize=True)
             try:
                 store.record_execution("content", 1.0, True)
                 store.record_execution("cookiecloud", 2.0, False)

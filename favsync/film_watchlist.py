@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import date
-import json
-from pathlib import Path
+import logging
 import re
-import sqlite3
 import unicodedata
+import time
 
 import requests
 
+from .bili_credentials import read_bili_sync_credential
 from .common import SyncError
 from .config import proxy_url
 
@@ -82,7 +82,7 @@ def country_info(video_title: str, intro: str) -> str | None:
     """Use a release-line territory first, then an explicit title prefix."""
     text = unicodedata.normalize("NFKC", intro or "")
     for cue in DATE_LABEL.finditer(text):
-        line = text[cue.end():].splitlines()[0][:100]
+        line = text[cue.end():].partition("\n")[0][:100]
         # A nearby release year is required; unrelated parenthesized text in
         # the description must not become the film's country.
         year = YEAR.search(line)
@@ -107,27 +107,29 @@ class FilmWatchlistAdapter:
         self.cfg = cfg
         self.section = cfg["film_watchlist"]
 
-    def _credential(self):
-        path = Path(self.section["bili_sync_db"])
-        if not path.is_file():
-            raise SyncError("bili_sync_unavailable")
-        try:
-            with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5) as db:
-                row = db.execute("SELECT data FROM config ORDER BY id DESC LIMIT 1").fetchone()
-            credentials = json.loads(row[0])["credential"] if row else {}
-            uid = str(credentials.get("dedeuserid") or "")
-            sessdata = credentials.get("sessdata")
-            if not uid.isdecimal() or not sessdata:
-                raise SyncError("auth_required")
-            return uid, credentials
-        except (sqlite3.Error, OSError, ValueError, KeyError, TypeError) as exc:
-            raise SyncError("bili_sync_unavailable") from exc
-
     def identity(self):
-        return self._credential()[0]
+        return read_bili_sync_credential(self.section["bili_sync_db"])[0]
+
+    def sync_metadata(self, store, source, account):
+        from .film_store import ingest_bilibili
+        key = "bili_identity:" + account
+        previous = store.setting(key)
+        if previous and previous != self.identity():
+            raise SyncError("bili_account_changed")
+        identity, folder, videos = self.scan()
+        if previous and previous != identity:
+            raise SyncError("bili_account_changed")
+        stats = ingest_bilibili(store.db, account, videos)
+        store.setting(key, identity)
+        store.setting("film_watchlist_last_result", str(stats))
+        store.update(source, account, scan_status="complete", scan_reason="end",
+                     last_scan=time.time(), error=None)
+        logging.getLogger("favsync").info(
+            "%s: complete folder=%s videos=%d titles=%d without_title=%d",
+            source, folder, stats["videos"], stats["titles"], stats["without_title"])
 
     def scan(self):
-        uid, credential = self._credential()
+        uid, credential = read_bili_sync_credential(self.section["bili_sync_db"])
         session = requests.Session()
         session.trust_env = False
         session.headers.update({

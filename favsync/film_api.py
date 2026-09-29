@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import hmac
 import json
@@ -11,7 +11,7 @@ import re
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
-from .film_store import get_film, list_films, set_downloaded
+from .film_store import add_manual_film, get_film, list_films, set_downloaded
 from .store import Store
 
 
@@ -116,6 +116,43 @@ def serve(cfg):
                 return
             item = set_downloaded(store.db, int(match.group(1)), payload["downloaded"], self.today())
             self.send_json(200 if item else 404, item or {"error": "not_found"})
+
+        def do_POST(self):
+            if not self.authenticated():
+                return
+            if urlsplit(self.path).path != "/v1/films" or urlsplit(self.path).query:
+                self.send_json(404, {"error": "not_found"})
+                return
+            try:
+                size = int(self.headers.get("Content-Length", ""))
+                if not 1 <= size <= 2048:
+                    raise ValueError
+                payload = json.loads(self.rfile.read(size))
+                if not isinstance(payload, dict) or set(payload) - {
+                        "title", "release_year", "release_date", "country", "media_type"}:
+                    raise ValueError
+                title, year = payload.get("title"), payload.get("release_year")
+                if not isinstance(title, str) or not title.strip() or len(title) > 120:
+                    raise ValueError
+                if type(year) is not int or not 1900 <= year <= 2100:
+                    raise ValueError
+                release = payload.get("release_date")
+                if release is not None and (not isinstance(release, str) or
+                                            date.fromisoformat(release).year != year):
+                    raise ValueError
+                country = payload.get("country")
+                if country is not None and (not isinstance(country, str) or
+                                            not country.strip() or len(country) > 60):
+                    raise ValueError
+                media_type = payload.get("media_type")
+                if media_type is not None and media_type not in ("movie", "tv"):
+                    raise ValueError
+            except (TypeError, ValueError, json.JSONDecodeError):
+                self.send_json(400, {"error": "invalid_body"})
+                return
+            film_id = add_manual_film(store.db, title, year, release,
+                                      country.strip() if country else None, media_type)
+            self.send_json(200, get_film(store.db, film_id, self.today()))
 
     try:
         server = HTTPServer((host, port), Handler)

@@ -65,11 +65,11 @@ def atomic_write(path, data):
 
 
 @contextmanager
-def process_lock(state):
+def process_lock(state, *, name="worker", blocking=False):
     Path(state).mkdir(parents=True, exist_ok=True)
-    with open(Path(state) / "worker.lock", "a") as lock:
+    with open(Path(state) / (name + ".lock"), "a") as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         except BlockingIOError:
             raise SyncError("worker_already_running") from None
         yield

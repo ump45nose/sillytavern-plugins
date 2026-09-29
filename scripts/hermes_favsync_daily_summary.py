@@ -8,28 +8,17 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from favsync.sources import SOURCE_LABELS
 
 
 TIMEZONE = ZoneInfo("Asia/Taipei")
 CONTAINER = "favsync-favsync-1"
-SOURCE_LABELS = {
-    "telegram": "Telegram",
-    "telegram_notice": "Telegram Bot 投递",
-    "x_bookmarks": "X 书签",
-    "x_likes": "X 点赞",
-    "eh_favorites": "EH 收藏",
-    "xhs_favorites": "小红书收藏",
-    "xhs_likes": "小红书点赞",
-    "pixiv_art_public": "Pixiv 公开图片",
-    "pixiv_art_private": "Pixiv 私密图片",
-    "pixiv_novel_public": "Pixiv 公开小说",
-    "pixiv_novel_private": "Pixiv 私密小说",
-    "wallabag_entries": "Wallabag",
-    "film_watchlist": "B 站影视片单",
-}
 KIND_LABELS = {"content": "内容同步", "cookiecloud": "Cookie 同步",
                "source:film_watchlist": "B 站影视片单手动同步"}
-NORMAL_STATES = {"complete", "disabled", "awaiting_start_date", "idle"}
+NORMAL_STATES = {"complete", "disabled", "awaiting_start_date", "idle", "partial"}
 
 
 def load_status() -> dict:
@@ -75,9 +64,13 @@ def main() -> int:
             lines.append(f"{finished:%m-%d %H:%M} {label}：{outcome}")
 
     problems = []
+    deferred = []
     for source in status.get("sources", []):
         scan_status = str(source.get("scan_status") or "unknown")
         error = source.get("error")
+        if scan_status == "partial" and not error:
+            label = SOURCE_LABELS.get(str(source.get("name")), str(source.get("name")))
+            deferred.append(f"{label}（{source.get('scan_reason') or '受限扫描'}）")
         if scan_status not in NORMAL_STATES or error:
             label = SOURCE_LABELS.get(str(source.get("name")), str(source.get("name")))
             detail = str(error or scan_status)
@@ -103,6 +96,12 @@ def main() -> int:
         if service_status != "ok":
             problems.append(f"{service}={service_status}")
     lines.append("当前异常：" + ("；".join(problems) if problems else "无"))
+    if deferred:
+        lines.append("按额度处理，剩余延后：" + "；".join(deferred))
+    incomplete = sum(row.get("count", 0) for row in status.get("wallabag_exports", [])
+                     if row.get("attachment_status") == "incomplete")
+    if incomplete:
+        lines.append(f"Wallabag：正文已保存，图片不完整（{incomplete} 条）")
     if skipped:
         lines.append("已跳过：" + "；".join(skipped))
     print("\n".join(lines))

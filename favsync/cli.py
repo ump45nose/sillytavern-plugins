@@ -7,11 +7,11 @@ import shutil
 from pathlib import Path
 import requests
 
-from .adapters import TelegramAdapter
 from .common import SyncError, process_lock
 from .config import load, telegram_accounts, telegram_config
-from .engine import Engine
 from .store import Store
+from .database import migrate
+from .sources import SOURCES
 
 
 def main(argv=None):
@@ -22,21 +22,12 @@ def main(argv=None):
     for name in ("run", "sync-once", "status"):
         cmd = commands.add_parser(name)
         if name == "sync-once":
-            cmd.add_argument("--source", choices=("telegram", "telegram_notice", "x_bookmarks", "x_likes",
-                                                    "eh_favorites", "xhs_favorites", "xhs_likes",
-                                                    "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public",
-                                                    "pixiv_novel_private", "wallabag_entries", "film_watchlist"))
+            cmd.add_argument("--source", choices=SOURCES)
     commands.add_parser("film-api", help="serve the authenticated film watchlist API")
     commands.add_parser("telegram-accounts")
     commands.add_parser("pixiv-login", help="authorize Pixiv once and persist token plus UID automatically")
     xhs_resume = commands.add_parser("xhs-resume", help="manually clear the persistent Xiaohongshu safety fuse")
     xhs_resume.add_argument("--account", default="personal")
-    commands.add_parser('telegram-relayout', help='migrate existing Telegram downloads to the configured flat directory')
-    review = commands.add_parser('x-review', help='download an explicit review sample without changing the likes baseline')
-    review.add_argument('--source', choices=('likes', 'bookmarks'), default='likes')
-    selection = review.add_mutually_exclusive_group()
-    selection.add_argument('--limit', type=int, default=30)
-    selection.add_argument('--all', action='store_true', help='explicitly download all interface-visible items, including history')
     login = commands.add_parser("telegram-login")
     login.add_argument("--mode", choices=("qr", "code"), default="qr")
     login.add_argument("--account", help="Telegram account label from config")
@@ -44,10 +35,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        cfg = load(args.config)
+        cfg = load(args.config, mode=args.command, source=getattr(args, "source", None))
         if args.command == "pixiv-login":
             from .pixiv_auth import login as pixiv_login
-            return pixiv_login(cfg)
+            with process_lock(cfg["state_dir"]):
+                return pixiv_login(cfg)
         if args.command == "telegram-accounts":
             print(json.dumps([{"account": p["account"], "enabled": p["enabled"],
                                "start_date": str(p["start_date"]),
@@ -55,13 +47,10 @@ def main(argv=None):
                               for p in telegram_accounts(cfg)], ensure_ascii=False, indent=2))
             return 0
         if args.command == "status":
-            db = Store(cfg["state_dir"])
+            db = Store(cfg["state_dir"], readonly=True)
             try:
                 result = db.status()
-                result["configured_enabled"] = {s: cfg[s]["enabled"] for s in (
-                    "telegram", "telegram_notice", "x_bookmarks", "x_likes", "eh_favorites", "xhs_favorites", "xhs_likes",
-                    "pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private",
-                    "wallabag_entries", "film_watchlist")}
+                result["configured_enabled"] = {s: cfg[s]["enabled"] for s in SOURCES}
                 result["telegram_accounts"] = [{"account": p["account"], "enabled": p["enabled"]} for p in telegram_accounts(cfg)]
                 try:
                     result["storage"].update({"free_bytes": shutil.disk_usage(cfg["download_dir"]).free,
@@ -69,32 +58,33 @@ def main(argv=None):
                                               "resume_free_bytes": cfg["storage"]["resume_free_bytes"]})
                 except OSError:
                     result["storage"]["error"] = "filesystem_error"
-                session = requests.Session(); session.trust_env = False
-                try:
-                    response = session.get(cfg["xhs"]["downloader_url"].rstrip("/") + "/docs", timeout=3)
-                    result["external_services"] = {"xhs_downloader": "ok" if response.ok else "http_error"}
-                except requests.RequestException:
-                    result["external_services"] = {"xhs_downloader": "unreachable"}
-                try:
-                    response = session.get(cfg["wallabag"]["base_url"].rstrip("/") + "/", timeout=3)
-                    result["external_services"]["wallabag"] = "ok" if response.ok else "http_error"
-                except requests.RequestException:
-                    result["external_services"]["wallabag"] = "unreachable"
+                result["external_services"] = {}
+                checks = {}
+                if cfg["xhs_favorites"]["enabled"] or cfg["xhs_likes"]["enabled"]:
+                    checks["xhs_downloader"] = cfg["xhs"]["downloader_url"].rstrip("/") + "/docs"
+                if cfg["wallabag_entries"]["enabled"]:
+                    checks["wallabag"] = cfg["wallabag"]["base_url"].rstrip("/") + "/"
                 if cfg["film_watchlist"]["enabled"]:
-                    try:
-                        response = session.get(f"http://{cfg['film_api']['bind_host']}:{cfg['film_api']['port']}/health", timeout=2)
-                        result["external_services"]["film_api"] = "ok" if response.ok else "http_error"
-                    except requests.RequestException:
-                        result["external_services"]["film_api"] = "unreachable"
+                    checks["film_api"] = f"http://{cfg['film_api']['bind_host']}:{cfg['film_api']['port']}/health"
+                with requests.Session() as session:
+                    session.trust_env = False
+                    for name, url in checks.items():
+                        try:
+                            with session.get(url, timeout=3) as response:
+                                result["external_services"][name] = "ok" if response.ok else "http_error"
+                        except requests.RequestException:
+                            result["external_services"][name] = "unreachable"
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             finally:
                 db.close()
             return 0
         if args.command == "film-api":
             from .film_api import serve
+            migrate(cfg["state_dir"])
             serve(cfg)
             return 0
         if args.command == "xhs-resume":
+            migrate(cfg["state_dir"])
             db = Store(cfg["state_dir"])
             try:
                 previous = db.xhs_fuse(args.account)
@@ -107,47 +97,22 @@ def main(argv=None):
         def terminate(*_):
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, terminate)
-        with process_lock(cfg["state_dir"]):
-            if args.command == "telegram-login":
-                account = args.account or cfg["telegram"]["account"]
+        if args.command == "telegram-login":
+            from .adapters import TelegramAdapter
+            account = args.account or cfg["telegram"]["account"]
+            with process_lock(cfg["state_dir"]):
                 return TelegramAdapter(telegram_config(cfg, account)).login(args.mode, replace=args.replace)
-            engine = Engine(cfg)
-            try:
-                if args.command == 'telegram-relayout':
-                    from .migrate import relayout
-                    print(json.dumps(relayout(engine), ensure_ascii=False, indent=2))
-                    return 0
-                elif args.command == 'x-review':
-                    if not args.all and not 1 <= args.limit <= 100:
-                        raise ValueError('review limit must be between 1 and 100')
-                    if not engine.cookie_sync():
-                        return 1
-                    account = cfg['x_likes']['account']
-                    engine.check_x(account)
-                    adapter = engine.adapters['x']
-                    records, _ = adapter.scan('x_' + args.source)
-                    if not args.all:
-                        records = records[:args.limit]
-                    source = 'x_review_' + args.source
-                    engine.store.source(source, account)
-                    engine.store.ingest(source, account, records)
-                    # Persist the exact ordered sample for review and crash recovery.
-                    engine.store.setting(source + ':ids', json.dumps([r['id'] for r in records]))
-                    ok = True
-                    for number, record in enumerate(records, 1):
-                        logging.info('x-review: task=%d/%d item=%s', number, len(records), record['id'])
-                        if not engine.drain(source, account, adapter, [record['id']]):
-                            ok = False
-                    logging.info('x-review: selected=%d requested=%s', len(records), 'all-visible' if args.all else args.limit)
-                    return 0 if ok and (args.all or len(records) == args.limit) else 1
-                elif args.command == "run":
-                    engine.run()
-                else:
-                    cookie_ok = True if args.source == "film_watchlist" else engine.cookie_sync()
-                    cycle_ok = engine.cycle(args.source)
-                    return 0 if cookie_ok and cycle_ok else 1
-            finally:
-                engine.store.close()
+        from .engine import Engine
+        engine = Engine(cfg)
+        try:
+            if args.command == "run":
+                engine.run()
+            else:
+                cookie_ok = True if args.source == "film_watchlist" else engine.cookie_sync()
+                cycle_ok = engine.cycle(args.source)
+                return 0 if cookie_ok and cycle_ok else 1
+        finally:
+            engine.store.close()
     except KeyboardInterrupt:
         return 130
     except SyncError as exc:

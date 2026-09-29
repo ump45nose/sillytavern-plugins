@@ -44,7 +44,7 @@ class PixivWallabagSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cfg = self._config(directory)
             Path(cfg["pixiv"]["refresh_token_file"]).write_text("fixture-token")
-            store = Store(cfg["state_dir"])
+            store = Store(cfg["state_dir"], initialize=True)
             try:
                 adapter = PixivAdapter(cfg, store)
                 meta = {"id": 42, "type": "manga", "count": 8, "title": "T",
@@ -76,7 +76,7 @@ class PixivWallabagSmoke(unittest.TestCase):
 
     def test_wallabag_fingerprint_update_requeues_same_filename(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = Store(directory)
+            store = Store(directory, initialize=True)
             try:
                 store.source("wallabag_entries", "personal")
                 record = {"id": "7", "locator": {"fingerprint": "a", "title": "Old"}}
@@ -99,7 +99,7 @@ class PixivWallabagSmoke(unittest.TestCase):
 
     def test_wallabag_invalid_content_stays_out_of_queue_until_repaired(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = Store(directory)
+            store = Store(directory, initialize=True)
             try:
                 store.source("wallabag_entries", "personal")
                 record = {"id": "4", "locator": {"fingerprint": "short", "title": "Chapter",

@@ -44,7 +44,7 @@ class XhsSafetySmoke(unittest.TestCase):
     def test_seen_page_is_incremental_boundary_and_run_limit_is_shared(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg = self.config(directory)
-            store = Store(cfg["state_dir"])
+            store = Store(cfg["state_dir"], initialize=True)
             try:
                 Path(cfg["state_dir"], "xhs-cookies.json").write_text('{"a1":"fixture"}')
                 store.source("xhs_favorites", "personal")
@@ -97,7 +97,7 @@ class XhsSafetySmoke(unittest.TestCase):
 
     def test_detail_cache_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = Store(Path(directory) / "state")
+            store = Store(Path(directory) / "state", initialize=True)
             try:
                 store.save_xhs_detail("personal", "note", {"下载地址": ["https://example.invalid/a.jpg"]})
                 self.assertIn("下载地址", store.xhs_detail("personal", "note", 60))

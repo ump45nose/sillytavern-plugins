@@ -1,87 +1,18 @@
 from pathlib import Path
 import json
 import re
-import sqlite3
 import time
-from .config import SOURCE_PLATFORM
-from .film_store import init_schema, film_status
+from .sources import SOURCE_PLATFORM
+from .film_store import film_status
+from .database import connect
 
 
 class Store:
-    def __init__(self, state):
-        Path(state).mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(Path(state) / "state.sqlite3", timeout=30)
-        self.db.row_factory = sqlite3.Row
-        self.db.executescript("""
-        PRAGMA journal_mode=WAL;
-        PRAGMA foreign_keys=ON;
-        CREATE TABLE IF NOT EXISTS sources (
-          name TEXT NOT NULL, account TEXT NOT NULL, baseline_at REAL,
-          cursor INTEGER NOT NULL DEFAULT 0, start_date TEXT NOT NULL DEFAULT '',
-          scan_status TEXT NOT NULL DEFAULT 'idle', last_scan REAL,
-          error TEXT, blocked_cookie TEXT,
-          PRIMARY KEY(name, account));
-        CREATE TABLE IF NOT EXISTS seen (
-          source TEXT NOT NULL, account TEXT NOT NULL, item_id TEXT NOT NULL,
-          first_seen_at REAL NOT NULL, baseline INTEGER NOT NULL DEFAULT 0,
-          PRIMARY KEY(source, account, item_id));
-        CREATE TABLE IF NOT EXISTS items (
-          platform TEXT NOT NULL, account TEXT NOT NULL, item_id TEXT NOT NULL,
-          body TEXT NOT NULL, locator TEXT NOT NULL, text_done INTEGER NOT NULL DEFAULT 0,
-          PRIMARY KEY(platform, account, item_id));
-        CREATE TABLE IF NOT EXISTS assets (
-          platform TEXT NOT NULL, account TEXT NOT NULL, item_id TEXT NOT NULL,
-          number INTEGER NOT NULL, filename TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
-          attempts INTEGER NOT NULL DEFAULT 0, error TEXT, size INTEGER,
-          PRIMARY KEY(platform, account, item_id, number),
-          FOREIGN KEY(platform,account,item_id) REFERENCES items(platform,account,item_id));
-        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS xhs_names (
-          account TEXT NOT NULL, author TEXT NOT NULL, published TEXT NOT NULL,
-          item_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
-          PRIMARY KEY(account,item_id), UNIQUE(account,author,published,ordinal));
-        CREATE TABLE IF NOT EXISTS eh_names (
-          account TEXT NOT NULL, item_id TEXT NOT NULL, relative_path TEXT NOT NULL,
-          PRIMARY KEY(account,item_id), UNIQUE(account,relative_path));
-        CREATE TABLE IF NOT EXISTS execution_history (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          kind TEXT NOT NULL, started_at REAL NOT NULL, finished_at REAL NOT NULL,
-          result TEXT NOT NULL CHECK(result IN ('success','failed')));
-        CREATE TABLE IF NOT EXISTS pixiv_names (
-          account TEXT NOT NULL, item_id TEXT NOT NULL, stem TEXT NOT NULL,
-          PRIMARY KEY(account,item_id), UNIQUE(account,stem));
-        CREATE TABLE IF NOT EXISTS wallabag_exports (
-          account TEXT NOT NULL, entry_id TEXT NOT NULL, fingerprint TEXT,
-          filename TEXT NOT NULL, attachment_status TEXT,
-          PRIMARY KEY(account,entry_id), UNIQUE(account,filename));
-        CREATE TABLE IF NOT EXISTS xhs_details (
-          account TEXT NOT NULL, item_id TEXT NOT NULL, payload TEXT NOT NULL,
-          updated_at REAL NOT NULL,
-          PRIMARY KEY(account,item_id));
-        CREATE TABLE IF NOT EXISTS xhs_media (
-          account TEXT NOT NULL, item_id TEXT NOT NULL, filename TEXT NOT NULL,
-          PRIMARY KEY(account,item_id,filename));
-        CREATE TABLE IF NOT EXISTS markdown_exports (
-          source TEXT NOT NULL, account TEXT NOT NULL, item_id TEXT NOT NULL,
-          filename TEXT NOT NULL, status TEXT NOT NULL,
-          PRIMARY KEY(source,account,item_id));
-        """)
-        init_schema(self.db)
-        columns = {r[1] for r in self.db.execute("PRAGMA table_info(items)")}
-        if "bundle_status" not in columns:
-            self.db.execute("ALTER TABLE items ADD COLUMN bundle_status TEXT NOT NULL DEFAULT 'none'")
-        if "error" not in columns:
-            self.db.execute("ALTER TABLE items ADD COLUMN error TEXT")
-        xhs_columns = {r[1] for r in self.db.execute("PRAGMA table_info(xhs_names)")}
-        if "stem" not in xhs_columns:
-            self.db.execute("ALTER TABLE xhs_names ADD COLUMN stem TEXT")
-        # Old invalid Wallabag entries were retried every cycle. Keep their
-        # locator so a later content change can requeue them.
-        self.db.execute("""UPDATE items SET bundle_status='skipped_invalid',text_done=1
-                           WHERE platform='wallabag' AND bundle_status='failed'
-                           AND error='invalid_content'""")
-        self.db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES('markdown_v2_since',?)", (str(time.time()),))
-        self.db.commit()
+    def __init__(self, state, *, readonly=False, initialize=False):
+        if initialize:
+            from .database import migrate
+            migrate(state)
+        self.db = connect(state, readonly=readonly)
 
     def close(self):
         self.db.close()
@@ -104,7 +35,7 @@ class Store:
         return dict(self.db.execute("SELECT * FROM sources WHERE name=? AND account=?", (name, account)).fetchone())
 
     def update(self, name, account, **values):
-        allowed = {"baseline_at", "cursor", "start_date", "scan_status", "last_scan", "error", "blocked_cookie"}
+        allowed = {"baseline_at", "cursor", "start_date", "scan_status", "last_scan", "error", "scan_reason"}
         assert values.keys() <= allowed
         with self.db:
             self.db.execute("UPDATE sources SET " + ",".join(k + "=?" for k in values) + " WHERE name=? AND account=?", (*values.values(), name, account))
@@ -140,6 +71,16 @@ class Store:
             (source, account, *item_ids),
         )
         return {row[0] for row in rows}
+
+    def retry_ids(self, platform, account, item_ids):
+        item_ids = list(dict.fromkeys(item_ids))
+        if not item_ids:
+            return set()
+        marks = ",".join("?" for _ in item_ids)
+        return {row[0] for row in self.db.execute(
+            f"SELECT item_id FROM items WHERE platform=? AND account=? AND item_id IN ({marks}) "
+            "AND bundle_status IN ('pending','failed','paused_low_disk')",
+            (platform, account, *item_ids))}
 
     def xhs_detail(self, account, item_id, max_age):
         row = self.db.execute(
@@ -231,9 +172,11 @@ class Store:
                 new_item = self.db.execute("INSERT OR IGNORE INTO items(platform,account,item_id,body,locator,bundle_status) VALUES(?,?,?,?,?,?)",
                                           (platform, account, r["id"], r.get("text", ""), json.dumps(r["locator"]), bundle)).rowcount
                 if not new_item and r['locator'].get('naming'):
-                    row = self.db.execute('SELECT locator FROM items WHERE platform=? AND account=? AND item_id=?',
+                    row = self.db.execute('SELECT locator,bundle_status FROM items WHERE platform=? AND account=? AND item_id=?',
                                           (platform, account, r['id'])).fetchone()
                     old = json.loads(row[0])
+                    if platform == "xhs" and row[1] == "done":
+                        continue
                     # Refresh signed XHS locators while preserving the allocated name.
                     naming = old.get('naming') or r['locator'].get('naming')
                     fresh_locator = dict(r['locator'])
@@ -242,6 +185,9 @@ class Store:
                             fresh_locator[frozen] = old[frozen]
                     if naming:
                         fresh_locator['naming'] = naming
+                    if platform == "xhs" and old.get("url") != fresh_locator.get("url"):
+                        self.db.execute("DELETE FROM xhs_details WHERE account=? AND item_id=?",
+                                        (account, r["id"]))
                     self.db.execute('UPDATE items SET locator=? WHERE platform=? AND account=? AND item_id=?',
                                     (json.dumps(fresh_locator), platform, account, r['id']))
                     if r.get("text"):
@@ -250,7 +196,7 @@ class Store:
                 for number, filename in (r["assets"] if new_item else []):
                     self.db.execute("INSERT OR IGNORE INTO assets(platform,account,item_id,number,filename) VALUES(?,?,?,?,?)",
                                     (platform, account, r["id"], number, filename))
-            self.db.execute("UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,blocked_cookie=NULL,start_date=? WHERE name=? AND account=?",
+            self.db.execute("UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,start_date=? WHERE name=? AND account=?",
                             (now, start_date, source, account))
             if baseline:
                 self.db.execute("UPDATE sources SET baseline_at=? WHERE name=? AND account=?", (now, source, account))
@@ -290,7 +236,7 @@ class Store:
                 self.db.execute("""UPDATE items SET locator=?,bundle_status=?,error=?,text_done=?
                                   WHERE platform='wallabag' AND account=? AND item_id=?""",
                                 (locator, bundle_status, error, text_done, account, item_id))
-            self.db.execute("""UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,blocked_cookie=NULL
+            self.db.execute("""UPDATE sources SET scan_status='complete',error=NULL,last_scan=?
                               WHERE name=? AND account=?""", (now, source, account))
 
     def pending(self, source, account):
@@ -396,7 +342,7 @@ class Store:
 
     def status(self):
         return {
-            "sources": [dict(r) for r in self.db.execute("SELECT name,account,baseline_at,cursor,start_date,scan_status,last_scan,error FROM sources")],
+            "sources": [dict(r) for r in self.db.execute("SELECT name,account,baseline_at,cursor,start_date,scan_status,scan_reason,last_scan,error FROM sources")],
             "assets": [dict(r) for r in self.db.execute("SELECT platform,account,status,count(*) AS count FROM assets GROUP BY platform,account,status")],
             "download_errors": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM assets WHERE error IS NOT NULL GROUP BY platform,account,error")],
             "bundles": [dict(r) for r in self.db.execute("SELECT platform,account,bundle_status,count(*) AS count FROM items GROUP BY platform,account,bundle_status")],

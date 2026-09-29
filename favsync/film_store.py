@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 import sqlite3
 import time
+import unicodedata
 
 from .film_watchlist import country_info, film_titles, release_info
 
@@ -18,6 +19,7 @@ def init_schema(db: sqlite3.Connection):
           release_year INTEGER,
           release_date TEXT,
           country TEXT,
+          media_type TEXT CHECK(media_type IN ('movie','tv') OR media_type IS NULL),
           downloaded INTEGER NOT NULL DEFAULT 0 CHECK(downloaded IN (0,1)),
           created_at REAL NOT NULL,
           updated_at REAL NOT NULL
@@ -45,15 +47,43 @@ def init_schema(db: sqlite3.Connection):
           new_id INTEGER NOT NULL REFERENCES films(id)
         );
     """)
-    film_columns = {row[1] for row in db.execute("PRAGMA table_info(films)")}
-    if "country" not in film_columns:
+    columns = {row[1] for row in db.execute("PRAGMA table_info(films)")}
+    if "country" not in columns:
         db.execute("ALTER TABLE films ADD COLUMN country TEXT")
+    if "media_type" not in columns:
+        db.execute("ALTER TABLE films ADD COLUMN media_type TEXT")
     source_columns = {row[1] for row in db.execute("PRAGMA table_info(film_sources)")}
     if "country" not in source_columns:
         db.execute("ALTER TABLE film_sources ADD COLUMN country TEXT")
         db.execute("""UPDATE film_sources SET country=(
                    SELECT country FROM films WHERE films.id=film_sources.film_id)
                    WHERE platform='manual'""")
+
+
+def add_manual_film(db: sqlite3.Connection, title: str, year: int,
+                    release_date: str | None = None, country: str | None = None,
+                    media_type: str | None = None) -> int:
+    """建立可去重的手动片单来源，不覆盖已有下载状态。"""
+    title = " ".join(unicodedata.normalize("NFKC", title).strip().split())
+    normalized = title.casefold()
+    now = time.time()
+    with db:
+        row = db.execute("SELECT id FROM films WHERE normalized_title=? AND release_year=?",
+                         (normalized, year)).fetchone()
+        film_id = row[0] if row else _new_film(db, title, normalized, year, now)
+        db.execute("UPDATE films SET release_date=COALESCE(?,release_date),"
+                   "country=COALESCE(?,country),media_type=COALESCE(?,media_type),updated_at=? "
+                   "WHERE id=?", (release_date, country, media_type, now, film_id))
+        db.execute("""INSERT INTO film_sources
+                   (platform,account,external_id,normalized_title,film_id,source_title,url,
+                    release_year,release_date,country,active,updated_at)
+                   VALUES('manual','api',?,?,?,?,?,?,?,?,1,?)
+                   ON CONFLICT(platform,account,external_id,normalized_title) DO UPDATE SET
+                   source_title=excluded.source_title,release_date=excluded.release_date,
+                   country=COALESCE(excluded.country,film_sources.country),
+                   active=1,updated_at=excluded.updated_at""",
+                   (str(film_id), normalized, film_id, title, "", year, release_date, country, now))
+    return film_id
 
 
 def _new_film(db, title, normalized, year, now):
@@ -180,7 +210,7 @@ def _row_to_film(db, row, today: date):
     return {
         "id": row["id"], "title": row["title"], "release_year": row["release_year"],
         "release_date": release,
-        "country": row["country"],
+        "country": row["country"], "media_type": row["media_type"],
         "released": date.fromisoformat(release) <= today if release else None,
         "downloaded": bool(row["downloaded"]),
         "active": any(source["active"] for source in sources),

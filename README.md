@@ -58,6 +58,9 @@ unset FILM_API_TOKEN
 
 `GET /v1/films` 支持 `offset`、`limit`（最大 200）、`downloaded=true|false`、
 `released=true|false|unknown`；`GET /v1/films/{id}` 返回单项。
+`POST /v1/films` 可用相同令牌手动加入或补充片单身份，必填 `title` 与
+`release_year`，可填 `release_date`（`YYYY-MM-DD`）、`country`（如 `法国`）
+和 `media_type`（`movie` 或 `tv`）。同名同年重复提交返回同一条记录，不清除下载状态。
 `PATCH /v1/films/{id}/downloaded` 只接受布尔值。`downloaded` 新建时为 `false`，
 后续由媒体库侧写回；Favsync 重扫不会覆盖它。首版只提供接口，不自动检查 Emby。
 
@@ -259,24 +262,20 @@ Telegram 已支持 `[telegram]` 加 `[[telegram.accounts]]` 的多账号配置�
 
 实现依据：[gallery-dl](https://github.com/mikf/gallery-dl)、[tdl 导出](https://docs.iyear.me/tdl/guide/tools/export-messages/)、[tdl 下载](https://docs.iyear.me/tdl/guide/download/)、[CookieCloud 解密参考](https://github.com/easychen/CookieCloud/blob/main/examples/decrypt.py)。
 
-## X 有限评审批次
+## 维护入口与任务隔离
 
-显式选择接口前 30 条点赞顺序下载，允许历史样本，不改变日常日期配置、点赞基线或 `first_seen_at` 含义。评审来源单独记录为 `x_review_likes`，媒体仍复用标准 X 帖子目录。
-
-```bash
-docker compose stop favsync
-docker compose run --rm -T favsync --config /app/config.toml x-review --source likes --limit 30
-docker compose up -d favsync
-```
-
-每条帖子完成后再处理下一条，同一帖子中的多个附件计为一条任务。状态内的 `x_review_likes:ids` 保存本次顺序；重跑命令重新选择当前前 30 条，已完成的文件不会重复下载。评审失败项需重跑评审命令补齐，日常来源不会主动下载旧点赞。
-
-需要一次性补齐接口当前可返回的全部点赞时，将 `--limit 30` 换成 `--all`：
+当前来源统一登记在 `favsync/sources.py`；日常任务只生成单篇 Markdown。历史大 Markdown 和旧 Telegram 布局迁移保留在独立维护模块中，正常同步不调用它们：
 
 ```bash
-docker compose stop favsync
-docker compose run --rm -T favsync --config /app/config.toml x-review --source likes --all
-docker compose up -d favsync
+docker compose run --rm -T --entrypoint python favsync -m favsync.maintenance --config /app/config.toml telegram-relayout
 ```
 
-这仍使用独立的 `x_review_likes` 来源，不重建日常点赞基线。重跑可复用已完成附件并重试未完成项；每帖全部附件落盘后才写入 `Twitter/收藏.md`。接口未返回的历史点赞不在此次补齐保证范围内。
+此维护命令会搬迁旧布局，只在确实需要历史迁移时执行。失效的 `x-review` 入口已下线，原有评审记录、基线和文件保留。
+
+调度器闲置期间可直接执行 `sync-once --source film_watchlist` 等单来源任务，无需停止常驻服务。实际同步或登录期间仍互斥；第二个常驻调度器也会被拒绝。重启沿用最近完整内容周期与 Cookie 周期的完成时间，不自动触发额外全量同步。
+
+数据库连接与版本迁移分离；写入服务启动时显式升级，`status` 使用只读连接。片单 API 只校验自身配置。B 站凭据读取由 `bili_credentials.py` 封装，仅读取已有 bili-sync SQLite。
+
+单个来源发生异常会记录失败并继续后面的来源；认证和风控异常停止同账号后续请求。小红书保留现有请求上限与熔断，已见但未完成的笔记仍可刷新访问令牌；达到页数或条目额度记录 `partial` 和具体原因。日报区分受限扫描与完整扫描，并列出 Wallabag 正文已保存但图片不完整的数量。
+
+修复与验收记录见 [2026-09-29 repair](docs/reviews/2026-09-29-repairs.md)。

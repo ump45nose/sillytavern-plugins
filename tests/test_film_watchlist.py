@@ -15,6 +15,7 @@ class FilmWatchlistSmoke(unittest.TestCase):
         self.assertEqual(release_info("首播: 2027(未定)"), (None, 2027))
 
     def test_country_from_release_line_or_title(self):
+        self.assertIsNone(country_info("《空日期》", "上映日期："))
         self.assertEqual(country_info("法国电影《甲》", "上映日期：2026-10-14 (德国)"), "德国")
         self.assertEqual(country_info("克罗地亚历史电影《乙》", "暂无上映时间"), "克罗地亚")
         self.assertEqual(country_info("《丙》", "播出周期: 2026年11月14日–2027年2月14日(韩国)"), "韩国")
@@ -22,7 +23,7 @@ class FilmWatchlistSmoke(unittest.TestCase):
         self.assertIsNone(country_info("《戊》", "上映日期：2026-10-14；主演：法国演员"))
 
         with TemporaryDirectory() as folder:
-            store = Store(folder)
+            store = Store(folder, initialize=True)
             try:
                 ingest_bilibili(store.db, "personal", [
                     {"bvid": "BV1234567890", "title": "法国电影《甲》",
@@ -42,7 +43,7 @@ class FilmWatchlistSmoke(unittest.TestCase):
             {"bvid": "BV1234567891", "title": "《甲》正式预告", "intro": "首播: 2026-10-15"},
         ]
         with TemporaryDirectory() as folder:
-            store = Store(folder)
+            store = Store(folder, initialize=True)
             try:
                 ingest_bilibili(store.db, "personal", videos)
                 first = list_films(store.db, date(2026, 9, 28))["items"]

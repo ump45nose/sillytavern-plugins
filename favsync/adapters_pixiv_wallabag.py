@@ -19,7 +19,7 @@ import zipfile
 
 import requests
 
-from .adapters_ext import _valid_media
+from .media import valid_media
 from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
@@ -238,13 +238,13 @@ class PixivAdapter:
                 if path.suffix.lower() == ".zip":
                     with zipfile.ZipFile(path) as archive:
                         if archive.testzip(): raise SyncError("download_invalid_file")
-                elif not _valid_media(path):
+                elif not valid_media(path):
                     raise SyncError("download_invalid_file")
                 final = output / f"{stem}_p{index:03d}{path.suffix.lower()}"
                 os.replace(path, final); finals.append(final)
             shutil.rmtree(staging, ignore_errors=True)
             return finals
-        images = [path for path in files if _valid_media(path)]
+        images = [path for path in files if valid_media(path)]
         expected = int(meta.get("count") or locator.get("count") or len(file_events))
         if len(images) != expected or expected != len(file_events):
             raise SyncError("incomplete_gallery")
@@ -416,7 +416,7 @@ class WallabagAdapter:
                 if expected_images and not packaged_images:
                     incomplete = True
                 return "incomplete" if incomplete else "complete"
-        except zipfile.BadZipFile:
+        except (zipfile.BadZipFile, KeyError, RuntimeError):
             raise SyncError("epub_invalid") from None
 
     def _fallback_epub(self, item, destination):

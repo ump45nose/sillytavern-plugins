@@ -1,7 +1,6 @@
 # 路径相对于配置文件；容器内使用下列绝对路径。
 state_dir = "/data/state"
 download_dir = "/downloads" # 所有平台共用；宿主机根目录由 .env 的 DOWNLOAD_ROOT 设置。
-markdown_scope = "platform" # 历史 收藏.md 保留；新目标内容改为逐条 Markdown。
 timezone = "Asia/Taipei"
 interval_seconds = 28800
 command_timeout_seconds = 3600

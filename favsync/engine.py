@@ -3,62 +3,62 @@ import os
 from pathlib import Path
 import threading
 import time
-import hashlib
 import shutil
 
 from . import cookies
-from .adapters import TelegramAdapter, XAdapter
-from .adapters_ext import EhAdapter, XhsAdapter
-from .adapters_pixiv_wallabag import PixivAdapter, WallabagAdapter
-from .film_watchlist import FilmWatchlistAdapter
-from .film_store import ingest_bilibili
-from .common import SyncError, atomic_write
-from .config import SOURCES, start_timestamp, telegram_accounts, telegram_config
+from .accounts import ACCOUNT_ERRORS, XHS_FUSE_ERRORS, AccountGuard
+from .adapters import TelegramAdapter
+from .common import SyncError, process_lock
+from .config import start_timestamp, telegram_accounts, telegram_config
+from .database import migrate
+from .sources import SOURCE_SPECS, ScanResult, make_adapter
 from .store import Store
-from .layout import paths
-from .journal import append_entry, write_item_markdown
-from .layout import platform_root
-
+from .layout import paths, platform_root
+from .journal import write_item_markdown
 
 log = logging.getLogger("favsync")
-XHS_FUSE_ERRORS = {"auth_required", "verification_required", "rate_limited",
-                   "risk_control_suspected", "xhs_account_changed"}
 
 
 class Engine:
     def __init__(self, cfg, adapters=None):
         self.cfg = cfg
+        migrate(cfg["state_dir"])
         self.store = Store(cfg["state_dir"])
-        self.adapters = adapters or {"telegram": TelegramAdapter(cfg), "x": XAdapter(cfg)}
-        self.adapters.setdefault("eh", EhAdapter(cfg, self.store))
-        self.adapters.setdefault("xhs", XhsAdapter(cfg, self.store))
-        self.adapters.setdefault("pixiv", PixivAdapter(cfg, self.store))
-        self.adapters.setdefault("wallabag", WallabagAdapter(cfg, self.store))
-        self.adapters.setdefault("films", FilmWatchlistAdapter(cfg))
+        self.adapters = dict(adapters or {})
+        self.guard = AccountGuard(cfg, self.store)
         self.attempted = set()
 
     def sources(self):
-        for profile in telegram_accounts(self.cfg):
-            adapter = self.adapters["telegram"] if profile["account"] == self.cfg["telegram"]["account"] else TelegramAdapter({**self.cfg, "telegram": profile})
-            yield "telegram", profile, adapter
-        notice = self.cfg["telegram_notice"]
-        notice_cfg = telegram_config(self.cfg, notice["account"])
-        yield "telegram_notice", notice, TelegramAdapter(notice_cfg)
-        for name in ("x_bookmarks", "x_likes"):
-            yield name, self.cfg[name], self.adapters["x"]
-        yield "eh_favorites", self.cfg["eh_favorites"], self.adapters["eh"]
-        for name in ("xhs_favorites", "xhs_likes"):
-            yield name, self.cfg[name], self.adapters["xhs"]
-        for name in ("pixiv_art_public", "pixiv_art_private", "pixiv_novel_public", "pixiv_novel_private"):
-            yield name, self.cfg[name], self.adapters["pixiv"]
-        yield "wallabag_entries", self.cfg["wallabag_entries"], self.adapters["wallabag"]
-        yield "film_watchlist", self.cfg["film_watchlist"], self.adapters["films"]
+        for spec in SOURCE_SPECS:
+            sections = telegram_accounts(self.cfg) if spec.name == "telegram" else [self.cfg[spec.name]]
+            for section in sections:
+                yield spec, section
+
+    def adapter(self, spec, account):
+        key = spec.adapter
+        cfg = self.cfg
+        if key == "telegram":
+            cfg = telegram_config(self.cfg, account)
+            if account != self.cfg["telegram"]["account"]:
+                key += ":" + account
+        if key not in self.adapters:
+            self.adapters[key] = (TelegramAdapter(cfg) if spec.adapter == "telegram"
+                                  else make_adapter(spec.adapter, cfg, self.store))
+        return self.adapters[key]
 
     def cookie_sync(self):
         if not self.cfg["cookiecloud"]["enabled"]:
             return True
+        try:
+            with process_lock(self.cfg["state_dir"], name="cookiecloud"):
+                return self._cookie_sync()
+        except SyncError as exc:
+            if exc.code == "worker_already_running":
+                return True
+            raise
+
+    def _cookie_sync(self):
         started = time.time()
-        # Dedicated connection: the daemon cookie thread never shares SQLite objects.
         db = Store(self.cfg["state_dir"])
         try:
             results = cookies.sync(self.cfg)
@@ -66,7 +66,8 @@ class Engine:
                 db.setting("cookiecloud_status:" + platform, status)
             complete = all(status == "ok" for status in results.values())
             db.setting("cookiecloud_status", "ok" if complete else "partial")
-            db.setting("cookiecloud_last_success", str(time.time()))
+            if complete:
+                db.setting("cookiecloud_last_success", str(time.time()))
             db.record_execution("cookiecloud", started, complete)
             return complete
         except SyncError as exc:
@@ -74,215 +75,138 @@ class Engine:
             db.record_execution("cookiecloud", started, False)
             log.warning("cookiecloud: %s (previous cookie retained)", exc.code)
             return False
-        except Exception:
-            db.record_execution("cookiecloud", started, False)
-            raise
         finally:
             db.close()
 
     def cookie_loop(self, stop):
-        while not stop.wait(self.cfg["cookiecloud"]["interval_seconds"]):
-            self.cookie_sync()
-
-    def check_x(self, account):
-        if float(self.store.setting("x_rate_until") or 0) > time.time():
-            raise SyncError("rate_limited")
-        token = cookies.identity(self.cfg)
-        if token:
-            key = "x_identity:" + account
-            previous = self.store.setting(key)
-            if previous and previous != token:
-                raise SyncError("x_account_changed")
-            self.store.setting(key, token)
-        blocked = self.store.setting("x_blocked_cookie")
-        if blocked and blocked == cookies.fingerprint(self.cfg):
-            raise SyncError("auth_required")
-
-    def telegram_session_digest(self, account):
-        try:
-            return hashlib.sha256((Path(self.cfg["state_dir"]) / "tdl" / account).read_bytes()).hexdigest()
-        except FileNotFoundError:
-            return "missing"
+        if not self.cfg["cookiecloud"]["enabled"]:
+            return
+        while not stop.is_set():
+            try:
+                db = Store(self.cfg["state_dir"], readonly=True)
+                try:
+                    last = db.last_execution_finished("cookiecloud")
+                finally:
+                    db.close()
+                remaining = (last + self.cfg["cookiecloud"]["interval_seconds"] - time.time()) if last else 0
+                if remaining > 0:
+                    stop.wait(remaining)
+                    continue
+                self.cookie_sync()
+                # A concurrent manual sync can still be holding the cookie lock.
+                stop.wait(1)
+            except Exception as exc:
+                log.error("cookiecloud: internal_error (%s)", type(exc).__name__)
+                stop.wait(60)
 
     def cycle(self, only_source=None):
-        started = time.time()
-        execution_kind = "content" if only_source is None else "source:" + only_source
-        try:
-            success = self._cycle(only_source)
-        except Exception:
-            self.store.record_execution(execution_kind, started, False)
-            raise
-        self.store.record_execution(execution_kind, started, success)
-        return success
+        with process_lock(self.cfg["state_dir"]):
+            started = time.time()
+            kind = "content" if only_source is None else "source:" + only_source
+            try:
+                success = self._cycle(only_source)
+            except Exception:
+                self.store.record_execution(kind, started, False)
+                raise
+            self.store.record_execution(kind, started, success)
+            return success
+
+    def _failure(self, spec, account, adapter, code, digest=None):
+        self.guard.failed(spec, account, code, digest)
+        if hasattr(adapter, "observe"):
+            adapter.observe(error=code)
+        state = "paused_risk" if spec.adapter == "xhs" and code in XHS_FUSE_ERRORS else "incomplete"
+        self.store.update(spec.name, account, scan_status=state, error=code)
+        log.warning("%s: %s", spec.name, code)
 
     def _cycle(self, only_source=None):
         self.attempted.clear()
-        for adapter in set(self.adapters.values()):
-            if hasattr(adapter, "begin_run"):
-                adapter.begin_run()
+        self.guard.blocked.clear()
+        initialized = set()
         failures = False
-        for source, section, adapter in self.sources():
-            if only_source and source != only_source:
+        for spec, section in self.sources():
+            if only_source and spec.name != only_source:
                 continue
             account = section["account"]
-            state = self.store.source(source, account)
+            self.store.source(spec.name, account)
             if not section["enabled"]:
-                self.store.update(source, account, scan_status="disabled")
+                self.store.update(spec.name, account, scan_status="disabled")
                 continue
-            if source == "film_watchlist":
-                try:
-                    self.store.update(source, account, scan_status="scanning", error=None)
-                    key = "bili_identity:" + account
-                    previous = self.store.setting(key)
-                    if previous and previous != adapter.identity():
-                        raise SyncError("bili_account_changed")
-                    identity, folder_name, videos = adapter.scan()
-                    stats = ingest_bilibili(self.store.db, account, videos)
-                    self.store.setting(key, identity)
-                    self.store.setting("film_watchlist_last_result", str(stats))
-                    self.store.update(source, account, scan_status="complete",
-                                      last_scan=time.time(), error=None)
-                    log.info("film_watchlist: complete folder=%s videos=%d titles=%d without_title=%d",
-                             folder_name, stats["videos"], stats["titles"], stats["without_title"])
-                except SyncError as exc:
-                    failures = True
-                    self.store.update(source, account, scan_status="incomplete", error=exc.code)
-                    log.warning("film_watchlist: %s", exc.code)
-                except Exception as exc:
-                    failures = True
-                    self.store.update(source, account, scan_status="incomplete", error="internal_error")
-                    log.error("film_watchlist: internal_error (%s)", type(exc).__name__)
-                continue
-            pixiv_source = source.startswith("pixiv_")
-            dated = source in ("telegram", "x_bookmarks") or pixiv_source
-            configured_date = (self.cfg["pixiv"].get("start_date", "") if pixiv_source
-                               else section.get("start_date", ""))
-            start = start_timestamp(configured_date, self.cfg["timezone"]) if dated else None
-            if source == "telegram_notice":
-                start = float(self.store.setting("markdown_v2_since"))
-            if dated and start is None:
-                self.store.update(source, account, scan_status="awaiting_start_date", error=None)
-                log.info("%s: awaiting_start_date", source)
-                continue
-            if pixiv_source and time.time() < start:
-                self.store.update(source, account, scan_status="awaiting_start_date", error=None)
-                log.info("%s: awaiting_start_date", source)
-                continue
-            x_source = source.startswith("x_") and not source.startswith("xhs_")
-            xhs_source = source.startswith("xhs_")
-            if xhs_source and hasattr(adapter, "begin_source"):
-                adapter.begin_source(source, account)
-            digest = cookies.fingerprint(self.cfg) if x_source else None
-            if xhs_source and (fuse := self.store.xhs_fuse(account)):
-                if hasattr(adapter, "observe"):
-                    adapter.observe(error=fuse["reason"])
-                failures = True
-                self.store.update(source, account, scan_status="paused_risk", error=fuse["reason"])
-                log.warning("%s: paused_risk (%s); run xhs-resume after review", source, fuse["reason"])
-                continue
+            adapter = None
+            digest = cookies.fingerprint(self.cfg) if spec.adapter == "x" else None
             try:
-                if x_source:
-                    self.check_x(account)
-                elif source in ("telegram", "telegram_notice") and self.store.setting("telegram_blocked_session:" + account) == self.telegram_session_digest(account):
-                    raise SyncError("auth_required")
-                baseline = ((source in ("x_likes", "eh_favorites") or pixiv_source)
-                            and state["baseline_at"] is None)
-                self.store.update(source, account, scan_status="initializing_baseline" if baseline else "scanning", error=None)
-                # Changing the date rescans historical Telegram messages idempotently.
-                cursor = state["cursor"] if state["start_date"] == str(section.get("start_date", "")) else 0
-                records, cursor = adapter.scan(source, cursor=cursor, start=start)
-                if (source == "eh_favorites" or source.startswith("xhs_") or
-                        source.startswith("pixiv_") or source == "wallabag_entries"):
-                    platform = ("eh" if source == "eh_favorites" else
-                                "xhs" if source.startswith("xhs_") else
-                                "pixiv" if source.startswith("pixiv_") else "wallabag")
-                    current_identity = adapter.identity()
-                    identity_key = f"{platform}_identity:{account}"
-                    previous_identity = self.store.setting(identity_key)
-                    if previous_identity and previous_identity != current_identity:
-                        raise SyncError(f"{platform}_account_changed")
-                    self.store.setting(identity_key, current_identity)
-                bad_dates = 0
-                if source == "x_bookmarks":
-                    bad_dates = sum(r["action_time"] is None for r in records)
-                    records = [r for r in records if r["action_time"] is not None and r["action_time"] >= start]
-                # Bind Saved Messages state to the actual peer ID when there are results.
-                if source in ("telegram", "telegram_notice") and getattr(adapter, "account_id", None):
-                    peer = adapter.account_id
-                    identity_key = ("tg_identity:" + account if source == "telegram" else
-                                    "tg_identity:" + source + ":" + account)
-                    previous = self.store.setting(identity_key)
-                    if previous and previous != peer:
-                        raise SyncError("telegram_account_changed")
-                    self.store.setting(identity_key, peer)
-                if source == "wallabag_entries":
-                    self.store.ingest_wallabag(source, account, records)
-                else:
-                    self.store.ingest(source, account, records, baseline=baseline,
-                                      cursor=cursor, start_date=str(configured_date))
-                if bad_dates:
-                    self.store.update(source, account, scan_status="incomplete", error="bookmark_time_unknown")
-                    log.warning("%s: %d items deferred (bookmark_time_unknown)", source, bad_dates)
+                adapter = self.adapter(spec, account)
+                if id(adapter) not in initialized:
+                    if hasattr(adapter, "begin_run"):
+                        adapter.begin_run()
+                    initialized.add(id(adapter))
+                if hasattr(adapter, "begin_source"):
+                    adapter.begin_source(spec.name, account)
+                self.guard.check(spec, account)
+                if not self._sync_source(spec, section, adapter, digest):
                     failures = True
-                outcome = "baseline_complete" if baseline else ("scan_incomplete" if bad_dates else "scan_complete")
-                log.info("%s: %s, discovered=%d", source, outcome, len(records))
             except SyncError as exc:
                 failures = True
-                if xhs_source and hasattr(adapter, "observe"):
-                    adapter.observe(error=exc.code)
-                if xhs_source and exc.code in XHS_FUSE_ERRORS:
-                    self.store.set_xhs_fuse(account, exc.code)
-                    self.store.update(source, account, scan_status="paused_risk", error=exc.code)
-                else:
-                    self.store.update(source, account, scan_status="incomplete", error=exc.code)
-                log.warning("%s: %s", source, exc.code)
-                if x_source and exc.code == "auth_required":
-                    self.store.setting("x_blocked_cookie", digest)
-                elif source in ("telegram", "telegram_notice") and exc.code == "auth_required":
-                    self.store.setting("telegram_blocked_session:" + account, self.telegram_session_digest(account))
-                if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
-                    self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
-                if exc.code in ("auth_required", "rate_limited", "verification_required", "risk_control_suspected",
-                                "x_account_changed", "eh_account_changed",
-                                "xhs_account_changed", "pixiv_account_changed", "wallabag_account_changed",
-                                "telegram_account_changed", "telegram_session_in_use"):
-                    continue
+                self._failure(spec, account, adapter, exc.code, digest)
             except Exception as exc:
-                # Avoid tracebacks/exception messages containing third-party payloads.
                 failures = True
-                if xhs_source and hasattr(adapter, "observe"):
-                    adapter.observe(error="internal_error")
-                self.store.update(source, account, scan_status="incomplete", error="internal_error")
-                log.error("%s: internal_error (%s)", source, type(exc).__name__)
-                continue
-            # Existing durable jobs remain retryable even after a failed enumeration.
-            try:
-                if not self.drain(source, account, adapter):
-                    failures = True
-                if source in ("x_bookmarks", "xhs_favorites", "telegram_notice") and not self.publish_markdown(source, account):
-                    failures = True
-            except SyncError as exc:
-                failures = True
-                if xhs_source and hasattr(adapter, "observe"):
-                    adapter.observe(error=exc.code)
-                if source.startswith("xhs_") and exc.code in XHS_FUSE_ERRORS:
-                    self.store.set_xhs_fuse(account, exc.code)
-                    self.store.update(source, account, scan_status="paused_risk", error=exc.code)
-                else:
-                    self.store.update(source, account, error=exc.code)
-                if x_source and exc.code == "auth_required":
-                    self.store.setting("x_blocked_cookie", digest)
-                elif source in ("telegram", "telegram_notice") and exc.code == "auth_required":
-                    self.store.setting("telegram_blocked_session:" + account, self.telegram_session_digest(account))
-                if x_source and exc.code == "rate_limited" and float(self.store.setting("x_rate_until") or 0) <= time.time():
-                    self.store.setting("x_rate_until", str(time.time() + max(900, self.cfg["interval_seconds"])))
-            except OSError:
-                failures = True
-                if xhs_source and hasattr(adapter, "observe"):
-                    adapter.observe(error="filesystem_error")
-                self.store.update(source, account, error="filesystem_error")
-                log.error("%s: filesystem_error", source)
+                self._failure(spec, account, adapter, "internal_error", digest)
+                log.error("%s: internal_error (%s)", spec.name, type(exc).__name__)
         return not failures
+
+    def _sync_source(self, spec, section, adapter, digest):
+        source, account = spec.name, section["account"]
+        state = self.store.source(source, account)
+        if hasattr(adapter, "sync_metadata"):
+            self.store.update(source, account, scan_status="scanning", error=None)
+            adapter.sync_metadata(self.store, source, account)
+            return True
+        configured_date = (section.get("start_date", "") if spec.date_section == source else
+                           self.cfg[spec.date_section].get("start_date", "")) if spec.date_section else ""
+        start = start_timestamp(configured_date, self.cfg["timezone"]) if spec.date_section else None
+        if source == "telegram_notice":
+            start = float(self.store.setting("markdown_v2_since"))
+        if spec.date_section and (start is None or (spec.adapter == "pixiv" and time.time() < start)):
+            self.store.update(source, account, scan_status="awaiting_start_date", error=None)
+            return True
+        success = True
+        try:
+            baseline = spec.baseline and state["baseline_at"] is None
+            self.store.update(source, account, scan_status="initializing_baseline" if baseline else "scanning", error=None)
+            cursor = state["cursor"] if state["start_date"] == str(configured_date) else 0
+            result = ScanResult.coerce(adapter.scan(source, cursor=cursor, start=start))
+            if baseline and not result.complete:
+                raise SyncError("scan_incomplete")
+            self.guard.validate_scan(spec, account, adapter)
+            records = result.records
+            bad_dates = 0
+            if source == "x_bookmarks":
+                bad_dates = sum(r["action_time"] is None for r in records)
+                records = [r for r in records if r["action_time"] is not None and r["action_time"] >= start]
+            if spec.adapter == "wallabag":
+                self.store.ingest_wallabag(source, account, records)
+            else:
+                self.store.ingest(source, account, records, baseline=baseline,
+                                  cursor=result.cursor, start_date=str(configured_date))
+            self.store.update(source, account, scan_reason=result.reason,
+                              scan_status="complete" if result.complete else "partial")
+            if bad_dates:
+                self.store.update(source, account, scan_status="incomplete", error="bookmark_time_unknown")
+                success = False
+            log.info("%s: %s, records=%d reason=%s", source,
+                     "baseline_complete" if baseline else ("scan_complete" if result.complete else "scan_partial"),
+                     len(records), result.reason)
+        except SyncError as exc:
+            self._failure(spec, account, adapter, exc.code, digest)
+            if exc.code in ACCOUNT_ERRORS:
+                return False
+            success = False
+        # Enumeration errors do not discard existing durable work.
+        if not self.drain(source, account, adapter):
+            success = False
+        if spec.markdown and not self.publish_markdown(source, account):
+            success = False
+        return success
 
     def drain(self, source, account, adapter, item_ids=None):
         success = True
@@ -320,11 +244,14 @@ class Engine:
                         continue
                     success = False
                     log.warning("%s: item=%s %s", source, item["item_id"], exc.code)
-                    if item["platform"] == "xhs" and exc.code in XHS_FUSE_ERRORS:
+                    if exc.code in ACCOUNT_ERRORS:
                         raise
                 except OSError:
                     self.store.bundle_result(item, "filesystem_error")
                     success = False
+                except Exception:
+                    self.store.bundle_result(item, "internal_error")
+                    raise
                 continue
             for asset in self.store.assets(item):
                 key = (item["platform"], account, item["item_id"], asset["number"])
@@ -364,8 +291,6 @@ class Engine:
                 pass
             assets = self.store.assets(item)
             if all(a['status'] == 'done' for a in assets):
-                if self.store.is_legacy_item(source, account, item["item_id"]):
-                    append_entry(self.cfg, item, assets)
                 self.store.text_done(item)
         return success
 
@@ -406,21 +331,26 @@ class Engine:
         return ready
 
     def run(self):
-        stop = threading.Event()
-        self.cookie_sync()
-        worker = threading.Thread(target=self.cookie_loop, args=(stop,), daemon=True)
-        worker.start()
-        try:
-            last_content = self.store.last_execution_finished("content")
-            if last_content is not None:
-                remaining = self.cfg["interval_seconds"] - (time.time() - last_content)
-                if remaining > 0:
-                    log.info("content: next scheduled cycle in %d seconds", int(remaining))
-                    stop.wait(remaining)
-            while True:
-                started = time.monotonic()
-                self.cycle()
-                stop.wait(max(1, self.cfg["interval_seconds"] - (time.monotonic() - started)))
-        finally:
-            stop.set()
-            worker.join(timeout=2)
+        # A scheduler singleton is separate from the short-lived worker lock.
+        with process_lock(self.cfg["state_dir"], name="scheduler"):
+            stop = threading.Event()
+            worker = threading.Thread(target=self.cookie_loop, args=(stop,), daemon=True)
+            worker.start()
+            try:
+                while True:
+                    last_content = self.store.last_execution_finished("content")
+                    remaining = (last_content + self.cfg["interval_seconds"] - time.time()) if last_content else 0
+                    if remaining > 0:
+                        log.info("content: next scheduled cycle in %d seconds", int(remaining))
+                        stop.wait(remaining)
+                        continue
+                    try:
+                        self.cycle()
+                    except SyncError as exc:
+                        if exc.code != "worker_already_running":
+                            raise
+                        log.info("content: another job holds worker lock; retrying in 60 seconds")
+                        stop.wait(60)
+            finally:
+                stop.set()
+                worker.join(timeout=2)

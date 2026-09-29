@@ -12,7 +12,7 @@ from .adapters import TelegramAdapter
 from .common import atomic_write, SyncError
 from .config import telegram_accounts, start_timestamp
 from .layout import paths
-from .journal import append_entry
+from .legacy_journal import append_entry
 
 
 def digest(path):
