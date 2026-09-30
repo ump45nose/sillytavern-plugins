@@ -27,6 +27,8 @@ class ConnectorConfig:
     poll_seconds: float = 60.0
     webhook_url: str = ""
     webhook_token: str = ""
+    client_id: str = "legacy"
+    account_namespace: str = ""
     checkpoint_path: str = ".personal-crm-wechat-checkpoint.json"
     allowed_contacts: set[str] = field(default_factory=set)
     since: datetime | None = None
@@ -71,6 +73,8 @@ class ConnectorConfig:
             poll_seconds=float(os.getenv("CHATLOG_POLL_SECONDS", "60")),
             webhook_url=os.getenv("CRM_WEBHOOK_URL", ""),
             webhook_token=os.getenv("CRM_WEBHOOK_TOKEN", ""),
+            client_id=os.getenv("CRM_CLIENT_ID", "legacy"),
+            account_namespace=os.getenv("CRM_ACCOUNT_NAMESPACE", ""),
             checkpoint_path=os.getenv("CRM_CHECKPOINT", cls.checkpoint_path),
             allowed_contacts=contacts,
             since=dt("WECHAT_SINCE"),

@@ -18,6 +18,8 @@ def _output(result, compact: bool) -> dict:
         "interaction_count": len(result.interactions),
         "fact_count": len(result.facts),
         "sent": result.sent,
+        "accepted": result.accepted,
+        "duplicates": result.duplicates,
         "errors": result.errors,
     }
 

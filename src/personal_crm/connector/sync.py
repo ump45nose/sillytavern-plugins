@@ -25,6 +25,8 @@ class SyncResult:
     facts: list[dict[str, Any]]
     sent: bool
     errors: list[str]
+    accepted: int = 0
+    duplicates: int = 0
 
 
 class WeChatConnector:
@@ -139,9 +141,14 @@ class WeChatConnector:
         interactions: list[dict[str, Any]] = []
         facts: list[dict[str, Any]] = []
         known_keys = set(state.get("keys", []))
+        known_message_keys = set(state.get("message_keys", []))
+        batch_message_keys: set[str] = set()
         for event in events:
             event_key = self._key(event)
-            if event_key in known_keys or not self._filter(event):
+            message_key = event.get("source_message_key")
+            if not self._filter(event):
+                continue
+            if message_key in known_message_keys or (event_key in known_keys and not message_key):
                 continue
             person_name = str(
                 event.get("contact") or event.get("peer") or event.get("sender") or ""
@@ -166,8 +173,12 @@ class WeChatConnector:
                     "summary": self._safe_summary(event, person_name),
                     "source_reference": f"{self.config.source_type}:wechat:{event_key}",
                     "source_event_key": event_key,
+                    **({"source_message_key": message_key} if message_key else {}),
                 }
             )
+            if message_key:
+                # 升级后的首轮允许重放旧事件来补齐服务端稳定身份；确认后在本机记忆。
+                batch_message_keys.add(message_key)
             facts.extend(self._facts(event, person_name, wxid, event_key))
 
         batch_seed = [item["source_event_key"] for item in interactions]
@@ -178,6 +189,7 @@ class WeChatConnector:
                 f"personal-crm:{self.config.source_type}:"
                 + json.dumps(
                     {
+                        "client_id": self.config.client_id,
                         "event_keys": batch_seed,
                         "empty_window_until": (
                             source_batch.until.isoformat() if not batch_seed else None
@@ -190,6 +202,8 @@ class WeChatConnector:
         payload = {
             "batch_id": batch_id,
             "source": self.config.source_type,
+            "client_id": self.config.client_id,
+            "synced_through": source_batch.until.isoformat(),
             "interactions": interactions,
             "facts": facts,
         }
@@ -222,8 +236,17 @@ class WeChatConnector:
             self.config.checkpoint_path,
             {
                 "keys": list(known_keys | set(batch_seed)),
+                "message_keys": list(known_message_keys | batch_message_keys),
                 "last_batch_id": batch_id,
                 "last_synced_at": source_batch.until.isoformat(),
             },
         )
-        return SyncResult(batch_id, interactions, facts, True, [])
+        return SyncResult(
+            batch_id,
+            interactions,
+            facts,
+            True,
+            [],
+            accepted=body.get("accepted", 0),
+            duplicates=body.get("duplicates", 0),
+        )

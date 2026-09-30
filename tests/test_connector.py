@@ -176,6 +176,23 @@ def test_checkpoint_save_is_atomic(tmp_path, monkeypatch):
     assert calls and Path(calls[0][0]).parent == target.parent
 
 
+def test_upgrade_enriches_known_event_once_and_preserves_checkpoint_keys(tmp_path):
+    """已确认旧事件首次补齐跨机身份；随后两个去重集合同时生效。"""
+
+    message = dict(event(), source_message_key="a" * 64)
+    connector, config = make_connector(tmp_path, [message], client_id="mac-pro")
+    legacy_key = connector._key(message)
+    save(config.checkpoint_path, {"keys": [legacy_key, "older-key"]})
+    result = connector.sync_once()
+    assert result.sent and len(result.interactions) == 1
+    payload = connector.client.posted[0][1]
+    assert payload["client_id"] == "mac-pro" and payload["synced_through"]
+    state = load(config.checkpoint_path)
+    assert set(state["keys"]) == {legacy_key, "older-key"}
+    assert state["message_keys"] == ["a" * 64]
+    assert connector.sync_once().interactions == []
+
+
 def test_welink_read_failure_does_not_raise_or_advance(tmp_path):
     """验证读取 WeLink 失败时返回可观察错误，不推进 checkpoint。"""
 

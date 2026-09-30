@@ -56,9 +56,7 @@ class ChatlogMessageSource:
 
         try:
             raw = json.loads(
-                Path(self.config.chatlog_scopes_path)
-                .expanduser()
-                .read_text(encoding="utf-8")
+                Path(self.config.chatlog_scopes_path).expanduser().read_text(encoding="utf-8")
             )
         except (OSError, ValueError) as error:
             raise ChatlogSourceError("scopes_unavailable") from error
@@ -89,6 +87,9 @@ class ChatlogMessageSource:
                     "requested_id": requested_id,
                     "person_name": str(item.get("person_name") or requested_id).strip(),
                     "account_id": account_id,
+                    "account_namespace": str(
+                        item.get("account_namespace") or self.config.account_namespace or account_id
+                    ),
                     "conversation_id": conversation_id,
                     "conversation_type": conversation_type,
                 }
@@ -137,6 +138,18 @@ class ChatlogMessageSource:
         event_id = hashlib.sha256(
             json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
+        message_key = None
+        server_id = str(record.get("server_id") or "").strip()
+        if server_id and server_id != "0":
+            # 同账号两台 Mac 的 rowid/shard 偏移不同；服务器消息 ID 才是跨设备身份。
+            stable_identity = {
+                "account": scope.get("account_namespace") or scope["account_id"],
+                "conversation": scope["conversation_id"],
+                "server_id": server_id,
+            }
+            message_key = hashlib.sha256(
+                json.dumps(stable_identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
         direction = "outbound" if record.get("is_self") is True else "inbound"
         try:
             # 抽取器只接触当前栈中的正文，输出只能是受限结构化 Fact。
@@ -146,6 +159,7 @@ class ChatlogMessageSource:
             facts = []
         return {
             "id": event_id,
+            "source_message_key": message_key,
             "contact": scope["person_name"],
             "wxid": scope["requested_id"],
             "timestamp": occurred_at.isoformat(),
