@@ -192,3 +192,22 @@ def test_deployed_content_enrichment_and_daily_queries_are_preserved(tmp_path):
     start, end = datetime(2026, 9, 4, tzinfo=UTC), datetime(2026, 9, 5, tzinfo=UTC)
     assert repo.daily_chat_records(start, end)[0]["content"] == content
     assert repo.daily_summary(start, end)["content_summaries"]["Alice"] == [content]
+
+
+def test_older_client_fact_does_not_supersede_newer_fact(tmp_path):
+    """客户端窗口乱序时，旧事实保存为历史而不会覆盖较新的当前状态。"""
+
+    client, repo = _file_client(tmp_path)
+    newer = _device_payload("mac-pro", "row-1", server_id="new")
+    newer["facts"][0].update(content="较新的事实", observed_at="2026-09-10T00:00:00Z")
+    older = _device_payload("mac-air", "row-2", server_id="old")
+    older["facts"][0].update(content="较旧的事实", observed_at="2026-09-01T00:00:00Z")
+    for payload in (newer, older):
+        assert (
+            client.post(
+                "/api/v1/webhooks/wechat", json=payload, headers={"X-Webhook-Token": "secret"}
+            ).status_code
+            == 200
+        )
+    facts = {fact.content: fact.status for fact in repo.list_facts()}
+    assert facts == {"较新的事实": "active", "较旧的事实": "superseded"}

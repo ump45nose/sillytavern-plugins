@@ -709,21 +709,31 @@ class CrmRepository:
                 if existing:
                     duplicates += 1
                     continue
-                for old in session.scalars(
-                    select(Fact).where(
-                        Fact.person_id == person.id,
-                        Fact.fact_type == item["fact_type"],
-                        Fact.status == FactStatus.ACTIVE.value,
+                observed_at = ensure_utc(item["observed_at"])
+                active_facts = list(
+                    session.scalars(
+                        select(Fact).where(
+                            Fact.person_id == person.id,
+                            Fact.fact_type == item["fact_type"],
+                            Fact.status == FactStatus.ACTIVE.value,
+                        )
                     )
-                ):
-                    old.status = FactStatus.SUPERSEDED.value
+                )
+                newer_exists = any(old.observed_at > observed_at for old in active_facts)
+                if not newer_exists:
+                    for old in active_facts:
+                        old.status = FactStatus.SUPERSEDED.value
                 source_interaction = interaction_by_key.get(item.get("source_event_key", ""))
                 session.add(
                     Fact(
                         person_id=person.id,
                         fact_type=item["fact_type"],
                         content=content,
-                        observed_at=ensure_utc(item["observed_at"]),
+                        observed_at=observed_at,
+                        # 多设备回填可能乱序；较旧事实留作历史证据，不撤销较新的当前事实。
+                        status=(
+                            FactStatus.SUPERSEDED.value if newer_exists else FactStatus.ACTIVE.value
+                        ),
                         confidence=item.get("confidence"),
                         source_interaction_id=source_interaction.id if source_interaction else None,
                         content_hash=digest,
