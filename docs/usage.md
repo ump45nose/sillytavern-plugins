@@ -37,6 +37,8 @@ CHATLOG_POLL_SECONDS=60
 CHATLOG_TIMEOUT=120
 CRM_WEBHOOK_URL=https://crm.example.com/api/v1/webhooks/wechat
 CRM_WEBHOOK_TOKEN=replace-with-webhook-secret
+CRM_CLIENT_ID=macbook-pro
+CRM_ACCOUNT_NAMESPACE=wechat-main
 CRM_CHECKPOINT=/Users/your-name/Library/Application Support/personal-crm/checkpoint.json
 WECHAT_CONTACTS=visible_wechat_id_alice,visible_wechat_id_bob
 WECHAT_SINCE=2026-06-06T00:00:00Z
@@ -57,6 +59,20 @@ CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --dry-run
 `personal-crm-wechat --watch`。Connector 按一天窗口回填并保留五分钟重叠；只有 NAS
 对整个批次（包括空窗口）返回成功且无错误项时，才会原子推进 checkpoint。
 chatlog 读取失败、NAS 5xx 或进程重启均不会丢失水位。
+
+多客户端同步时，每台 Mac 的 `CRM_CLIENT_ID` 必须不同，本地 checkpoint 也独立保存。
+同一微信账号使用相同的 `CRM_ACCOUNT_NAMESPACE`，不同微信账号使用不同值；多账号映射
+可在每条 scope 中配置 `account_namespace`。该命名空间和内部会话 ID 只用于本机计算
+SHA-256，不直接出站。稳定消息键取自账号、会话及微信 `server_id`，不包含设备 rowid。
+缺少 `server_id` 的消息继续按旧事件键去重，不按时间或正文猜测身份。
+
+旧客户端仍可上报；服务端将未标识客户端的请求记为 `legacy`。升级后首次回放旧事件
+会补齐稳定消息键，不重建原记录。历史记录必须先由原设备回放补齐身份，另一设备才能
+对这些旧记录跨机去重；只凭旧键无法恢复原先未上报的服务器消息 ID。
+
+管理员可携带 `X-Webhook-Token` 查询内网端点
+`GET /api/v1/webhooks/wechat/clients`，核验每台设备的 `synced_through`、最近成功时间和
+接收/重复计数。状态查询与同步使用相同鉴权，不返回联系人或聊天内容。
 
 Connector 在解析 `record` 时只在当前调用栈内使用原始 `content`，随后立即丢弃，
 不在日志、checkpoint 或 Webhook 中保存正文。`WECHAT_FACT_EXTRACTION=true` 会启用

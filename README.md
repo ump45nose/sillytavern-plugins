@@ -11,6 +11,10 @@
 
 核心数据严格为四张表：`people`、`interactions`、`facts`、`reminders`。所有实体 ID 使用 UUIDv7，时间统一为 UTC，SQLite JSON 字段带 `json_valid()` 约束。
 
+多台 Mac 可同时运行 Connector：每台设备使用独立 `CRM_CLIENT_ID` 和本地 checkpoint，
+服务端以 `source_message_key` 对同账号的服务器消息跨设备去重。`sync_clients` 是独立的
+技术状态表，只记录设备成功水位和计数，四张业务表保持原有职责。
+
 ## 快速开始
 
 需要 Python 3.12 与 [uv](https://docs.astral.sh/uv/)：

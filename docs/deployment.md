@@ -52,6 +52,16 @@ docker compose exec crm uv run --no-dev personal-crm integrity
 ./deploy/launchd/install-macos.sh
 ```
 
+安装脚本优先使用显式 `CRM_CLIENT_ID`，否则在
+`~/Library/Application Support/personal-crm/client-id` 生成并持久化设备 UUID。
+可用 `CHATLOG_EXECUTABLE=/absolute/path/to/audited-binary ./deploy/launchd/install-macos.sh`
+选择已有固定校验的导出器；二进制不随配置迁移替换。
+
+服务端首次升级多客户端版本前先备份数据库，再执行 `alembic upgrade head`。
+迁移 `002_sync_clients` 为互动增加可空稳定消息键及唯一索引，并创建技术状态表；
+等价 SQL 保存在 `database/002_sync_clients.sql`。客户端去重查询在 SQLite
+`BEGIN IMMEDIATE` 写事务中执行，多个设备并发提交时不会竞争创建人物或事实。
+
 也可手动复制并修改 plist：
 
 ```bash
