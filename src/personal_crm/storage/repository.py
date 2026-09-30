@@ -7,7 +7,7 @@ import json
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,7 @@ from .models import (
     Person,
     Reminder,
     ReminderStatus,
+    SyncClient,
     ensure_utc,
 )
 
@@ -39,7 +40,7 @@ class CrmRepository:
                 {"connect_args": {"check_same_thread": False}, "poolclass": StaticPool}
             )
         elif url.startswith("sqlite:"):
-            engine_options["connect_args"] = {"check_same_thread": False}
+            engine_options["connect_args"] = {"check_same_thread": False, "timeout": 30}
         self.engine = create_engine(url, **engine_options)
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
         self._configure_sqlite(self.engine)
@@ -60,6 +61,7 @@ class CrmRepository:
             del connection_record
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=30000")
             if engine.url.database not in {None, "", ":memory:"}:
                 cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
@@ -70,11 +72,14 @@ class CrmRepository:
         return self._sessions()
 
     @contextmanager
-    def transaction(self) -> Iterator[Session]:
+    def transaction(self, *, immediate: bool = False) -> Iterator[Session]:
         """提供统一的提交/回滚边界。"""
 
         with self._sessions() as session:
             with session.begin():
+                if immediate and self.engine.dialect.name == "sqlite":
+                    # 在去重查询之前取得写锁，防止两个客户端同时创建人物和事件。
+                    session.execute(text("BEGIN IMMEDIATE"))
                 yield session
 
     @staticmethod
@@ -269,8 +274,42 @@ class CrmRepository:
                 statement = statement.where(Interaction.person_id == person_id)
             return list(session.scalars(statement))
 
+    def daily_chat_records(
+        self, start: datetime, end: datetime, offset: int = 0, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """保留线上按业务日分页读取微信记录的接口。"""
+
+        if offset < 0 or not 1 <= limit <= 500:
+            raise ValueError("invalid page")
+        with self._sessions() as session:
+            rows = session.execute(
+                select(Interaction, Person.display_name)
+                .join(Person, Person.id == Interaction.person_id)
+                .where(
+                    Interaction.channel == "wechat",
+                    Interaction.occurred_at >= ensure_utc(start),
+                    Interaction.occurred_at < ensure_utc(end),
+                )
+                .order_by(Interaction.occurred_at, Interaction.id)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.id,
+                    "person_name": name,
+                    "occurred_at": item.occurred_at.isoformat(),
+                    "direction": item.direction,
+                    "message_type": item.interaction_type,
+                    "content": item.summary.removeprefix("消息内容：")
+                    if item.summary.startswith("消息内容：")
+                    else None,
+                }
+                for item, name in rows
+            ]
+
     def daily_summary(self, start: datetime, end: datetime) -> dict[str, Any]:
-        """按半开时间窗汇总关系变化，不返回互动、事实或提醒正文。"""
+        """按半开时间窗汇总关系变化，保留线上有限内容摘要。"""
 
         start_utc, end_utc = ensure_utc(start), ensure_utc(end)
         if start_utc >= end_utc:
@@ -310,6 +349,15 @@ class CrmRepository:
         people = sorted({name for _item, name in interaction_rows})
         fact_people = sorted({name for _item, name in fact_rows})
         reminder_people = sorted({name for _item, name in reminder_rows})
+        content_summaries: dict[str, list[str]] = {}
+        for item, name in interaction_rows:
+            # 保留线上每人最多五项的聚合契约，避免升级影响复盘调用。
+            value = item.summary.strip()
+            if not value.startswith("消息内容："):
+                continue
+            values = content_summaries.setdefault(name, [])
+            if value not in values and len(values) < 5:
+                values.append(value.removeprefix("消息内容："))
         return {
             "window_start": start_utc.isoformat(),
             "window_end": end_utc.isoformat(),
@@ -330,6 +378,7 @@ class CrmRepository:
                 "people": reminder_people,
                 "statuses": counts([item.status for item, _name in reminder_rows]),
             },
+            "content_summaries": content_summaries,
         }
 
     @staticmethod
@@ -550,7 +599,14 @@ class CrmRepository:
             )
 
     def import_wechat_batch(
-        self, source: str, interactions: list[dict[str, Any]], facts: list[dict[str, Any]]
+        self,
+        source: str,
+        interactions: list[dict[str, Any]],
+        facts: list[dict[str, Any]],
+        *,
+        client_id: str = "legacy",
+        batch_id: str | None = None,
+        synced_through: datetime | None = None,
     ) -> tuple[int, int]:
         """在单一事务内导入微信摘要和事实；任一错误都会整批回滚。"""
 
@@ -579,20 +635,43 @@ class CrmRepository:
         accepted = 0
         duplicates = 0
         interaction_by_key: dict[str, Interaction] = {}
-        with self.transaction() as session:
+        with self.transaction(immediate=True) as session:
             for item in interactions:
-                person = self._resolve_person(session, item["person_name"], item.get("wxid"))
                 event_key = item["source_event_key"]
-                existing = session.scalar(
-                    select(Interaction).where(
-                        Interaction.source_type == source,
-                        Interaction.source_event_key == event_key,
+                message_key = item.get("source_message_key")
+                identity_predicate = Interaction.source_event_key == event_key
+                if message_key:
+                    identity_predicate = or_(
+                        identity_predicate, Interaction.source_message_key == message_key
                     )
+                existing = session.scalar(
+                    select(Interaction)
+                    .where(
+                        Interaction.source_type == source,
+                        identity_predicate,
+                    )
+                    .order_by(Interaction.source_message_key.is_not(None).desc())
                 )
                 if existing:
+                    if (
+                        message_key
+                        and existing.source_message_key
+                        and message_key != existing.source_message_key
+                    ):
+                        raise ValueError("conflicting message identity")
+                    # 同设备的旧事件键命中时补齐稳定身份，避免升级重新导入旧消息。
+                    if message_key and existing.source_message_key is None:
+                        existing.source_message_key = message_key
+                    # 保留线上已有的内容补齐语义，不覆盖已经记录的完整内容。
+                    incoming = item["summary"].strip()
+                    if incoming.startswith("消息内容：") and not existing.summary.startswith(
+                        "消息内容："
+                    ):
+                        existing.summary = incoming
                     duplicates += 1
                     interaction_by_key[event_key] = existing
                     continue
+                person = self._resolve_person(session, item["person_name"], item.get("wxid"))
                 interaction = Interaction(
                     person_id=person.id,
                     occurred_at=ensure_utc(item["occurred_at"]),
@@ -603,6 +682,7 @@ class CrmRepository:
                     source_type=source,
                     source_reference=item.get("source_reference"),
                     source_event_key=event_key,
+                    source_message_key=message_key,
                 )
                 session.add(interaction)
                 session.flush()
@@ -650,7 +730,33 @@ class CrmRepository:
                     )
                 )
                 accepted += 1
+            client = session.get(SyncClient, (source, client_id))
+            if client is None:
+                client = SyncClient(
+                    source=source, client_id=client_id, accepted_total=0, duplicate_total=0
+                )
+                session.add(client)
+            client.last_batch_id = batch_id
+            client.last_seen_at = datetime.now(UTC)
+            if synced_through is not None:
+                watermark = ensure_utc(synced_through)
+                # 旧窗口重放只更新观测时间，不能倒退该客户端的成功水位。
+                if client.synced_through is None or watermark > client.synced_through:
+                    client.synced_through = watermark
+            client.accepted_total += accepted
+            client.duplicate_total += duplicates
         return accepted, duplicates
+
+    def list_sync_clients(self) -> list[dict[str, Any]]:
+        """返回各连接器的最近成功状态，不包含账号标识、密钥或消息内容。"""
+
+        with self._sessions() as session:
+            return [
+                self.to_dict(item)
+                for item in session.scalars(
+                    select(SyncClient).order_by(SyncClient.source, SyncClient.client_id)
+                )
+            ]
 
     @staticmethod
     def _resolve_person(session: Session, display_name: str, wxid: str | None) -> Person:

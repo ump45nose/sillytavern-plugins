@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -96,6 +97,7 @@ class Interaction(Base):
     __tablename__ = "interactions"
     __table_args__ = (
         UniqueConstraint("source_type", "source_event_key", name="uq_interaction_source_event"),
+        Index("uq_interaction_source_message", "source_type", "source_message_key", unique=True),
         CheckConstraint(
             "interaction_type IN ('message','call','meeting','manual_note','other')",
             name="ck_interaction_type",
@@ -122,7 +124,23 @@ class Interaction(Base):
     source_type: Mapped[str] = mapped_column(String(80), nullable=False)
     source_reference: Mapped[str | None] = mapped_column(Text)
     source_event_key: Mapped[str | None] = mapped_column(String(128))
+    # 服务器消息身份与设备数据库偏移分离；旧记录允许为空并在回放时补齐。
+    source_message_key: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=utcnow)
+
+
+class SyncClient(Base):
+    """连接器运行状态表；各客户端独立推进水位，不承载人物或消息正文。"""
+
+    __tablename__ = "sync_clients"
+
+    source: Mapped[str] = mapped_column(String(80), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    last_batch_id: Mapped[str | None] = mapped_column(String(36))
+    synced_through: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=utcnow)
+    accepted_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duplicate_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Fact(Base):
