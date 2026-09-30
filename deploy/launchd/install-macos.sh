@@ -10,7 +10,8 @@ support_dir="${user_home}/Library/Application Support/personal-crm"
 logs_dir="${support_dir}/logs"
 agent_dir="${user_home}/Library/LaunchAgents"
 env_path="${project_root}/connector.env"
-binary_path="${support_dir}/bin/chatlog-keeper-v0.3.7-preview"
+binary_path="${CHATLOG_EXECUTABLE:-${support_dir}/bin/chatlog-keeper-v0.3.7-preview}"
+client_id_path="${support_dir}/client-id"
 scopes_path="${support_dir}/wechat/whitelist-scopes.json"
 checkpoint_path="${support_dir}/checkpoint.json"
 plist_path="${agent_dir}/${label}.plist"
@@ -41,14 +42,29 @@ BINARY_PATH="${binary_path}" \
 BINARY_SHA256="${binary_sha256}" \
 SCOPES_PATH="${scopes_path}" \
 CHECKPOINT_PATH="${checkpoint_path}" \
+CLIENT_ID_PATH="${client_id_path}" \
 LOG_PATH="${logs_dir}/wechat.log" \
 ERROR_LOG_PATH="${logs_dir}/wechat.error.log" \
-/usr/bin/python3 <<'PY'
+"${project_root}/.venv/bin/python" <<'PY'
 """把本机绝对路径写入 launchd plist，并显式覆盖迁移前机器的路径配置。"""
 
 import os
 import plistlib
+import re
+import uuid
 from pathlib import Path
+from dotenv import dotenv_values
+
+# 设备 ID 不随重装变化；首次安装生成，明确配置的 ID 优先。
+client_id_path = Path(os.environ["CLIENT_ID_PATH"])
+env_values = dotenv_values(os.environ["ENV_PATH"])
+client_id = os.environ.get("CRM_CLIENT_ID") or env_values.get("CRM_CLIENT_ID")
+if not client_id:
+    client_id = client_id_path.read_text().strip() if client_id_path.exists() else str(uuid.uuid4())
+if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}", client_id):
+    raise ValueError("CRM_CLIENT_ID 必须是最多 80 字符的设备标签")
+client_id_path.write_text(client_id + "\n")
+client_id_path.chmod(0o600)
 
 plist_path = Path(os.environ["PLIST_PATH"])
 with plist_path.open("rb") as stream:
@@ -58,6 +74,7 @@ value["ProgramArguments"] = [os.environ["PROGRAM_PATH"], "--watch"]
 value["WorkingDirectory"] = os.environ["PROJECT_ROOT"]
 value["EnvironmentVariables"] = {
     "CRM_ENV_FILE": os.environ["ENV_PATH"],
+    "CRM_CLIENT_ID": client_id,
     # dotenv 不覆盖进程环境，以下三项负责接管旧 Mac 配置中的绝对路径。
     "CHATLOG_EXECUTABLE": os.environ["BINARY_PATH"],
     "CHATLOG_EXPECTED_SHA256": os.environ["BINARY_SHA256"],
