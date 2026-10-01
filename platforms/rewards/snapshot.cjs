@@ -84,7 +84,7 @@ async function run(chromium, state, options = {}, deps = common) {
       reason:
         error.message === "human_required"
           ? "human_required"
-          : "snapshot_unavailable",
+          : error.details?.code || "snapshot_unavailable",
       business: {
         daily: "unknown",
         desktop_search: "unknown",

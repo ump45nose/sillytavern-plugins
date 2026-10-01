@@ -7,11 +7,11 @@
 - SMZDM：原有签名与签到/奖励查询已迁移；假 HTTP 测试通过
 - V2EX：从 dailycheckin 25.12.9 提取 MIT 的最小 provider，去除全包导入；独立 venv、完整带 hash 的 HTTP 依赖锁、与原 provider 的假 Session 等价测试；强制 TLS 验证
 - 阿里云：只签到/领取的原生适配器；外部 daily.py 必须匹配精确 hash，不调用完整 main、发通知、清理或互动任务
-- Laowang：原生 Firefox 流程、持久账号 profile、状态查询及人工登录入口；页面模拟测试通过；Firefox 已安装，但本地浏览器 smoke 在 profile 初始化时失败，未通过浏览器验收
-- Epic：已有固定来源/AST 契约检查、零价/购物车纯函数防护；执行仍阻塞，不能领取
-- Rewards：独立 activities 每日活动、snapshot 只读快照、extra 社交/Explore、desktop-search/mobile-search 模式已实现（离线夹具通过）；完整上游全任务仍阻塞，默认 full 不执行业务
+- Laowang：原生 Firefox 流程、持久账号 profile、状态查询及人工登录入口；页面模拟测试通过；前一环境 Firefox smoke 在 profile 初始化时失败；当前环境的依赖/浏览器验证结果单独记录，尚未通过业务验收
+- Epic：已有固定来源检查、状态机与原生浏览器对象驱动、零价/购物车/商品身份核验和不确定提交只读恢复；公共claim入口尚未开放，未通过真实端到端验收
+- Rewards：已有独立每日活动、快照、extra、桌面/手机搜索、onboarding punchcard；full 按明确的 capabilities.json 顺序编排，缺少清单时不执行。未接入能力保持 pending，部分成功不会冒充所有能力完成；APP/目标恢复需可信调用方，尚无真实账号端到端验收
 
-这是第一轮实现检查点，不是六平台已上线。没有使用账号、登录、签到、领取、解验证码或改 NAS 调度。离线测试不证明真实网站/API 仍兼容。
+这是持续开发中的实现检查点，尚未六平台上线。没有使用账号、登录、签到、领取、解验证码或改 NAS 调度。离线测试不证明真实网站/API 仍兼容。
 
 ## 目录
 

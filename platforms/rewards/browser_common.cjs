@@ -199,7 +199,23 @@ async function withBrowser(chromium, state, options, work) {
       storageState: state,
       ignoreHTTPSErrors: false,
     });
-    return await work(context, await context.newPage());
+    const output = await work(context, await context.newPage());
+    if (
+      output?.execution === "ok" &&
+      typeof options.onVerifiedState === "function"
+    ) {
+      const next = await context.storageState();
+      if (
+        !next ||
+        !Array.isArray(next.cookies) ||
+        !Array.isArray(next.origins) ||
+        Buffer.byteLength(JSON.stringify(next)) > MAX_STATE
+      )
+        throw Error("session_state_limit");
+      // In-memory handoff only; failed stages do not overwrite a valid snapshot.
+      await options.onVerifiedState(next);
+    }
+    return output;
   } finally {
     try {
       if (context) await context.close();

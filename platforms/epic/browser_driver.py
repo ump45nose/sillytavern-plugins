@@ -57,9 +57,16 @@ class BrowserDriver:
 
     async def _visible(self, locator):
         try:
-            return await locator.count() > 0 and await locator.first.is_visible(
-                timeout=500
-            )
+            count = await locator.count()
+            if count > 32:
+                raise Paused("observation_controls_ambiguous")
+            # Hidden provider iframes can precede an active visible challenge.
+            for index in range(count):
+                if await locator.nth(index).is_visible(timeout=500):
+                    return True
+            return False
+        except Paused:
+            raise
         except Exception:
             return False
 
@@ -123,13 +130,17 @@ class BrowserDriver:
             self.page.get_by_role("button", name="Done linking", exact=True)
         )
         signals["security_setting"] = "/id/login/mfa/add" in target
-        signals["visible_captcha"] = (
-            await self._visible(
-                self.page.locator(
-                    'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
-                )
+        signals["visible_captcha"] = await self._visible(
+            self.page.locator(
+                'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
             )
-            or "verify you are human" in text
+        ) or any(
+            marker in text
+            for marker in (
+                "verify you are human",
+                "checking your browser",
+                "请完成安全检查以继续",
+            )
         )
         signals["mfa_required"] = (
             "/id/login/mfa" in target and not signals["security_setting"]

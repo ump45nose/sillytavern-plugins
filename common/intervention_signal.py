@@ -54,6 +54,10 @@ CAPABILITIES = {
         "visual_search",
         "streak_protection",
         "search_perk",
+        "more_promotions",
+        "experimental_api_search",
+        "experimental_api_search_on_bing",
+        "experimental_edge_browsing",
     },
 }
 

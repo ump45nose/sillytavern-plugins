@@ -173,11 +173,12 @@ def run(platform):
                         else "adapter.py"
                     )
                 )
-                if platform == "rewards" and a.mode != "full":
+                if platform == "rewards":
                     adapter = (
                         ROOT
                         / "platforms/rewards"
                         / {
+                            "full": "full.cjs",
                             "activities": "activities.cjs",
                             "snapshot": "snapshot.cjs",
                             "extra": "extra.cjs",

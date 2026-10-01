@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import AsyncMock
 from common.interventions import fingerprint, IDENTITY
 from platforms.epic.workflow import ClaimWorkflow, Offer, Obstacle
 
@@ -67,6 +68,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             deadline=100,
             expires_at="2099-01-01T00:00:00Z",
             clock=lambda: 0,
+            sleep=AsyncMock(),
             **kw,
         )
 
@@ -76,6 +78,56 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.reason, "complete")
         self.assertEqual(d.submitted, ["a"])
         self.assertEqual(d.journal.states["a"], "confirmed")
+
+    async def test_delayed_ownership_reconciled_without_repeat(self):
+        d = Driver()
+        d.verify = AsyncMock(side_effect=["not_owned", "unknown", "not_owned", "owned"])
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "complete")
+        self.assertEqual(r.confirmed, ["a"])
+        self.assertEqual(d.submitted, ["a"])
+        self.assertEqual(d.verify.await_count, 4)
+
+    async def test_pending_intent_later_confirmed_without_submit(self):
+        d = Driver()
+        d.journal.states["a"] = "submitting"
+        d.verify = AsyncMock(side_effect=["unknown", "unknown", "owned"])
+        r = await self.engine(d).run()
+        self.assertEqual(r.already_owned, ["a"])
+        self.assertEqual(r.uncertain, [])
+        self.assertEqual(d.submitted, [])
+
+    async def test_readback_transport_failure_retried_readonly(self):
+        d = Driver()
+        d.verify = AsyncMock(side_effect=["not_owned", TimeoutError(), "owned"])
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "complete")
+        self.assertEqual(d.submitted, ["a"])
+
+    async def test_unconfirmed_readback_bounded(self):
+        d = Driver()
+        d.verify = AsyncMock(return_value="unknown")
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "partial")
+        self.assertEqual(r.uncertain, ["a"])
+        self.assertEqual(d.verify.await_count, 4)
+        self.assertEqual(d.submitted, ["a"])
+
+    async def test_post_submit_obstacle_preserves_uncertain_item(self):
+        d = Driver()
+        original = d.submit_once
+
+        async def submit(offer, **kw):
+            await original(offer, **kw)
+            d.obstacles = [
+                Obstacle("captcha", "fixture", fingerprint("late"), "post_submit")
+            ]
+
+        d.submit_once = submit
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "approval_or_handler_needed")
+        self.assertEqual(r.uncertain, ["a"])
+        self.assertEqual(d.submitted, ["a"])
 
     async def test_already_owned_no_submit(self):
         d = Driver()

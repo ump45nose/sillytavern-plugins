@@ -240,7 +240,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
       reason:
         error.message === "human_required"
           ? "human_required"
-          : "punchcards_unconfirmed",
+          : error.details?.code || "punchcards_unconfirmed",
       business: { punchcards: "unknown" },
     };
   }

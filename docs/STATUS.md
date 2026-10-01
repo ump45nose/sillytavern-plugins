@@ -1,4 +1,6 @@
-# 第一轮原生实现检查点
+# 原生实现检查点（以下保留分轮历史）
+
+当前：Rewards full 已改为显式能力清单驱动的原生顺序编排；缺少清单不执行，未接入的请求能力明确pending。APP/目标有可信调用方接口，CLI授权桥与完整业务/真实端到端仍pending。Epic公共claim仍未开放。下文早期轮次中的“full门禁”等描述是历史状态。
 
 ## 已完成并离线验证
 
@@ -85,3 +87,10 @@ Rewards新增原onboarding白名单punchcard的真实浏览器/Next-action绑定
 本轮另尝试 Rewards 官方 patchright Chromium1228 下载；其官方CDN连续返回无法解压的0MiB内容，安装器有限重试后失败。tests/rewards_browser_smoke.cjs 已准备为本地HTML/阻断页面网络的真实浏览器smoke，但Chromium未安装，尚未运行。没有关闭sandbox或修改系统安全设置。
 
 Epic本轮增加具体Playwright对象驱动：官方catalog读取、storefront所有权、即时/购物车checkout路径、零价与匹配offer证据核验；文本/控件溢出拒绝。共50项Epic离线fixture已通过。非空购物车的语义价格读取器与checkout具体商品身份读取器仍需现场绑定，未绑定就unknown；公共claim入口仍有门禁，尚无真实浏览器端到端验收。
+
+
+## 恢复后的原生编排检查点
+
+云执行环境重建后，从私有GitHub连接器恢复 checkpoint 915211b，逐个验证112个blob、完整tree及原commit哈希；旧依赖缓存、浏览器下载与外部上游构建目录并未恢复。重写未提交的full编排并补齐初始快照timeout/busy停止、desktop状态前置校验两项审阅修复。
+
+本轮16项编排fixture覆盖严格manifest、顺序执行、partial保留、缺失绑定、快照不覆盖业务、阻碍/超时停止、可信调用方前置账号状态、成功session仅进程内传递。真实浏览器/平台端到端、完整宿主授权桥及剩余能力没有因此变成已验收。

@@ -16,7 +16,7 @@
 
 | ID | 原业务及源码证据 | 重写保留方式 | 当前状态 / 回归映射 |
 |---|---|---|---|
-| C01 | P worker:12–20：before → daily → extra → upstream → after → summary；daily=3/3 不是全量完成 | 单次入口顺序阶段，各阶段独立结果，最后按当前有效全清单聚合；部分失败不丢已证实事实 | 尚未完成全量编排；现有 explicit modes 只是检查点，不是最终缩减范围 |
+| C01 | P worker:12–20：before → daily → extra → upstream → after → summary；daily=3/3 不是全量完成 | 单次入口顺序阶段，各阶段独立结果，最后按当前有效全清单聚合；部分失败不丢已证实事实 | full.cjs 已实现显式能力清单、顺序执行、前后观察、有界报告和partial聚合；未绑定的请求能力明确pending，可信宿主CLI桥及全部业务仍未完成 |
 | C02 | P daily-activities：Dashboard 活动展开、可见卡片、popup、积分读回 | 保留 UI 路径，避免原 reportActivity ACK 假完成；已完成不再点 | 已实现；rewards-activities.test.cjs：already complete、one click/readback、失败无重放 |
 | C03 | P extra-activities：SocialMedia 卡片，明确 TikTok/YouTube/Rewards 目标；确认该 offer 完成 | 保留已有导航行为，不发帖、不点赞；限定来源与 URL；逐项读回 | 已实现；rewards-native.test.cjs：social flow、destination guard、unknown eligibility |
 | C04 | P extra-activities：Explore 激活 + 8 类主题，每类最多2个查询，去重，不在手机/电脑阶段重复执行 | 保留主题、激活、查询、读回和上限；按 offer ID 去重，与常规搜索分别记账 | 已实现基本流程；缺完整 Explore 分支模拟与真实验证，不算已验收 |

@@ -150,6 +150,14 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(r.returncode, 1)
             self.assertEqual(json.loads(r.stdout)["execution_status"], "failed")
 
+    def test_rewards_full_requires_manifest_before_browser(self):
+        with tempfile.TemporaryDirectory() as root:
+            response = self.invoke("rewards", root, "--execute")
+            self.assertEqual(response.returncode, 1)
+            self.assertEqual(
+                json.loads(response.stdout)["reason"], "capability_manifest_required"
+            )
+
     def test_rewards_explicit_modes_remain_separate(self):
         with tempfile.TemporaryDirectory() as root:
             for mode in ("snapshot", "extra"):

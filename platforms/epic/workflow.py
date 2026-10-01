@@ -86,7 +86,20 @@ class ClaimWorkflow:
         approve=None,
         handlers=None,
         clock=time.monotonic,
+        readback_attempts=3,
+        readback_interval=2,
+        sleep=asyncio.sleep,
     ):
+        if type(readback_attempts) is not int or not 1 <= readback_attempts <= 10:
+            raise ValueError("invalid_readback_attempts")
+        if (
+            type(readback_interval) not in (int, float)
+            or not 0 <= readback_interval <= 30
+        ):
+            raise ValueError("invalid_readback_interval")
+        self.readback_attempts = readback_attempts
+        self.readback_interval = readback_interval
+        self.sleep = sleep
         self.driver = driver
         self.context = context
         self.deadline = deadline
@@ -158,6 +171,26 @@ class ClaimWorkflow:
             await self.handlers[state.kind](current, timeout=self.remaining())
             # Always re-observe; don't trust a plugin's own success flag.
 
+    async def reconcile(self, offer):
+        """Bounded read-only recovery for delayed ownership; never resubmit."""
+        for attempt in range(self.readback_attempts):
+            if attempt:
+                await asyncio.wait_for(
+                    self.sleep(min(self.readback_interval, self.remaining())),
+                    timeout=self.remaining(),
+                )
+            await self.settle("verification")
+            try:
+                state = await asyncio.wait_for(
+                    self.driver.verify(offer, timeout=self.remaining()),
+                    timeout=self.remaining(),
+                )
+            except (TimeoutError, ConnectionError):
+                continue
+            if state == "owned":
+                return True
+        return False
+
     async def run(self):
         out = ClaimResult()
         try:
@@ -207,6 +240,10 @@ class ClaimWorkflow:
                 if prior in {"submitting", "submitted", "uncertain", "confirmed"}:
                     # Uncertain previous submissions require readback, not replay.
                     out.uncertain.append(offer.id)
+                    if await self.reconcile(offer):
+                        await self.driver.journal.write(offer.id, "confirmed")
+                        out.uncertain.remove(offer.id)
+                        out.already_owned.append(offer.id)
                     continue
                 # Both instant checkout and cart routes are driver-supported.
                 # Existing paid/unknown cart items must remain untouched.
@@ -223,6 +260,7 @@ class ClaimWorkflow:
                 if total != "explicit_zero":
                     raise Paused("checkout_price_unconfirmed")
                 await self.driver.journal.write(offer.id, "submitting")
+                out.uncertain.append(offer.id)
                 try:
                     await self.driver.submit_once(offer, timeout=self.remaining())
                     await self.driver.journal.write(offer.id, "submitted")
@@ -230,13 +268,12 @@ class ClaimWorkflow:
                     await self.driver.journal.write(offer.id, "uncertain")
                 # No submission retries, including after navigation timeout.
                 await self.settle("post_submit")
-                state = await self.driver.verify(offer, timeout=self.remaining())
-                if state == "owned":
+                if await self.reconcile(offer):
                     await self.driver.journal.write(offer.id, "confirmed")
                     out.confirmed.append(offer.id)
+                    out.uncertain.remove(offer.id)
                 else:
                     await self.driver.journal.write(offer.id, "uncertain")
-                    out.uncertain.append(offer.id)
             out.reason = "complete" if not out.uncertain else "partial"
         except Paused as error:
             out.reason = error.reason

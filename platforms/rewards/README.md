@@ -7,7 +7,7 @@
 - `--mode activities`：每日活动卡片，原有迁移功能
 - `--mode snapshot`：只读当前 dashboard/flyout；不点击登录、领奖、目标或活动
 - `--mode extra`：已有社交卡片/Explore 静态查询主题；先验证当次明确 unlocked 资格，再一次点击/有限查询，只读回确认。当前目标设置暂为 blocked；完整手动兑换目标设置/授权恢复属于待补齐能力，不是永久删除，不开启自动兑换
-- 默认 `--mode full`：完整上游仍阻塞，未装成“已完成”的假实现
+- 默认 `--mode full`：原生顺序编排，必须提供明确启用的 capabilities.json；不导入上游 Main。未实现或缺可信调用方的已请求能力会明确 pending
 
 上述模式均需显式 `--execute`；这里只开发/离线测试，没有使用真实 Cookie、会话或网站动作。`daily=complete` 或 snapshot 返回不能代表完整 Rewards 全部完成。
 
@@ -65,8 +65,25 @@ obstacles.cjs 为typed探测与恢复计划，common/intervention_signal.py把�
 
 server_actions.cjs 逐个读取当前页面引用的 chunk，最多60个、总12MiB；每个响应最多2MiB，发现冲突action ID即退出。提交沿用已审查的 Next server-action 协议，POST不自动重试。punchcard-journal.json 在提交前持久记录，跨进程再次执行只读核验，不能盲目重发。当前未暴露重置journal开关，需人工确认真实状态后再设计恢复。
 
-APP 的 app.cjs 是实际HTTP绑定与 caller API：createClient 接收调用方提供的现有有效token/country/language，不创建token、不做OAuth、不写凭据、不自动加载环境凭据。runPromotions 保留 type=sapphire 的已知任务、最多40项、逐项三次读回；只有确切活动complete才完成。submitDaily 发送原type103并读回，但原响应没有独立签到完成字段，故目前标unknown，不能用余额增加冒充归因证据。ReadToEarn 已保留原type101与最多10次顺序调度、缺资格/停滞/不确定写入停止，只有特定offer完成才报告complete；该offer的实际现场数据形态仍待验证。APP尚未暴露独立CLI或接入full编排。
+APP 的 app.cjs 是实际HTTP绑定与 caller API：createClient 接收调用方提供的现有有效token/country/language，不创建token、不做OAuth、不写凭据、不自动加载环境凭据。runPromotions 保留 type=sapphire 的已知任务、最多40项、逐项三次读回；只有确切活动complete才完成。submitDaily 发送原type103并读回，但原响应没有独立签到完成字段，故目前标unknown，不能用余额增加冒充归因证据。ReadToEarn 已保留原type101与最多10次顺序调度、缺资格/停滞/不确定写入停止，只有特定offer完成才报告complete；该offer的实际现场数据形态仍待验证。APP没有自动读取凭据的CLI；full 的可信调用方可以通过 host.appClient 接入现有token客户端，普通JSON不能配置该回调。
 
 goal.cjs 恢复原手动目标浏览器操作，准确SKU URL、明确手动兑换radio、Next/Okay、刷新读回；不下兑换订单，不选auto-redeem。extra 的 native-config.json.goal.url 可以指定既有目标URL，缺少可信授权回调时生成该目标的待处理checkpoint。调用方 setManualGoal 需传入经认证授权器验证的checkpoint、authorize回调、journal；配置JSON自身不能批准执行。已有目标不会切换其现有兑换设置。目标设置成功后 extra 还必须核验对应卡片完成。
 
 初始总预算继承旧部署：Rewards7500秒（各mode相同），显式 --timeout 可覆盖；重试和阶段共用单次总预算，不重置计时。上述增加均仅通过离线假页面/传输测试，未运行真实账号或平台操作。
+
+
+## 原生 full 编排与显式任务范围
+
+每账号 state 目录必须提供 capabilities.json，例如：
+
+```json
+{"schema_version": 1, "enabled": ["daily", "desktop_search"]}
+```
+
+这里只是明确请求两项能力的例子，不代表原账号真实启用配置。根据自己的旧任务范围填写；缺失清单返回 capability_manifest_required，未知/重复名称、空列表或额外字段拒绝。完整名称见 full.cjs 的 ORDER：daily、extra、punchcards、desktop_search、mobile_search、bonus_search、more_promotions、claim、search_perk、streak_protection、app_daily、app_promotions、read_to_earn、visual_search，以及三个原实验能力。未接入的请求能力会列入报告并返回unknown，不偷偷忽略，也不启用未列出的可选任务。
+
+full先只读快照，按固定顺序执行请求阶段，再只读快照；最多一个浏览器/上下文，阶段结束关闭。成功阶段的会话轮换仅在进程内按desktop/mobile分别传递，失败不替换有效副本、不新写凭据。全部阶段/重试共用runner总超时。初始快照或阶段的timeout/busy、账号限制、认证或需要授权的阻碍，都会停止后续动作；desktop会话缺失在任何APP调用前失败。
+
+业务结果以请求能力为单位；本次run的 rewards-report.json 保存阶段明细（最多64KiB、每阶段原子覆盖、无网页/凭据）。快照只是观察，不能覆盖动作失败；已确认结果、unknown、partial、blocked与缺失绑定分别保留。full_requested_capabilities_complete只表示清单内能力确认完成，不意味着所有官方能力都已开发或验收。
+
+可信host可在进程内调用createBindings({...,host})：host.appClient为当前账号已有APP客户端工厂；host.businessDate为明确业务日；host.goalCheckpoint/authorizeGoal提供经认证、精确范围校验的目标恢复接口。没有从JSON加载代码/授权，也不自动OAuth。CLI尚无聊天授权桥；checkpoint由可信宿主验证并重新探测后才能进入相应恢复入口。验证码、条款、年龄真实处理器及剩余业务继续按矩阵pending。

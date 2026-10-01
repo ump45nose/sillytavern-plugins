@@ -34,6 +34,53 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_hidden_first_frame_does_not_hide_visible_challenge(self):
+        class Element:
+            def __init__(self, visible):
+                self.visible = visible
+
+            async def is_visible(self, **kw):
+                return self.visible
+
+        class Frames:
+            async def count(self):
+                return 2
+
+            def nth(self, index):
+                return Element(index == 1)
+
+        d = BrowserDriver(None, None, None)
+        self.assertTrue(await d._visible(Frames()))
+
+    async def test_excessive_observation_matches_are_not_silently_ignored(self):
+        class Frames:
+            async def count(self):
+                return 33
+
+        d = BrowserDriver(None, None, None)
+        with self.assertRaises(Paused):
+            await d._visible(Frames())
+
+    async def test_observed_chinese_security_gate_is_challenge(self):
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/free-games",
+            frames=[],
+            locator=lambda *a: object(),
+            get_by_role=lambda *a, **kw: object(),
+        )
+        d = BrowserDriver(None, page, None)
+
+        async def hidden(*a, **kw):
+            return False
+
+        async def text(*a, **kw):
+            return "再进行一步操作\n请完成安全检查以继续"
+
+        d._visible = hidden
+        d._text = text
+        state = await d.observe("session", timeout=1)
+        self.assertEqual(state.kind, "captcha")
+
     async def test_main_frame_not_counted_twice(self):
         frame = SimpleNamespace(url="https://store.epicgames.com/en-US/cart")
         page = SimpleNamespace(

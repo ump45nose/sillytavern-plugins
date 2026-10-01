@@ -295,7 +295,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
         error.message,
       )
         ? error.message
-        : "extra_unconfirmed",
+        : error.details?.code || "extra_unconfirmed",
       business,
     };
   }

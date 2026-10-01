@@ -141,7 +141,7 @@ async function run(chromium, storageState, options = {}, deps = common) {
       false,
       error.message === "human_required"
         ? "human_required"
-        : "daily_browser_or_network_error",
+        : error.details?.code || "daily_browser_or_network_error",
     );
   }
 }
