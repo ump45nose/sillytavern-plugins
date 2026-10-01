@@ -37,6 +37,8 @@ function fixture({
   max = "3",
   fail = false,
   clickFail = false,
+  challenge = false,
+  login = false,
 } = {}) {
   const state = {
     contextClosed: false,
@@ -72,6 +74,8 @@ function fixture({
   };
   const control = { getAttribute: async () => "true", locator: () => panel };
   const popup = {
+    url: () => "https://www.bing.com/search?q=fixture",
+    locator: () => ({ count: async () => 0 }),
     waitForLoadState: async () => {},
     waitForTimeout: async () => {},
     close: async () => {
@@ -79,6 +83,11 @@ function fixture({
     },
   };
   const page = {
+    url: () =>
+      login ? "https://login.live.com/" : "https://rewards.bing.com/dashboard",
+    locator: (selector) => ({
+      count: async () => (challenge && selector.includes("captcha") ? 1 : 0),
+    }),
     goto: async () => {
       state.visits++;
       if (fail) throw Error("fixture");
@@ -168,5 +177,15 @@ test("session lookup is read-only and selects exact account", () => {
     assert.throws(() => loadState(p, "missing@example.invalid"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("daily activities stop on login or challenge without clicking", async () => {
+  for (const options of [{ login: true }, { challenge: true }]) {
+    const f = fixture({ ...options, now: "0", max: "1" });
+    const out = await run(f.chromium, {});
+    assert.equal(out.reason, "human_required");
+    assert.equal(f.state.clicks, 0);
+    assert.ok(f.state.contextClosed && f.state.browserClosed);
   }
 });

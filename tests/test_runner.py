@@ -134,3 +134,20 @@ class RunnerTests(unittest.TestCase):
             r = self.invoke("smzdm", root, "--execute")
             self.assertEqual(r.returncode, 1)
             self.assertEqual(json.loads(r.stdout)["execution_status"], "failed")
+
+    def test_rewards_explicit_modes_remain_separate(self):
+        with tempfile.TemporaryDirectory() as root:
+            for mode in ("snapshot", "extra"):
+                response = self.invoke("rewards", root, "--mode", mode, "--execute")
+                self.assertEqual(response.returncode, 1)
+                self.assertEqual(
+                    json.loads(response.stdout)["execution_status"], "failed"
+                )
+                self.assertTrue(
+                    (
+                        Path(root) / "results/rewards/default" / mode / "latest.json"
+                    ).exists()
+                )
+            self.assertFalse(
+                (Path(root) / "results/rewards/default/full/latest.json").exists()
+            )

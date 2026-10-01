@@ -47,3 +47,31 @@ Laowang：原签到读回、持久 profile、只读 status；人工 login 支持
 - 总历史/日志保留数量、每日汇总、CookieCloud 原生同步：未实现；不会擅自删旧数据
 - 真实浏览器/账号、峰值 RSS/PSS、长时残留、NAS 架构及代理路径：未验收
 - 调度安装、旧容器停用、会话/凭据迁移：本轮未执行
+
+
+## Rewards 第二轮检查点
+
+已补齐显式 snapshot（只读）与 extra（选定社交/Explore）模式，默认 full 仍保留执行闸门。snapshot 不登录或领取，只读认证 dashboard/flyout；extra 只处理当前明确 unlocked 的已知活动，目标设置始终 blocked，不发外部内容。原始 Main 的完整自动任务未包装。
+
+build.py 对固定全部相关源码 hash 验证，复制到全新外部目录，去掉自主 main，使用原 package-lock 安装168包。TypeScript 6.0.3、Node24.19.0、--module Node20 --moduleResolution Node16 编译+资源复制成功；按完整配方再次构建的 dist 文件 hash 与首次构建一致。模块导入测试阻断 Node 网络和 subprocess，真实 React parser 合成页面通过。未执行上游真实任务。
+
+新增平台说明列出精确构建调整与剩余设计选择。仍未验证当前真实网站/浏览器。Main 的多个潜在兼容替换会增加维护成本，已暂停大范围替换，等待是否转向选定能力轻量重写的决定。
+
+进一步提取：独立 React parser 的生成 JS 无 runtime require/import，已连同原 TypeScript、source map、GPL-3.0 许可和来源证明纳入 vendor/rewards-parser。extra 日常运行不再要求完整上游 build 或168依赖；完整构建只是开发验证。
+
+## 用户确认的后续方向
+
+以独立能力重写并保留原方案合理业务/障碍恢复，内存优化不允许静默删减能力。此前 blocked/限定 mode 是未完成的阶段状态，不是最终减配决定。完整 Rewards 能力、障碍、保留/整合/替换理由与回归映射见 REWARDS_PARITY.md；目标设置、desktop/mobile搜索、APP、claim/punchcards、恢复授权等逐项补齐。
+
+
+## 第三轮开发检查点：组件与现场绑定分开
+
+Rewards新增独立desktop/mobile搜索执行逻辑及模拟场景，严格desktop/Edge/mobile配额、本地/聚类词队列、延迟入账、停滞、预算、未知/倒退、输入超时只读核验不重放；移动场景需自己的有效state和设备元数据。默认full入口仍有闸门，因为完整编排、claim/APP/punchcard/goal与现场恢复处理器仍未全部接通。
+
+通用interventions只核对请求/可信调用方决策的范围与时效；Rewards子进程信号桥限制8KiB、官方域名、当前run/account/capability、TTL，无任意JSON授权执行。typed障碍/恢复计划已可离线测试，但没有虚构真实solver、条款、年龄或认证插件已可用。
+
+Epic新增可执行的注入driver工作流、当前免费catalog解析、只读purchase candidates、storefront ownership判定及懒加载障碍处理生命周期。40项Epic纯组件测试覆盖已有库、两种checkout驱动契约、零价/已有购物车、提交前journal、模糊提交只读回、不重放、协议/挑战/年龄授权后重探测、部分结果等。真实browser driver、真实挑战提供器和执行入口尚未接通；public claim gate保留，不能称Epic领取完成。purchase历史候选不等于当前持有权。
+
+任何已有confirmed journal与当前unknown/not_owned矛盾都不自动再次提交；缺失promotions/无效discount/不完整库存保持unknown。账号登录、领取、搜索、CAPTCHA、新协议、年龄、NAS改动均未实际执行。
+
+Epic另外有懒加载HCaptchaHandler兼容桥的合成loader测试，复用原AgentV.wait_for_challenge调用契约；没有在模块导入时加载模型/读取API密钥/联网，仍需可信授权及注入配置。真实provider/browser绑定、拖拽/GLM扩展仍pending；不能据此声称现场验证码已解决。

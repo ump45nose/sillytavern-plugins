@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from .locks import Lease, Busy
 from .model import result, read_result, atomic_json, validate
 from .lifecycle import LogSink, supervise
+from .intervention_signal import create_checkpoint
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER = {"laowang", "epic", "rewards"}
@@ -42,9 +43,16 @@ def run(platform):
     p.add_argument("--python", default=sys.executable)
     p.add_argument(
         "--mode",
-        choices=("full", "activities"),
+        choices=(
+            "full",
+            "activities",
+            "snapshot",
+            "extra",
+            "desktop-search",
+            "mobile-search",
+        ),
         default="full",
-        help="Rewards activities is a separate limited scope",
+        help="Rewards explicit limited modes: daily activities, read-only snapshot, or selected extras",
     )
     p.add_argument(
         "--login",
@@ -66,7 +74,7 @@ def run(platform):
     )
     a = p.parse_args()
     if a.mode != "full" and platform != "rewards":
-        p.error("--mode activities is supported only for Rewards")
+        p.error("non-full modes are supported only for Rewards")
     if a.login and (platform != "laowang" or not sys.stdin.isatty()):
         p.error("--login needs Laowang and an interactive terminal")
     if a.login and a.status:
@@ -111,6 +119,8 @@ def run(platform):
                 )
             cached = None
             latest_dir = runtime / "results" / platform / a.account
+            if platform == "rewards":
+                latest_dir = latest_dir / a.mode
             try:
                 cache_path = latest_dir / "last-confirmed.json"
                 if cache_path.stat().st_size <= 65536:
@@ -153,9 +163,21 @@ def run(platform):
                         else "adapter.py"
                     )
                 )
-                if platform == "rewards" and a.mode == "activities":
-                    adapter = ROOT / "platforms/rewards/activities.cjs"
+                if platform == "rewards" and a.mode != "full":
+                    adapter = (
+                        ROOT
+                        / "platforms/rewards"
+                        / {
+                            "activities": "activities.cjs",
+                            "snapshot": "snapshot.cjs",
+                            "extra": "extra.cjs",
+                            "desktop-search": "search.cjs",
+                            "mobile-search": "search.cjs",
+                        }[a.mode]
+                    )
                 argv = [a.node if adapter.suffix == ".cjs" else a.python, str(adapter)]
+                if platform == "rewards" and a.mode == "mobile-search":
+                    argv.append("--mobile")
                 if a.status:
                     argv.append("--status")
                 if a.login:
@@ -209,6 +231,18 @@ def run(platform):
                         output = result(context, reason="invalid_or_missing_result")
                     if outcome.returncode and output["execution_status"] == "ok":
                         output = result(context, reason="process_failed_after_result")
+            if a.execute:
+                try:
+                    checkpoint = create_checkpoint(
+                        run_dir / "obstacle-signal.json", context, a.mode
+                    )
+                    if checkpoint:
+                        atomic_json(run_dir / "checkpoint.json", checkpoint)
+                        if output["execution_status"] not in {"timeout", "busy"}:
+                            output["execution_status"] = "failed"
+                            output["reason"] = "approval_required_" + checkpoint["kind"]
+                except (OSError, ValueError, TypeError, KeyError):
+                    output = result(context, reason="invalid_intervention_signal")
             atomic_json(run_dir / "result.json", output)
             # Latest is serialized by the same account lock; no append-only unbounded ledger.
             if a.execute:

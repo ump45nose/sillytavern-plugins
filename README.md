@@ -9,7 +9,7 @@
 - 阿里云：只签到/领取的原生适配器；外部 daily.py 必须匹配精确 hash，不调用完整 main、发通知、清理或互动任务
 - Laowang：原生 Firefox 流程、持久账号 profile、状态查询及人工登录入口；页面模拟测试通过；Firefox 已安装，但本地浏览器 smoke 在 profile 初始化时失败，未通过浏览器验收
 - Epic：已有固定来源/AST 契约检查、零价/购物车纯函数防护；执行仍阻塞，不能领取
-- Rewards：新增独立 --mode activities 每日活动模式（假页面测试通过），完整搜索/额外活动/上游全任务仍阻塞；默认 full 不执行业务
+- Rewards：独立 activities 每日活动、snapshot 只读快照、extra 社交/Explore、desktop-search/mobile-search 模式已实现（离线夹具通过）；完整上游全任务仍阻塞，默认 full 不执行业务
 
 这是第一轮实现检查点，不是六平台已上线。没有使用账号、登录、签到、领取、解验证码或改 NAS 调度。离线测试不证明真实网站/API 仍兼容。
 
@@ -93,3 +93,5 @@ python3 platforms/v2ex/run.py --runtime-root /absolute/private/benefits-data --a
 platforms/rewards/package-lock.json 固定 patchright 1.61.1。先在该目录 npm ci --ignore-scripts（PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1），再配置 REWARDS_ROOT 为该目录绝对路径。仅从 runtime-root/state/rewards/<account>/storage-state.json 读取已授权人工准备的单账号会话，不自动迁移数据库/凭据。会话文件最多1MiB。
 
 显式 --execute --mode activities 只点每日活动卡片、读回进度，不执行搜索、extra、完整上游或通知。仍受全局浏览器锁；要求原生 Chromium sandbox，不用 --no-sandbox。尚未进行真实浏览器/账号验证；遇到挑战/页面变化可能返回 unknown。该模式完成不表示全部 Rewards 项目完成。
+
+Rewards 的新增 snapshot/extra 模式及可重复 parser 构建、编译参数和范围边界详见 [平台说明](platforms/rewards/README.md)。不自动设置兑换目标，不运行完整上游 Main。

@@ -1,0 +1,243 @@
+"""Epic claim state machine with injected browser/obstacle handlers.
+
+This is executable orchestration tested with synthetic drivers. It is not the
+unimplemented live browser binding; the public claim entry remains gated.
+"""
+
+from dataclasses import dataclass, field
+import time
+import asyncio
+from typing import Any
+from urllib.parse import urlsplit
+from common.interventions import request, validate_resume
+
+# Consent-bearing steps and recoverable non-consent obstacles are distinct.
+CONSENT = {
+    "captcha",
+    "terms",
+    "age_verification",
+    "login",
+    "account_link",
+    "security_prompt",
+    "account_setting",
+}
+RECOVERABLE = {
+    "navigation_partial",
+    "store_sso",
+    "remembered_account",
+    "overlay",
+    "popup",
+    "stale_locator",
+    "delayed_result",
+    "browser_page_rebuild",
+    "region_layout",
+    "mfa_code_expired",
+}
+TERMINAL = {"rate_limited", "account_restricted", "unsupported_region", "unknown"}
+
+
+@dataclass(frozen=True)
+class Obstacle:
+    kind: str
+    target: str
+    fingerprint: str
+    phase: str
+    # Only a clean target and fingerprint may be exported in a checkpoint.
+    payload: Any = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class Offer:
+    id: str
+    url: str
+    explicitly_free: bool
+
+
+@dataclass
+class ClaimResult:
+    confirmed: list[str] = field(default_factory=list)
+    already_owned: list[str] = field(default_factory=list)
+    uncertain: list[str] = field(default_factory=list)
+    pending: list[dict] = field(default_factory=list)
+    reason: str = "unknown"
+
+
+class Paused(Exception):
+    def __init__(self, reason, checkpoint=None):
+        self.reason = reason
+        self.checkpoint = checkpoint
+
+
+class ClaimWorkflow:
+    """Driver operations remain explicit: observation, recovery, submit, verify.
+
+    driver.journal must persist submission intent before a side-effect. An
+    ambiguous prior intent is never treated as permission to click again.
+    Trusted approval callback is separate from plugin execution and disk files.
+    """
+
+    def __init__(
+        self,
+        driver,
+        context,
+        *,
+        deadline,
+        expires_at,
+        approve=None,
+        handlers=None,
+        clock=time.monotonic,
+    ):
+        self.driver = driver
+        self.context = context
+        self.deadline = deadline
+        self.expires_at = expires_at
+        self.approve = approve
+        self.handlers = handlers or {}
+        self.clock = clock
+        self.remaining_recoveries = 12
+        self.remaining_interventions = 8
+
+    def remaining(self):
+        remaining = self.deadline - self.clock()
+        if remaining <= 0:
+            raise Paused("deadline_exceeded")
+        return remaining
+
+    async def settle(self, phase):
+        """Observe after every recovery; solver success is not business success."""
+        while True:
+            state = await self.driver.observe(phase, timeout=self.remaining())
+            if state is None:
+                return
+            if not isinstance(state, Obstacle):
+                raise Paused("invalid_observation")
+            if state.kind in TERMINAL:
+                raise Paused(state.kind)
+            if state.kind in RECOVERABLE:
+                if self.remaining_recoveries <= 0:
+                    raise Paused("recovery_budget_exhausted")
+                self.remaining_recoveries -= 1
+                # Recovery bindings must not submit orders, erase sessions, or
+                # silently accept terms. Those are separate explicit operations.
+                await self.driver.recover(state, timeout=self.remaining())
+                continue
+            if state.kind not in CONSENT:
+                raise Paused("unsupported_obstacle")
+            pending = request(
+                self.context,
+                "claim",
+                state.phase,
+                state.kind,
+                state.target,
+                state.fingerprint,
+                expires_at=self.expires_at,
+            )
+            if self.remaining_interventions <= 0:
+                raise Paused("intervention_budget_exhausted", pending)
+            if self.approve is None or state.kind not in self.handlers:
+                raise Paused("approval_or_handler_needed", pending)
+            # Callback must authenticate user consent via the host, not read an
+            # arbitrary approval JSON. Missing truthful age/OTP data is handled
+            # inside the selected handler, never substituted by a default.
+            decision = await asyncio.wait_for(
+                self.approve(pending), timeout=self.remaining()
+            )
+            current = await self.driver.observe(phase, timeout=self.remaining())
+            if current is None:
+                continue  # Already resolved: do not replay.
+            if (
+                not isinstance(current, Obstacle)
+                or current.kind != state.kind
+                or current.target != state.target
+            ):
+                raise Paused("site_state_changed", pending)
+            error = validate_resume(pending, decision, current.fingerprint)
+            if error:
+                raise Paused(error, pending)
+            self.remaining_interventions -= 1
+            await self.handlers[state.kind](current, timeout=self.remaining())
+            # Always re-observe; don't trust a plugin's own success flag.
+
+    async def run(self):
+        out = ClaimResult()
+        try:
+            await self.settle("session")
+            offers = await self.driver.inventory(timeout=self.remaining())
+            from .catalog import Inventory
+
+            if isinstance(offers, Inventory):
+                if not offers.complete:
+                    raise Paused("inventory_unconfirmed")
+                if not offers.offers:
+                    out.reason = "no_current_promotions"
+                    return out
+                offers = offers.offers
+            if not isinstance(offers, list) or not offers:
+                raise Paused("inventory_unconfirmed")
+            if len(offers) > 200 or any(not isinstance(o, Offer) for o in offers):
+                raise Paused("inventory_invalid")
+            ids = [o.id for o in offers]
+            if len(set(ids)) != len(ids):
+                raise Paused("inventory_ambiguous")
+            for offer in offers:
+                parsed = urlsplit(offer.url)
+                if (
+                    parsed.scheme != "https"
+                    or parsed.hostname != "store.epicgames.com"
+                    or parsed.username
+                    or parsed.password
+                    or parsed.port not in (None, 443)
+                    or not offer.id
+                    or len(offer.id) > 128
+                ):
+                    raise Paused("invalid_offer_target")
+                if offer.explicitly_free is not True:
+                    out.uncertain.append(offer.id)
+                    continue
+                await self.driver.open_offer(offer, timeout=self.remaining())
+                await self.settle("product")
+                owned = await self.driver.verify(offer, timeout=self.remaining())
+                if owned == "owned":
+                    out.already_owned.append(offer.id)
+                    continue
+                if owned not in {"not_owned", "unknown"}:
+                    out.uncertain.append(offer.id)
+                    continue
+                prior = await self.driver.journal.read(offer.id)
+                if prior in {"submitting", "submitted", "uncertain", "confirmed"}:
+                    # Uncertain previous submissions require readback, not replay.
+                    out.uncertain.append(offer.id)
+                    continue
+                # Both instant checkout and cart routes are driver-supported.
+                # Existing paid/unknown cart items must remain untouched.
+                cart = await self.driver.inspect_cart(timeout=self.remaining())
+                if cart not in {"empty_confirmed", "only_free_confirmed"}:
+                    raise Paused("cart_preserved")
+                await self.driver.prepare_checkout(offer, timeout=self.remaining())
+                await self.settle("checkout")
+                total = await self.driver.checkout_total(timeout=self.remaining())
+                if total != "explicit_zero":
+                    raise Paused("checkout_price_unconfirmed")
+                await self.driver.journal.write(offer.id, "submitting")
+                try:
+                    await self.driver.submit_once(offer, timeout=self.remaining())
+                    await self.driver.journal.write(offer.id, "submitted")
+                except Exception:
+                    await self.driver.journal.write(offer.id, "uncertain")
+                # No submission retries, including after navigation timeout.
+                await self.settle("post_submit")
+                state = await self.driver.verify(offer, timeout=self.remaining())
+                if state == "owned":
+                    await self.driver.journal.write(offer.id, "confirmed")
+                    out.confirmed.append(offer.id)
+                else:
+                    await self.driver.journal.write(offer.id, "uncertain")
+                    out.uncertain.append(offer.id)
+            out.reason = "complete" if not out.uncertain else "partial"
+        except Paused as error:
+            out.reason = error.reason
+            if error.checkpoint:
+                out.pending.append(error.checkpoint)
+        except Exception:
+            out.reason = "driver_error"
+        return out

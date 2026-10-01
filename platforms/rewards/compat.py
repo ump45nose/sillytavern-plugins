@@ -13,7 +13,6 @@ def validate_config(config, accounts):
     if (
         config.get("clusters") != 1
         or config.get("searchSettings", {}).get("parallelSearching") is not False
-        or config.get("searchSettings", {}).get("clusterSearch") is not False
     ):
         return "parallel_browser_unsupported"
     if config.get("headless") is not True:

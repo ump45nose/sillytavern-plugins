@@ -69,3 +69,14 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(
                 verify_files(d, {"source.py": h}), "dependency_incompatible"
             )
+
+
+class QueryClusteringTests(unittest.TestCase):
+    def test_topic_clustering_is_not_browser_parallelism(self):
+        config = {
+            "clusters": 1,
+            "headless": True,
+            "searchSettings": {"parallelSearching": False, "clusterSearch": True},
+            "workers": {"doDailySet": False},
+        }
+        self.assertIsNone(validate_config(config, [{}]))
