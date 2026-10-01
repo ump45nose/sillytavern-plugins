@@ -1,0 +1,11 @@
+{
+  "source_commit": "f61f4e982bbb435f37133bed0dc5b4c582ed1e73",
+  "files": {
+    "package.json": "557fbbd3719d9e589d41e4ec9ebdfe1ff2a85387ff340d8938046fbe654e7d33",
+    "package-lock.json": "31a5da66b25ac60333fd71d9d2a8db9f258d0d492e8334707fe12533d2cbdff2",
+    "src/index.ts": "0b1e238bbc066268ebd8815c131c10e0c491fc1a27a2c6070bdbbd3ed1bd2acb",
+    "src/util/Load.ts": "a40488b50c89b68194a8abded5571549a5636eb31596fcd40753f217d001facf",
+    "src/browser/ReactFunc.ts": "3fa4c5130656df698857f226dc7f0c4a25f7f1a61cfab49ac5ddbb666f7bced5",
+    "src/util/SessionStore.ts": "5b04b2c64a0f53456c3f04834daecb0e1c95f379425773c712549b9f757ec1cb"
+  }
+}

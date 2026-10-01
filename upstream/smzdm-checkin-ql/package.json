@@ -1,0 +1,7 @@
+{
+  "name": "smzdm-checkin-ql",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": { "checkin": "node checkin.js" },
+  "engines": { "node": ">=22" }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "laowang-checkin",
+  "version": "1.0.0",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "login": "node login.cjs",
+    "checkin": "node sign.cjs"
+  },
+  "dependencies": {
+    "playwright-firefox": "1.63.0"
+  }
+}

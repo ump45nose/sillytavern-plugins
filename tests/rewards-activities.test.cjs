@@ -1,0 +1,172 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {
+  parseProgress,
+  allowedCard,
+  run,
+  loadState,
+} = require("../platforms/rewards/activities.cjs");
+test("missing counters never turn into zero completion", () => {
+  for (const [a, b] of [
+    [null, "3"],
+    ["", "3"],
+    ["0", null],
+    ["0", "0"],
+    ["NaN", "3"],
+    ["-1", "3"],
+  ])
+    assert.equal(parseProgress(a, b), null);
+  assert.deepEqual(parseProgress("0", "3"), { current: 0, max: 3 });
+});
+test("cards restricted to explicit HTTPS first-party hosts", () => {
+  assert.ok(allowedCard("https://www.bing.com/search?q=fixture"));
+  for (const u of [
+    "http://www.bing.com",
+    "https://www.bing.com.evil.invalid",
+    "https://user@www.bing.com",
+    "https://www.bing.com:444",
+    "javascript:alert(1)",
+  ])
+    assert.equal(allowedCard(u), false);
+});
+function fixture({
+  now = "3",
+  max = "3",
+  fail = false,
+  clickFail = false,
+} = {}) {
+  const state = {
+    contextClosed: false,
+    browserClosed: false,
+    clicks: 0,
+    visits: 0,
+    popupClosed: false,
+    launch: null,
+  };
+  const bar = {
+    waitFor: async () => {},
+    getAttribute: async (n) => (n === "aria-valuenow" ? now : max),
+  };
+  const link = {
+    innerText: async () => "Card",
+    click: async () => {
+      state.clicks++;
+      if (clickFail) throw Error("fixture");
+      now = max;
+    },
+  };
+  const panel = {
+    locator: () => ({
+      evaluateAll: async () => [
+        {
+          title: "Card",
+          text: "Card",
+          href: "https://www.bing.com/search?q=fixture",
+        },
+      ],
+      filter: () => ({ first: () => link }),
+    }),
+  };
+  const control = { getAttribute: async () => "true", locator: () => panel };
+  const popup = {
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    close: async () => {
+      state.popupClosed = true;
+    },
+  };
+  const page = {
+    goto: async () => {
+      state.visits++;
+      if (fail) throw Error("fixture");
+    },
+    getByRole: (role) => (role === "progressbar" ? bar : control),
+    waitForEvent: async () => popup,
+    waitForTimeout: async () => {},
+  };
+  const context = {
+    newPage: async () => page,
+    close: async () => {
+      state.contextClosed = true;
+    },
+  };
+  return {
+    state,
+    chromium: {
+      launch: async (opts) => {
+        state.launch = opts;
+        return {
+          newContext: async () => context,
+          close: async () => {
+            state.browserClosed = true;
+          },
+        };
+      },
+    },
+  };
+}
+test("already complete no click and all browser resources close", async () => {
+  const f = fixture();
+  const r = await run(f.chromium, { cookies: [], origins: [] });
+  assert.equal(r.business.daily, "complete");
+  assert.equal(f.state.clicks, 0);
+  assert.ok(f.state.contextClosed && f.state.browserClosed);
+  assert.equal(f.state.launch.chromiumSandbox, true);
+  assert.equal(f.state.launch.args, undefined);
+});
+test("unknown before progress cannot submit", async () => {
+  const f = fixture({ now: null });
+  const r = await run(f.chromium, {});
+  assert.equal(r.business.daily, "unknown");
+  assert.equal(f.state.clicks, 0);
+  assert.ok(f.state.browserClosed);
+});
+test("one click then readback confirms progress and closes popup", async () => {
+  const f = fixture({ now: "0", max: "1" });
+  const r = await run(f.chromium, {});
+  assert.equal(r.business.daily, "complete");
+  assert.equal(f.state.clicks, 1);
+  assert.ok(f.state.popupClosed && f.state.browserClosed);
+});
+test("click failure never retried and popup cleaned", async () => {
+  const f = fixture({ now: "0", max: "1", clickFail: true });
+  const r = await run(f.chromium, {});
+  assert.equal(r.business.daily, "unknown");
+  assert.equal(f.state.clicks, 1);
+  assert.ok(
+    f.state.popupClosed && f.state.contextClosed && f.state.browserClosed,
+  );
+});
+test("page failure closes browser", async () => {
+  const f = fixture({ fail: true });
+  const r = await run(f.chromium, {});
+  assert.equal(r.execution, "failed");
+  assert.ok(f.state.browserClosed);
+});
+test("session lookup is read-only and selects exact account", () => {
+  const { DatabaseSync } = require("node:sqlite");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "benefits-fixture-"));
+  const p = path.join(dir, "sessions.db");
+  try {
+    const db = new DatabaseSync(p);
+    db.exec(
+      "CREATE TABLE sessions(email TEXT,platform TEXT,storage_state TEXT)",
+    );
+    db.prepare("INSERT INTO sessions VALUES(?,?,?)").run(
+      "fixture@example.invalid",
+      "desktop",
+      JSON.stringify({ cookies: [], origins: [] }),
+    );
+    db.close();
+    assert.deepEqual(loadState(p, "fixture@example.invalid"), {
+      cookies: [],
+      origins: [],
+    });
+    assert.throws(() => loadState(p, "missing@example.invalid"));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
