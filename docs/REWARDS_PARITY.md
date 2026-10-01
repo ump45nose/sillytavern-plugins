@@ -20,16 +20,16 @@
 | C02 | P daily-activities：Dashboard 活动展开、可见卡片、popup、积分读回 | 保留 UI 路径，避免原 reportActivity ACK 假完成；已完成不再点 | 已实现；rewards-activities.test.cjs：already complete、one click/readback、失败无重放 |
 | C03 | P extra-activities：SocialMedia 卡片，明确 TikTok/YouTube/Rewards 目标；确认该 offer 完成 | 保留已有导航行为，不发帖、不点赞；限定来源与 URL；逐项读回 | 已实现；rewards-native.test.cjs：social flow、destination guard、unknown eligibility |
 | C04 | P extra-activities：Explore 激活 + 8 类主题，每类最多2个查询，去重，不在手机/电脑阶段重复执行 | 保留主题、激活、查询、读回和上限；按 offer ID 去重，与常规搜索分别记账 | 已实现基本流程；缺完整 Explore 分支模拟与真实验证，不算已验收 |
-| C05 | P extra-activities / README:70：设置兑换目标，只选 Track and manually redeem；可自定义官方 SKU | 必须恢复这一原有能力：准确目标/既有状态检查→需要时请求该设置授权→执行手动兑换选项→读回；不启用 auto-redeem，不提交订单 | 当前实现暂为 blocked，是待补齐，不是永久删除；后续需 grant/目标已设置/选项不符/延迟读回 fixture |
+| C05 | P extra-activities / README:70：设置兑换目标，只选 Track and manually redeem；可自定义官方 SKU | 必须恢复这一原有能力：准确目标/既有状态检查→需要时请求该设置授权→执行手动兑换选项→读回；不启用 auto-redeem，不提交订单 | goal.cjs 真实目标控件绑定及5个fixture已实现：可信授权缺失、已有目标、手动选项缺失、Next超时读回、URL拒绝；extra已接入。可信授权调用方尚未部署，CLI只生成待处理checkpoint |
 | C06 | U search/SearchManager:19–69、BrowserSearch:30–203：desktop/mobile Bing quota 搜索、更新 counter、边界条件 | 两平台都保留；按用户原配置启用；顺序 context 而非两浏览器并行；每次动作后读回，终止于完成/明确上限/停滞状态 | 基本独立driver已实现，desktop/mobile/Edge、无积分/提交不确定/重复词/延迟counter已有fixture；真实设备/会话/现场验证与完整编排仍pending |
 | C07 | U SearchProgress：桌面与 Edge quota 分离；BrowserSearch PointsTracker | 保留真实分项，不把缺失/null 当0完成；Edge 搜索 bonus 与 Edge duration 分开 | 严格 counters 与桌面/Edge拆分已实现；仍需真实账号读回证明 |
 | C08 | U BonusTracker、BrowserSearch.doBonusSearches：额外搜索 offer 与 maxSearches、offer 消失、停滞上限 | 保留可配置额外搜索；限定当前 offer，offer 消失→重新获取/未知，不伪造完成 | 待实现；保留接口和覆盖项，不能直接关闭为节省内存 |
 | C09 | U MorePromotions、PromotionActivityRunner、UrlReward：URL reward / SearchOnBing 分类，资格/零积分/未来日期检查 | 保留完整分类及账号资格；只省略重复的自定义 Explore；零积分/试用类仍按原显式设置处理，不猜测订阅或付款授权 | 待实现；当前 extra 只覆盖一部分，不能冒充 MorePromotions |
-| C10 | U PunchCards；P audit：仅 onboarding 指定 parent，可领取 child、search quota child、missing hash | 保留旧私有白名单与父子任务关系；不放大到所有 punchcards；领取与任务完成分开读回 | 待实现；parent/child/allowlist/claim toggle fixture |
-| C11 | U ClaimBonusPoints：reportClaimAllPoints；ClaimReward：child reward | 恢复待领积分和已授权奖励领取；只有 ACK 不足；前后余额、pending 或 child 完成读回，未知不重放 | 待实现；当前 snapshot 不等于已领取 |
+| C10 | U PunchCards；P audit：仅 onboarding 指定 parent，可领取 child、search quota child、missing hash | 保留旧私有白名单与父子任务关系；不放大到所有 punchcards；领取与任务完成分开读回 | punchcards.cjs/server_actions.cjs 独立mode及10项fixture已实现：父白名单、子资格/搜索延期、claim开关、journal、延迟/超时、协议路径；现场验收pending |
+| C11 | U ClaimBonusPoints：reportClaimAllPoints；ClaimReward：child reward | 恢复待领积分和已授权奖励领取；只有 ACK 不足；前后余额、pending 或 child 完成读回，未知不重放 | child claim 已由punchcard开关和逐项读回实现；全局pending-points claim缺少可归因待领/完成字段仍pending，不能用ACK或余额变化替代完成 |
 | C12 | U ActivateSearchPerk：倍率 perk 识别、当前 live offer、reportable/已激活 | 保留；按当次资格/已启用去重，明确账户设置/动作授权边界 | 待实现；perk missing/already active/no action ID/ACK-but-unconfirmed |
 | C13 | U EnsureStreakProtection：已开启/剩余0/功能未发现/设置后读回 | 保留合理防断签设置流程；请求需要的设置授权，幂等检查优先 | 待实现；未知页面不点击通用 primary button |
-| C14 | U app/DailyCheckIn、AppPromotions、AppReward、ReadToEarn：APP token、签到 type103、活动、文章读取 | 不删除。能力按需加载，复用当前有效认证；token 失效进入认证恢复而非假成功；手机/HTTP阶段不常驻浏览器 | 待实现；需 token missing/expired/permissions、活动ID、余额/文章上限/停滞 fixture |
+| C14 | U app/DailyCheckIn、AppPromotions、AppReward、ReadToEarn：APP token、签到 type103、活动、文章读取 | 不删除。能力按需加载，复用当前有效认证；token 失效进入认证恢复而非假成功；手机/HTTP阶段不常驻浏览器 | app.cjs 实际HTTP/caller API及10个fixture已实现：token缺失/失效、sapphire活动、journal、未知完成、限额/限流、最多10次阅读/停滞。type103提交后归因证据缺失保持unknown；APP CLI/认证恢复调用方及全链路pending |
 | C15 | U VisualSearch：图像搜索及 Browser helper | 保留为按原配置启用的可选能力；记录图片来源与运行前提，不强制加载图像/模型库 | 待实现；原部署是否启用未知，不擅自默认为开启 |
 | C16 | U experimental/{ApiSearch,ApiSearchOnBing,EdgeBrowsing}：明确 experimental/unsafe 提示 | 不默默删接口，也不默认启用或把原本排除的 Edge duration 加入成功目标。保留原配置/风险确认边界；与正常 browser 搜索独立 | 尚未核实旧部署是否启用，作为可选能力待迁移；不能声称官方所有实验功能是旧业务范围 |
 | C17 | S snapshot；P summarize/audit：新鲜 dashboard/flyout、有限历史回退、balance delta、eligible tasks/blocked 分离 | 全类别记录完成/未知/受限/不适用；旧状态只有同 run 或明确当前时间证据才能回退；余额变化不单独归因 | snapshot 已实现部分；完整 summary/audit、pending claim/Edge分项待补齐 |
@@ -77,7 +77,7 @@
 
 ## 5. 当前回归与待补齐清单
 
-已通过的基线：45项 Python 与35项 Node（数字在代码继续变化时以最新测试输出为准）；独立 parser 与可重复 upstream 构建对照通过；所有测试使用合成/本地数据。
+第四轮新增25项 Rewards Node离线测试；总数以最新测试输出为准；独立 parser 与可重复 upstream 构建对照通过；所有测试使用合成/本地数据。
 
 当前有现成覆盖：每日卡片、popup关闭、单次点击、空/缺失/未知资格、重复inventory、超过30项拒绝、精确来源parser、状态文件上限、challenge/login停止、进程/锁/超时、原V2EX行为等。
 

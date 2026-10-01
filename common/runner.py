@@ -26,6 +26,15 @@ ENV = {
     "rewards": {"REWARDS_UPSTREAM_DIR", "REWARDS_ROOT", "REWARDS_PROXY"},
 }
 EXIT = {"ok": 0, "failed": 1, "timeout": 124, "busy": 75}
+# Initial budgets retained from the reviewed deployment, not measured optima.
+DEFAULT_TIMEOUT = {
+    "smzdm": 180,
+    "v2ex": 240,
+    "aliyun": 480,
+    "laowang": 360,
+    "rewards": 7500,
+    "epic": 1300,
+}
 
 
 def run(platform):
@@ -35,7 +44,7 @@ def run(platform):
     )
     p.add_argument("--account", default="default")
     p.add_argument("--runtime-root", required=True, type=Path)
-    p.add_argument("--timeout", type=float, default=180)
+    p.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT[platform])
     p.add_argument("--lock-wait", type=float, default=0)
     p.add_argument("--timezone", default="Asia/Shanghai")
     p.add_argument("--execute", action="store_true")
@@ -50,6 +59,7 @@ def run(platform):
             "extra",
             "desktop-search",
             "mobile-search",
+            "punchcards",
         ),
         default="full",
         help="Rewards explicit limited modes: daily activities, read-only snapshot, or selected extras",
@@ -173,6 +183,7 @@ def run(platform):
                             "extra": "extra.cjs",
                             "desktop-search": "search.cjs",
                             "mobile-search": "search.cjs",
+                            "punchcards": "punchcards.cjs",
                         }[a.mode]
                     )
                 argv = [a.node if adapter.suffix == ".cjs" else a.python, str(adapter)]

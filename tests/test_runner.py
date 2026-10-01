@@ -13,6 +13,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RunnerTests(unittest.TestCase):
+    def test_original_platform_time_budgets(self):
+        from common.runner import DEFAULT_TIMEOUT
+
+        self.assertEqual(
+            DEFAULT_TIMEOUT,
+            {
+                "smzdm": 180,
+                "v2ex": 240,
+                "aliyun": 480,
+                "laowang": 360,
+                "rewards": 7500,
+                "epic": 1300,
+            },
+        )
+
     def invoke(self, platform, runtime, *args):
         return subprocess.run(
             [

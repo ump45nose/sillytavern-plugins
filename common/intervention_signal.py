@@ -35,6 +35,7 @@ CAPABILITIES = {
     "desktop-search": {"desktop_search"},
     "mobile-search": {"mobile_search"},
     "activities": {"daily"},
+    "punchcards": {"punchcards"},
     "snapshot": {"snapshot"},
     "extra": {"extra", "goal"},
     "full": {

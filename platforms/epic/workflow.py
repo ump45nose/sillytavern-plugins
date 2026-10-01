@@ -210,6 +210,10 @@ class ClaimWorkflow:
                     continue
                 # Both instant checkout and cart routes are driver-supported.
                 # Existing paid/unknown cart items must remain untouched.
+                prepare_cart = getattr(self.driver, "prepare_cart", None)
+                if prepare_cart is not None:
+                    await prepare_cart(timeout=self.remaining())
+                    await self.settle("cart")
                 cart = await self.driver.inspect_cart(timeout=self.remaining())
                 if cart not in {"empty_confirmed", "only_free_confirmed"}:
                     raise Paused("cart_preserved")

@@ -75,3 +75,13 @@ Epic新增可执行的注入driver工作流、当前免费catalog解析、只读
 任何已有confirmed journal与当前unknown/not_owned矛盾都不自动再次提交；缺失promotions/无效discount/不完整库存保持unknown。账号登录、领取、搜索、CAPTCHA、新协议、年龄、NAS改动均未实际执行。
 
 Epic另外有懒加载HCaptchaHandler兼容桥的合成loader测试，复用原AgentV.wait_for_challenge调用契约；没有在模块导入时加载模型/读取API密钥/联网，仍需可信授权及注入配置。真实provider/browser绑定、拖拽/GLM扩展仍pending；不能据此声称现场验证码已解决。
+
+## 第四轮进行中
+
+Rewards新增原onboarding白名单punchcard的真实浏览器/Next-action绑定（单独mode），提交前持久journal、超时读回、禁止盲重放；APP保存token的调用方HTTP绑定和任务读回；原手动goal浏览器流程及可信授权回调接口。新增25个Node离线测试。APP、goal的授权调用方和完整full编排尚未接通；type103签到目前无法从上游响应获得可归因完成证据，保持unknown。旧任务能力继续按矩阵补齐。
+
+默认单次总预算恢复为旧部署初始值：SMZDM180、V2EX240、Aliyun480、Laowang360、Rewards7500、Epic1300秒。不是测量得到的最优值；可显式覆盖，阶段/重试不另起预算。内存优化依靠顺序执行和关闭资源，不缩短原业务窗口。
+
+本轮另尝试 Rewards 官方 patchright Chromium1228 下载；其官方CDN连续返回无法解压的0MiB内容，安装器有限重试后失败。tests/rewards_browser_smoke.cjs 已准备为本地HTML/阻断页面网络的真实浏览器smoke，但Chromium未安装，尚未运行。没有关闭sandbox或修改系统安全设置。
+
+Epic本轮增加具体Playwright对象驱动：官方catalog读取、storefront所有权、即时/购物车checkout路径、零价与匹配offer证据核验；文本/控件溢出拒绝。共50项Epic离线fixture已通过。非空购物车的语义价格读取器与checkout具体商品身份读取器仍需现场绑定，未绑定就unknown；公共claim入口仍有门禁，尚无真实浏览器端到端验收。

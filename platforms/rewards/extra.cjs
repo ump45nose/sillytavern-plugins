@@ -1,5 +1,5 @@
 "use strict";
-// Selected extra activities from the owner's private adapter; no goal/redemption clicks.
+// Extra activities from the owner's private adapter; goal changes use an exact trusted authorization boundary.
 const common = require("./browser_common.cjs");
 const { publish } = require("../../common/result.cjs");
 const { loadParser } = require("./parser_loader.cjs");
@@ -146,7 +146,26 @@ async function run(chromium, state, parser, options = {}, deps = common) {
             continue;
           }
           if (job.kind === "goal") {
-            outcomes.push({ ...job, status: "blocked" });
+            if (!options.goal?.url) {
+              outcomes.push({ ...job, status: "blocked" });
+              continue;
+            }
+            try {
+              const goal = await require("./goal.cjs").setManualGoal(page, {
+                ...options.goal,
+                guard: deps.guard,
+              });
+              const complete =
+                goal.business.goal === "complete" &&
+                (await confirmed(job.offerId));
+              outcomes.push({
+                ...job,
+                status: complete ? "complete" : "unknown",
+              });
+            } catch (error) {
+              error.capability = "goal";
+              throw error;
+            }
             continue;
           }
           let target, popupPromise;
@@ -266,7 +285,10 @@ async function run(chromium, state, parser, options = {}, deps = common) {
       },
     );
   } catch (error) {
-    common.recordObstacle(error, { capability: "extra", phase: "extra_cards" });
+    common.recordObstacle(error, {
+      capability: error.capability === "goal" ? "goal" : "extra",
+      phase: "extra_cards",
+    });
     return {
       execution: "failed",
       reason: ["human_required", "activity_inventory_limit"].includes(
@@ -281,11 +303,23 @@ async function run(chromium, state, parser, options = {}, deps = common) {
 async function main() {
   let out;
   try {
+    const fs = require("node:fs"),
+      path = require("node:path");
+    const configFile = path.join(
+      process.env.BENEFITS_STATE_DIR,
+      "native-config.json",
+    );
+    const config = fs.existsSync(configFile)
+      ? common.boundedJson(configFile, 65536)
+      : {};
     out = await run(
       common.dependency(process.env.REWARDS_ROOT),
       common.readState(process.env.BENEFITS_STATE_DIR),
       loadParser(),
-      { proxy: process.env.REWARDS_PROXY },
+      {
+        proxy: process.env.REWARDS_PROXY,
+        goal: config.goal?.url ? { url: config.goal.url } : undefined,
+      },
     );
   } catch (error) {
     out = {

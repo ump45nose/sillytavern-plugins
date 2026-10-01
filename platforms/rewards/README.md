@@ -58,3 +58,15 @@ native-config.json 可配置 search.maxSearches/stagnantLimit/delayMs/readbackAt
 obstacles.cjs 为typed探测与恢复计划，common/intervention_signal.py把子进程信号转为待审批checkpoint；文件不等于授权。登录/验证码/新条款/年龄/安全设置/目标设置有各自类型。当前识别器没有真实验证码solver、协议或年龄执行器绑定；具体验证插件需提供当次公共内容指纹和可信授权回调。没有精确证据提供器时使用单次nonce，防止旧许可跨页面复用，不能据此直接执行恢复。
 
 已具备安全的非绑定Bing cookie拒绝操作（一次点击后读回，不点泛化Accept/Next），以及账号限制/地区不一致/迟到账/弹窗/异常中断等测试。剩余完整业务与现场处理器保持pending，见能力对照表。
+
+## 第四轮：punchcard、APP 与目标设置
+
+--mode punchcards 只处理原私有部署允许的 WW_pcparent_redesign_existinguser_onboarding_offer_punchcard。保持 search/day/streak 子项延期、奖励领取默认关闭；native-config.json 的 punchcards.autoClaim=true 才请求这些子奖励。资格来自新鲜 quest 数据；缺失字段保持 unknown。不能拿上游 FlyoutDashboard 人工创建的空 punchCards 数组当成「无任务」。
+
+server_actions.cjs 逐个读取当前页面引用的 chunk，最多60个、总12MiB；每个响应最多2MiB，发现冲突action ID即退出。提交沿用已审查的 Next server-action 协议，POST不自动重试。punchcard-journal.json 在提交前持久记录，跨进程再次执行只读核验，不能盲目重发。当前未暴露重置journal开关，需人工确认真实状态后再设计恢复。
+
+APP 的 app.cjs 是实际HTTP绑定与 caller API：createClient 接收调用方提供的现有有效token/country/language，不创建token、不做OAuth、不写凭据、不自动加载环境凭据。runPromotions 保留 type=sapphire 的已知任务、最多40项、逐项三次读回；只有确切活动complete才完成。submitDaily 发送原type103并读回，但原响应没有独立签到完成字段，故目前标unknown，不能用余额增加冒充归因证据。ReadToEarn 已保留原type101与最多10次顺序调度、缺资格/停滞/不确定写入停止，只有特定offer完成才报告complete；该offer的实际现场数据形态仍待验证。APP尚未暴露独立CLI或接入full编排。
+
+goal.cjs 恢复原手动目标浏览器操作，准确SKU URL、明确手动兑换radio、Next/Okay、刷新读回；不下兑换订单，不选auto-redeem。extra 的 native-config.json.goal.url 可以指定既有目标URL，缺少可信授权回调时生成该目标的待处理checkpoint。调用方 setManualGoal 需传入经认证授权器验证的checkpoint、authorize回调、journal；配置JSON自身不能批准执行。已有目标不会切换其现有兑换设置。目标设置成功后 extra 还必须核验对应卡片完成。
+
+初始总预算继承旧部署：Rewards7500秒（各mode相同），显式 --timeout 可覆盖；重试和阶段共用单次总预算，不重置计时。上述增加均仅通过离线假页面/传输测试，未运行真实账号或平台操作。
