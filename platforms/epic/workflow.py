@@ -24,7 +24,6 @@ CONSENT = {
 RECOVERABLE = {
     "navigation_partial",
     "store_sso",
-    "remembered_account",
     "overlay",
     "popup",
     "stale_locator",

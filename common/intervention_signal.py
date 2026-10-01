@@ -80,11 +80,18 @@ def create_checkpoint(signal_path, context, mode, *, now=None):
     for key in ("run_id", "platform", "account"):
         if value.get(key) != context[key]:
             raise ValueError("signal_identity_mismatch")
-    if context["platform"] != "rewards":
+    if context["platform"] == "rewards":
+        capabilities, hosts = CAPABILITIES.get(mode, set()), REWARDS_HOSTS
+    elif context["platform"] == "laowang" and mode == "full":
+        capabilities, hosts = {"tncode"}, {"laowang.vip"}
+        if value["kind"] != "captcha":
+            raise ValueError("unsupported_intervention")
+    else:
         raise ValueError("unsupported_signal_platform")
-    if not isinstance(value["capability"], str) or value[
-        "capability"
-    ] not in CAPABILITIES.get(mode, set()):
+    if (
+        not isinstance(value["capability"], str)
+        or value["capability"] not in capabilities
+    ):
         raise ValueError("signal_capability_mismatch")
     if not isinstance(value["kind"], str) or value["kind"] not in KINDS:
         raise ValueError("unsupported_intervention")
@@ -98,7 +105,7 @@ def create_checkpoint(signal_path, context, mode, *, now=None):
     url = urlsplit(target)
     if (
         url.scheme != "https"
-        or url.hostname not in REWARDS_HOSTS
+        or url.hostname not in hosts
         or url.username
         or url.password
         or url.query

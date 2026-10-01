@@ -27,7 +27,7 @@ def classify(signals, *, phase, target, evidence_fingerprint):
         ("visible_captcha", "captcha"),
         ("mfa_required", "login"),
         ("login_required", "login"),
-        ("remembered_account", "remembered_account"),
+        ("remembered_account", "login"),
         ("store_sso", "store_sso"),
         ("device_modal", "region_layout"),
         ("stale_locator", "stale_locator"),
