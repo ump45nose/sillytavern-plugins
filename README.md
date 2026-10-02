@@ -27,8 +27,10 @@
 
 图标验收需在安装后刷新详情页和已安装列表，不能仅根据上传预览判断生效。
 
-2026-10-02 创建的云端插件：[钉钉](https://chatgpt.com/plugins/Plugin_6e7cd81e16288191be4471f450fd078a)。已通过 Plugin Creator 原 ID 更新到 1.1.1。更新优先读取当前源文件和 release ID，再提交新版 ZIP；也可以使用“更多操作 → 上传新版本”。
+2026-10-02 创建的云端插件：[钉钉](https://chatgpt.com/plugins/Plugin_6e7cd81e16288191be4471f450fd078a)。已通过 Plugin Creator 原 ID 更新到 1.1.3。更新优先读取当前源文件和 release ID，再提交新版 ZIP；也可以使用“更多操作 → 上传新版本”。
 
 更新展示信息时同步两份清单并保持 `.app.json` 的 App ID；无需重新创建 App 或变更 OAuth 配置。官方格式参考：https://developers.openai.com/codex/plugins/build/
 
 1.1.1 已将展示名缩短，保留全部场景描述、示例提示和原 App ID。平台保存了图标清单与资源，但安装后详情图标仍可能回退为默认图标，需以实际页面验收，不能将包上传成功视为图标已生效。
+
+1.1.2 用仅含兼容清单的 ZIP 通过网页上传原 ID，刷新后仍显示默认图标；1.1.3 恢复两份同步清单，保留官方 PNG 和原 App 映射。两种格式均未解决安装后的图标回退。
