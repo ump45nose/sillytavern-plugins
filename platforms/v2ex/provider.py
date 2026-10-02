@@ -8,7 +8,7 @@ import re
 
 class V2ex:
     @staticmethod
-    def sign(session):
+    def sign(session, *, read_only=False, before_write=None, on_balance=None):
         msg = []
         response = session.get(url="https://www.v2ex.com/mission/daily", verify=True)
         pattern = (
@@ -17,11 +17,13 @@ class V2ex:
         )
         urls = re.findall(pattern=pattern, string=response.text)
         url = urls[0] if urls else None
-        if url is None:
+        if url is None and not read_only:
             return [{"name": "签到失败", "value": "cookie 可能过期"}]
-        elif url != "/balance":
+        elif url != "/balance" and not read_only:
             headers = {"Referer": "https://www.v2ex.com/mission/daily"}
             data = {"once": url.split("=")[-1]}
+            if before_write is not None:
+                before_write()
             _ = session.get(
                 url="https://www.v2ex.com" + url,
                 verify=True,
@@ -49,6 +51,8 @@ class V2ex:
             {"name": "今日签到", "value": today},
             {"name": "帐号余额", "value": total},
         ]
+        if on_balance is not None:
+            on_balance(msg)
         response = session.get(url="https://www.v2ex.com/mission/daily", verify=True)
         data = re.findall(
             pattern=r"<div class=\"cell\">(.*?)天</div>", string=response.text

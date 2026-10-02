@@ -41,6 +41,8 @@ function allowed(url, hosts) {
   }
 }
 function plan(offers, metadata) {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   if (
     !Array.isArray(offers) ||
     offers.length > 300 ||
@@ -75,7 +77,7 @@ function plan(offers, metadata) {
     status:
       o.isCompleted === true
         ? "complete"
-        : o.isLocked === true
+        : o.isLocked === true || (typeof o.date === "string" && o.date > today)
           ? "blocked"
           : meta.get(o.offerId)?.exclusiveLockedFeatureStatus === "unlocked"
             ? "eligible"
@@ -123,12 +125,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
         }
         let offers = await read();
         const raw = await deps.readFlyout(context);
-        if (
-          raw?.isError ||
-          raw?.userInfo?.isRewardsUser !== true ||
-          raw?.flyoutResult?.userStatus?.isRewardsUser !== true
-        )
-          throw Error("authenticated_inventory_unavailable");
+        common.assertAccountAvailable(raw, options.region);
         const flyout = raw.flyoutResult;
         if (
           !Array.isArray(flyout.morePromotions) ||
@@ -139,15 +136,35 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           ...flyout.morePromotions,
           ...flyout.exploreOnBingPromotions,
         ]);
-        const outcomes = [];
+        const outcomes = jobs.map((job) => ({
+          ...job,
+          status: job.status === "eligible" ? "unknown" : job.status,
+        }));
+        function updateBusiness() {
+          for (const key of Object.keys(business)) {
+            const rows = outcomes.filter((o) => o.kind === key);
+            business[key] = !rows.length
+              ? "unknown"
+              : rows.every((o) => o.status === "complete")
+                ? "complete"
+                : rows.some((o) => o.status === "unknown")
+                  ? "unknown"
+                  : "blocked";
+          }
+        }
+        function record(job, status) {
+          outcomes.find((o) => o.offerId === job.offerId).status = status;
+          updateBusiness();
+        }
+        updateBusiness();
         for (const job of jobs) {
           if (job.status !== "eligible") {
-            outcomes.push({ ...job, status: job.status });
+            record(job, job.status);
             continue;
           }
           if (job.kind === "goal") {
             if (!options.goal?.url) {
-              outcomes.push({ ...job, status: "blocked" });
+              record(job, "blocked");
               continue;
             }
             try {
@@ -158,10 +175,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               const complete =
                 goal.business.goal === "complete" &&
                 (await confirmed(job.offerId));
-              outcomes.push({
-                ...job,
-                status: complete ? "complete" : "unknown",
-              });
+              record(job, complete ? "complete" : "unknown");
             } catch (error) {
               error.capability = "goal";
               throw error;
@@ -201,7 +215,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 job.offerId.includes("_" + k + "_"),
               );
               if (!key) {
-                outcomes.push({ ...job, status: "unknown" });
+                record(job, "unknown");
                 continue;
               }
               const title = job.metadata?.title;
@@ -246,32 +260,19 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 if (await confirmed(job.offerId)) break;
               }
             }
-            outcomes.push({
-              ...job,
-              status: (await confirmed(job.offerId)) ? "complete" : "unknown",
-            });
+            record(
+              job,
+              (await confirmed(job.offerId)) ? "complete" : "unknown",
+            );
           } catch (error) {
-            if (error.message === "human_required") throw error;
-            outcomes.push({ ...job, status: "unknown" });
+            if (error.message === "human_required" || error.details)
+              throw error;
+            record(job, "unknown");
           } finally {
             if (!target && popupPromise) target = await popupPromise;
             if (target && target !== page) await target.close();
           }
           offers = await read();
-        }
-        for (const key of Object.keys(business)) {
-          const rows = outcomes.filter((o) => o.kind === key);
-          if (!rows.length) {
-            business[key] = "unknown";
-            continue;
-          }
-          if (rows.every((o) => o.status === "complete"))
-            business[key] = "complete";
-          else if (
-            rows.some((o) => o.status === "unknown" || o.status === "eligible")
-          )
-            business[key] = "unknown";
-          else business[key] = "blocked";
         }
         return {
           execution: "ok",

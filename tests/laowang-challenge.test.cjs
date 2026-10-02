@@ -132,15 +132,23 @@ test("explicit rejection permits one authorized refresh; uncertain response neve
   assert.equal(uncertain.drags, 1);
   assert.deepEqual(uncertain.events, ["#tncode"]);
 });
-function fakeFlow({ throwSubmit = false, autoSigned = false } = {}) {
+function fakeFlow({
+  throwSubmit = false,
+  autoSigned = false,
+  challengeOnResponse = false,
+} = {}) {
   let signed = false,
     submits = 0,
     gets = 0,
-    closed = 0;
+    closed = 0,
+    challengePresent = !challengeOnResponse;
   const page = {
     url: () => challenge.TARGET,
     goto: async (u) => {
-      if (u.includes("operation=qiandao")) gets++;
+      if (u.includes("operation=qiandao")) {
+        gets++;
+        challengePresent = true;
+      } else if (challengeOnResponse) challengePresent = false;
     },
     waitForTimeout: async () => {},
     locator: (selector) => ({
@@ -150,7 +158,7 @@ function fakeFlow({ throwSubmit = false, autoSigned = false } = {}) {
             ? 1
             : 0
           : selector === "#tncode" || selector === "#submit-btn"
-            ? 1
+            ? Number(challengePresent)
             : 0,
       click: async () => {
         if (selector === "#submit-btn") {
@@ -167,6 +175,7 @@ function fakeFlow({ throwSubmit = false, autoSigned = false } = {}) {
   };
   const verifier = {
     ...page,
+    goto: async () => {},
     locator: (selector) => ({
       count: async () => (selector === ".qdleft .btnvisted" && signed ? 1 : 0),
       first() {
@@ -196,7 +205,10 @@ function fakeFlow({ throwSubmit = false, autoSigned = false } = {}) {
     }),
   };
   page.waitForFunction = async () => {};
-  page.evaluate = async () => ({ x: 53, width: 120, markWidth: 40 });
+  page.evaluate = async (fn) =>
+    fn.toString().includes("document.documentElement.outerHTML")
+      ? '<a href="formhash=abcdef12">fixture</a>'
+      : { x: 53, width: 120, markWidth: 40 };
   return {
     firefox,
     challengeOptions,
@@ -306,6 +318,7 @@ test("concrete slider binding listens before release and validates exact server 
         true,
       );
       return {
+        status: () => 200,
         headers: () => ({ "content-length": "3" }),
         text: async () => "_ok",
       };
@@ -328,6 +341,7 @@ test("concrete slider response with unknown size does not read arbitrary body", 
     mouse: { move: async () => {}, down: async () => {}, up: async () => {} },
     waitForTimeout: async () => {},
     waitForResponse: async () => ({
+      status: () => 200,
       headers: () => ({}),
       text: async () => assert.fail("unbounded body"),
     }),
@@ -398,5 +412,109 @@ test("two-drag budget survives reopening the intent journal", () => {
     assert.throws(() => reopened.mark("captcha_attempted"), /attempt_limit/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("source-shaped qiandao challenge completes within the same authorized invocation", async () => {
+  const f = fakeFlow({ challengeOnResponse: true });
+  const phases = [];
+  const out = await run(f.firefox, "/fake", {
+    intent: createIntent(null, "2026-10-02"),
+    authorize: async (observation) => {
+      phases.push(observation.phase);
+      return null;
+    },
+    challengeOptions: f.challengeOptions,
+  });
+  assert.equal(out.checkin, "complete");
+  assert.equal(f.gets, 1);
+  assert.equal(f.submits, 1);
+  assert.deepEqual(phases, ["tncode_open", "tncode_drag"]);
+  assert.equal(f.closed, 1);
+});
+
+test("response-only challenge lost after approval pause is not invented or qiandao-replayed", async () => {
+  const intent = createIntent(null, "2026-10-02");
+  const first = fakeFlow({ challengeOnResponse: true });
+  const paused = await run(first.firefox, "/fake", {
+    intent,
+    challengeOptions: first.challengeOptions,
+  });
+  assert.equal(paused.reason, "human_required");
+  assert.equal(intent.phase, "challenge_pending");
+  assert.equal(first.gets, 1);
+  const second = fakeFlow({ challengeOnResponse: true });
+  const out = await run(second.firefox, "/fake", {
+    intent,
+    challengeOptions: second.challengeOptions,
+    authorize: async () => assert.fail("No continuation page to authorize"),
+  });
+  assert.equal(out.reason, "previous_sign_action_requires_reconciliation");
+  assert.equal(second.gets, 0);
+  assert.equal(second.submits, 0);
+  assert.equal(second.closed, 1);
+});
+
+test("slow same-invocation authorization is bounded and cancelled without solver activation", async () => {
+  const f = fakeChallenge();
+  let signal;
+  await assert.rejects(
+    challenge.solve(f.page, {
+      ...f.options,
+      approvalTimeoutMs: 5,
+      authorize: async (observation, options) => {
+        signal = options.signal;
+        return new Promise(() => {});
+      },
+    }),
+    challenge.PendingChallenge,
+  );
+  assert.equal(signal.aborted, true);
+  assert.equal(f.loaded, 0);
+  assert.deepEqual(f.events, []);
+});
+
+test("HTTP errors and unknown tncode bodies never become rejection or trigger a second drag", async () => {
+  for (const [status, body] of [
+    [503, "<h1>Try later</h1>"],
+    [500, "_ok"],
+    [200, "_error"],
+    [200, ""],
+  ]) {
+    let drags = 0,
+      refreshes = 0;
+    const page = {
+      url: () => challenge.TARGET,
+      locator: (selector) => ({
+        count: async () => 1,
+        boundingBox: async () => ({ x: 0, y: 0, width: 20, height: 20 }),
+        click: async () => {
+          if (selector === ".tncode_refresh") refreshes++;
+        },
+      }),
+      mouse: {
+        move: async () => {},
+        down: async () => {
+          drags++;
+        },
+        up: async () => {},
+      },
+      waitForTimeout: async () => {},
+      waitForFunction: async () => {},
+      evaluate: async () => ({ x: 53, width: 120, markWidth: 40 }),
+      waitForResponse: async () => ({
+        status: () => status,
+        headers: () => ({ "content-length": String(Buffer.byteLength(body)) }),
+        text: async () => body,
+      }),
+    };
+    const result = await challenge.solve(page, {
+      authorize: async () => null,
+      readEvidence: async () => "fixture",
+      loadSolver: () => tn,
+    });
+    assert.equal(result.status, "unknown", `${status} ${body}`);
+    assert.equal(drags, 1);
+    assert.equal(refreshes, 0);
   }
 });

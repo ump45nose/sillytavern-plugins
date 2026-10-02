@@ -100,16 +100,41 @@ async function solve(
     readEvidence = evidence,
     loadSolver = () => require("./tncode.cjs"),
     maxAttempts = 2,
+    approvalTimeoutMs = 30000,
     beforeDrag = async () => {},
     onOutcome = async () => {},
   } = {},
 ) {
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 2)
     throw Error("captcha_attempt_limit");
+  if (
+    !Number.isInteger(approvalTimeoutMs) ||
+    approvalTimeoutMs < 1 ||
+    approvalTimeoutMs > 30000
+  )
+    throw Error("approval_timeout_invalid");
   async function allow(phase) {
     const current = await observe(page, phase, readEvidence);
-    if (typeof authorize !== "function" || (await authorize(current)) !== null)
-      throw new PendingChallenge(current);
+    if (typeof authorize !== "function") throw new PendingChallenge(current);
+    const controller = new AbortController();
+    let timer, decision;
+    try {
+      decision = await Promise.race([
+        Promise.resolve().then(() =>
+          authorize(current, { signal: controller.signal }),
+        ),
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new PendingChallenge(current)),
+            approvalTimeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
+    }
+    if (decision !== null) throw new PendingChallenge(current);
     const fresh = await observe(page, phase, readEvidence);
     if (fresh.fingerprint !== current.fingerprint)
       throw new PendingChallenge(fresh);

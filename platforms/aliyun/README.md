@@ -30,3 +30,15 @@ python platforms/aliyun/run.py --runtime-root /absolute/private/runtime --accoun
 - 该适配器使用已有 provider 的 HTTP 和认证实现，外部依赖变更需要重新审阅，不能只更新哈希绕过兼容检查
 
 离线验证：`python -m unittest discover -s tests -p test_aliyun.py -v`。全部使用 fake client，不导入外部 daily.py，不访问平台。
+
+## 中断与再次执行（2026-10-02）
+
+- `BENEFITS_STATE_DIR/http-actions.json` 是有界、0600 的原子动作记录，只保存账号代号、业务日期及每个社区的签到/奖励事实，不保存 Cookie、请求内容或 API 响应
+- 固定来源的 15 个社区全部纳入汇总，包括空 `excode` 的默认社区。第一个社区完成、后续查询失败时，汇总签到仍为 unknown；已经确认的社区不会丢失。结果的 `community_0_*` 到 `community_14_*` 按固定 `TASK_GROUPS` 顺序对应社区，合计最多 32 个业务字段
+- 不采信旧版 `last-confirmed.json` 的阿里云汇总结论；旧版可能在只完成部分社区时写入 complete。升级后逐个读回社区
+- 签到和领奖发出前先持久化 intent。签到超时后立即只读确认；后续进程也只读恢复，已经确认或仍不明确的签到不重发。奖励查询仍继续，不因签到完成跳过整个平台
+- 奖励资格 false 只能说明当前没有可领取资格，不能证明一次不明确的领奖已经到账。此类 bonus 保持 unknown，重启及跨日均不自动重放；需额外可信证据或人工核对
+- 待收积分为零可确认当前没有待领取积分；不明确的领取只做余额读回。同日已确认过一次领取但再次读到正数时，无法区分新奖励与延迟数据，因此保持 unknown，不盲目重发
+- 动作记录损坏或无法写入时拒绝进一步写请求。新一天的签到可重新执行；未核实的 bonus/待收积分 intent 不因换日而被清空
+
+新增离线回归覆盖 15 社区、部分异常、超时写入、跨次运行恢复和损坏动作记录；未访问真实平台。

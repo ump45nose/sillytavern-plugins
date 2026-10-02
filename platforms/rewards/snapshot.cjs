@@ -31,14 +31,8 @@ function group(items, { requireEligibility = false } = {}) {
     if (states.includes(state)) return state;
   return "complete";
 }
-function summarize(raw, daily) {
-  if (
-    !raw ||
-    raw.isError ||
-    raw.userInfo?.isRewardsUser !== true ||
-    raw.flyoutResult?.userStatus?.isRewardsUser !== true
-  )
-    throw Error("authenticated_flyout_unavailable");
+function summarize(raw, daily, region = null) {
+  common.assertAccountAvailable(raw, region);
   const flyout = raw.flyoutResult,
     counters = flyout.userStatus.counters;
   if (!counters || typeof counters !== "object")
@@ -73,7 +67,8 @@ async function run(chromium, state, options = {}, deps = common) {
           await bar.getAttribute("aria-valuenow"),
           await bar.getAttribute("aria-valuemax"),
         );
-        const business = summarize(await deps.readFlyout(context), daily);
+        const raw = await deps.readFlyout(context);
+        const business = summarize(raw, daily, options.region);
         return { execution: "ok", reason: "fresh_readonly_snapshot", business };
       },
     );

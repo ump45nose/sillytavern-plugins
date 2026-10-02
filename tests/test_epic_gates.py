@@ -153,6 +153,44 @@ class GateTests(unittest.IsolatedAsyncioTestCase):
             await LicenseHandler(self.page, disclosure)(self.obstacle, timeout=5)
         self.control.click.assert_not_called()
 
+    async def test_license_uses_observed_checkout_frame_not_outer_page(self):
+        frame_control = Control()
+        frame = SimpleNamespace(
+            url="https://www.epicgames.com/purchase",
+            locator=lambda *a: frame_control,
+            get_by_role=lambda *a, **kw: frame_control,
+        )
+        self.page.frames = [frame]
+        state = Obstacle(
+            "terms",
+            frame.url,
+            "f" * 64,
+            "checkout",
+            {"subtype": "new_terms", "_container": frame},
+        )
+        disclosure = AsyncMock(
+            return_value={
+                "fingerprint": "f" * 64,
+                "agreement_links": ["https://www.epicgames.com/site/en-US/tos"],
+            }
+        )
+        await LicenseHandler(self.page, disclosure)(state, timeout=5)
+        self.assertIs(disclosure.await_args.args[0], frame)
+        frame_control.check.assert_awaited_once()
+        frame_control.click.assert_awaited_once()
+        self.control.click.assert_not_awaited()
+
+    async def test_detached_checkout_frame_cannot_receive_approved_action(self):
+        frame = SimpleNamespace(url="https://www.epicgames.com/purchase")
+        self.page.frames = []
+        state = Obstacle(
+            "terms", frame.url, "f" * 64, "checkout", {"_container": frame}
+        )
+        disclosure = AsyncMock()
+        with self.assertRaises(Paused):
+            await LicenseHandler(self.page, disclosure)(state, timeout=5)
+        disclosure.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

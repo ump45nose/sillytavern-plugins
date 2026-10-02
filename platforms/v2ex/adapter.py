@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.model import result, atomic_json
+from platforms.v2ex.state import Journal
 
 
 def classify(rows, today):
@@ -24,11 +25,34 @@ def classify(rows, today):
     )
 
 
-def execute(context, provider, session_factory, cookie, proxy=None):
+def execute(
+    context,
+    provider,
+    session_factory,
+    cookie,
+    proxy=None,
+    state_dir=None,
+    confirmed_path=None,
+):
     if not cookie or "\n" in cookie or "\r" in cookie:
         return result(context, reason="missing_or_invalid_cookie")
     try:
+        journal = Journal(context, state_dir, confirmed_path)
+    except Exception:
+        return result(context, reason="invalid_action_state")
+
+    def confirmed():
+        complete = journal.status == "complete"
+        return {
+            "checkin": "complete" if complete else "unknown",
+            "reward": "complete" if complete else "unknown",
+        }
+
+    if journal.status == "complete":
+        return result(context, "ok", "reward_confirmed", confirmed())
+    try:
         with session_factory() as session:
+            session.trust_env = False
             session.headers.update(
                 {
                     "Cookie": cookie,
@@ -38,18 +62,61 @@ def execute(context, provider, session_factory, cookie, proxy=None):
             )
             if proxy:
                 session.proxies.update({"http": proxy, "https": proxy})
-            success = classify(provider.sign(session), context["business_date"])
+
+            def on_balance(rows):
+                if classify(rows, context["business_date"]):
+                    journal.set("complete")
+
+            rows = provider.sign(
+                session,
+                read_only=journal.status == "pending",
+                before_write=lambda: journal.set("pending"),
+                on_balance=on_balance,
+            )
+            on_balance(rows)
+        success = journal.status == "complete"
         return result(
             context,
             "ok" if success else "failed",
             "reward_confirmed" if success else "reward_not_confirmed",
-            {
-                "checkin": "complete" if success else "unknown",
-                "reward": "complete" if success else "unknown",
-            },
+            confirmed(),
         )
     except Exception:
-        return result(context, reason="provider_error")
+        return result(context, reason="provider_error", business=confirmed())
+
+
+def bounded_session(base):
+    """Enforce the cap while decoding the body, before requests buffers .text."""
+
+    class BoundedSession(base):
+        def resolve_redirects(self, *args, **kwargs):
+            # requests also builds Response.next when allow_redirects=False;
+            # that path eagerly consumes redirect bodies unless disabled here.
+            return iter(())
+
+        def request(self, method, url, **kwargs):
+            kwargs.update(timeout=30, verify=True, stream=True, allow_redirects=False)
+            response = super().request(method, url, **kwargs)
+            try:
+                # Redirect bodies are otherwise consumed without bounds by requests.
+                if 300 <= response.status_code < 400:
+                    raise ValueError("unexpected_redirect")
+                size = response.headers.get("Content-Length")
+                if size is not None and int(size) > 1048576:
+                    raise ValueError("response_limit")
+                chunks, total = [], 0
+                for chunk in response.iter_content(chunk_size=65536):
+                    total += len(chunk)
+                    if total > 1048576:
+                        raise ValueError("response_limit")
+                    chunks.append(chunk)
+                response._content = b"".join(chunks)
+                response._content_consumed = True
+                return response
+            finally:
+                response.close()
+
+    return BoundedSession
 
 
 def main():
@@ -63,20 +130,14 @@ def main():
     except Exception:
         output = result(context, reason="dependency_unavailable_or_incompatible")
     else:
-
-        class BoundedSession(requests.Session):
-            def request(self, method, url, **kwargs):
-                kwargs["timeout"] = 30
-                # The legacy provider passes verify=False; do not inherit that unsafe behavior.
-                kwargs["verify"] = True
-                return super().request(method, url, **kwargs)
-
         output = execute(
             context,
             V2ex,
-            BoundedSession,
+            bounded_session(requests.Session),
             os.getenv("V2EX_COOKIE", ""),
             os.getenv("V2EX_PROXY"),
+            os.environ.get("BENEFITS_STATE_DIR"),
+            os.environ.get("BENEFITS_LAST_CONFIRMED_PATH"),
         )
     atomic_json(os.environ["BENEFITS_RESULT_PATH"], output)
     return 0 if output["execution_status"] == "ok" else 1

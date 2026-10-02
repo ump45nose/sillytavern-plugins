@@ -92,8 +92,18 @@ async function discover(page, parser, html, read = request) {
     if (response.status !== 200) continue;
     bytes += Buffer.byteLength(response.text);
     if (bytes > 12 * 1024 * 1024) throw Error("action_discovery_limit");
-    for (const [name, id] of Object.entries(
-      parser.extractActionIds(response.text).byName,
+    // The source parser keeps only the last ID for a name. Parse individual
+    // references too, so ambiguity inside one chunk cannot be hidden by it.
+    const references =
+      response.text.match(
+        /(?:createServerReference\s*\)?\s*\(\s*"[a-f0-9]{40,64}"|registerServerReference\s*\)?\s*\([^,]+,\s*"[a-f0-9]{40,64}")[\s\S]{0,800}?\)/g,
+      ) || [];
+    const parsed = [
+      parser.extractActionIds(response.text),
+      ...references.map((reference) => parser.extractActionIds(reference)),
+    ];
+    for (const [name, id] of parsed.flatMap((value) =>
+      Object.entries(value.byName),
     )) {
       if (!["reportActivity", "reportClaimAllPoints"].includes(name)) continue;
       if (!/^[a-f0-9]{40,64}$/i.test(id)) throw Error("invalid_action_id");
@@ -105,15 +115,7 @@ async function discover(page, parser, html, read = request) {
   }
   return ids;
 }
-async function submit(
-  page,
-  parser,
-  actionId,
-  parent,
-  child,
-  timezoneOffset,
-  send = request,
-) {
+function validateSubmission(actionId, parent, child, timezoneOffset) {
   if (!/^[a-f0-9]{40,64}$/i.test(actionId)) throw Error("action_id_missing");
   safePath("/earn/quest/" + parent);
   if (
@@ -125,6 +127,17 @@ async function submit(
     Math.abs(timezoneOffset) > 840
   )
     throw Error("invalid_child_action");
+}
+async function submit(
+  page,
+  parser,
+  actionId,
+  parent,
+  child,
+  timezoneOffset,
+  send = request,
+) {
+  validateSubmission(actionId, parent, child, timezoneOffset);
   return send(page, "/earn/quest/" + parent, {
     method: "POST",
     headers: {
@@ -140,4 +153,11 @@ async function submit(
     ]),
   });
 }
-module.exports = { safePath, request, chunkPaths, discover, submit };
+module.exports = {
+  safePath,
+  request,
+  chunkPaths,
+  discover,
+  validateSubmission,
+  submit,
+};

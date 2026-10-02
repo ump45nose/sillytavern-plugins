@@ -39,6 +39,7 @@ function fixture({
   clickFail = false,
   challenge = false,
   login = false,
+  restricted = false,
 } = {}) {
   const state = {
     contextClosed: false,
@@ -83,6 +84,16 @@ function fixture({
     },
   };
   const page = {
+    evaluate: async () => ({
+      userInfo: { isRewardsUser: true },
+      flyoutResult: {
+        userStatus: { isRewardsUser: true },
+        userWarnings: restricted
+          ? [{ name: "Fraud_UserWarning_BotScore_UX" }]
+          : [],
+      },
+    }),
+    close: async () => {},
     url: () =>
       login ? "https://login.live.com/" : "https://rewards.bing.com/dashboard",
     locator: (selector) => ({
@@ -125,6 +136,14 @@ test("already complete no click and all browser resources close", async () => {
   assert.ok(f.state.contextClosed && f.state.browserClosed);
   assert.equal(f.state.launch.chromiumSandbox, true);
   assert.equal(f.state.launch.args, undefined);
+});
+
+test("daily native binding checks account warning before any card click", async () => {
+  const f = fixture({ now: "0", max: "1", restricted: true });
+  const out = await run(f.chromium, {});
+  assert.equal(out.reason, "account_restricted");
+  assert.equal(f.state.clicks, 0);
+  assert.ok(f.state.contextClosed && f.state.browserClosed);
 });
 test("unknown before progress cannot submit", async () => {
   const f = fixture({ now: null });

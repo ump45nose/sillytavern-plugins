@@ -138,6 +138,9 @@ async function drag(page, match) {
     const reply = await response;
     if (!reply)
       return { status: "unknown", reason: "captcha_response_uncertain" };
+    const status = reply.status?.();
+    if (!Number.isInteger(status) || status < 200 || status >= 300)
+      return { status: "unknown", reason: "captcha_response_http_error" };
     // Bounded text: refuse an oversized declared body before fetching it.
     const declared = reply.headers?.()["content-length"];
     const length =
@@ -151,7 +154,10 @@ async function drag(page, match) {
       return { status: "unknown", reason: "captcha_response_oversized" };
     return accepted(text)
       ? { status: "accepted" }
-      : { status: "rejected", reason: "captcha_rejected" };
+      : // The pinned source establishes only the success token. A negative token
+        // has not been verified; HTML, errors and unknown bodies are not proof of
+        // rejection and therefore must not authorize another drag.
+        { status: "unknown", reason: "captcha_response_unrecognized" };
   } finally {
     if (down) await page.mouse.up().catch(() => {});
     if (response) await response;

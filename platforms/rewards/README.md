@@ -82,8 +82,21 @@ goal.cjs 恢复原手动目标浏览器操作，准确SKU URL、明确手动兑�
 
 这里只是明确请求两项能力的例子，不代表原账号真实启用配置。根据自己的旧任务范围填写；缺失清单返回 capability_manifest_required，未知/重复名称、空列表或额外字段拒绝。完整名称见 full.cjs 的 ORDER：daily、extra、punchcards、desktop_search、mobile_search、bonus_search、more_promotions、claim、search_perk、streak_protection、app_daily、app_promotions、read_to_earn、visual_search，以及三个原实验能力。未接入的请求能力会列入报告并返回unknown，不偷偷忽略，也不启用未列出的可选任务。
 
-full先只读快照，按固定顺序执行请求阶段，再只读快照；最多一个浏览器/上下文，阶段结束关闭。成功阶段的会话轮换仅在进程内按desktop/mobile分别传递，失败不替换有效副本、不新写凭据。全部阶段/重试共用runner总超时。初始快照或阶段的timeout/busy、账号限制、认证或需要授权的阻碍，都会停止后续动作；desktop会话缺失在任何APP调用前失败。
+full按启用能力预检所需设备会话；需要浏览器的任务先只读快照，按固定顺序执行请求阶段，再只读快照。纯APP可信调用方任务不读取桌面会话、不加载Chromium/parser、不运行浏览器快照；只启用mobile-search时使用手机会话快照。最多一个浏览器/上下文，阶段结束关闭。成功阶段的会话轮换仅在进程内按desktop/mobile分别传递，失败不替换有效副本、不新写凭据。全部阶段/重试共用runner总超时。初始快照或阶段的timeout/busy、账号限制、认证或需要授权的阻碍，都会停止后续动作；所请求浏览器能力的必要会话缺失，在任何APP调用前失败；纯APP任务的账号与认证由可信APP客户端负责。
 
-业务结果以请求能力为单位；本次run的 rewards-report.json 保存阶段明细（最多64KiB、每阶段原子覆盖、无网页/凭据）。快照只是观察，不能覆盖动作失败；已确认结果、unknown、partial、blocked与缺失绑定分别保留。full_requested_capabilities_complete只表示清单内能力确认完成，不意味着所有官方能力都已开发或验收。
+业务结果以请求能力为单位；本次run的 rewards-report.json 保存阶段明细（最多64KiB、每阶段原子覆盖、无网页/凭据）。每完成一阶段还原子保存标准 adapter-result.json：含全部请求能力，未运行项unknown、执行状态failed/full_in_progress，完成时再写最终状态。监督者超时或中断时可保留已核验的同run业务事实；不能将中间结果当成功。快照只是观察，不能覆盖动作失败；已确认结果、unknown、partial、blocked与缺失绑定分别保留。full_requested_capabilities_complete只表示清单内能力确认完成，不意味着所有官方能力都已开发或验收。
 
-可信host可在进程内调用createBindings({...,host})：host.appClient为当前账号已有APP客户端工厂；host.businessDate为明确业务日；host.goalCheckpoint/authorizeGoal提供经认证、精确范围校验的目标恢复接口。没有从JSON加载代码/授权，也不自动OAuth。CLI尚无聊天授权桥；checkpoint由可信宿主验证并重新探测后才能进入相应恢复入口。验证码、条款、年龄真实处理器及剩余业务继续按矩阵pending。
+可信host可在进程内调用createBindings({...,enabled:[...],host})，enabled为必填，应与execute的清单一致；旧可信调用方必须补传明确清单，省略会在读取会话/依赖前返回capability_manifest_invalid：host.appClient为当前账号已有APP客户端工厂；host.businessDate为明确业务日；host.goalCheckpoint/authorizeGoal提供经认证、精确范围校验的目标恢复接口。没有从JSON加载代码/授权，也不自动OAuth。CLI尚无聊天授权桥；checkpoint由可信宿主验证并重新探测后才能进入相应恢复入口。验证码、条款、年龄真实处理器及剩余业务继续按矩阵pending。
+
+
+## 2026-10-02 审阅修复与验证边界
+
+- 默认搜索词库7000条，执行前限定到最多1000条候选；用户自定义词库仍按1000条上限校验。无自定义词库的desktop/mobile原生绑定已有回归
+- snapshot与daily/extra/punchcards/search共用flyout账号限制检查；BotScore警告先于任务动作停止，不能等到搜索阶段才发现
+- punchcard真实metadata保留search类型、活动次数与目标URL，执行默认claim关闭与搜索延期规则；动作ID、payload和当前页面在写journal前预检。缺ID不会把零提交误记为已尝试
+- action ID冲突检测覆盖同一chunk和不同chunk；已完成的extra分类在后续授权障碍或错误后保留；未来日期extra不执行
+- goal先打开选择对话框，确认手动radio与Next，再在Next提交前写journal；缺少控件不产生提交意图，可在修复后重新运行。不确定Next仍需只读确认，不能直接重放
+- APP daily/read改用一个最多11项的app-daily-journal.json，仅在新业务日开始写入时轮换，拒绝业务日期倒退。迁移会保留旧app-journal.json内当天的意图，不删除旧文件。120个业务日离线回归确认文件数量和当日项数有界
+- 多日APP promotion与onboarding/goal仍使用各自不可盲重放的持久journal；没有把跨日清理当成通用重试许可。其100项上限、无法自动解除未确认promotion意图仍需真实生命周期依据，不声称自动恢复已完成
+
+这些是本地假页面、假HTTP和真实入口子进程回归。CLI仍没有APP token/聊天授权桥，APP签到归因、真实浏览器/账户链路及剩余能力仍pending；未运行真实领取、登录、搜索、CAPTCHA或NAS调度。

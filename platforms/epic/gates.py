@@ -8,23 +8,25 @@ Bindings follow the pinned upstream selectors; live layouts remain unverified.
 
 from urllib.parse import urlsplit
 from .workflow import Paused
+from .browser_driver import clean_target
 
 
 def official_page(page):
-    parsed = urlsplit(page.url)
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname
-        not in {
-            "store.epicgames.com",
-            "www.epicgames.com",
-            "accounts.epicgames.com",
-        }
-        or parsed.username
-        or parsed.password
-        or parsed.port not in (None, 443)
+    clean_target(page.url, checkout=True)
+
+
+def current_container(page, obstacle):
+    """Use only the current driver-observed container, never arbitrary frames."""
+    payload = obstacle.payload if isinstance(obstacle.payload, dict) else {}
+    container = payload.get("_container", page)
+    if container is not page and not any(
+        container is frame for frame in getattr(page, "frames", [])
     ):
-        raise Paused("unexpected_origin")
+        raise Paused("gate_container_changed")
+    official_page(container)
+    if clean_target(container.url, checkout=True) != obstacle.target:
+        raise Paused("gate_target_changed")
+    return container
 
 
 async def unique_visible(locator):
@@ -51,14 +53,16 @@ class RememberedAccountHandler:
         self.account_identifier = account_identifier
 
     async def __call__(self, obstacle, *, timeout):
-        if obstacle.kind != "login" or obstacle.payload != {
-            "subtype": "remembered_account"
-        }:
+        if (
+            obstacle.kind != "login"
+            or not isinstance(obstacle.payload, dict)
+            or obstacle.payload.get("subtype") != "remembered_account"
+        ):
             raise Paused("wrong_login_handler")
-        official_page(self.page)
-        await unique_visible(self.page.get_by_text("Welcome back", exact=True))
+        page = current_container(self.page, obstacle)
+        await unique_visible(page.get_by_text("Welcome back", exact=True))
         account = await unique_visible(
-            self.page.get_by_text(self.account_identifier, exact=True)
+            page.get_by_text(self.account_identifier, exact=True)
         )
         await account.click(timeout=min(5000, int(timeout * 1000)))
         return {"requires_readback": True}
@@ -73,9 +77,9 @@ class AccountLinkHandler:
     async def __call__(self, obstacle, *, timeout):
         if obstacle.kind != "account_link":
             raise Paused("wrong_account_link_handler")
-        official_page(self.page)
+        page = current_container(self.page, obstacle)
         button = await unique_visible(
-            self.page.get_by_role("button", name="Done linking", exact=True)
+            page.get_by_role("button", name="Done linking", exact=True)
         )
         await button.click(timeout=min(5000, int(timeout * 1000)))
         return {"requires_readback": True}
@@ -99,12 +103,12 @@ class LicenseHandler:
     async def __call__(self, obstacle, *, timeout):
         if obstacle.kind != "terms":
             raise Paused("wrong_terms_handler")
-        official_page(self.page)
+        page = current_container(self.page, obstacle)
         # The privacy correction flow is a different agreement and form.
-        if "/correction/privacy-policy" in self.page.url:
+        if "/correction/privacy-policy" in page.url:
             raise Paused("privacy_correction_binding_pending")
-        await unique_visible(self.page.locator('label[for="agree"]'))
-        evidence = await self.verify_disclosure(self.page, obstacle, timeout=timeout)
+        await unique_visible(page.locator('label[for="agree"]'))
+        evidence = await self.verify_disclosure(page, obstacle, timeout=timeout)
         if (
             not isinstance(evidence, dict)
             or evidence.get("fingerprint") != obstacle.fingerprint
@@ -123,7 +127,7 @@ class LicenseHandler:
                 or parsed.password
             ):
                 raise Paused("agreement_link_invalid")
-        checkbox = self.page.locator("#agree")
+        checkbox = page.locator("#agree")
         if (
             await checkbox.count() != 1
             or await checkbox.get_attribute("type") != "checkbox"
@@ -132,7 +136,7 @@ class LicenseHandler:
         # check is idempotent: a pre-checked checkbox is not toggled off.
         await checkbox.check(timeout=min(5000, int(timeout * 1000)))
         button = await unique_visible(
-            self.page.get_by_role("button", name="Accept", exact=True)
+            page.get_by_role("button", name="Accept", exact=True)
         )
         if not await button.is_enabled():
             raise Paused("agreement_accept_disabled")

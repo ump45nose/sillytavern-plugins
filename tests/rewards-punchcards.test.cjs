@@ -198,3 +198,129 @@ test("real vendored parser through native fake-browser binding confirms parent",
   assert.equal(out.business.punchcards, "complete");
   assert.equal(posted, 1);
 });
+
+function nativeFixture({
+  metadata = {},
+  actionPresent = true,
+  restricted = false,
+  journal,
+} = {}) {
+  const parser = require("../platforms/rewards/parser_loader.cjs").loadParser();
+  let posted = 0;
+  const entries = new Map();
+  journal ||= {
+    has: (key) => entries.has(key),
+    mark: async (key, value) => entries.set(key, value),
+  };
+  const page = {
+    goto: async () => {},
+    waitForTimeout: async () => {},
+    evaluate: async (_fn, args) => {
+      if (args.method === "POST") {
+        posted++;
+        return { status: 200, text: "1:true" };
+      }
+      return {
+        status: 200,
+        text: actionPresent
+          ? `createServerReference("${"a".repeat(40)}",callServer,"reportActivity")`
+          : "no action IDs",
+      };
+    },
+  };
+  const deps = {
+    EARN: "https://rewards.bing.com/earn",
+    withBrowser: async (_c, _s, _o, work) => work({}, page),
+    guard: async () => {},
+    recordObstacle: () => {},
+    boundedHtml: async () =>
+      '<script src="/_next/static/chunks/fixture.js"></script><script>self.__next_f.push([1,' +
+      JSON.stringify(
+        "/earn/quest/" +
+          p.PARENT +
+          (posted ? " 1/1 tasks " : " 0/1 tasks ") +
+          JSON.stringify({ ...child, ...metadata, isCompleted: posted > 0 }),
+      ) +
+      "])</script>",
+    readFlyout: async () => ({
+      userInfo: { isRewardsUser: true },
+      flyoutResult: {
+        userStatus: { isRewardsUser: true },
+        userWarnings: restricted
+          ? [{ name: "Fraud_UserWarning_BotScore_UX" }]
+          : [],
+      },
+    }),
+  };
+  return {
+    journal,
+    entries,
+    posted: () => posted,
+    run: (options = {}) =>
+      p.run(null, {}, parser, { journal, ...options }, deps),
+  };
+}
+test("native metadata preserves search deferral and default manual claim gate", async () => {
+  for (const metadata of [
+    { promotionType: "search" },
+    { attributes: { type: "search" } },
+    { activityProgressMax: 3 },
+    { destinationUrl: "https://rewards.bing.com/redeem/sku/fixture" },
+  ]) {
+    const f = nativeFixture({ metadata });
+    await f.run();
+    assert.equal(f.posted(), 0);
+    assert.equal(f.entries.size, 0);
+  }
+  const allowed = nativeFixture({
+    metadata: { destinationUrl: "https://rewards.bing.com/redeem/sku/fixture" },
+  });
+  assert.equal(
+    (await allowed.run({ autoClaim: true })).business.punchcards,
+    "complete",
+  );
+  assert.equal(allowed.posted(), 1);
+});
+test("missing action or invalid offset leaves no intent and a later valid run can submit", async () => {
+  for (const options of [{ actionPresent: false }, { offset: 900 }]) {
+    const f = nativeFixture(options);
+    await f.run(options.offset ? { timezoneOffset: options.offset } : {});
+    assert.equal(f.posted(), 0);
+    assert.equal(f.entries.size, 0);
+    const valid = nativeFixture({ journal: f.journal });
+    assert.equal((await valid.run()).business.punchcards, "complete");
+    assert.equal(valid.posted(), 1);
+  }
+});
+test("native punchcard preflight stops a flyout restriction before journal or POST", async () => {
+  const f = nativeFixture({ restricted: true });
+  assert.equal((await f.run()).reason, "account_restricted");
+  assert.equal(f.posted(), 0);
+  assert.equal(f.entries.size, 0);
+});
+test("actual parser cannot hide conflicting action IDs within one chunk", async () => {
+  const parser = require("../platforms/rewards/parser_loader.cjs").loadParser();
+  for (const form of ["create", "register"]) {
+    const reference = (id) =>
+      form === "create"
+        ? `createServerReference("${id}",callServer,"reportActivity")`
+        : `registerServerReference(fn,"${id}","reportActivity")`;
+    await assert.rejects(
+      a.discover({}, parser, "static/chunks/fixture.js", async () => ({
+        status: 200,
+        text: reference("a".repeat(40)) + ";" + reference("b".repeat(40)),
+      })),
+      /ambiguous_action_id/,
+    );
+    const same = reference("a".repeat(40));
+    assert.equal(
+      (
+        await a.discover({}, parser, "static/chunks/fixture.js", async () => ({
+          status: 200,
+          text: same + ";" + same,
+        }))
+      ).reportActivity,
+      "a".repeat(40),
+    );
+  }
+});

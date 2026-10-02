@@ -7,6 +7,10 @@ of checkout submission. Real-site integration is still unverified.
 """
 
 import asyncio
+import hashlib
+import math
+import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 import re
 from urllib.parse import urlsplit
@@ -21,17 +25,33 @@ PROMOTIONS = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromot
 ALLOWED = {"store.epicgames.com", "www.epicgames.com", "accounts.epicgames.com"}
 
 
-def clean_target(url):
+def clean_target(url, *, checkout=False):
     p = urlsplit(url)
     if (
         p.scheme != "https"
-        or p.hostname not in ALLOWED
+        or not (
+            p.hostname in ALLOWED
+            or checkout
+            and p.hostname
+            and (p.hostname == "epicgames.com" or p.hostname.endswith(".epicgames.com"))
+        )
         or p.username
         or p.password
         or p.port not in (None, 443)
     ):
         raise Paused("unexpected_origin")
     return f"https://{p.hostname}{p.path}"
+
+
+def _is_playwright_timeout(error):
+    # The adapter has no eager browser dependency. Once a read-only browser
+    # operation fails, use the real class rather than matching exception names
+    # or messages (which could hide selector/protocol/authorization errors).
+    try:
+        from playwright.async_api import TimeoutError as BrowserTimeoutError
+    except ImportError:
+        return False
+    return isinstance(error, BrowserTimeoutError)
 
 
 class BrowserDriver:
@@ -54,6 +74,7 @@ class BrowserDriver:
         self.checkout_evidence = checkout_evidence
         self.cart_evidence = cart_evidence
         self.current_offer_ids = set()
+        self.observation_session = uuid.uuid4().hex
 
     async def _visible(self, locator):
         try:
@@ -100,9 +121,113 @@ class BrowserDriver:
                 raise
         clean_target(self.page.url)
 
+    async def _containers(self, phase):
+        containers = [self.page]
+        if phase not in {"checkout", "post_submit"}:
+            return containers
+        frames = [f for f in self.page.frames if f is not self.page.main_frame]
+        if len(frames) > 16:
+            raise Paused("observation_frames_ambiguous")
+        for frame in frames:
+            try:
+                clean_target(frame.url, checkout=True)
+            except Paused:
+                continue
+            # Ignore hidden stale checkout frames, never a visibility failure.
+            if await (await frame.frame_element()).is_visible():
+                containers.append(frame)
+        return containers
+
+    async def _captcha_evidence(self, container, *, timeout):
+        """Hash current visible pixels, not stable provider iframe URLs.
+
+        Bytes are transient, bounded and never saved. This also detects refreshes
+        implemented with canvas/blob images inside an unchanged iframe. A new
+        browser instance/container cannot reuse a previous approval.
+        """
+        selector = 'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
+        frames = container.locator(selector)
+        count = await frames.count()
+        if count > 32:
+            raise Paused("observation_controls_ambiguous")
+        visible = []
+        for index in range(count):
+            frame = frames.nth(index)
+            if await frame.is_visible():
+                visible.append(frame)
+        if not visible:
+            visible = [container.locator("body")]
+        if len(visible) > 4:
+            raise Paused("challenge_evidence_ambiguous")
+        digests = []
+        for surface in visible:
+            box = await surface.bounding_box()
+            if (
+                not box
+                or any(
+                    not isinstance(box.get(k), (int, float))
+                    or not math.isfinite(box[k])
+                    for k in ("width", "height")
+                )
+                or box["width"] <= 0
+                or box["height"] <= 0
+                or box["width"] * box["height"] > 1024 * 1024
+            ):
+                raise Paused("challenge_evidence_unavailable")
+            pixels = await surface.screenshot(
+                type="png", scale="css", timeout=min(5000, int(timeout * 1000))
+            )
+            if not isinstance(pixels, bytes) or not 0 < len(pixels) <= 4 * 1024 * 1024:
+                raise Paused("challenge_evidence_unavailable")
+            digests.append(hashlib.sha256(pixels).hexdigest())
+        return [self.observation_session, id(container), digests]
+
+    async def _ready(self, container, phase, text):
+        if phase == "session":
+            return await self._visible(
+                container.locator('egs-navigation[isloggedin="true"]')
+            )
+        if phase in {"product", "verification"}:
+            return await self._visible(
+                container.locator('[data-testid="purchase-cta-button"]')
+            )
+        if phase == "cart":
+            return any(
+                x in text for x in ("your cart is empty", "购物车为空")
+            ) or await self._visible(
+                container.locator('[data-testid="offer-card-layout-wrapper"]')
+            )
+        if phase in {"checkout", "post_submit"}:
+            controls = await self._checkout_controls()
+            return len(controls) == 1 and controls[0][0] is container
+        return False
+
     async def observe(self, phase, *, timeout):
-        target = clean_target(self.page.url)
-        text = (await self._text()).lower()
+        observations = []
+        ready = False
+        for container in await self._containers(phase):
+            state = await self._observe_container(container, phase, timeout=timeout)
+            if state is None:
+                ready = True
+            elif state.kind != "unknown":
+                observations.append(state)
+        if len(observations) > 1:
+            raise Paused("observation_containers_ambiguous")
+        if observations:
+            return observations[0]
+        if ready:
+            return None
+        return classify(
+            {},
+            phase=phase,
+            target=clean_target(self.page.url),
+            evidence_fingerprint=fingerprint("unconfirmed", phase),
+        )
+
+    async def _observe_container(self, container, phase, *, timeout):
+        target = clean_target(container.url, checkout=container is not self.page)
+        raw_text = await self._text(container)
+        text = raw_text.lower()
         signals = {}
         signals["rate_limited"] = any(
             x in text
@@ -120,18 +245,18 @@ class BrowserDriver:
             )
         )
         signals["new_terms"] = await self._visible(
-            self.page.locator('label[for="agree"]')
+            container.locator('label[for="agree"]')
         )
         signals["privacy_acceptance"] = "/correction/privacy-policy" in target
         signals["age_confirmation"] = bool(
             re.search(r"date of birth|verify your age|age verification", text)
         )
         signals["account_link"] = await self._visible(
-            self.page.get_by_role("button", name="Done linking", exact=True)
+            container.get_by_role("button", name="Done linking", exact=True)
         )
         signals["security_setting"] = "/id/login/mfa/add" in target
         signals["visible_captcha"] = await self._visible(
-            self.page.locator(
+            container.locator(
                 'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
             )
         ) or any(
@@ -146,24 +271,26 @@ class BrowserDriver:
             "/id/login/mfa" in target and not signals["security_setting"]
         )
         signals["login_required"] = await self._visible(
-            self.page.locator("#email,#password")
+            container.locator("#email,#password")
         )
         signals["remembered_account"] = "welcome back" in text and "/id/" in target
         signals["device_modal"] = "device not supported" in text
         # No generic overlay flag from an arbitrary Continue label.
-        signals["ready"] = not any(signals.values())
-        challenge_sources = []
-        for frame in self.page.frames[:16]:
-            source = getattr(frame, "url", "")
-            if "hcaptcha" in source or "challenges.cloudflare.com" in source:
-                challenge_sources.append(source)
+        signals["ready"] = not any(signals.values()) and await self._ready(
+            container, phase, text
+        )
+        challenge_evidence = (
+            await self._captcha_evidence(container, timeout=timeout)
+            if signals["visible_captcha"]
+            else None
+        )
         # Bind a grant to current visible content/challenge identity. Raw source
         # URLs/text remain local memory and are never written to checkpoint.
         digest = fingerprint(
             target,
             phase,
             sorted(k for k, v in signals.items() if v),
-            text
+            hashlib.sha256(raw_text.encode()).hexdigest()
             if any(
                 signals.get(k)
                 for k in (
@@ -175,11 +302,18 @@ class BrowserDriver:
                 )
             )
             else "",
-            challenge_sources,
+            self.observation_session,
+            id(container),
+            challenge_evidence,
         )
-        return classify(
+        state = classify(
             signals, phase=phase, target=target, evidence_fingerprint=digest
         )
+        if state is not None:
+            state = replace(
+                state, payload={**(state.payload or {}), "_container": container}
+            )
+        return state
 
     async def recover(self, obstacle, *, timeout):
         if obstacle.kind in {"delayed_result", "navigation_partial", "stale_locator"}:
@@ -232,7 +366,33 @@ class BrowserDriver:
 
     async def verify(self, offer, *, timeout):
         await self._goto(offer.url, timeout)
-        button = self.page.locator('[data-testid="purchase-cta-button"]').first
+        return await self._ownership(self.page, offer, timeout=timeout)
+
+    async def verify_readonly(self, offer, *, timeout):
+        """Never navigate away from a pending checkout/challenge for readback."""
+        page = await self.context.new_page()
+        try:
+            clean_target(offer.url)
+            await page.goto(
+                offer.url,
+                wait_until="domcontentloaded",
+                timeout=min(20000, int(timeout * 1000)),
+            )
+            return await self._ownership(page, offer, timeout=timeout)
+        except Exception as error:
+            if _is_playwright_timeout(error):
+                # Playwright's TimeoutError is not Python's TimeoutError. Only
+                # this read-only navigation/ownership boundary is normalized;
+                # creation/cleanup failures and all other browser errors escape.
+                raise TimeoutError("readonly_browser_timeout") from error
+            raise
+        finally:
+            await page.close()
+
+    async def _ownership(self, page, offer, *, timeout):
+        if clean_target(page.url) != clean_target(offer.url):
+            return "unknown"
+        button = page.locator('[data-testid="purchase-cta-button"]').first
         if not await self._visible(button):
             return "unknown"
         text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip()

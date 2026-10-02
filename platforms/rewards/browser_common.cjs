@@ -8,6 +8,68 @@ const FLYOUT =
 const MAX_STATE = 1024 * 1024,
   MAX_HTML = 2 * 1024 * 1024;
 const obstacles = require("./obstacles.cjs");
+function restricted(raw) {
+  const counters = raw?.flyoutResult?.userStatus?.counters;
+  const attrs = raw?.userInfo?.profile?.attributes;
+  const sum = (rows) => {
+    if (!Array.isArray(rows)) return null;
+    let value = 0;
+    for (const row of rows) {
+      const n = row?.pointProgressMax;
+      if (
+        n === null ||
+        n === undefined ||
+        typeof n === "boolean" ||
+        (typeof n === "string" && !n.trim()) ||
+        !Number.isFinite(Number(n)) ||
+        Number(n) < 0
+      )
+        return null;
+      value += Number(n);
+    }
+    return value;
+  };
+  const pc = sum(counters?.PCSearch ?? counters?.pcSearch);
+  return (
+    String(attrs?.rbs ?? "").trim() === "1" &&
+    Boolean(attrs?.SerpBotScore_upd) &&
+    Boolean(attrs?.AdsBotScore_upd) &&
+    sum(counters?.ActivityAndQuiz ?? counters?.activityAndQuiz) === 0 &&
+    pc !== null &&
+    sum(counters?.DailyPoint ?? counters?.dailyPoint) === pc
+  );
+}
+function assertAccountAvailable(raw, expectedRegion = null) {
+  if (
+    raw?.isError ||
+    raw?.userInfo?.isRewardsUser !== true ||
+    raw?.flyoutResult?.userStatus?.isRewardsUser !== true
+  )
+    throw Error("authenticated_inventory_unavailable");
+  const warnings = [raw.userWarnings, raw.flyoutResult.userWarnings];
+  if (
+    restricted(raw) ||
+    warnings.some(
+      (rows) =>
+        Array.isArray(rows) &&
+        rows.some((row) => row?.name === "Fraud_UserWarning_BotScore_UX"),
+    )
+  )
+    throw new obstacles.Obstacle({
+      url: DASHBOARD,
+      flags: { botWarning: true },
+    });
+  const country = raw.userInfo?.profile?.attributes?.country;
+  if (
+    expectedRegion &&
+    (!country || String(country).toUpperCase() !== expectedRegion.toUpperCase())
+  )
+    throw new obstacles.Obstacle({
+      url: DASHBOARD,
+      flags: { regionMismatch: true },
+    });
+  return raw;
+}
 class HumanRequired extends obstacles.Obstacle {
   constructor() {
     super({
@@ -272,6 +334,8 @@ async function readFlyout(context, existingPage = null) {
   }
 }
 module.exports = {
+  restricted,
+  assertAccountAvailable,
   contextOptions,
   recordObstacle: obstacles.record,
   DASHBOARD,

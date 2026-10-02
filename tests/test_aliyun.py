@@ -151,5 +151,177 @@ class AliyunTests(unittest.TestCase):
         self.assertFalse(client.session.trust_env)
 
 
+# Metadata fixture from the hash-pinned external provider, not its implementation.
+PINNED_CODES = [
+    "",
+    "ecs",
+    "computenest",
+    "yitian",
+    "wuying",
+    "cloudnative",
+    "storage",
+    "database",
+    "polardb",
+    "modelscope",
+    "vision",
+    "dns",
+    "iot",
+    "aliyun_linux",
+    "tongyi",
+]
+
+
+class AliyunRecoveryTests(unittest.TestCase):
+    def test_all_15_communities_including_default_are_required(self):
+        from common.model import validate
+
+        client = FakeClient()
+        original = client.request
+        seen = []
+
+        def request(method, url, **kwargs):
+            if url.endswith("getUserSpaceSignInDetail"):
+                seen.append(kwargs["params"]["excode"])
+                if kwargs["params"]["excode"] == "ecs":
+                    raise TimeoutError("fixture")
+            return original(method, url, **kwargs)
+
+        client.request = request
+        out = sign_only(
+            CTX, client, [{"code": c} for c in PINNED_CODES], API, lambda _: None
+        )
+        self.assertEqual(seen, PINNED_CODES)
+        self.assertEqual(out["business"]["checkin"], "unknown")
+        self.assertEqual(out["business"]["community_0_checkin"], "complete")
+        self.assertEqual(out["business"]["community_1_checkin"], "unknown")
+        self.assertEqual(len(out["business"]), 32)
+        validate(out, CTX)
+
+    def test_later_detail_error_preserves_prior_facts_without_aggregate_completion(
+        self,
+    ):
+        import json
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient()
+            original = client.request
+
+            def request(method, url, **kwargs):
+                if (
+                    url.endswith("getUserSpaceSignInDetail")
+                    and kwargs["params"]["excode"] == "two"
+                ):
+                    raise TimeoutError("fixture")
+                return original(method, url, **kwargs)
+
+            client.request = request
+            groups = [{"code": "one"}, {"code": "two"}]
+            out = sign_only(CTX, client, groups, API, lambda _: None, directory)
+            self.assertEqual(out["business"]["checkin"], "unknown")
+            state = json.loads((Path(directory) / "http-actions.json").read_text())
+            self.assertEqual(state["groups"]["one"]["sign"], "complete")
+            self.assertEqual(state["groups"]["two"]["sign"], "unknown")
+            restored = FakeClient()
+            out = sign_only(CTX, restored, groups, API, lambda _: None, directory)
+            self.assertEqual(out["business"]["checkin"], "complete")
+            self.assertFalse(any(u.endswith("actionLog") for _, u in restored.calls))
+            self.assertEqual(
+                sum(u.endswith("receiveSignInBonus") for _, u in restored.calls), 1
+            )
+
+    def test_write_timeout_is_read_back_and_not_replayed_next_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient(signed=False)
+            original = client.request
+
+            def request(method, url, **kwargs):
+                if url.endswith("actionLog"):
+                    client.calls.append((method, url))
+                    client.signed = True
+                    raise TimeoutError("fixture")
+                return original(method, url, **kwargs)
+
+            client.request = request
+            out = sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(out["business"]["checkin"], "complete")
+            # A stale read on restart must not override the persisted positive receipt.
+            client.signed = False
+            sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(sum(u.endswith("actionLog") for _, u in client.calls), 1)
+
+    def test_unresolved_sign_intent_only_reads_on_subsequent_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient(signed=False)
+            original = client.request
+
+            def request(method, url, **kwargs):
+                if url.endswith("actionLog"):
+                    client.calls.append((method, url))
+                    raise TimeoutError("fixture")
+                return original(method, url, **kwargs)
+
+            client.request = request
+            for _ in range(2):
+                out = sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+                self.assertEqual(out["business"]["checkin"], "unknown")
+            self.assertEqual(sum(u.endswith("actionLog") for _, u in client.calls), 1)
+
+    def test_unresolved_bonus_does_not_repeat_or_infer_receipt_from_false_eligibility(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient()
+            original = client.request
+            eligible = True
+
+            def request(method, url, **kwargs):
+                if url.endswith("receiveSignInBonus"):
+                    client.calls.append((method, url))
+                    raise TimeoutError("fixture")
+                if url.endswith("assessSignInBonusQualification"):
+                    return {"code": 200, "data": eligible}
+                return original(method, url, **kwargs)
+
+            client.request = request
+            sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            eligible = False
+            out = sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(
+                sum(u.endswith("receiveSignInBonus") for _, u in client.calls), 1
+            )
+            self.assertEqual(out["business"]["reward"], "unknown")
+            self.assertEqual(out["business"]["checkin"], "complete")
+
+    def test_pending_score_timeout_is_read_back_before_future_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient(pending=2)
+            original = client.request
+
+            def request(method, url, **kwargs):
+                if url.endswith("receiveAllPendingScore"):
+                    client.calls.append((method, url))
+                    raise TimeoutError("fixture")
+                return original(method, url, **kwargs)
+
+            client.request = request
+            sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(
+                sum(u.endswith("receiveAllPendingScore") for _, u in client.calls), 1
+            )
+            client.pending = 0
+            out = sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(out["business"]["reward"], "complete")
+
+    def test_corrupt_journal_prevents_requests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "http-actions.json").write_text("broken")
+            client = FakeClient()
+            out = sign_only(CTX, client, GROUPS, API, lambda _: None, directory)
+            self.assertEqual(out["reason"], "invalid_action_state")
+            self.assertEqual(client.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

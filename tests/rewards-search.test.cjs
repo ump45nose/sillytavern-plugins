@@ -219,3 +219,55 @@ test("explicit configured region mismatch stops rather than changing proxy", () 
   };
   assert.throws(() => search.quotas(raw, "desktop", "GB"), /region_mismatch/);
 });
+
+test("native desktop and mobile bindings use the bounded built-in query pool by default", async () => {
+  const pool = require("../platforms/rewards/vendor/rewards-parser/src/functions/search-queries.json");
+  assert.ok(
+    pool.length > 1000,
+    "fixture must exercise the original oversized default",
+  );
+  for (const device of ["desktop", "mobile"]) {
+    let presses = 0;
+    const page = {
+      goto: async () => {},
+      waitForLoadState: async () => {},
+      waitForTimeout: async () => {},
+      locator: () => ({
+        waitFor: async () => {},
+        fill: async () => {},
+        press: async () => {
+          presses++;
+        },
+      }),
+    };
+    const deps = {
+      withBrowser: async (_c, _s, _o, work) => work({}, page),
+      guard: async () => {},
+      readFlyout: async () => ({
+        userInfo: { isRewardsUser: true },
+        flyoutResult: {
+          userStatus: {
+            isRewardsUser: true,
+            counters: {
+              [device === "mobile" ? "MobileSearch" : "PCSearch"]: [
+                { pointProgress: presses * 3, pointProgressMax: 3 },
+              ],
+            },
+          },
+        },
+      }),
+    };
+    const out = await search.run(
+      null,
+      {},
+      device,
+      {
+        search: { delayMs: 0 },
+        contextOptions: { isMobile: device === "mobile", userAgent: "fixture" },
+      },
+      deps,
+    );
+    assert.equal(out.business[device + "_search"], "complete");
+    assert.equal(presses, 1);
+  }
+});

@@ -2,6 +2,84 @@
 // Protocol adapted from Rewards v4.3.2 (GPL-3.0-or-later):
 // BrowserFunc.getAppDashboardData and activities/app/{DailyCheckIn,AppReward,ReadToEarn}.
 const { randomUUID, randomBytes } = require("node:crypto");
+const fs = require("node:fs"),
+  path = require("node:path");
+const { boundedJson } = require("./browser_common.cjs");
+// Daily/read actions expire with their business day. Keep just one bounded day;
+// multi-day promotions continue to use their separate reconciliation journal.
+function dailyJournal(stateDir, businessDate) {
+  if (
+    typeof businessDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(businessDate) ||
+    !Number.isFinite(Date.parse(businessDate)) ||
+    new Date(businessDate).toISOString().slice(0, 10) !== businessDate
+  )
+    throw Error("business_date_invalid");
+  const keys = [
+    "daily_" + businessDate,
+    ...Array.from({ length: 10 }, (_, i) => `read_${businessDate}_${i}`),
+  ];
+  const file = path.join(stateDir, "app-daily-journal.json");
+  let entries = {};
+  if (fs.existsSync(file)) {
+    const saved = boundedJson(file, 65536);
+    if (
+      saved?.schema_version !== 1 ||
+      typeof saved.business_date !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(saved.business_date) ||
+      !saved.entries ||
+      Array.isArray(saved.entries) ||
+      typeof saved.entries !== "object" ||
+      Object.keys(saved.entries).length > 11 ||
+      Object.values(saved.entries).some(
+        (v) => !["attempted", "confirmed"].includes(v),
+      )
+    )
+      throw Error("journal_invalid");
+    if (saved.business_date > businessDate)
+      throw Error("business_date_regressed");
+    if (saved.business_date === businessDate) {
+      if (Object.keys(saved.entries).some((key) => !keys.includes(key)))
+        throw Error("journal_invalid");
+      entries = saved.entries;
+    }
+  }
+  // Preserve existing current-day intent during migration, without altering the
+  // old promotion/uncertain-action journal or importing obsolete day keys.
+  const legacy = path.join(stateDir, "app-journal.json");
+  if (fs.existsSync(legacy)) {
+    const saved = boundedJson(legacy, 65536);
+    if (
+      !saved ||
+      Array.isArray(saved) ||
+      typeof saved !== "object" ||
+      Object.keys(saved).length > 100 ||
+      Object.values(saved).some((v) => !["attempted", "confirmed"].includes(v))
+    )
+      throw Error("journal_invalid");
+    for (const key of keys)
+      if (Object.hasOwn(saved, key)) entries[key] = saved[key];
+  }
+  return {
+    has: (key) => Object.hasOwn(entries, key),
+    async mark(key, status) {
+      if (!keys.includes(key) || !["attempted", "confirmed"].includes(status))
+        throw Error("journal_invalid");
+      entries[key] = status;
+      const temporary = file + ".tmp";
+      fs.writeFileSync(
+        temporary,
+        JSON.stringify({
+          schema_version: 1,
+          business_date: businessDate,
+          entries,
+        }),
+        { mode: 0o600 },
+      );
+      fs.renameSync(temporary, file);
+    },
+  };
+}
 const ORIGIN = "https://prod.rewardsplatform.microsoft.com";
 const UA =
   "Bing/32.5.431027001 (com.microsoft.bing; build:431027001; iOS 17.6.1) Alamofire/5.10.2";
@@ -245,6 +323,7 @@ async function submitDaily(client, journal, businessDate) {
   };
 }
 module.exports = {
+  dailyJournal,
   createClient,
   promotions,
   runPromotions,
