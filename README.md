@@ -62,4 +62,4 @@ uv run personal-crm backup /safe/path/personal-crm.db
 
 ## 插件展示与场景说明
 
-本仓库同时维护 **Personal CRM · 联系人与关系管理** 的名称、场景描述和图标。插件包位于仓库根目录，接入和维护说明见 [插件说明](docs/plugin.md)，图标来源见 [图标来源](assets/plugin/SOURCES.md)。
+本仓库同时维护 **Personal CRM** 的名称、场景描述和图标。插件包位于仓库根目录，接入和维护说明见 [插件说明](docs/plugin.md)，图标来源见 [图标来源](assets/plugin/SOURCES.md)。
