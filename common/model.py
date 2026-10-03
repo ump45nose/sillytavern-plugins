@@ -4,20 +4,23 @@ import json
 import math
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
+from .details import validate_details
 
 MAX_RESULT = 65536
 STATUSES = {"complete", "incomplete", "unknown", "not_applicable", "blocked"}
 EXECUTIONS = {"ok", "failed", "timeout", "busy"}
 
 
-def result(context, execution="failed", reason="unknown", business=None):
+def result(context, execution="failed", reason="unknown", business=None, details=None):
     return {
         "schema_version": 1,
         **{k: context[k] for k in ("run_id", "platform", "account", "business_date")},
         "execution_status": execution,
         "reason": reason,
         "business": business or {"checkin": "unknown", "reward": "unknown"},
+        "details": validate_details(details or {"metrics": {}, "items": []}),
     }
 
 
@@ -49,9 +52,19 @@ def validate(value, context):
         "execution_status",
         "reason",
         "business",
+        "details", "started_at", "finished_at", "duration_ms",
     }
     if set(value) - allowed:
         raise ValueError("unexpected_result_fields")
+    if "details" in value:
+        validate_details(value["details"])
+    for key in ("started_at", "finished_at"):
+        if key in value and (not isinstance(value[key], str) or
+                             datetime.fromisoformat(value[key]).tzinfo is None):
+            raise ValueError("invalid_result_time")
+    if "duration_ms" in value and (type(value["duration_ms"]) is not int or
+                                    not 0 <= value["duration_ms"] <= 1e12):
+        raise ValueError("invalid_result_duration")
     return dict(value)
 
 

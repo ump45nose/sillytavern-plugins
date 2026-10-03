@@ -34,3 +34,7 @@ tncode 算法按需加载，图片仅在浏览器内分析，不落盘。最多�
 `sign-intent.json` 区分请求、验证码、最终提交。验证码成功后先查业务，再点击唯一提交控件一次；最终提交不明确时只读恢复。日状态只存账号代号和动作事实。奖励/连续天数等数字写本次 `laowang-status.json`，不把无法读取的奖励额误判为签到失败。
 
 来源为 [laowang-checkin](../../upstream/laowang-checkin/)，MIT；具体回收与结果协议使用 `common/`，没有其他平台依赖。
+
+## 统一结果
+
+通用 JSON 补充运行起止时间、耗时及 `details.metrics/items`。数值未知时为 null；已签到与奖励已到账分别判断。字段与各平台事实边界见 [结果契约](../../docs/RESULTS.md)。

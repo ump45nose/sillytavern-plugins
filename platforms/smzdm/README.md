@@ -25,3 +25,7 @@ python3 platforms/smzdm/run.py --runtime-root /absolute/private/runtime --execut
 ```
 
 2026-10-03 NAS 已确认今日签到；奖励查询返回无法确认为到账的数据，因此保留 reward=unknown，签到确认不会丢失。调度与通知由调用方负责。
+
+## 统一结果
+
+通用 JSON 补充运行起止时间、耗时及 `details.metrics/items`。数值未知时为 null；已签到与奖励已到账分别判断。字段与各平台事实边界见 [结果契约](../../docs/RESULTS.md)。

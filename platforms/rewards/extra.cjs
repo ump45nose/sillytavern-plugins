@@ -141,6 +141,7 @@ function plan(offers, metadata) {
 }
 async function run(chromium, state, parser, options = {}, deps = common) {
   const business = { social: "unknown", explore: "unknown", goal: "unknown" };
+  let confirmedDetails;
   try {
     return await deps.withBrowser(
       chromium,
@@ -215,6 +216,13 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           const tmp = file + ".tmp";
           fs.writeFileSync(tmp, JSON.stringify(safe), {mode: 0o600}); fs.renameSync(tmp, file);
         }
+        function deliveryDetails() {
+          return {metrics: {}, items: outcomes.slice(0,100).map(o => ({
+            id: String(o.offerId).slice(0,128),
+            name: String(o.title || o.metadata?.title || o.offerId).replace(/[\x00-\x1f]/g, " ").slice(0,200),
+            status: o.status, reason: o.reason === "eligible" ? "not_yet_confirmed" : o.reason,
+          }))};
+        }
         function updateBusiness() {
           for (const key of Object.keys(business)) {
             const rows = outcomes.filter((o) => o.kind === key);
@@ -231,6 +239,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           Object.assign(outcomes.find((o) => o.offerId === job.offerId), {status, reason});
           updateBusiness();
           saveStatus();
+          confirmedDetails = deliveryDetails();
         }
         updateBusiness();
         for (const job of jobs) {
@@ -369,6 +378,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
             ? "goal_requires_manual_action"
             : "extra_readback_finished",
           business,
+          details: deliveryDetails(),
         };
       },
     );
@@ -385,6 +395,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
         ? error.message
         : error.details?.code || "extra_unconfirmed",
       business,
+      details: confirmedDetails,
     };
   }
 }
@@ -426,7 +437,7 @@ async function main() {
       business: { extra: "unknown" },
     };
   }
-  publish(out.execution, out.reason, out.business);
+  publish(out.execution, out.reason, out.business, out.details);
 }
 if (require.main === module) main();
 module.exports = { kind, allowed, plan, run, QUERIES };

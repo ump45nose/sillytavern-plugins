@@ -68,8 +68,8 @@ function journal(directory, account, date, confirmedPath) {
       ]);
       if (
         !old ||
-        Object.keys(old).sort().join() !==
-          "account,business,business_date,execution_status,platform,reason,run_id,schema_version" ||
+        Object.keys(old).some(k => !["account","business","business_date","execution_status",
+          "platform","reason","run_id","schema_version","details","started_at","finished_at","duration_ms"].includes(k)) ||
         old.schema_version !== 1 ||
         old.platform !== "smzdm" ||
         old.account !== account ||
@@ -88,6 +88,7 @@ function journal(directory, account, date, confirmedPath) {
         )
       )
         throw Error("invalid_previous_result");
+      if (old.details) require("../../common/details.cjs").validateDetails(old.details);
       if (old.business_date === date) {
         let migrated = false;
         for (const [source, target] of [

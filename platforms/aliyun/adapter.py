@@ -14,6 +14,7 @@ import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.model import result, atomic_json
+from common.details import metric, number
 from platforms.aliyun.state import Journal
 
 SOURCE_SHA256 = "286563810a780f06edaa0eea2dd0633480b403d6634ab3357d0890df77b696c3"
@@ -48,6 +49,7 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
     had_error = False
     score_known = False
     pending_confirmed = False
+    score_before = score_after = pending_after = None
 
     def finish(reason=None):
         signs = [journal.get(code, "sign") for code in codes]
@@ -83,13 +85,19 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
             if success
             else reason or ("provider_error" if had_error else "business_unconfirmed"),
             business,
+            {"metrics": {
+                "balance": metric("points", score_after, before=score_before, after=score_after,
+                    delta=score_after - score_before if score_before is not None and score_after is not None else None),
+                "pending_points": metric("points", pending_after),
+            }, "items": []},
         )
 
     try:
         auth = client.ensure_session()
         if not isinstance(auth, dict) or auth.get("ok") is not True:
             return finish("authentication_invalid")
-        if client.get_user_score() is None:
+        score_before = number(client.get_user_score())
+        if score_before is None:
             return finish("score_unconfirmed")
     except Exception:
         return finish("provider_error")
@@ -198,6 +206,7 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
             had_error = True
     try:
         pending = client.get_pending_score()
+        pending_after = number(pending)
         if pending == 0 and pending is not None:
             journal.set_pending(
                 "complete"
@@ -232,7 +241,10 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
             # Successful earlier claims are facts, but do not establish today's
             # currently unknown pending balance. Keep the aggregate uncertain.
             return finish("provider_error" if had_error else "business_unconfirmed")
-        score_known = client.get_user_score() is not None
+        score_after = number(client.get_user_score())
+        score_known = score_after is not None
+        if pending_confirmed:
+            pending_after = number(client.get_pending_score())
     except Exception:
         had_error = True
     return finish()

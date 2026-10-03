@@ -3,6 +3,7 @@
 const common = require("./browser_common.cjs");
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
+const {metric} = require("../../common/details.cjs");
 const LABEL = /^(Daily activit(?:y|ies)|Daily Set|每日活动)$/i;
 const DASHBOARD = "https://rewards.bing.com/dashboard";
 const DAILY_SELECTOR = '[role="progressbar"][aria-label="Daily Set" i],'+
@@ -59,11 +60,12 @@ async function section(page) {
   await page.waitForTimeout(1000);
   return control.locator("xpath=ancestor::section[1]");
 }
-function outcome(complete, reason) {
+function outcome(complete, reason, observed = null) {
   return {
     execution: complete ? "ok" : "failed",
     reason,
     business: { daily: complete ? "complete" : "unknown" },
+    details: {metrics: {daily: metric("count", observed?.current, observed?.max)}, items: []},
   };
 }
 async function run(chromium, storageState, options = {}, deps = common) {
@@ -81,7 +83,7 @@ async function run(chromium, storageState, options = {}, deps = common) {
         let after = await progress(page);
         if (!after) return outcome(false, "daily_progress_unavailable");
         if (after.current >= after.max)
-          return outcome(true, "daily_already_complete");
+          return outcome(true, "daily_already_complete", after);
         common.assertAccountAvailable(
           await deps.readFlyout(context),
           options.region,
@@ -140,9 +142,9 @@ async function run(chromium, storageState, options = {}, deps = common) {
             if (popup) await popup.close();
           }
           if (after.current >= after.max)
-            return outcome(true, "daily_complete");
+            return outcome(true, "daily_complete", after);
         }
-        return outcome(false, "daily_activity_not_credited");
+        return outcome(false, "daily_activity_not_credited", after);
       },
     );
   } catch (error) {
@@ -196,7 +198,7 @@ async function main() {
   } catch {
     output = outcome(false, "dependency_session_or_browser_unavailable");
   }
-  return publish(output.execution, output.reason, output.business);
+  return publish(output.execution, output.reason, output.business, output.details);
 }
 module.exports = { parseProgress, progress, allowedCard, run, loadState };
 if (require.main === module)

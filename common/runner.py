@@ -2,13 +2,14 @@
 
 import argparse
 from contextlib import ExitStack
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import uuid
 from zoneinfo import ZoneInfo
 from .locks import Lease, Busy
@@ -22,6 +23,12 @@ EXIT = {"ok": 0, "failed": 1, "timeout": 124, "busy": 75}
 
 
 def run(task: Task):
+    started_at, started = datetime.now(timezone.utc).isoformat(), time.monotonic()
+    def stamp(value):
+        value.setdefault("started_at", started_at)
+        value.setdefault("finished_at", datetime.now(timezone.utc).isoformat())
+        value.setdefault("duration_ms", round((time.monotonic() - started) * 1000))
+        return value
     platform = task.platform
     os.umask(0o077)
     p = argparse.ArgumentParser(
@@ -167,7 +174,7 @@ def run(task: Task):
                     )
             # Latest is serialized by the same account lock; no append-only unbounded ledger.
             if a.execute:
-                atomic_json(latest_dir / "latest.json", output)
+                atomic_json(latest_dir / "latest.json", stamp(output))
                 if output["business"].get("checkin") == "complete":
                     atomic_json(latest_dir / "last-confirmed.json", output)
     except Busy:
@@ -179,6 +186,7 @@ def run(task: Task):
     # Storage failure must not suppress the scheduler's stdout result. Preserve
     # business evidence even if an artifact could not be persisted.
     try:
+        stamp(output)
         if run_dir is not None:
             atomic_json(run_dir / "result.json", output)
     except (ValueError, OSError):

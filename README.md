@@ -15,7 +15,7 @@
 | Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 每日活动、桌面搜索、APP 签到/活动确认；探索必应仍在验收 |
 | Epic 免费游戏 | [Epic](platforms/epic/README.md) | 当前免费游戏已在库，原生轮询确认；新订单待验证 |
 
-最新证据见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md)。旧容器和调度尚未切换，不能据此删除青龙或旧仓库。京东和中国移动不在当前六个平台中。
+最新证据见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 和 [生产迁移记录](docs/MIGRATION_2026-10-03.md)。生产启动已迁至 Hermes no-agent cron，六条旧青龙任务已停用。Epic 新订单与 Rewards 未确认项保留为使用中的待完善能力。京东和中国移动不在当前六个平台中。
 
 ## 结构
 
@@ -44,7 +44,7 @@ python3 platforms/smzdm/run.py --runtime-root /absolute/private/benefits-data --
 
 ## 结果契约
 
-标准输出是一条 JSON，同时原子保存 `runs/<run-id>/result.json` 和 `results/<platform>/<account>/latest.json`。Rewards 按模式分别保存 latest。包含 run ID、平台、账号代号、业务日期、执行状态、原因和业务状态；Hermes 可直接读取，不需要通知 SDK。
+标准输出是一条 JSON，同时原子保存 `runs/<run-id>/result.json` 和 `results/<platform>/<account>/latest.json`。Rewards 按模式分别保存 latest。包含 run ID、平台、账号代号、业务日期、起止时间、耗时、执行状态、原因和业务状态；`details.metrics` 交付进度/余额变化/奖励/数量，`details.items` 交付任务与游戏明细。未核实数值为 null，不能按 0 处理。Hermes 可直接读取，不需要通知 SDK。完整字段见 [结果契约](docs/RESULTS.md)。
 
 | 退出码 | 含义 |
 |---|---|
@@ -62,4 +62,4 @@ python3 platforms/smzdm/run.py --runtime-root /absolute/private/benefits-data --
 
 Linux subreaper/pidfd 负责一次性启动器的后代回收；回收无法确认时阻止下一次浏览器重叠运行。只读检查及恢复说明见 [RUNTIME_RECOVERY](docs/RUNTIME_RECOVERY.md)。日志每次最多 1 MiB，结果最多 64 KiB，新文件默认 0600、目录 0700。日志脱敏不能替代对未知凭据格式的检查；通用运行历史没有自动删除策略。
 
-这里只记录平台结果。旧调度切换、新入口上线与旧部署清理由外部运维完成：先停对应旧任务，再由 Hermes 调用新入口，验证后清理，避免双跑。依赖边界和许可证见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。
+这里只记录平台结果。Hermes 的实际 cron、私有凭据配置和日报读取器维护在仓库外，切换按平台停旧任务再启新入口，避免双跑。依赖边界和许可证见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。

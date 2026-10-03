@@ -107,7 +107,10 @@ def parse_catalog(raw, *, now):
                 + "/"
                 + quote(slug.strip("/"), safe="/-_.")
             )
-            offers.append(Offer(identity, url, True))
+            title = row.get("title")
+            title = title if isinstance(title, str) else ""
+            title = "".join(c for c in title if ord(c) >= 32)[:200]
+            offers.append(Offer(identity, url, True, title))
             seen.add(identity)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError):
             uncertain = True

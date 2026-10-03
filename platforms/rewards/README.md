@@ -1,6 +1,6 @@
 # Microsoft Rewards
 
-按启用清单顺序执行一次账号任务，阶段之间关闭浏览器，最后输出通用 JSON 和本次 `rewards-report.json`。Hermes 决定何时运行、如何汇总和推送。
+按启用清单顺序执行一次账号任务，阶段之间关闭浏览器，最后输出通用 JSON 和本次 `rewards-report.json`。Hermes 决定何时运行、如何汇总和推送。统一结果补充进度、余额变化、锁定数量和未确认任务明细，见 [结果契约](../../docs/RESULTS.md)；不把余额差当全天积分收入。
 
 ## 安装和账号状态
 

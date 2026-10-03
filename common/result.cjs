@@ -1,7 +1,8 @@
 "use strict";
 const fs = require("node:fs"),
   path = require("node:path");
-function publish(execution, reason, business) {
+const {validateDetails} = require("./details.cjs");
+function publish(execution, reason, business, details = {metrics: {}, items: []}) {
   const result = {
     schema_version: 1,
     run_id: process.env.BENEFITS_RUN_ID,
@@ -11,6 +12,7 @@ function publish(execution, reason, business) {
     execution_status: execution,
     reason,
     business,
+    details: validateDetails(details),
   };
   const destination = process.env.BENEFITS_RESULT_PATH;
   const temp = destination + ".tmp-" + process.pid;

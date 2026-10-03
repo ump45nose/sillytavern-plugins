@@ -2,6 +2,7 @@
 // Source and MIT attribution retained in upstream/laowang-checkin.
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
+const {metric} = require("../../common/details.cjs");
 const challenge = require("./challenge.cjs");
 const { createIntent } = require("./intent.cjs");
 const URL = "https://laowang.vip/plugin.php?id=k_misign:sign";
@@ -306,7 +307,11 @@ async function main() {
     );
     fs.writeFileSync(file, JSON.stringify(r.details), { mode: 0o600 });
   }
-  publish(r.execution, r.reason, { checkin: r.checkin });
+  publish(r.execution, r.reason, { checkin: r.checkin }, {metrics: {
+    reward: metric("points", r.details?.reward),
+    streak: metric("days", r.details?.streak),
+    total_days: metric("days", r.details?.days),
+  }, items: []});
 }
 if (require.main === module) main();
 module.exports = { run, readStatus };

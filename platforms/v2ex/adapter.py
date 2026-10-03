@@ -6,6 +6,17 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.model import result, atomic_json
+from common.details import metric
+import re
+
+
+def delivery_details(rows):
+    fields = {r.get("name"): str(r.get("value", "")) for r in rows if isinstance(r, dict)}
+    streak = re.fullmatch(r"(?:已连续签到\s*)?(\d{1,6})天", fields.get("签到天数", "").strip())
+    # The provider's legacy balance column is not a verified unit/value contract.
+    # Do not reinterpret that column as the reward or invent an earned amount.
+    return {"metrics": {"streak": metric("days", int(streak[1]) if streak else None),
+                        "reward": metric("coins")}, "items": []}
 from platforms.v2ex.state import Journal
 
 
@@ -48,8 +59,7 @@ def execute(
             "reward": "complete" if complete else "unknown",
         }
 
-    if journal.status == "complete":
-        return result(context, "ok", "reward_confirmed", confirmed())
+    already_complete = journal.status == "complete"
     try:
         with session_factory() as session:
             session.trust_env = False
@@ -77,7 +87,7 @@ def execute(
             try:
                 rows = provider.sign(
                     session,
-                    read_only=journal.status == "pending",
+                    read_only=already_complete or journal.status == "pending",
                     before_write=before_write,
                     on_balance=on_balance,
                 )
@@ -96,9 +106,12 @@ def execute(
             "ok" if success else "failed",
             "reward_confirmed" if success else "reward_not_confirmed",
             confirmed(),
+            delivery_details(rows),
         )
     except Exception:
-        return result(context, reason="provider_error", business=confirmed())
+        return result(context, "ok" if already_complete else "failed",
+                      "reward_confirmed_details_unavailable" if already_complete else "provider_error",
+                      confirmed(), {"metrics": {"streak": metric("days"), "reward": metric("coins")}, "items": []})
 
 
 def bounded_session(base):

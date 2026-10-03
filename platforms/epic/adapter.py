@@ -8,6 +8,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.model import result, atomic_json
+from common.details import metric
+
+
+def delivery_details(value):
+    items = []
+    for offer in value.offers[:100]:
+        reason = ("newly_claimed" if offer.id in value.confirmed else
+                  "already_owned" if offer.id in value.already_owned else "ownership_unconfirmed")
+        items.append({"id": offer.id, "name": offer.title or offer.id, "url": offer.url,
+                      "status": "unknown" if reason == "ownership_unconfirmed" else "complete",
+                      "reason": reason})
+    # Counts refer to this invocation, not historical library purchases.
+    known = value.inventory_complete
+    return {"metrics": {
+        "newly_claimed": metric("count", len(value.confirmed) if known else None),
+        "already_owned": metric("count", len(value.already_owned) if known else None),
+        "unconfirmed": metric("count", sum(o.id not in value.confirmed and o.id not in value.already_owned
+                                           for o in value.offers) if known else None),
+        "current_promotions": metric("count", len(value.offers) if known else None),
+        "omitted_items": metric("count", max(0, len(value.offers) - 100) if known else None),
+    }, "items": items}
 
 
 def main():
@@ -26,7 +47,7 @@ def main():
         complete = value.reason in {"complete", "no_current_promotions"} and not value.uncertain
         output = result(context, "ok" if complete else "failed", value.reason,
                         {"claim": "not_applicable" if value.reason == "no_current_promotions"
-                         else "complete" if complete else "unknown"})
+                         else "complete" if complete else "unknown"}, delivery_details(value))
     except Exception as error:
         from platforms.epic.workflow import Paused
         output = result(context, reason=error.reason if isinstance(error, Paused)

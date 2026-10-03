@@ -49,10 +49,13 @@ class Offer:
     id: str
     url: str
     explicitly_free: bool
+    title: str = ""
 
 
 @dataclass
 class ClaimResult:
+    offers: list[Offer] = field(default_factory=list)
+    inventory_complete: bool = False
     confirmed: list[str] = field(default_factory=list)
     already_owned: list[str] = field(default_factory=list)
     uncertain: list[str] = field(default_factory=list)
@@ -218,6 +221,7 @@ class ClaimWorkflow:
                 if not offers.complete:
                     raise Paused("inventory_unconfirmed")
                 if not offers.offers:
+                    out.inventory_complete = True
                     out.reason = "no_current_promotions"
                     return out
                 offers = offers.offers
@@ -228,6 +232,8 @@ class ClaimWorkflow:
             ids = [o.id for o in offers]
             if len(set(ids)) != len(ids):
                 raise Paused("inventory_ambiguous")
+            out.offers = offers
+            out.inventory_complete = True
             for offer in offers:
                 parsed = urlsplit(offer.url)
                 if (

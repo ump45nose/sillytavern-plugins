@@ -3,6 +3,41 @@
 const { publish } = require("../../common/result.cjs");
 const common = require("./browser_common.cjs");
 const { parseProgress, progress } = require("./activities.cjs");
+const {metric, number} = require("../../common/details.cjs");
+function details(raw, daily, app) {
+  const {quota, quotas} = require("./search.cjs");
+  const flyout = raw.flyoutResult, metrics = {}, items = [];
+  const put = (key, q) => { metrics[key] = metric("points", q.earned, q.max); };
+  for (const [key, q] of Object.entries(quotas(raw, "desktop"))) put(key, q);
+  const counters = flyout.userStatus.counters;
+  if (counters.MobileSearch || counters.mobileSearch)
+    put("mobile_search", quota(counters.MobileSearch ?? counters.mobileSearch));
+  metrics.daily = metric("count", daily?.current, daily?.max);
+  metrics.app_daily = metric("count", app?.current, app?.max);
+  metrics.balance = metric("points", flyout.userStatus.availablePoints);
+  let locked = 0, omitted = 0;
+  for (const [key, rows] of [["explore", flyout.exploreOnBingPromotions],
+      ["more_promotions", flyout.morePromotions]]) {
+    if (!Array.isArray(rows) || rows.length > 300) { put(key, quota(null)); continue; }
+    const pointRows = rows.filter(x => number(x?.pointProgressMax) > 0);
+    const eligible = pointRows.filter(x => x.complete === true || x.isCompleted === true ||
+      ["unlocked", "notsupported"].includes(x.exclusiveLockedFeatureStatus));
+    const known = pointRows.every(x => x.complete === true || x.isCompleted === true ||
+      ["unlocked", "notsupported", "locked"].includes(x.exclusiveLockedFeatureStatus));
+    put(key, quota(known ? eligible : null));
+    for (const [i, x] of pointRows.entries()) {
+      const status = group([x], {requireEligibility: true});
+      locked += status === "blocked" ? 1 : 0;
+      if (items.length >= 100) { omitted++; continue; }
+      items.push({id: String(x.offerId || key + "_" + i).slice(0,128),
+        name: String(x.title || x.name || key).replace(/[\x00-\x1f]/g, " ").slice(0,200),
+        status, reason: status === "blocked" ? "platform_locked" : "fresh_readback"});
+    }
+  }
+  metrics.locked_tasks = metric("count", locked);
+  metrics.omitted_items = metric("count", omitted);
+  return {metrics, items};
+}
 function counter(current, max) {
   const p = parseProgress(String(current ?? ""), String(max ?? ""));
   return p ? (p.current >= p.max ? "complete" : "incomplete") : "unknown";
@@ -68,7 +103,8 @@ async function run(chromium, state, options = {}, deps = common) {
             max: rows[0].getAttribute('aria-valuemax')} : null;
         });
         business.app_daily = app ? counter(app.current, app.max) : "unknown";
-        return { execution: "ok", reason: "fresh_readonly_snapshot", business };
+        return { execution: "ok", reason: "fresh_readonly_snapshot", business,
+          details: details(raw, daily, app) };
       },
     );
   } catch (error) {
@@ -104,7 +140,7 @@ async function main() {
       business: { snapshot: "unknown" },
     };
   }
-  publish(out.execution, out.reason, out.business);
+  publish(out.execution, out.reason, out.business, out.details);
 }
 if (require.main === module) main();
-module.exports = { run, counter, group, summarize };
+module.exports = { run, counter, group, summarize, details };

@@ -4,6 +4,7 @@ const fs = require("node:fs"),
   path = require("node:path");
 const common = require("./browser_common.cjs");
 const { publish } = require("../../common/result.cjs");
+const {metric, validateDetails} = require("../../common/details.cjs");
 const ORDER = Object.freeze([
   "daily",
   "extra",
@@ -90,6 +91,7 @@ function validateOutput(out) {
         ? out.reason
         : "capability_finished",
     business: Object.fromEntries(entries),
+    ...(out.details ? {details: validateDetails(out.details)} : {}),
   };
 }
 function overall(out) {
@@ -105,6 +107,24 @@ function stopReason(out) {
   if (out.execution === "timeout") return "full_deadline_exceeded";
   if (out.execution === "busy") return "full_resource_busy";
   return STOP.has(out.reason) ? "full_intervention_pending" : null;
+}
+function deliveryDetails(snapshots, stages) {
+  const before = snapshots.before?.details?.metrics || {},
+    after = {...Object.assign({}, ...Object.values(stages).map(s => s.details?.metrics || {})),
+      ...snapshots.after?.details?.metrics}, metrics = {};
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const b = before[key], a = after[key], unit = (a || b).unit;
+    // current is the latest confirmed same-run observation. after remains null
+    // when no post-operation readback was possible; preserve the earlier facts.
+    metrics[key] = metric(unit, a?.current ?? b?.current, a?.max ?? b?.max, b?.current, a?.current,
+      b?.current != null && a?.current != null ? a.current - b.current : null);
+  }
+  const rows = snapshots.after?.details?.items || snapshots.before?.details?.items || [];
+  const extra = stages.extra?.details?.items || [];
+  const items = new Map(rows.map(row => [row.id, row]));
+  for (const row of extra) items.set(row.id, {...row,
+    name: row.name === row.id && items.has(row.id) ? items.get(row.id).name : row.name});
+  return {metrics, items: [...items.values()].slice(0,100)};
 }
 async function execute(
   value,
@@ -186,6 +206,7 @@ async function execute(
       stages,
       snapshots,
       business,
+      details: deliveryDetails(snapshots, stages),
     });
   }
   if (!stopped) {
@@ -208,7 +229,9 @@ async function execute(
         ? "full_requested_capabilities_complete"
         : "full_requested_capabilities_partial"),
     business,
-    report: { schema_version: 1, enabled, stages, snapshots, business },
+    details: deliveryDetails(snapshots, stages),
+    report: { schema_version: 1, enabled, stages, snapshots, business,
+      details: deliveryDetails(snapshots, stages) },
   };
 }
 function createBindings({
@@ -376,7 +399,7 @@ function writeReport(file, value, max = 65536) {
   fs.renameSync(temp, file);
 }
 async function main() {
-  let out, confirmedBusiness;
+  let out, confirmedBusiness, confirmedDetails;
   try {
     const stateDir = process.env.BENEFITS_STATE_DIR;
     let requested;
@@ -416,7 +439,8 @@ async function main() {
         // Publish the existing protocol first: the runner can recover confirmed
         // same-run business even if a later stage or report write never returns.
         confirmedBusiness = { ...value.business };
-        publish("failed", "full_in_progress", confirmedBusiness);
+        confirmedDetails = value.details;
+        publish("failed", "full_in_progress", confirmedBusiness, confirmedDetails);
         writeReport(reportPath, value);
       },
     }); } finally { await native.close(); }
@@ -435,9 +459,10 @@ async function main() {
         ? error.message
         : "full_preflight_or_reporting_failed",
       business: out?.business || confirmedBusiness || { full: "unknown" },
+      details: out?.details || confirmedDetails,
     };
   }
-  publish(out.execution, out.reason, out.business);
+  publish(out.execution, out.reason, out.business, out.details);
 }
 if (require.main === module) main();
 module.exports = {
@@ -446,6 +471,7 @@ module.exports = {
   validateOutput,
   overall,
   execute,
+  deliveryDetails,
   createBindings,
   writeReport,
   main,

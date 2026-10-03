@@ -3,6 +3,7 @@
 const path = require("node:path");
 const common = require("./browser_common.cjs");
 const { publish } = require("../../common/result.cjs");
+const {metric} = require("../../common/details.cjs");
 function amount(value) {
   if (
     value === null ||
@@ -227,6 +228,10 @@ async function runSession(
   };
 }
 async function run(chromium, state, device, options = {}, deps = common) {
+  let first, last;
+  const details = () => ({metrics: Object.fromEntries(Object.entries(last || {}).map(([key,q]) =>
+    [key, metric("points", q.earned, q.max, first?.[key]?.earned, q.earned,
+      first?.[key]?.earned != null && q.earned != null ? q.earned - first[key].earned : null)])), items: []});
   let business =
     device === "mobile"
       ? { mobile_search: "unknown" }
@@ -243,7 +248,7 @@ async function run(chromium, state, device, options = {}, deps = common) {
         reason: "mobile_device_profile_required",
         business,
       };
-    return await deps.withBrowser(
+    const out = await deps.withBrowser(
       chromium,
       state,
       options,
@@ -255,11 +260,13 @@ async function run(chromium, state, device, options = {}, deps = common) {
         await deps.guard(page);
         const observe = async () => {
           await deps.guard(page);
-          return quotas(
+          last = quotas(
             await deps.readFlyout(context, page),
             device,
             options.region,
           );
+          first ||= last;
+          return last;
         };
         const queries =
           config.queries ||
@@ -270,6 +277,7 @@ async function run(chromium, state, device, options = {}, deps = common) {
         return runSession(page, observe, device, config, queries, deps);
       },
     );
+    return {...out, details: details()};
   } catch (error) {
     deps.recordObstacle?.(error, {
       capability: device === "mobile" ? "mobile_search" : "desktop_search",
@@ -279,6 +287,7 @@ async function run(chromium, state, device, options = {}, deps = common) {
       execution: "failed",
       reason: error.details?.code || "search_unconfirmed",
       business,
+      details: details(),
     };
   }
 }
@@ -314,7 +323,7 @@ async function main() {
       business: { [device + "_search"]: "unknown" },
     };
   }
-  publish(out.execution, out.reason, out.business);
+  publish(out.execution, out.reason, out.business, out.details);
 }
 if (require.main === module) main();
 module.exports = {

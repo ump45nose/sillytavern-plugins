@@ -32,3 +32,7 @@ COOKIECLOUD_CONFIG=/absolute/private/cookiecloud.json \
 `http-actions.json` 在写请求前记录账号/日期/社区 intent。不明确的签到和领奖只读恢复；签到确认后仍查询奖励。15 个社区分别保留结果，汇总允许明确不适用，但不会用第一个社区成功遮盖其他未知结果。未核实奖励 intent 不因换日自动删除。
 
 单请求 30 秒、响应最多 1 MiB；默认总预算 480 秒。损坏状态拒绝进一步写请求。输出通用 JSON 与逐社区结果，不保留 Cookie 或完整响应。
+
+## 统一结果
+
+通用 JSON 补充运行起止时间、耗时及 `details.metrics/items`。数值未知时为 null；已签到与奖励已到账分别判断。字段与各平台事实边界见 [结果契约](../../docs/RESULTS.md)。
