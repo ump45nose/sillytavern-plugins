@@ -10,6 +10,8 @@ config.toml.bak-*
 state/
 backups/
 downloads/
+!packages/downloads/
+!packages/downloads/**
 VALIDATION.md
 X_REVIEW_30.md
 *.sqlite
