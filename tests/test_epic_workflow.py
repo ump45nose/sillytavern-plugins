@@ -113,7 +113,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(d.verify.await_count, 4)
         self.assertEqual(d.submitted, ["a"])
 
-    async def test_post_submit_obstacle_preserves_uncertain_item(self):
+    async def test_post_submit_stale_obstacle_readback_before_approval(self):
         d = Driver()
         original = d.submit_once
 
@@ -125,8 +125,55 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         d.submit_once = submit
         r = await self.engine(d).run()
+        self.assertEqual(r.reason, "complete")
+        self.assertEqual(r.confirmed, ["a"])
+        self.assertEqual(r.pending, [])
+        self.assertEqual(d.submitted, ["a"])
+
+    async def test_unconfirmed_submit_still_requires_challenge_approval(self):
+        d = Driver()
+        original = d.submit_once
+
+        async def submit(offer, **kw):
+            await original(offer, **kw)
+            d.obstacles = [
+                Obstacle("captcha", "fixture", fingerprint("late"), "post_submit")
+            ]
+
+        d.submit_once = submit
+        d.verify = AsyncMock(return_value="unknown")
+        r = await self.engine(d).run()
         self.assertEqual(r.reason, "approval_or_handler_needed")
         self.assertEqual(r.uncertain, ["a"])
+        self.assertEqual(d.verify.await_count, 4)
+        self.assertEqual(d.submitted, ["a"])
+
+    async def test_post_submit_recovered_gate_then_readback_never_resubmits(self):
+        d = Driver()
+        original = d.submit_once
+
+        async def submit(offer, **kw):
+            await original(offer, **kw)
+            d.obstacles = [
+                Obstacle("captcha", "fixture", fingerprint("late"), "post_submit")
+            ]
+
+        async def approve(req):
+            return {
+                **{k: req[k] for k in IDENTITY},
+                "decision": "approve",
+                "expires_at": "2099-01-01T00:00:00Z",
+            }
+
+        async def solver(*a, **kw):
+            d.obstacles.clear()
+
+        d.submit_once = submit
+        d.verify_readonly = AsyncMock(
+            side_effect=["unknown", "unknown", "unknown", "owned"]
+        )
+        r = await self.engine(d, approve=approve, handlers={"captcha": solver}).run()
+        self.assertEqual(r.confirmed, ["a"])
         self.assertEqual(d.submitted, ["a"])
 
     async def test_already_owned_no_submit(self):

@@ -7,13 +7,15 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import uuid
 from zoneinfo import ZoneInfo
 from .locks import Lease, Busy
-from .model import result, read_result, atomic_json, validate
+from .model import result, read_result, atomic_json
 from .lifecycle import LogSink, supervise
 from .intervention_signal import create_checkpoint
+from .containment import BrowserScope, ContainmentError
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER = {"laowang", "epic", "rewards"}
@@ -72,7 +74,7 @@ def run(platform):
     p.add_argument(
         "--allow-repeat",
         action="store_true",
-        help="Explicitly allow repeating an already-confirmed daily check-in",
+        help="Deprecated compatibility flag; never bypasses adapter reconciliation",
     )
     p.add_argument(
         "--browser-cache",
@@ -97,9 +99,6 @@ def run(platform):
         p.error("account must be an opaque identifier (not an email)")
     if not 2 <= a.timeout <= 86400 or not 0 <= a.lock_wait <= 300:
         p.error("timeout must be 2..86400; lock-wait 0..300")
-    runtime = a.runtime_root.expanduser().resolve()
-    if runtime == ROOT or ROOT in runtime.parents:
-        p.error("runtime-root must be outside the source repository")
     try:
         today = datetime.now(ZoneInfo(a.timezone)).date().isoformat()
     except Exception:
@@ -110,12 +109,16 @@ def run(platform):
         "account": a.account,
         "business_date": today,
     }
-    run_dir = runtime / "runs" / context["run_id"]
-    run_dir.mkdir(parents=True, mode=0o700)
-    state = runtime / "state" / platform / a.account
-    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    run_dir = None
     output = result(context, reason="execution_not_requested")
     try:
+        runtime = a.runtime_root.expanduser().resolve()
+        if runtime == ROOT or ROOT in runtime.parents:
+            p.error("runtime-root must be outside the source repository")
+        run_dir = runtime / "runs" / context["run_id"]
+        state = runtime / "state" / platform / a.account
+        run_dir.mkdir(parents=True, mode=0o700)
+        state.mkdir(parents=True, exist_ok=True, mode=0o700)
         with ExitStack() as stack:
             task = stack.enter_context(
                 Lease(runtime / "locks" / f"{platform}.{a.account}.lock", a.lock_wait)
@@ -127,42 +130,12 @@ def run(platform):
                         Lease(runtime / "locks" / "browser.lock", a.lock_wait)
                     ).fd
                 )
-            cached = None
             latest_dir = runtime / "results" / platform / a.account
             if platform == "rewards":
                 latest_dir = latest_dir / a.mode
-            try:
-                cache_path = latest_dir / "last-confirmed.json"
-                if cache_path.stat().st_size <= 65536:
-                    candidate = json.loads(cache_path.read_text())
-                    if isinstance(candidate, dict) and isinstance(
-                        candidate.get("run_id"), str
-                    ):
-                        expected = {**context, "run_id": candidate["run_id"]}
-                        cached = validate(candidate, expected)
-            except (OSError, ValueError, TypeError):
-                pass
-            already = (
-                isinstance(cached, dict)
-                and cached.get("business_date") == today
-                and cached.get("platform") == platform
-                and cached.get("account") == a.account
-                and cached.get("business", {}).get("checkin") == "complete"
-            )
-            if (
-                a.execute
-                and already
-                and not a.allow_repeat
-                and not a.status
-                and not a.login
-            ):
-                output = result(
-                    context,
-                    cached["execution_status"],
-                    "daily_checkin_already_confirmed",
-                    cached["business"],
-                )
-            elif a.execute:
+            # A confirmed action does not complete the whole platform. Adapters
+            # reconcile their own action journals and current site state.
+            if a.execute:
                 adapter = (
                     ROOT
                     / "platforms"
@@ -217,6 +190,9 @@ def run(platform):
                 env.update(
                     BENEFITS_RESULT_PATH=str(run_dir / "adapter-result.json"),
                     BENEFITS_STATE_DIR=str(state),
+                    BENEFITS_LAST_CONFIRMED_PATH=str(
+                        latest_dir / "last-confirmed.json"
+                    ),
                     HOME=str(state),
                     TMPDIR=str(run_dir),
                 )
@@ -224,25 +200,53 @@ def run(platform):
                     run_dir / "output.log",
                     [os.environ[k] for k in ENV[platform] if k in os.environ],
                 )
+                scope = None
                 try:
-                    outcome = supervise(
-                        argv, ROOT, env, a.timeout, sink, leases, interactive=a.login
-                    )
+                    with ExitStack() as process_stack:
+                        if platform in BROWSER:
+                            scope = process_stack.enter_context(
+                                BrowserScope(
+                                    runtime / "locks/browser-cleanup.json",
+                                    context["run_id"],
+                                )
+                            )
+                        outcome = supervise(
+                            argv,
+                            ROOT,
+                            env,
+                            a.timeout,
+                            sink,
+                            leases,
+                            interactive=a.login,
+                        )
                 finally:
-                    sink.close()
-                if outcome.spawn_error:
-                    output = result(context, reason="runtime_unavailable")
-                elif outcome.timed_out:
-                    output = result(context, "timeout", "deadline_exceeded")
-                elif outcome.interrupted:
-                    output = result(context, reason="interrupted")
-                else:
+                    # Even cleanup/reporting exceptions must not erase a valid
+                    # partial result that the adapter already published.
                     try:
                         output = read_result(run_dir / "adapter-result.json", context)
                     except (OSError, ValueError, TypeError):
                         output = result(context, reason="invalid_or_missing_result")
-                    if outcome.returncode and output["execution_status"] == "ok":
-                        output = result(context, reason="process_failed_after_result")
+                    sink.close()
+                # Execution failure does not revoke independently confirmed
+                # business evidence, including partial progress before a deadline.
+                if scope is not None and not scope.cleanup_verified:
+                    output.update(
+                        execution_status="failed", reason="browser_cleanup_unverified"
+                    )
+                elif outcome.spawn_error:
+                    output.update(
+                        execution_status="failed", reason="runtime_unavailable"
+                    )
+                elif outcome.timed_out:
+                    output.update(
+                        execution_status="timeout", reason="deadline_exceeded"
+                    )
+                elif outcome.interrupted:
+                    output.update(execution_status="failed", reason="interrupted")
+                elif outcome.returncode and output["execution_status"] == "ok":
+                    output.update(
+                        execution_status="failed", reason="process_failed_after_result"
+                    )
             if a.execute:
                 try:
                     checkpoint = create_checkpoint(
@@ -250,12 +254,18 @@ def run(platform):
                     )
                     if checkpoint:
                         atomic_json(run_dir / "checkpoint.json", checkpoint)
-                        if output["execution_status"] not in {"timeout", "busy"}:
+                        if (
+                            output["execution_status"] not in {"timeout", "busy"}
+                            and output["reason"] != "browser_cleanup_unverified"
+                        ):
                             output["execution_status"] = "failed"
                             output["reason"] = "approval_required_" + checkpoint["kind"]
                 except (OSError, ValueError, TypeError, KeyError):
-                    output = result(context, reason="invalid_intervention_signal")
-            atomic_json(run_dir / "result.json", output)
+                    if output["reason"] != "browser_cleanup_unverified":
+                        output.update(
+                            execution_status="failed",
+                            reason="invalid_intervention_signal",
+                        )
             # Latest is serialized by the same account lock; no append-only unbounded ledger.
             if a.execute:
                 atomic_json(latest_dir / "latest.json", output)
@@ -263,10 +273,17 @@ def run(platform):
                     atomic_json(latest_dir / "last-confirmed.json", output)
     except Busy:
         output = result(context, "busy", "lock_busy")
-        atomic_json(run_dir / "result.json", output)
+    except ContainmentError as error:
+        output.update(execution_status="failed", reason=str(error))
+    except (ValueError, OSError, RuntimeError, subprocess.SubprocessError):
+        output.update(execution_status="failed", reason="configuration_or_io_error")
+    # Storage failure must not suppress the scheduler's stdout result. Preserve
+    # business evidence even if an artifact could not be persisted.
+    try:
+        if run_dir is not None:
+            atomic_json(run_dir / "result.json", output)
     except (ValueError, OSError):
-        output = result(context, reason="configuration_or_io_error")
-        atomic_json(run_dir / "result.json", output)
+        output.update(execution_status="failed", reason="configuration_or_io_error")
     print(json.dumps(output, ensure_ascii=False))
     if output["execution_status"] == "ok" and any(
         v not in {"complete", "not_applicable"} for v in output["business"].values()

@@ -67,17 +67,16 @@ async function setManualGoal(
       business: { goal: "unknown" },
       reason: "goal_previous_action_requires_reconciliation",
     };
-  await journal.mark(key, "attempted");
+  const label = page
+    .locator("label")
+    .filter({ hasText: /^(Set as your Rewards goal|设置为目标|设为目标)$/i });
+  if ((await label.count()) !== 1) throw Error("goal_control_ambiguous");
   let submitted = false;
   try {
-    const label = page
-      .locator("label")
-      .filter({ hasText: /^(Set as your Rewards goal|设置为目标|设为目标)$/i });
-    if ((await label.count()) !== 1) throw Error("goal_control_ambiguous");
     await label.click({ timeout: 15000 });
     const dialog = page.getByRole("dialog");
-    if ((await dialog.count()) !== 1) throw Error("goal_dialog_ambiguous");
     await dialog.waitFor({ timeout: 10000 });
+    if ((await dialog.count()) !== 1) throw Error("goal_dialog_ambiguous");
     await guard(page);
     const manual = dialog.getByRole("radio", {
       name: "Track and manually redeem your reward",
@@ -89,6 +88,12 @@ async function setManualGoal(
       throw Error("manual_redemption_not_selected");
     const next = dialog.getByRole("button", { name: "Next", exact: true });
     if ((await next.count()) !== 1) throw Error("goal_next_ambiguous");
+    await guard(page);
+    if (page.url() !== target) throw Error("goal_target_changed");
+    // This goal wizard applies the selected mode with Next. Opening its dialog
+    // and selecting the manual radio only prepare that submission. A missing
+    // control therefore must not create uncertain-submission evidence.
+    await journal.mark(key, "attempted");
     submitted = true;
     await next.click({ timeout: 15000 });
     await dialog

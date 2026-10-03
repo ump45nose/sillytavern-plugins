@@ -23,6 +23,8 @@ KINDS = {
 }
 IDENTITY = (
     "request_id",
+    "origin_run_id",
+    "phase",
     "platform",
     "account",
     "capability",
@@ -73,8 +75,6 @@ def request(
 def validate_request(value):
     allowed = set(IDENTITY) | {
         "schema_version",
-        "origin_run_id",
-        "phase",
         "expires_at",
         "resume_policy",
     }
@@ -86,7 +86,7 @@ def validate_request(value):
         raise ValueError("invalid_checkpoint_schema")
     if not isinstance(value["kind"], str) or value["kind"] not in KINDS:
         raise ValueError("unsupported_intervention")
-    for key in IDENTITY + ("origin_run_id", "phase", "expires_at"):
+    for key in IDENTITY + ("expires_at",):
         if not isinstance(value[key], str) or not value[key] or len(value[key]) > 1024:
             raise ValueError("invalid_checkpoint_field")
     for key in ("platform", "account", "capability", "phase"):

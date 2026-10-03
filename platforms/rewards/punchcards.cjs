@@ -108,6 +108,8 @@ async function execute(driver, { autoClaim = false, timezoneOffset = 0 } = {}) {
       outcomes.push("unknown");
       continue;
     }
+    // Deterministic preflight failures must not create uncertain-write evidence.
+    await driver.prepare?.(child, timezoneOffset);
     await driver.journal.mark(child.offerId, "attempted");
     try {
       await driver.submit(child, timezoneOffset);
@@ -167,12 +169,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           journal: options.journal,
           async inventory() {
             const raw = await deps.readFlyout(context);
-            if (
-              raw?.isError ||
-              raw?.userInfo?.isRewardsUser !== true ||
-              raw?.flyoutResult?.userStatus?.isRewardsUser !== true
-            )
-              throw Error("authenticated_inventory_unavailable");
+            common.assertAccountAvailable(raw, options.region);
             await page.goto(deps.EARN, {
               waitUntil: "domcontentloaded",
               timeout: 45000,
@@ -193,6 +190,10 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               return {
                 offerId: child.offerId,
                 complete: child.isCompleted,
+                promotionType: rawChild.promotionType,
+                attributes: rawChild.attributes,
+                activityProgressMax: rawChild.activityProgressMax,
+                destinationUrl: rawChild.destinationUrl ?? rawChild.destination,
                 exclusiveLockedFeatureStatus:
                   rawChild.isLocked === false && rawChild.isDisabled === false
                     ? "unlocked"
@@ -209,8 +210,16 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           async children() {
             return parser.snapshotQuestPage(await html());
           },
-          async submit(child, offset) {
+          async prepare(child, offset) {
+            actions.validateSubmission(
+              ids.reportActivity,
+              PARENT,
+              child,
+              offset,
+            );
             await deps.guard(page);
+          },
+          async submit(child, offset) {
             return actions.submit(
               page,
               parser,

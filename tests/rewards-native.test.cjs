@@ -154,6 +154,7 @@ function fakeExtra({
   unknown = false,
   challenge = false,
   clickFails = false,
+  restricted = false,
 } = {}) {
   const id = goal ? "10XMSRewards_a30081646" : "SocialMediaFixture",
     events = [];
@@ -202,6 +203,9 @@ function fakeExtra({
       userInfo: { isRewardsUser: true },
       flyoutResult: {
         userStatus: { isRewardsUser: true },
+        userWarnings: restricted
+          ? [{ name: "Fraud_UserWarning_BotScore_UX" }]
+          : [],
         morePromotions: unknown
           ? []
           : [{ offerId: id, exclusiveLockedFeatureStatus: "unlocked" }],
@@ -329,4 +333,151 @@ test("bundled exact GPL parser needs no upstream installation", () => {
     /\brequire\s*\(|\bimport\s*\(/.test(fs.readFileSync(file, "utf8")),
     false,
   );
+});
+
+test("real snapshot warning result stops full before subsequent mutations", async () => {
+  const full = require("../platforms/rewards/full.cjs");
+  const raw = {
+    userInfo: { isRewardsUser: true },
+    flyoutResult: {
+      userStatus: {
+        isRewardsUser: true,
+        counters: {
+          PCSearch: [{ pointProgress: 0, pointProgressMax: 3 }],
+          MobileSearch: [],
+        },
+      },
+      userWarnings: [{ name: "Fraud_UserWarning_BotScore_UX" }],
+      morePromotions: [],
+      exploreOnBingPromotions: [],
+    },
+  };
+  const page = {
+    url: () => common.DASHBOARD,
+    goto: async () => {},
+    locator: () => ({ count: async () => 0 }),
+    getByRole: () => ({
+      waitFor: async () => {},
+      getAttribute: async (name) => (name === "aria-valuenow" ? "0" : "3"),
+    }),
+  };
+  const deps = {
+    ...common,
+    withBrowser: async (_c, _s, _o, work) => work({}, page),
+    readFlyout: async () => raw,
+  };
+  const out = await full.execute(
+    { schema_version: 1, enabled: ["daily"] },
+    {
+      daily: async () =>
+        assert.fail("restriction must stop before card action"),
+    },
+    { snapshot: () => snapshot.run(null, {}, {}, deps) },
+  );
+  assert.equal(out.report.snapshots.before.reason, "account_restricted");
+  assert.equal(out.business.daily, "blocked");
+});
+test("extra native preflight stops account warning before card action", async () => {
+  const f = fakeExtra({ restricted: true });
+  const out = await extra.run(null, {}, f.parser, {}, f.deps);
+  assert.equal(out.reason, "account_restricted");
+  assert.equal(f.events.includes("click"), false);
+});
+test("future-dated real parser offer cannot become an eligible extra card", async () => {
+  const f = fakeExtra();
+  const parser = require("../platforms/rewards/parser_loader.cjs").loadParser();
+  const payload = JSON.stringify({
+    offerId: "SocialMediaFixture",
+    title: "Fixture",
+    hash: "fixture",
+    date: "01/01/2099",
+    isLocked: false,
+    isCompleted: false,
+  });
+  const html =
+    "<script>self.__next_f.push([1," + JSON.stringify(payload) + "])</script>";
+  f.deps.boundedHtml = async () => html;
+  assert.equal(parser.snapshotPage(html).offers[0].reportable, false);
+  const out = await extra.run(null, {}, parser, {}, f.deps);
+  assert.equal(f.events.includes("click"), false);
+  assert.equal(out.business.social, "blocked");
+});
+test("confirmed social result survives a later goal authorization obstacle", async () => {
+  let clicked = false,
+    url = common.EARN;
+  const target = {
+    url: () => "https://www.youtube.com/watch?v=fixture",
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    close: async () => {},
+  };
+  const link = {
+    first() {
+      return this;
+    },
+    getAttribute: async () => target.url(),
+    click: async () => {
+      clicked = true;
+    },
+  };
+  const page = {
+    url: () => url,
+    goto: async (value) => {
+      url = value;
+    },
+    waitForTimeout: async () => {},
+    waitForEvent: async () => target,
+    locator: (selector) =>
+      selector === "main"
+        ? { waitFor: async () => {} }
+        : { filter: () => link },
+    getByRole: () => ({
+      count: async () => 1,
+      waitFor: async () => {},
+      isChecked: async () => false,
+    }),
+  };
+  const offers = () => [
+    {
+      offerId: "SocialMediaFixture",
+      title: "Social",
+      isCompleted: clicked,
+      isLocked: false,
+    },
+    {
+      offerId: "10XMSRewards_a30081646",
+      title: "Goal",
+      isCompleted: false,
+      isLocked: false,
+    },
+  ];
+  const deps = {
+    EARN: common.EARN,
+    withBrowser: async (_c, _s, _o, work) =>
+      work({ newPage: async () => page }, page),
+    guard: async () => {},
+    boundedHtml: async () => "fixture",
+    readFlyout: async () => ({
+      userInfo: { isRewardsUser: true },
+      flyoutResult: {
+        userStatus: { isRewardsUser: true },
+        morePromotions: offers().map((o) => ({
+          offerId: o.offerId,
+          exclusiveLockedFeatureStatus: "unlocked",
+        })),
+        exploreOnBingPromotions: [],
+      },
+    }),
+  };
+  const out = await extra.run(
+    null,
+    {},
+    { snapshotPage: () => ({ offers: offers() }) },
+    { goal: { url: "https://rewards.bing.com/redeem/sku/fixture" } },
+    deps,
+  );
+  assert.equal(clicked, true);
+  assert.equal(out.reason, "human_required");
+  assert.equal(out.business.social, "complete");
+  assert.equal(out.business.goal, "unknown");
 });

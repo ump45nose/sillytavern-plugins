@@ -209,3 +209,80 @@ test("reading missing offer never submits", async () => {
     /offer_unavailable/,
   );
 });
+
+test("daily and reading journal stays bounded past the old lifetime cap", async () => {
+  const fs = require("node:fs"),
+    os = require("node:os"),
+    path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-app-days-"));
+  try {
+    let writes = 0;
+    const client = {
+      read: async () => ({}),
+      submit: async () => {
+        writes++;
+      },
+    };
+    for (let day = 0; day < 120; day++) {
+      const date = new Date(Date.UTC(2026, 0, 1 + day))
+        .toISOString()
+        .slice(0, 10);
+      const journal = app.dailyJournal(dir, date);
+      await app.submitDaily(client, journal, date);
+      for (let article = 0; article < 10; article++)
+        await journal.mark(`read_${date}_${article}`, "attempted");
+      await app.submitDaily(client, app.dailyJournal(dir, date), date);
+      const saved = JSON.parse(
+        fs.readFileSync(path.join(dir, "app-daily-journal.json")),
+      );
+      assert.equal(saved.business_date, date);
+      assert.equal(Object.keys(saved.entries).length, 11);
+    }
+    assert.equal(writes, 120);
+    assert.deepEqual(fs.readdirSync(dir), ["app-daily-journal.json"]);
+    assert.throws(
+      () => app.dailyJournal(dir, "2026-01-01"),
+      /business_date_regressed/,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+test("daily journal migration retains current-day uncertain actions without editing legacy promotions", async () => {
+  const fs = require("node:fs"),
+    os = require("node:os"),
+    path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-app-migrate-"));
+  try {
+    const legacy = JSON.stringify({
+      daily_2026_ignored: "confirmed",
+      "daily_2026-10-02": "attempted",
+      "read_2026-10-02_0": "attempted",
+      old_promotion: "attempted",
+    });
+    fs.writeFileSync(path.join(dir, "app-journal.json"), legacy);
+    const journal = app.dailyJournal(dir, "2026-10-02");
+    assert.equal(journal.has("read_2026-10-02_0"), true);
+    await app.submitDaily(
+      {
+        read: async () => ({}),
+        submit: async () => assert.fail("must not replay"),
+      },
+      journal,
+      "2026-10-02",
+    );
+    await journal.mark("read_2026-10-02_1", "attempted");
+    assert.equal(
+      fs.readFileSync(path.join(dir, "app-journal.json"), "utf8"),
+      legacy,
+    );
+    assert.equal(
+      app.dailyJournal(dir, "2026-10-03").has("read_2026-10-02_0"),
+      false,
+    );
+    for (const date of ["2026-02-30", "bad", undefined])
+      assert.throws(() => app.dailyJournal(dir, date), /business_date_invalid/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

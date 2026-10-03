@@ -71,6 +71,11 @@ function browser({ signed = false, challenge = false, fail = false } = {}) {
         selector === "#tncode" ? (challenge ? 1 : 0) : signed ? 1 : 0,
     }),
     content: async () => '<a href="formhash=abcdef12">x</a>',
+    url: () => "https://laowang.vip/plugin.php",
+    evaluate: async (fn) =>
+      fn.toString().includes("document.documentElement.outerHTML")
+        ? '<a href="formhash=abcdef12">x</a>'
+        : null,
   };
   return {
     state,

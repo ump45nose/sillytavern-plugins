@@ -76,6 +76,10 @@ async function run(chromium, storageState, options = {}, deps = common) {
         if (!after) return outcome(false, "daily_progress_unavailable");
         if (after.current >= after.max)
           return outcome(true, "daily_already_complete");
+        common.assertAccountAvailable(
+          await deps.readFlyout(context),
+          options.region,
+        );
         const panel = await section(page);
         const cards = await panel.locator("a").evaluateAll((xs) =>
           xs

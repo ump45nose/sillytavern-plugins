@@ -24,7 +24,6 @@ CONSENT = {
 RECOVERABLE = {
     "navigation_partial",
     "store_sso",
-    "remembered_account",
     "overlay",
     "popup",
     "stale_locator",
@@ -118,10 +117,11 @@ class ClaimWorkflow:
 
     async def settle(self, phase):
         """Observe after every recovery; solver success is not business success."""
+        handled = False
         while True:
             state = await self.driver.observe(phase, timeout=self.remaining())
             if state is None:
-                return
+                return handled
             if not isinstance(state, Obstacle):
                 raise Paused("invalid_observation")
             if state.kind in TERMINAL:
@@ -133,6 +133,7 @@ class ClaimWorkflow:
                 # Recovery bindings must not submit orders, erase sessions, or
                 # silently accept terms. Those are separate explicit operations.
                 await self.driver.recover(state, timeout=self.remaining())
+                handled = True
                 continue
             if state.kind not in CONSENT:
                 raise Paused("unsupported_obstacle")
@@ -157,6 +158,7 @@ class ClaimWorkflow:
             )
             current = await self.driver.observe(phase, timeout=self.remaining())
             if current is None:
+                handled = True
                 continue  # Already resolved: do not replay.
             if (
                 not isinstance(current, Obstacle)
@@ -169,6 +171,7 @@ class ClaimWorkflow:
                 raise Paused(error, pending)
             self.remaining_interventions -= 1
             await self.handlers[state.kind](current, timeout=self.remaining())
+            handled = True
             # Always re-observe; don't trust a plugin's own success flag.
 
     async def reconcile(self, offer):
@@ -179,10 +182,13 @@ class ClaimWorkflow:
                     self.sleep(min(self.readback_interval, self.remaining())),
                     timeout=self.remaining(),
                 )
-            await self.settle("verification")
             try:
+                # Independent readback must precede interaction with a stale
+                # checkout gate. BrowserDriver uses a separate, finally-closed
+                # page so an unfinished transaction remains available.
+                verify = getattr(self.driver, "verify_readonly", self.driver.verify)
                 state = await asyncio.wait_for(
-                    self.driver.verify(offer, timeout=self.remaining()),
+                    verify(offer, timeout=self.remaining()),
                     timeout=self.remaining(),
                 )
             except (TimeoutError, ConnectionError):
@@ -267,8 +273,10 @@ class ClaimWorkflow:
                 except Exception:
                     await self.driver.journal.write(offer.id, "uncertain")
                 # No submission retries, including after navigation timeout.
-                await self.settle("post_submit")
-                if await self.reconcile(offer):
+                reconciled = await self.reconcile(offer)
+                if not reconciled and await self.settle("post_submit"):
+                    reconciled = await self.reconcile(offer)
+                if reconciled:
                     await self.driver.journal.write(offer.id, "confirmed")
                     out.confirmed.append(offer.id)
                     out.uncertain.remove(offer.id)

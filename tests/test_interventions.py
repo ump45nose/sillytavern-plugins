@@ -52,6 +52,26 @@ class InterventionTests(unittest.TestCase):
                 "approval_scope_mismatch",
             )
 
+    def test_same_request_and_fingerprint_cannot_change_origin_or_phase(self):
+        for key in ("origin_run_id", "phase"):
+            with self.subTest(field=key):
+                grant = {**self.grant, key: "different"}
+                self.assertEqual(grant["request_id"], self.req["request_id"])
+                self.assertEqual(grant["fingerprint"], self.req["fingerprint"])
+                self.assertEqual(
+                    validate_resume(
+                        self.req, grant, self.req["fingerprint"], now=self.now
+                    ),
+                    "approval_scope_mismatch",
+                )
+                grant.pop(key)
+                self.assertEqual(
+                    validate_resume(
+                        self.req, grant, self.req["fingerprint"], now=self.now
+                    ),
+                    "approval_scope_mismatch",
+                )
+
     def test_changed_terms(self):
         self.assertEqual(
             validate_resume(

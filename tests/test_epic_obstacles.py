@@ -39,9 +39,9 @@ class ObstacleTests(unittest.TestCase):
             self.classify({"mfa_required": True}).payload["subtype"], "mfa_required"
         )
 
-    def test_recoverable_families(self):
+    def test_recovery_and_login_families(self):
         for flag, kind in [
-            ("remembered_account", "remembered_account"),
+            ("remembered_account", "login"),
             ("store_sso", "store_sso"),
             ("device_modal", "region_layout"),
             ("stale_locator", "stale_locator"),

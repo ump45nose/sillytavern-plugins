@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from platforms.epic.browser_driver import BrowserDriver, clean_target
 from platforms.epic.workflow import Paused
 
@@ -78,6 +79,7 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
 
         d._visible = hidden
         d._text = text
+        d._captcha_evidence = AsyncMock(return_value=["fixture-pixels"])
         state = await d.observe("session", timeout=1)
         self.assertEqual(state.kind, "captcha")
 
@@ -106,6 +108,269 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
 
         d._text = text
         self.assertEqual(await d.inspect_cart(timeout=1), "unknown")
+
+    async def test_unknown_page_is_not_phase_ready(self):
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/free-games",
+            locator=lambda s: s,
+            get_by_role=lambda *a, **k: "button",
+        )
+        d = BrowserDriver(None, page, None)
+        d._text = AsyncMock(return_value="Loading")
+        d._visible = AsyncMock(return_value=False)
+        self.assertEqual((await d.observe("session", timeout=1)).kind, "unknown")
+
+    async def test_positive_authenticated_navigation_is_session_ready(self):
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/free-games",
+            locator=lambda s: s,
+            get_by_role=lambda *a, **k: "button",
+        )
+        d = BrowserDriver(None, page, None)
+        d._text = AsyncMock(return_value="Store")
+        d._visible = AsyncMock(
+            side_effect=lambda s: s == 'egs-navigation[isloggedin="true"]'
+        )
+        self.assertIsNone(await d.observe("session", timeout=1))
+
+    async def test_same_iframe_refresh_changes_pixel_fingerprint(self):
+        surface = SimpleNamespace(
+            is_visible=AsyncMock(return_value=True),
+            bounding_box=AsyncMock(return_value={"width": 300, "height": 200}),
+            screenshot=AsyncMock(side_effect=[b"image-one", b"image-two"]),
+        )
+        frames = SimpleNamespace(count=AsyncMock(return_value=1), nth=lambda i: surface)
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/p/fixture",
+            locator=lambda s: frames if s.startswith("iframe") else s,
+            get_by_role=lambda *a, **k: "button",
+        )
+        d = BrowserDriver(None, page, None)
+        d._text = AsyncMock(return_value="verify you are human")
+        d._visible = AsyncMock(return_value=False)
+        first = await d.observe("product", timeout=1)
+        second = await d.observe("product", timeout=1)
+        self.assertEqual(first.kind, "captcha")
+        self.assertNotEqual(first.fingerprint, second.fingerprint)
+        self.assertEqual(surface.screenshot.await_count, 2)
+
+    async def test_same_iframe_refresh_while_approval_pending_blocks_handler(self):
+        from platforms.epic.workflow import ClaimWorkflow
+        from common.interventions import IDENTITY
+
+        surface = SimpleNamespace(
+            is_visible=AsyncMock(return_value=True),
+            bounding_box=AsyncMock(return_value={"width": 300, "height": 200}),
+            screenshot=AsyncMock(side_effect=[b"image-one", b"image-two"]),
+        )
+        frames = SimpleNamespace(count=AsyncMock(return_value=1), nth=lambda i: surface)
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/p/fixture",
+            locator=lambda s: frames if s.startswith("iframe") else s,
+            get_by_role=lambda *a, **k: "button",
+        )
+        d = BrowserDriver(None, page, None)
+        d._text = AsyncMock(return_value="verify you are human")
+        d._visible = AsyncMock(return_value=False)
+
+        async def approve(req):
+            return {
+                **{k: req[k] for k in IDENTITY},
+                "decision": "approve",
+                "expires_at": "2099-01-01T00:00:00Z",
+            }
+
+        handler = AsyncMock()
+        workflow = ClaimWorkflow(
+            d,
+            {"run_id": "fixture", "platform": "epic", "account": "one"},
+            deadline=100,
+            clock=lambda: 0,
+            expires_at="2099-01-01T00:00:00Z",
+            approve=approve,
+            handlers={"captcha": handler},
+        )
+        with self.assertRaises(Paused) as error:
+            await workflow.settle("product")
+        self.assertEqual(error.exception.reason, "site_state_changed")
+        handler.assert_not_awaited()
+
+    async def test_oversized_challenge_not_screenshotted(self):
+        surface = SimpleNamespace(
+            is_visible=AsyncMock(return_value=True),
+            bounding_box=AsyncMock(return_value={"width": 3000, "height": 3000}),
+            screenshot=AsyncMock(),
+        )
+        frames = SimpleNamespace(count=AsyncMock(return_value=1), nth=lambda i: surface)
+        d = BrowserDriver(None, None, None)
+        with self.assertRaises(Paused):
+            await d._captcha_evidence(
+                SimpleNamespace(locator=lambda s: frames), timeout=1
+            )
+        surface.screenshot.assert_not_awaited()
+
+    async def test_checkout_frame_terms_are_observed_and_bound(self):
+        frame = SimpleNamespace(
+            url="https://www.epicgames.com/purchase",
+            locator=lambda s: ("frame", s),
+            get_by_role=lambda *a, **k: ("frame", "button"),
+            frame_element=AsyncMock(
+                return_value=SimpleNamespace(is_visible=AsyncMock(return_value=True))
+            ),
+        )
+        page = SimpleNamespace(
+            url="https://store.epicgames.com/en-US/p/fixture",
+            main_frame=object(),
+            frames=[frame],
+            locator=lambda s: ("page", s),
+            get_by_role=lambda *a, **k: ("page", "button"),
+        )
+        d = BrowserDriver(None, page, None)
+        d._text = AsyncMock(return_value="License terms")
+        d._visible = AsyncMock(
+            side_effect=lambda s: s == ("frame", 'label[for="agree"]')
+        )
+        d._checkout_controls = AsyncMock(return_value=[])
+        state = await d.observe("checkout", timeout=1)
+        self.assertEqual(state.kind, "terms")
+        self.assertIs(state.payload["_container"], frame)
+        self.assertEqual(state.target, frame.url)
+
+    async def test_readonly_verification_closes_separate_page(self):
+        from platforms.epic.workflow import Offer
+
+        offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
+        button = SimpleNamespace(inner_text=AsyncMock(return_value="In Library"))
+        verification = SimpleNamespace(
+            url=offer.url,
+            goto=AsyncMock(),
+            close=AsyncMock(),
+            locator=lambda s: SimpleNamespace(first=button),
+        )
+        checkout = SimpleNamespace(goto=AsyncMock())
+        context = SimpleNamespace(new_page=AsyncMock(return_value=verification))
+        d = BrowserDriver(context, checkout, None)
+        d._visible = AsyncMock(return_value=True)
+        self.assertEqual(await d.verify_readonly(offer, timeout=1), "owned")
+        checkout.goto.assert_not_awaited()
+        verification.close.assert_awaited_once()
+
+    async def test_readonly_timeout_closes_page_without_leaving_checkout(self):
+        from platforms.epic.workflow import Offer
+
+        offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
+        verification = SimpleNamespace(
+            goto=AsyncMock(side_effect=TimeoutError()), close=AsyncMock()
+        )
+        checkout = SimpleNamespace(goto=AsyncMock())
+        d = BrowserDriver(
+            SimpleNamespace(new_page=AsyncMock(return_value=verification)),
+            checkout,
+            None,
+        )
+        with self.assertRaises(TimeoutError):
+            await d.verify_readonly(offer, timeout=1)
+        checkout.goto.assert_not_awaited()
+        verification.close.assert_awaited_once()
+
+    async def test_real_playwright_timeout_retries_readback_then_preserves_gate(self):
+        try:
+            from playwright.async_api import TimeoutError as BrowserTimeoutError
+        except ImportError:
+            self.skipTest("optional Playwright dependency is not installed")
+        from platforms.epic.workflow import ClaimWorkflow, Obstacle, Offer
+        from common.interventions import fingerprint
+
+        offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
+        readback_pages = [
+            SimpleNamespace(
+                goto=AsyncMock(side_effect=BrowserTimeoutError("fixture navigation")),
+                close=AsyncMock(),
+            )
+            for _ in range(3)
+        ]
+        context = SimpleNamespace(new_page=AsyncMock(side_effect=readback_pages))
+        journal = SimpleNamespace(read=AsyncMock(return_value=None), write=AsyncMock())
+        d = BrowserDriver(context, object(), journal)
+        d.observe = AsyncMock(
+            side_effect=[
+                None,
+                None,
+                None,
+                None,
+                Obstacle("captcha", offer.url, fingerprint("late"), "post_submit"),
+            ]
+        )
+        d.inventory = AsyncMock(return_value=[offer])
+        d.open_offer = AsyncMock()
+        d.verify = AsyncMock(return_value="not_owned")
+        d.prepare_cart = AsyncMock()
+        d.inspect_cart = AsyncMock(return_value="empty_confirmed")
+        d.prepare_checkout = AsyncMock()
+        d.checkout_total = AsyncMock(return_value="explicit_zero")
+        d.submit_once = AsyncMock()
+        result = await ClaimWorkflow(
+            d,
+            {"run_id": "fixture", "platform": "epic", "account": "one"},
+            deadline=100,
+            clock=lambda: 0,
+            expires_at="2099-01-01T00:00:00Z",
+            readback_interval=0,
+            sleep=AsyncMock(),
+        ).run()
+        self.assertEqual(result.reason, "approval_or_handler_needed")
+        self.assertEqual(result.uncertain, ["a"])
+        self.assertEqual(result.pending[0]["phase"], "post_submit")
+        self.assertEqual(context.new_page.await_count, 3)
+        d.submit_once.assert_awaited_once()
+        for page in readback_pages:
+            page.close.assert_awaited_once()
+
+    async def test_real_playwright_ownership_timeout_is_normalized(self):
+        try:
+            from playwright.async_api import TimeoutError as BrowserTimeoutError
+        except ImportError:
+            self.skipTest("optional Playwright dependency is not installed")
+        from platforms.epic.workflow import Offer
+
+        offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
+        verification = SimpleNamespace(goto=AsyncMock(), close=AsyncMock())
+        d = BrowserDriver(
+            SimpleNamespace(new_page=AsyncMock(return_value=verification)),
+            object(),
+            None,
+        )
+        d._ownership = AsyncMock(side_effect=BrowserTimeoutError("fixture ownership"))
+        with self.assertRaises(TimeoutError):
+            await d.verify_readonly(offer, timeout=1)
+        verification.close.assert_awaited_once()
+
+    async def test_readonly_deterministic_and_authorization_errors_are_not_normalized(
+        self,
+    ):
+        from platforms.epic.workflow import Offer
+
+        try:
+            from playwright.async_api import Error as BrowserError
+        except ImportError:
+            self.skipTest("optional Playwright dependency is not installed")
+
+        offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
+        for original in [
+            BrowserError("strict mode violation"),
+            Paused("unexpected_origin"),
+        ]:
+            verification = SimpleNamespace(goto=AsyncMock(), close=AsyncMock())
+            d = BrowserDriver(
+                SimpleNamespace(new_page=AsyncMock(return_value=verification)),
+                object(),
+                None,
+            )
+            d._ownership = AsyncMock(side_effect=original)
+            with self.assertRaises(type(original)) as raised:
+                await d.verify_readonly(offer, timeout=1)
+            self.assertIs(raised.exception, original)
+            verification.close.assert_awaited_once()
 
     async def test_empty_cart_requires_positive_marker(self):
         class Empty:

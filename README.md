@@ -2,11 +2,11 @@
 
 一个 Git 仓库，六个平台各一个目录；原生 Linux 一次性任务，无容器、常驻 worker、任务队列或浏览器池。
 
-## 当前状态（2026-10-01）
+## 当前状态（2026-10-02）
 
-- SMZDM：原有签名与签到/奖励查询已迁移；假 HTTP 测试通过
+- SMZDM：原有签名与签到/奖励查询已迁移；动作级日状态保留已确认签到，后续仍可恢复奖励查询；不明确写入不盲目重放
 - V2EX：从 dailycheckin 25.12.9 提取 MIT 的最小 provider，去除全包导入；独立 venv、完整带 hash 的 HTTP 依赖锁、与原 provider 的假 Session 等价测试；强制 TLS 验证
-- 阿里云：只签到/领取的原生适配器；外部 daily.py 必须匹配精确 hash，不调用完整 main、发通知、清理或互动任务
+- 阿里云：只签到/领取的原生适配器，逐社区保留结果并正确汇总；外部 daily.py 必须匹配精确 hash，不调用完整 main、发通知、清理或互动任务
 - Laowang：原生 Firefox 流程、持久账号 profile、状态查询及人工登录入口；页面模拟测试通过；前一环境 Firefox smoke 在 profile 初始化时失败；当前环境的依赖/浏览器验证结果单独记录，尚未通过业务验收
 - Epic：已有固定来源检查、状态机与原生浏览器对象驱动、零价/购物车/商品身份核验和不确定提交只读恢复；公共claim入口尚未开放，未通过真实端到端验收
 - Rewards：已有独立每日活动、快照、extra、桌面/手机搜索、onboarding punchcard；full 按明确的 capabilities.json 顺序编排，缺少清单时不执行。未接入能力保持 pending，部分成功不会冒充所有能力完成；APP/目标恢复需可信调用方，尚无真实账号端到端验收
@@ -30,7 +30,7 @@ source-lock.json         原始仓库来源
 
 ```sh
 python3 -m unittest discover -s tests -v
-node --test tests/adapters.test.cjs
+node --test tests/*.test.cjs
 python3 platforms/smzdm/run.py --runtime-root /absolute/private/benefits-data
 ```
 
@@ -67,7 +67,7 @@ Playwright Firefox 1.63.0 已锁完整 npm integrity。本轮已安装 Firefox 1
 - 75：锁忙，未执行业务
 - 124：总时限耗尽，结果可能未知，禁止盲目重放写请求
 
-同日已确认签到保存 last-confirmed.json；后续调用默认不重复提交，即使奖励仍未知。--allow-repeat 是显式重复执行开关，应先人工读回确认。--status 不受已签到跳过限制。dry-run 不覆盖最新业务结果。尚未实现每日汇总/历史轮转/自动凭据同步。
+通用运行器每次在锁内调用适配器，不再以 checkin=complete 跳过整个平台。last-confirmed.json 仅保留证据；各平台按具体动作及业务日期恢复，已确认签到不会因为奖励未知而重做，待确认奖励仍可读回。异常退出、超时和中断保留经过身份校验的同 run 业务事实，只改变执行状态。--allow-repeat 仅为旧命令兼容保留，已弃用且不绕过动作防重放。--status 当前仅 Laowang 支持。dry-run 不覆盖最新业务结果。尚未实现每日汇总或自动凭据同步。
 
 运行一次示意（仅在完成真实操作授权后）：
 
@@ -82,11 +82,13 @@ python3 platforms/v2ex/run.py --runtime-root /absolute/private/benefits-data --a
 
 任务锁→全局浏览器锁，flock 文件不删除；浏览器任务串行。监督者按 chunk 排空输出，单 run 日志最多 1 MiB，结果最多 64 KiB。精确已知环境值跨 chunk 脱敏；不能保证未知编码机密被识别。凭据仅从当前平台白名单传入，不写 argv/result。文件默认 0600、新目录 0700；已有目录权限不擅自修改。
 
-总时限内 TERM→KILL 同一进程组，即使 leader 已退出也清理子组。子进程继承专用 lease fd，降低 launcher 异常退出提前解锁风险。setsid/双重 fork 脱离进程组、关闭继承 fd 的后代不受此机制完整约束；不能宣称 SIGKILL launcher 后所有浏览器必然立即回收。生产严格保证需经批准的原生 systemd/cgroup KillMode=control-group。未按进程名杀其他任务，未更改系统安全设置。
+总时限内 TERM→KILL 适配器进程组。浏览器任务另使用一次性启动器进程自身的 Linux subreaper 与 pidfd，回收适配器退出后被收养的分离子进程；仅操作经确认属于该启动器的后代，不按名称杀进程。执行前实际探测内核能力，不支持时不会启动浏览器任务。该实现没有安装系统服务或修改系统安全设置。
 
-运行记录数量目前无自动删除；日志单次有界不等于磁盘总量有界。部署前应确定保留策略，不自动删除旧记录/会话。成功不保留网页截图/HTML。Laowang CAPTCHA 默认 human_required，原始 solver 仅保留为来源对照，不在执行路径里。
+cleanup 标记在确认回收后才清除。如果启动器自身被 SIGKILL，或无法证明回收完成，同一主机本次启动期间的后续浏览器任务会拒绝重叠执行；这不代表已立即杀掉所有孤儿。只读检查和恢复边界见 [运行与回收说明](docs/RUNTIME_RECOVERY.md)。只有已验证的新 boot ID 才自动恢复旧启动记录；正常运行中不提供盲目清除标记的开关。NAS 内核能力及真实峰值内存仍须部署前确认。
 
-详见 [实现状态与阻塞](docs/STATUS.md) 和 [来源与许可证](THIRD_PARTY_NOTICES.md)。
+通用 run 历史目前无自动删除；日志单次有界不等于磁盘总量有界。平台的每日动作 journal 有自己的有界周期管理，但不会替用户清除未知提交或既有会话。成功不保留网页截图/HTML。Laowang 已有按需 tncode 处理器和同次调用的有界授权恢复，普通 CLI 尚未接入可信 Hermes 宿主，因此遇到挑战仍暂停。Epic 的公开领取入口也仍有明确闸门。
+
+详见 [本轮修复与验收](docs/FIX_STATUS_2026-10-02.md)、[实现状态与阻塞](docs/STATUS.md) 和 [来源与许可证](THIRD_PARTY_NOTICES.md)。
 
 ## Rewards 每日活动限定模式
 

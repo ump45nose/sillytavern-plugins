@@ -3,7 +3,6 @@
 const path = require("node:path");
 const common = require("./browser_common.cjs");
 const { publish } = require("../../common/result.cjs");
-const { Obstacle } = require("./obstacles.cjs");
 function amount(value) {
   if (
     value === null ||
@@ -31,55 +30,10 @@ function quota(rows) {
   }
   return { status: earned >= max ? "complete" : "incomplete", earned, max };
 }
-function restricted(raw) {
-  const flyout = raw?.flyoutResult,
-    counters = flyout?.userStatus?.counters,
-    attrs = raw?.userInfo?.profile?.attributes;
-  const sum = (rows) => {
-    if (!Array.isArray(rows)) return null;
-    let value = 0;
-    for (const row of rows) {
-      const n = amount(row?.pointProgressMax);
-      if (n === null) return null;
-      value += n;
-    }
-    return value;
-  };
-  const pc = sum(counters?.PCSearch ?? counters?.pcSearch),
-    activity = sum(counters?.ActivityAndQuiz ?? counters?.activityAndQuiz),
-    daily = sum(counters?.DailyPoint ?? counters?.dailyPoint);
-  return (
-    String(attrs?.rbs ?? "").trim() === "1" &&
-    Boolean(attrs?.SerpBotScore_upd) &&
-    Boolean(attrs?.AdsBotScore_upd) &&
-    activity === 0 &&
-    pc !== null &&
-    daily === pc
-  );
-}
+const restricted = common.restricted;
 function quotas(raw, device, expectedRegion = null) {
-  if (
-    raw?.isError ||
-    raw?.userInfo?.isRewardsUser !== true ||
-    raw?.flyoutResult?.userStatus?.isRewardsUser !== true
-  )
-    throw Error("authenticated_counters_unavailable");
-  const data = raw.flyoutResult,
-    counters = data.userStatus.counters || {};
-  const country = raw.userInfo?.profile?.attributes?.country;
-  if (
-    expectedRegion &&
-    (!country || String(country).toUpperCase() !== expectedRegion.toUpperCase())
-  )
-    throw new Obstacle({
-      url: common.DASHBOARD,
-      flags: { regionMismatch: true },
-    });
-  if (restricted(raw))
-    throw new Obstacle({ url: common.DASHBOARD, flags: { botWarning: true } });
-  const warnings = data.userWarnings || raw.userWarnings || [];
-  if (warnings.some?.((x) => x?.name === "Fraud_UserWarning_BotScore_UX"))
-    throw new Obstacle({ url: common.DASHBOARD, flags: { botWarning: true } });
+  common.assertAccountAvailable(raw, expectedRegion);
+  const counters = raw.flyoutResult.userStatus.counters || {};
   if (device === "mobile")
     return {
       mobile_search: quota(counters.MobileSearch ?? counters.mobileSearch),
@@ -309,7 +263,10 @@ async function run(chromium, state, device, options = {}, deps = common) {
         };
         const queries =
           config.queries ||
-          require("./vendor/rewards-parser/src/functions/search-queries.json");
+          require("./vendor/rewards-parser/src/functions/search-queries.json").slice(
+            0,
+            1000,
+          );
         return runSession(page, observe, device, config, queries, deps);
       },
     );

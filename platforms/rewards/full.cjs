@@ -113,7 +113,7 @@ async function execute(
 ) {
   const enabled = manifest(value),
     stages = {},
-    business = {},
+    business = Object.fromEntries(enabled.map((key) => [key, "unknown"])),
     snapshots = {};
   let stopped = null,
     terminal = null,
@@ -208,69 +208,105 @@ async function execute(
     report: { schema_version: 1, enabled, stages, snapshots, business },
   };
 }
-function createBindings({ chromium, stateDir, config = {}, proxy, host = {} }) {
-  // Required account context is checked before snapshots or any APP action.
-  // A failed snapshot must not accidentally turn a missing desktop state into
-  // permission to execute other mutations against an unbound account.
-  let desktop;
-  try {
-    desktop = common.readState(stateDir, "desktop");
-  } catch {
-    throw Error("desktop_session_unavailable");
-  }
-  const sessions = new Map([["desktop", desktop]]);
-  const state = (device) => {
-    if (!sessions.has(device))
+function createBindings({
+  chromium,
+  stateDir,
+  config = {},
+  proxy,
+  host = {},
+  enabled,
+}) {
+  const requested = new Set(manifest({ schema_version: 1, enabled }));
+  const desktopRequired = [
+    "daily",
+    "extra",
+    "punchcards",
+    "desktop_search",
+  ].some((capability) => requested.has(capability));
+  const mobileRequired = requested.has("mobile_search");
+  // Check every required browser account before snapshots or any mutation.
+  // APP-only hosts establish their account through the trusted APP client.
+  const sessions = new Map();
+  for (const device of [
+    ...(desktopRequired ? ["desktop"] : []),
+    ...(mobileRequired ? ["mobile"] : []),
+  ]) {
+    try {
       sessions.set(device, common.readState(stateDir, device));
-    return sessions.get(device);
-  };
+    } catch {
+      throw Error(device + "_session_unavailable");
+    }
+  }
+  const state = (device) => sessions.get(device);
   const preserve = (device) => (value) => sessions.set(device, value);
-  const parser = require("./parser_loader.cjs").loadParser();
+  // Only enabled browser capabilities need Chromium. Parser-only dependencies
+  // remain lazy, so a daily/search or APP request cannot fail loading a parser.
+  if ((desktopRequired || mobileRequired) && !chromium)
+    chromium = common.dependency(process.env.REWARDS_ROOT);
+  let loadedParser;
+  const parser = () =>
+    (loadedParser ??= require("./parser_loader.cjs").loadParser());
   const base = {
     proxy,
+    region: config.region,
     contextOptions: config.desktop,
     onVerifiedState: preserve("desktop"),
   };
-  const journal = require("./punchcards.cjs").journal;
+  const mobile = {
+    proxy,
+    region: config.region,
+    contextOptions: config.mobile,
+    onVerifiedState: preserve("mobile"),
+  };
+  const journal = (name) =>
+    require("./punchcards.cjs").journal(path.join(stateDir, name));
   // Trusted in-process callbacks only. Never module names/grants/tokens from JSON.
-  const goal = config.goal?.url
-    ? {
-        url: config.goal.url,
-        checkpoint: host.goalCheckpoint,
-        authorize: host.authorizeGoal,
-        journal: journal(path.join(stateDir, "goal-journal.json")),
-      }
-    : undefined;
-  const snapshot = () =>
-    require("./snapshot.cjs").run(chromium, state("desktop"), base);
+  const goal = () =>
+    config.goal?.url
+      ? {
+          url: config.goal.url,
+          checkpoint: host.goalCheckpoint,
+          authorize: host.authorizeGoal,
+          journal: journal("goal-journal.json"),
+        }
+      : undefined;
+  const snapshot =
+    desktopRequired || mobileRequired
+      ? () =>
+          require("./snapshot.cjs").run(
+            chromium,
+            state(desktopRequired ? "desktop" : "mobile"),
+            desktopRequired ? base : mobile,
+          )
+      : async () => ({
+          execution: "ok",
+          reason: "browser_snapshot_not_required",
+          business: { snapshot: "not_applicable" },
+        });
   const bindings = {
     daily: () =>
       require("./activities.cjs").run(chromium, state("desktop"), base),
     extra: () =>
-      require("./extra.cjs").run(chromium, state("desktop"), parser, {
+      require("./extra.cjs").run(chromium, state("desktop"), parser(), {
         ...base,
-        goal,
+        goal: goal(),
       }),
     punchcards: () =>
-      require("./punchcards.cjs").run(chromium, state("desktop"), parser, {
+      require("./punchcards.cjs").run(chromium, state("desktop"), parser(), {
         ...base,
         autoClaim: config.punchcards?.autoClaim === true,
         timezoneOffset: config.timezoneOffset ?? 0,
-        journal: journal(path.join(stateDir, "punchcard-journal.json")),
+        journal: journal("punchcard-journal.json"),
       }),
     desktop_search: () =>
       require("./search.cjs").run(chromium, state("desktop"), "desktop", {
         ...base,
         search: config.search,
-        region: config.region,
       }),
     mobile_search: () =>
       require("./search.cjs").run(chromium, state("mobile"), "mobile", {
-        proxy,
+        ...mobile,
         search: config.search,
-        region: config.region,
-        contextOptions: config.mobile,
-        onVerifiedState: preserve("mobile"),
       }),
   };
   if (typeof host.appClient === "function")
@@ -281,19 +317,27 @@ function createBindings({ chromium, stateDir, config = {}, proxy, host = {} }) {
     ])
       bindings[capability] = async () => {
         const client = await host.appClient();
-        const j = journal(path.join(stateDir, "app-journal.json"));
         const app = require("./app.cjs");
         const out =
           method === "runPromotions"
-            ? await app[method](client, j)
-            : await app[method](client, j, host.businessDate);
+            ? await app[method](client, journal("app-journal.json"))
+            : await app[method](
+                client,
+                app.dailyJournal(stateDir, host.businessDate),
+                host.businessDate,
+              );
         return {
           ...out,
-          execution: "ok",
+          execution: out.execution || "ok",
           reason: out.reason || "app_readback_finished",
         };
       };
-  return { bindings, snapshot };
+  return {
+    bindings: Object.fromEntries(
+      Object.entries(bindings).filter(([key]) => requested.has(key)),
+    ),
+    snapshot,
+  };
 }
 function writeReport(file, value) {
   const text = JSON.stringify(value);
@@ -303,7 +347,7 @@ function writeReport(file, value) {
   fs.renameSync(temp, file);
 }
 async function main() {
-  let out;
+  let out, confirmedBusiness;
   try {
     const stateDir = process.env.BENEFITS_STATE_DIR;
     let requested;
@@ -319,15 +363,18 @@ async function main() {
           : "capability_manifest_invalid",
       );
     }
-    manifest(requested);
+    const enabled = manifest(requested);
+    confirmedBusiness = Object.fromEntries(
+      enabled.map((capability) => [capability, "unknown"]),
+    );
     const configPath = path.join(stateDir, "native-config.json");
     const config = fs.existsSync(configPath)
       ? common.boundedJson(configPath, 65536)
       : {};
     const native = createBindings({
-      chromium: common.dependency(process.env.REWARDS_ROOT),
       stateDir,
       config,
+      enabled,
       proxy: process.env.REWARDS_PROXY,
     });
     const reportPath = path.join(
@@ -336,7 +383,13 @@ async function main() {
     );
     out = await execute(requested, native.bindings, {
       snapshot: native.snapshot,
-      onProgress: (value) => writeReport(reportPath, value),
+      onProgress: (value) => {
+        // Publish the existing protocol first: the runner can recover confirmed
+        // same-run business even if a later stage or report write never returns.
+        confirmedBusiness = { ...value.business };
+        publish("failed", "full_in_progress", confirmedBusiness);
+        writeReport(reportPath, value);
+      },
     });
     writeReport(reportPath, out.report);
   } catch (error) {
@@ -348,10 +401,11 @@ async function main() {
         "dependency_not_configured",
         "dependency_incompatible",
         "desktop_session_unavailable",
+        "mobile_session_unavailable",
       ].includes(error.message)
         ? error.message
         : "full_preflight_or_reporting_failed",
-      business: { full: "unknown" },
+      business: out?.business || confirmedBusiness || { full: "unknown" },
     };
   }
   publish(out.execution, out.reason, out.business);
@@ -365,4 +419,5 @@ module.exports = {
   execute,
   createBindings,
   writeReport,
+  main,
 };
