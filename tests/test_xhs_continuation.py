@@ -73,9 +73,10 @@ class XhsContinuationTests(unittest.TestCase):
         self.assertEqual(second.reason, "request_budget")
         self.assertEqual(self.ids(), {"a", "b", "c", "d"})
         third = self.scan({})
-        self.assertEqual(third.reason, "end")
+        self.assertEqual(third.reason, "window_recheck")
+        self.scan({"": self.page(["a", "b", "c", "d", "e"])})
         self.assertEqual(self.ids(), {"a", "b", "c", "d", "e"})
-        self.assertEqual(self.calls, [""])
+        self.assertEqual(self.calls, ["", ""])
         self.assertIsNone(self.store.scan_continuation(self.source, self.account))
         state = self.store.source(self.source, self.account)
         self.assertEqual((state["cursor"], state["baseline_at"], state["scan_status"]), (731, 42, "complete"))
@@ -86,8 +87,11 @@ class XhsContinuationTests(unittest.TestCase):
         self.assertEqual(self.scan({"": self.page(["a", "b"], "page2")}).reason, "page_limit")
         self.restart_store()
         result = self.scan({"page2": self.page(["c", "d"])})
-        self.assertTrue(result.complete)
-        self.assertEqual(self.calls, ["", "page2"])
+        self.assertEqual(result.reason, "window_recheck")
+        self.scan({"": self.page(["a", "b"], "page2")})
+        verified = self.scan({"page2": self.page(["c", "d"])})
+        self.assertTrue(verified.complete)
+        self.assertEqual(self.calls, ["", "page2", "", "page2"])
         self.assertEqual(self.ids(), {"a", "b", "c", "d"})
 
     def test_exact_item_budget_saves_next_page_cursor(self):
@@ -159,13 +163,15 @@ class XhsContinuationTests(unittest.TestCase):
     def test_checkpoint_clear_and_final_batch_are_atomic(self):
         self.scan({"": self.page(["a", "b", "c"])})
         before = self.store.scan_continuation(self.source, self.account)
-        result = self.scan({}, commit=False)
+        self.scan({})  # Finish buffered entries and enter head verification.
+        before = self.store.scan_continuation(self.source, self.account)
+        result = self.scan({"": self.page(["a", "b", "c"])}, commit=False)
         self.store.db.execute("""CREATE TEMP TRIGGER reject_clear BEFORE DELETE ON settings
             WHEN OLD.key LIKE 'scan_continuation:%'
             BEGIN SELECT RAISE(ABORT, 'fixture clear failure'); END""")
         with self.assertRaises(sqlite3.IntegrityError):
             self.store.apply_scan(self.source, self.account, result)
-        self.assertEqual(self.ids(), {"a", "b"})
+        self.assertEqual(self.ids(), {"a", "b", "c"})
         self.assertEqual(self.store.scan_continuation(self.source, self.account), before)
         self.assertEqual(self.store.source(self.source, self.account)["scan_status"], "partial")
 
@@ -249,6 +255,59 @@ class XhsContinuationTests(unittest.TestCase):
         self.assertEqual(tuple(self.store.db.execute("SELECT * FROM seen").fetchone()), before)
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM items").fetchone()[0], 0)
         self.assertIsNotNone(self.store.source("x_likes", self.account)["baseline_at"])
+
+    def test_offset_deletion_requires_head_reverification_before_complete(self):
+        self._moving_offset_deletions(delete_during_verification=False)
+
+    def test_deletion_during_verification_with_no_fresh_ids_requires_stable_digest(self):
+        self._moving_offset_deletions(delete_during_verification=True)
+
+    def _moving_offset_deletions(self, *, delete_during_verification):
+        self.cfg["xhs"]["max_pages_per_run"] = 1
+        live = list("abcdefgh")
+        removed_head = removed_verify = False
+        completed = False
+        for run in range(30):
+            before = self.store.scan_continuation(self.source, self.account)
+            cursor = before["cursor"] if before else ""
+            pages = {}
+            for offset in range(0, len(live) + 2, 2):
+                next_cursor = str(offset + 2) if offset + 2 < len(live) else None
+                pages[str(offset) if offset else ""] = self.page(live[offset:offset + 2], next_cursor)
+            count = len(self.calls)
+            result = self.scan(pages)
+            self.assertLessEqual(len(self.calls) - count, 1)
+            if run == 1:
+                # Initial scan has accepted a..d. Removing a moves unread e
+                # behind the saved offset=4, so the resumed walk skips it.
+                live.remove("a"); removed_head = True
+            if (delete_during_verification and not removed_verify and before
+                    and before.get("phase") == "verify" and cursor == ""):
+                # First verification sees b/c, then their deletion moves e
+                # behind offset=2 again. No fresh ID is found on this pass.
+                live.remove("b"); live.remove("c"); removed_verify = True
+            if result.complete:
+                completed = True
+                break
+        self.assertTrue(completed, "a stable source should converge within these fixture passes")
+        self.assertTrue(removed_head)
+        self.assertEqual(removed_verify, delete_during_verification)
+        self.assertLessEqual(set(live), self.ids())
+        self.assertIn("e", self.ids())
+        self.assertIsNone(self.store.scan_continuation(self.source, self.account))
+
+    def test_legacy_checkpoint_without_digest_revalidates_conservatively(self):
+        self.scan({"": self.page(["a", "b", "c"])})
+        key = f"scan_continuation:{self.source}:{self.account}"
+        state = self.store.scan_continuation(self.source, self.account)
+        for field in ("phase", "digest", "reference_digest", "discovered"):
+            state.pop(field, None)
+        self.store.setting(key, json.dumps(state))
+        result = self.scan({})
+        self.assertEqual(result.reason, "window_recheck")
+        self.assertEqual(self.ids(), {"a", "b", "c"})
+        self.assertEqual(self.scan({"": self.page(["a", "b", "c"])}).reason, "window_recheck")
+        self.assertTrue(self.scan({"": self.page(["a", "b", "c"])}).complete)
 
 
 if __name__ == "__main__":

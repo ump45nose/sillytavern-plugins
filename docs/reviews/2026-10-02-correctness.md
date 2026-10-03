@@ -7,10 +7,16 @@ platform accounts, or media directories were accessed by the tests.
 
 - **FS1:** XHS resumes a source/account-scoped unfinished walk. A checkpoint
   retains unread page entries, pagination progress and the original seen boundary.
-  Queue entries, seen IDs, outcome and checkpoint commit together. A resumed walk
-  finishes before the next head scan; new head inserts are picked up on that next
-  scan. Existing numeric cursors, timestamps, baselines, frozen names and retry
-  locators remain compatible.
+  Queue entries, seen IDs, outcome and checkpoint commit together. The API does
+  not promise snapshot-stable cursors: after any resumed walk, budgeted head
+  verification retains the original boundary. Completion requires two consecutive
+  traversals with the same ordered page-ID digest and no newly discovered IDs in
+  the verification traversal. Deletion/reordering also changes the digest, even
+  when no new IDs are found. This is explicit convergence evidence, not an atomic
+  snapshot guarantee under continuous adversarial mutation. Old checkpoints
+  without digests are revalidated conservatively without losing buffered entries.
+  Existing numeric cursors, timestamps, baselines, frozen names and retry
+  locators remain compatible; head inserts are processed during verification.
 - **FS2:** Pixiv refuses every terminal gallery-dl `-1` event, including mixed
   successful records followed by auth, HTTP or unknown failures. At the pinned
   gallery-dl commit, such an event is emitted when DataJob dispatch aborts and

@@ -7,6 +7,7 @@ item locator and the private state directory.
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import hashlib
 import math
 import os
 import http.cookiejar
@@ -151,6 +152,7 @@ class XhsAdapter:
             state = self.store.scan_continuation(source, account)
         except (TypeError, ValueError):
             raise SyncError("scan_incomplete") from None
+        resumed = state is not None
         if state is None:
             state = {"version": 1, "started_at": time.time(), "cursor": "",
                      "seen_cursors": [], "pending": []}
@@ -173,16 +175,38 @@ class XhsAdapter:
                 or not isinstance(state.get("pending"), list)
                 or not all(valid_pending(record) for record in state["pending"])
                 or not isinstance(state.get("seen_cursors"), list)
-                or not all(isinstance(value, str) for value in state["seen_cursors"])):
+                or not all(isinstance(value, str) for value in state["seen_cursors"])
+                or state.get("phase", "walk") not in ("walk", "verify")
+                or not isinstance(state.get("discovered", 0), int)
+                or state.get("discovered", 0) < 0
+                or any(not isinstance(state.get(key, ""), str) for key in ("digest", "reference_digest"))):
             raise SyncError("scan_incomplete")
         records, seen_cursors = [], set(state["seen_cursors"])
         cursor_value = state["cursor"]
         pending = state["pending"]
+        phase = state.get("phase", "walk")
+        digest = state.get("digest", "")
+        reference_digest = state.get("reference_digest", "")
+        discovered = state.get("discovered", 0)
 
         def result(reason):
+            if reason in ("end", "seen_boundary") and (
+                    (resumed and phase == "walk") or
+                    (phase == "verify" and (discovered or digest != reference_digest))):
+                # The API exposes an opaque cursor, not a snapshot guarantee.
+                # Rewalk the moving list from its head against the ORIGINAL
+                # boundary before declaring a cross-run window complete. A
+                # changed pass (even only deletions/reordering) must stabilize
+                # on another budgeted pass; do not promote this window's seen.
+                return ScanResult(records, reason="window_recheck", continuation={
+                    "version": 1, "started_at": state["started_at"], "cursor": "",
+                    "seen_cursors": [], "pending": [], "phase": "verify",
+                    "digest": "", "reference_digest": digest, "discovered": 0})
             continuation = None if reason in ("end", "seen_boundary") else {
                 "version": 1, "started_at": state["started_at"], "cursor": cursor_value,
-                "seen_cursors": sorted(seen_cursors), "pending": pending}
+                "seen_cursors": sorted(seen_cursors), "pending": pending,
+                "phase": phase, "digest": digest, "reference_digest": reference_digest,
+                "discovered": discovered}
             return ScanResult(records, reason=reason, continuation=continuation)
 
         # Retain the unread part of a fetched page rather than re-reading the
@@ -194,6 +218,7 @@ class XhsAdapter:
             for _ in selected:
                 self.observe("new_ids")
             self._discover_remaining -= len(selected)
+            discovered += len(selected)
             if pending:
                 return result("request_budget")
         if cursor_value is None:
@@ -220,6 +245,7 @@ class XhsAdapter:
             data = payload.get("data") or {}
             page_by_id = {r["id"]: r for r in (self._note(n) for n in data.get("notes", []))}
             page_records = list(page_by_id.values())
+            digest = hashlib.sha256((digest + json.dumps(list(page_by_id))).encode()).hexdigest()
             # A moving page can repeat a buffered or earlier-page selection in
             # this uncommitted batch. Refresh its locator without spending a
             # second discovery slot or emitting a duplicate record.
@@ -234,6 +260,7 @@ class XhsAdapter:
             for _ in selected:
                 self.observe("new_ids")
             self._discover_remaining -= len(selected)
+            discovered += len(selected)
             # Pages repeated by offset pagination after a head insert are not a
             # boundary if their IDs were first saved during this unfinished walk.
             boundary = self.store.seen_ids(source, account, (r["id"] for r in page_records),
