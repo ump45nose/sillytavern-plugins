@@ -90,7 +90,7 @@ def queries(item: MediaItem, tracks: list[dict] = (), provider: str | None = Non
 
 def musicbrainz(item: MediaItem) -> list[dict]:
     title = item.original_title or item.name
-    with httpx.Client(timeout=12, headers={"User-Agent": "EmbyThemeWorker/0.3 (https://github.com/ump45nose/emby-theme-worker)"}) as client:
+    with httpx.Client(timeout=12, headers={"User-Agent": "EmbyThemeWorker/0.3 (https://github.com/ump45nose/media-automation)"}) as client:
         data = client.get("https://musicbrainz.org/ws/2/release/", params={"query": f'release:"{title}" AND secondarytype:soundtrack', "fmt": "json", "limit": 5}).raise_for_status().json()
         def related_release(release):
             evidence = ' '.join(str(release.get(k, '')) for k in ('title', 'disambiguation', 'release-group'))

@@ -58,8 +58,8 @@ The image pins its Python base digest, FFmpeg, yt-dlp, audio classifier version 
 1. Clone and build:
 
    ```bash
-   gh repo clone ump45nose/emby-theme-worker
-   cd emby-theme-worker
+   gh repo clone ump45nose/media-automation
+   cd media-automation/apps/emby-theme-worker
    mkdir -p models
    curl -fL -o models/keras_speech_music_noise_cnn.hdf5 \
      https://github.com/ina-foss/inaSpeechSegmenter/releases/download/models/keras_speech_music_noise_cnn.hdf5

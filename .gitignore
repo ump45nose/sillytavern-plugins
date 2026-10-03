@@ -46,3 +46,4 @@ downloads/
 # Independent frontend and local wheel artifacts
 node_modules/
 *.whl
+.build/

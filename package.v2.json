@@ -22,7 +22,7 @@
     "name": "主题曲管理",
     "description": "自动检索、智能兜底与人工试听裁剪，连接独立 Theme Worker",
     "version": "0.3.0",
-    "icon": "https://raw.githubusercontent.com/ump45nose/emby-theme-worker/main/moviepilot/icon.svg",
+    "icon": "163music_A.png",
     "author": "ump45nose",
     "level": 1,
     "history": {

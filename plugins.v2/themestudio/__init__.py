@@ -34,7 +34,7 @@ class WorkerAudioResponse(StreamingResponse):
 class ThemeStudio(_PluginBase):
     plugin_name = "主题曲管理"
     plugin_desc = "自动检索、智能提取、试听裁剪与人工完成锁定"
-    plugin_icon = "https://raw.githubusercontent.com/ump45nose/emby-theme-worker/main/moviepilot/icon.svg"
+    plugin_icon = "163music_A.png"
     plugin_version = "0.3.0"
     plugin_author = "ump45nose"
     author_url = "https://github.com/ump45nose"
