@@ -185,11 +185,11 @@ class Engine:
                 records = [r for r in records if r["action_time"] is not None and r["action_time"] >= start]
             if spec.adapter == "wallabag":
                 self.store.ingest_wallabag(source, account, records)
+                self.store.update(source, account, scan_reason=result.reason,
+                                  scan_status="complete" if result.complete else "partial")
             else:
-                self.store.ingest(source, account, records, baseline=baseline,
-                                  cursor=result.cursor, start_date=str(configured_date))
-            self.store.update(source, account, scan_reason=result.reason,
-                              scan_status="complete" if result.complete else "partial")
+                self.store.apply_scan(source, account, result, records=records,
+                                      baseline=baseline, start_date=str(configured_date))
             if bad_dates:
                 self.store.update(source, account, scan_status="incomplete", error="bookmark_time_unknown")
                 success = False
@@ -264,23 +264,38 @@ class Engine:
                 self.attempted.add(key)
                 final = paths(self.cfg, item, asset)
                 try:
-                    if not final.is_file():
+                    if final.exists() or final.is_symlink():
+                        if asset["error"] == "destination_exists":
+                            # A collision discovered during publication is not
+                            # crash recovery evidence on the next run either.
+                            raise SyncError("destination_exists")
+                        if final.is_symlink() or not final.is_file() or final.stat().st_size == 0:
+                            # Preserve unknown files for inspection; a failed
+                            # existing target is never evidence of completion.
+                            raise SyncError("existing_file_invalid")
+                    else:
                         download_item = dict(item)
                         if item['platform'] == 'x':
                             download_item['_pending_numbers'] = [a['number'] for a in self.store.assets(item) if a['status'] != 'done']
                         downloaded = adapter.download(download_item, asset, staging)
-                        if not downloaded.is_file() or downloaded.stat().st_size == 0:
+                        if downloaded.is_symlink() or not downloaded.is_file() or downloaded.stat().st_size == 0:
                             raise SyncError("download_missing_file")
                         with downloaded.open("rb") as f:
                             os.fsync(f.fileno())
-                        os.replace(downloaded, final)
+                        # Staging is a sibling on the same filesystem. Link
+                        # publishes atomically without overwriting a racing file.
+                        try:
+                            os.link(downloaded, final)
+                        except FileExistsError:
+                            raise SyncError("destination_exists") from None
+                        downloaded.unlink()
                     self.store.asset_result(asset, size=final.stat().st_size)
                     log.info("%s: item=%s asset=%s downloaded", source, item["item_id"], asset["number"])
                 except SyncError as exc:
                     self.store.asset_result(asset, error=exc.code)
                     success = False
                     log.warning("%s: item=%s asset=%s %s", source, item["item_id"], asset["number"], exc.code)
-                    if exc.code in ("auth_required", "rate_limited"):
+                    if exc.code in ACCOUNT_ERRORS:
                         raise
                 except OSError:
                     self.store.asset_result(asset, error="filesystem_error")

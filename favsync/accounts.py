@@ -54,8 +54,9 @@ class AccountGuard:
             self._identity(f"{spec.adapter}_identity:{account}", adapter.identity(),
                            spec.adapter + "_account_changed")
         elif spec.adapter == "telegram" and getattr(adapter, "account_id", None):
-            key = "tg_identity:" + ("" if spec.name == "telegram" else spec.name + ":") + account
-            self._identity(key, adapter.account_id, "telegram_account_changed")
+            # Both collections belong to the same real Telegram subject. Keep
+            # legacy notice-dialog settings untouched; they were not user IDs.
+            self._identity("tg_identity:" + account, adapter.account_id, "telegram_account_changed")
 
     def failed(self, spec, account, error, cookie_digest=None):
         if error in ACCOUNT_ERRORS:

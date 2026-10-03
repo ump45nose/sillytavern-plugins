@@ -23,6 +23,7 @@ from .media import valid_media
 from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
+from .sources import ScanResult
 
 
 class _TextParser(HTMLParser):
@@ -127,13 +128,15 @@ class PixivAdapter:
                 events = json.load(output)
             except ValueError:
                 raise SyncError("invalid_export") from None
+        if not isinstance(events, list):
+            raise SyncError("invalid_export")
         errors = [event[-1] for event in events if isinstance(event, list) and event and event[0] == -1]
-        usable = [event for event in events if isinstance(event, list) and event and event[0] in (1, 2, 3)
-                  and isinstance(event[-1], dict) and str(event[-1].get("id") or "").isdigit()]
-        # Deleted and My-Pixiv-only bookmarks appear as per-work errors while
-        # pagination itself completes.  They are outside the interface-visible
-        # download set and must not prevent a baseline from committing.
-        if errors and not usable:
+        # At the pinned gallery-dl version, a DataJob -1 event means dispatch
+        # raised and enumeration stopped, even if earlier records were usable
+        # and the process returned zero. Deleted/My-Pixiv works instead produce
+        # warnings and normal metadata while pagination continues; do not treat
+        # those warnings as a failed scan or allow terminal NotFound errors.
+        if errors:
             names = {str(error.get("error", "")) for error in errors if isinstance(error, dict)}
             if names & {"AuthenticationError", "AuthorizationError"}:
                 raise SyncError("auth_required")
@@ -172,7 +175,7 @@ class PixivAdapter:
                             "author": author, "title": title, "series": series, "count": count,
                             "naming": {"group": author, "date": ""}},
             }
-        return list(records.values()), None
+        return ScanResult(list(records.values()), reason="end")
 
     @staticmethod
     def _comicinfo(meta, count, url):

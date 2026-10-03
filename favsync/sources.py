@@ -57,6 +57,8 @@ class ScanResult:
     records: list
     cursor: int | None = None
     reason: str = "end"
+    # Opaque adapter checkpoint, committed with records by Store.apply_scan.
+    continuation: dict | None = None
 
     @property
     def complete(self):

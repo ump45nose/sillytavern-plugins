@@ -173,6 +173,9 @@ class TelegramAdapter:
             target = Path(directory) / "export.json"
             args = self.base() + ["chat", "export", "--all", "--with-content", "--raw", "-o", str(target)]
             notice = source == "telegram_notice"
+            # A notice export identifies the bot dialog, not the session owner.
+            # Resolve Saved Messages separately even when its source is disabled.
+            self.account_id = self.identity() if notice else None
             if notice:
                 args += ["-c", self.cfg["telegram_notice"]["chat"]]
             if cursor:
@@ -183,7 +186,8 @@ class TelegramAdapter:
             try:
                 data = json.loads(target.read_text())
                 dialog = str(int(data["id"]))
-                self.account_id = dialog
+                if not notice:
+                    self.account_id = dialog
                 records = []
                 maximum = cursor
                 wanted = {self.origin(m.get('raw', {}))[0] for m in data['messages']} if not notice else set()
@@ -207,6 +211,22 @@ class TelegramAdapter:
                                     "locator": {"dialog": dialog, "message": int(item_id),
                                                 "naming": naming}})
                 return records, maximum
+            except (OSError, ValueError, KeyError, TypeError):
+                raise SyncError("invalid_export") from None
+
+    def identity(self):
+        # tdl 0.20.4 resolves an omitted chat to manager.Self(). A last=0
+        # export still emits that ID, including for empty Saved Messages, while
+        # retaining no messages. Never use raw outgoing senders as identity.
+        with tempfile.TemporaryDirectory(dir=self.cfg["state_dir"]) as directory:
+            target = Path(directory) / "identity.json"
+            command(self.base() + ["chat", "export", "--all", "-T", "last", "-i", "0", "-o", str(target)],
+                    self.cfg["command_timeout_seconds"])
+            try:
+                identity = int(json.loads(target.read_text())["id"])
+                if identity <= 0:
+                    raise ValueError("invalid identity")
+                return str(identity)
             except (OSError, ValueError, KeyError, TypeError):
                 raise SyncError("invalid_export") from None
 

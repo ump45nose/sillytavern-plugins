@@ -209,6 +209,11 @@ class Smoke(unittest.TestCase):
         adapter = TelegramAdapter(self.cfg)
         start = start_timestamp("2020-01-01", self.cfg["timezone"])
         def export_command(args, timeout):
+            if "-c" not in args:
+                self.assertEqual(args[args.index("-T") + 1], "last")
+                self.assertEqual(args[args.index("-i") + 1], "0")
+                Path(args[args.index("-o") + 1]).write_text(json.dumps({"id": 123, "messages": []}))
+                return
             self.assertEqual(args[args.index("-c") + 1], "@yuwk_notice_bot")
             Path(args[args.index("-o") + 1]).write_text(json.dumps({"id": 456, "messages": [
                 {"id": 1, "date": start, "text": "转给 Bot", "file": "", "raw": {"Out": True}},
