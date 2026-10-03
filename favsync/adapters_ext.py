@@ -434,7 +434,8 @@ class EhAdapter:
 
     def _events(self, url):
         with self.config_file() as config:
-            return read_events(config, url, self.cfg["command_timeout_seconds"], runner=command)
+            return read_events(config, url, self.cfg["command_timeout_seconds"],
+                               runner=command, warnings_are_errors=True)
 
     def scan(self, source, cursor=0, start=None):
         events = self._events("https://exhentai.org/favorites.php")

@@ -122,7 +122,8 @@ class PixivAdapter:
 
     def _events(self, url):
         with self.config_file() as config:
-            return read_events(config, url, self.cfg["command_timeout_seconds"], runner=command)
+            return read_events(config, url, self.cfg["command_timeout_seconds"],
+                               runner=command, warnings_are_errors=False)
 
     def scan(self, source, cursor=0, start=None):
         uid = self._uid()

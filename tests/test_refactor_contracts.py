@@ -1,5 +1,6 @@
 """Small contracts around shared boundaries; all inputs are local fixtures."""
 import json
+from contextlib import nullcontext
 from pathlib import Path
 import tempfile
 import tomllib
@@ -10,6 +11,8 @@ from favsync.common import SyncError
 from favsync.gallery import read_events
 from favsync.publication import accepted_size, publish_file
 from favsync.adapters_pixiv_wallabag import WallabagAdapter
+from favsync.adapters_pixiv_wallabag import PixivAdapter
+from favsync.adapters_ext import EhAdapter
 
 
 class RefactorContracts(unittest.TestCase):
@@ -20,10 +23,28 @@ class RefactorContracts(unittest.TestCase):
             self.assertEqual(args[-2:], ["-j", "fixture"])
             self.assertEqual(timeout, 12)
             output.write(json.dumps(expected).encode())
-        self.assertEqual(read_events("config", "fixture", 12, runner=runner), expected)
+        self.assertEqual(read_events("config", "fixture", 12, runner=runner, warnings_are_errors=False), expected)
         expected.append([-1, {"error": "AuthorizationError"}])
         with self.assertRaisesRegex(SyncError, "auth_required"):
-            read_events("config", "fixture", 12, runner=runner)
+            read_events("config", "fixture", 12, runner=runner, warnings_are_errors=False)
+
+    def test_gallery_warning_policy_stays_platform_specific(self):
+        for adapter_type, module, strict in ((EhAdapter, "adapters_ext", True),
+                                             (PixivAdapter, "adapters_pixiv_wallabag", False)):
+            with self.subTest(adapter=adapter_type.__name__):
+                adapter = adapter_type({"command_timeout_seconds": 12})
+                def runner(args, timeout, output, *, warnings_are_errors):
+                    self.assertEqual(warnings_are_errors, strict)
+                    if warnings_are_errors:
+                        raise SyncError("scan_incomplete")  # Existing warning policy.
+                    output.write(b"[]")
+                with patch.object(adapter, "config_file", return_value=nullcontext("config")), \
+                        patch(f"favsync.{module}.command", side_effect=runner):
+                    if strict:
+                        with self.assertRaisesRegex(SyncError, "scan_incomplete"):
+                            adapter._events("fixture")
+                    else:
+                        self.assertEqual(adapter._events("fixture"), [])
 
     def test_publication_uses_same_acceptance_and_never_replaces(self):
         with tempfile.TemporaryDirectory() as directory:
