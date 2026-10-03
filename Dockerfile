@@ -16,7 +16,7 @@ RUN set -eu; \
 WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir 'setuptools>=68' wheel \
-    && python -c 'import tomllib,subprocess,sys; p=tomllib.load(open("pyproject.toml","rb")); subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir",*p["project"]["dependencies"]])'
+    && python -c 'import tomllib,subprocess,sys; p=tomllib.load(open("pyproject.toml","rb"))["project"]; subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir",*p["dependencies"],*p["optional-dependencies"]["all"]])'
 COPY favsync ./favsync
 RUN pip install --no-cache-dir --no-deps --no-build-isolation . \
     && tdl version && gallery-dl --version \

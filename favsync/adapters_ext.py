@@ -28,6 +28,7 @@ from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
 from .media import valid_media
+from .gallery import read_events
 from .sources import ScanResult
 
 
@@ -432,21 +433,8 @@ class EhAdapter:
         finally: Path(name).unlink(missing_ok=True)
 
     def _events(self, url):
-        with self.config_file() as config, tempfile.TemporaryFile() as output:
-            command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
-                    self.cfg["command_timeout_seconds"], output)
-            output.seek(0)
-            try:
-                events = json.load(output)
-            except ValueError:
-                raise SyncError("invalid_export") from None
-            errors = [e[-1] for e in events if isinstance(e, list) and e and e[0] == -1]
-            if errors:
-                names = {str(e.get("error", "")) for e in errors if isinstance(e, dict)}
-                if names & {"AuthenticationError", "AuthorizationError"}:
-                    raise SyncError("auth_required")
-                raise SyncError("scan_incomplete")
-            return events
+        with self.config_file() as config:
+            return read_events(config, url, self.cfg["command_timeout_seconds"], runner=command)
 
     def scan(self, source, cursor=0, start=None):
         events = self._events("https://exhentai.org/favorites.php")
@@ -460,7 +448,7 @@ class EhAdapter:
             if gid.isdigit() and token:
                 records[gid] = {"id": gid, "text": "", "assets": [], "bundle": True,
                                 "locator": {"url": f"https://exhentai.org/g/{gid}/{token}/"}}
-        return list(records.values()), None
+        return ScanResult(list(records.values()), reason="end")
 
     def identity(self):
         path = Path(self.cfg["state_dir"]) / "eh-cookies.txt"

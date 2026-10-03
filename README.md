@@ -246,11 +246,17 @@ Twitter 同样平铺：标签去掉井号并拼接，作者名称占群名位置
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e .
+.venv/bin/pip install -e '.[all]'
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
 本地运行另需 tdl 0.20.4 在 PATH 中（或配置 `telegram.tdl_binary`），将路径改为本地 `state`、`downloads` 和 `secrets/cookiecloud.json`。Docker 服务使用宿主机网络，以便访问 NAS 的 `127.0.0.1:7890` 代理；本地运行也必须能访问配置中的代理地址。Docker 构建会下载官方 tdl 二进制并核对官方校验和，支持 amd64/arm64；本次只在 amd64 验证。
+
+只使用状态/片单 API 或不需要全部来源时，可以安装基础包 `pip install .`。
+X/EH/Pixiv 使用 `.[gallery]`，小红书 CLI 使用 `.[xhs]`；`.[all]` 和现有
+Docker 镜像继续包含两种后端。固定上游版本不变，不要求新增后台服务。
+采集事务由 `acquisition.py`/`Store.apply_scan` 负责，下载队列由
+`downloads.py` 负责；`Engine` 的现有入口保持兼容，原状态和输出路径不变。
 
 ## 多账号现状
 

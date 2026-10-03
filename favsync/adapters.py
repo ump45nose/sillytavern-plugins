@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from .common import SyncError, classify, command, safe_extension, atomic_write
 from .config import proxy_url
+from .sources import ScanResult
 
 
 def timestamp(value):
@@ -110,7 +111,7 @@ class XAdapter:
             result.seek(0)
             try:
                 # DataJob returns zero on extraction errors: parse -1 events too.
-                return parse_x(json.load(result), self.cfg['timezone']), None
+                return ScanResult(parse_x(json.load(result), self.cfg['timezone']), reason="end")
             except (ValueError, KeyError, TypeError, IndexError):
                 raise SyncError("invalid_export") from None
 
@@ -210,7 +211,7 @@ class TelegramAdapter:
                                     "action_time": created, "assets": assets,
                                     "locator": {"dialog": dialog, "message": int(item_id),
                                                 "naming": naming}})
-                return records, maximum
+                return ScanResult(records, cursor=maximum, reason="end")
             except (OSError, ValueError, KeyError, TypeError):
                 raise SyncError("invalid_export") from None
 
