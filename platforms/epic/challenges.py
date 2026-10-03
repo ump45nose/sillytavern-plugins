@@ -6,6 +6,7 @@ The public task binds its authorized challenge scope and private model config.
 
 import asyncio
 import importlib
+import sys
 
 
 class HCaptchaHandler:
@@ -21,8 +22,11 @@ class HCaptchaHandler:
         # On-demand loading, analogous to upstream hcaptcha_runtime, but without
         # eagerly importing all OpenCV/model patches for non-challenge tasks.
         module = self.loader("hcaptcha_challenger.agent")
-        from loguru import logger
-        logger.remove()  # SDK debug output can include challenge tokens/model replies.
+        logging_module = sys.modules.get("loguru")
+        if logging_module is not None:
+            # The real SDK already imports loguru; injected smoke drivers need
+            # no optional package. SDK debug output can contain challenge tokens.
+            logging_module.logger.remove()
         if self.agent is None:
             self.agent = module.AgentV(page=self.page, agent_config=self.config)
         signal = await asyncio.wait_for(
