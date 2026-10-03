@@ -2,7 +2,8 @@ from pathlib import Path
 import json
 import re
 import time
-from .sources import SOURCE_PLATFORM
+from .sources import SOURCE_PLATFORM, ScanResult
+from .common import SyncError
 from .film_store import film_status
 from .database import connect
 
@@ -61,14 +62,19 @@ class Store:
     def clear_xhs_fuse(self, account):
         self.delete_setting("xhs_fuse:" + account)
 
-    def seen_ids(self, source, account, item_ids):
+    def scan_continuation(self, source, account):
+        value = self.setting(f"scan_continuation:{source}:{account}")
+        return json.loads(value) if value is not None else None
+
+    def seen_ids(self, source, account, item_ids, *, before=None):
         item_ids = list(dict.fromkeys(str(item_id) for item_id in item_ids if item_id))
         if not item_ids:
             return set()
         placeholders = ",".join("?" for _ in item_ids)
         rows = self.db.execute(
-            f"SELECT item_id FROM seen WHERE source=? AND account=? AND item_id IN ({placeholders})",
-            (source, account, *item_ids),
+            f"SELECT item_id FROM seen WHERE source=? AND account=? AND item_id IN ({placeholders})"
+            + (" AND first_seen_at<?" if before is not None else ""),
+            (source, account, *item_ids, *((before,) if before is not None else ())),
         )
         return {row[0] for row in rows}
 
@@ -155,53 +161,73 @@ class Store:
             self.db.execute("INSERT OR REPLACE INTO markdown_exports VALUES(?,?,?,?,?)",
                             (source, account, item_id, filename, status))
 
+    def apply_scan(self, source, account, result, *, baseline=False, start_date="", records=None):
+        """Commit records, scan outcome and continuation as one durable batch."""
+        result = ScanResult.coerce(result)
+        if baseline and not result.complete:
+            raise SyncError("scan_incomplete")
+        with self.db:
+            self._ingest(source, account, result.records if records is None else records,
+                         baseline, result.cursor, start_date)
+            self.db.execute("UPDATE sources SET scan_reason=?,scan_status=? WHERE name=? AND account=?",
+                            (result.reason, "complete" if result.complete else "partial", source, account))
+            key = f"scan_continuation:{source}:{account}"
+            if result.continuation is None:
+                self.db.execute("DELETE FROM settings WHERE key=?", (key,))
+            else:
+                self.db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",
+                                (key, json.dumps(result.continuation, ensure_ascii=False)))
+
     def ingest(self, source, account, records, baseline=False, cursor=None, start_date=""):
         """One transaction: complete baseline OR seen + durable queue + scan cursor."""
+        with self.db:
+            self._ingest(source, account, records, baseline, cursor, start_date)
+
+    def _ingest(self, source, account, records, baseline, cursor, start_date):
         now = time.time()
         platform = SOURCE_PLATFORM.get(source)
         if not platform:
             raise ValueError("unknown source")
-        with self.db:
-            for r in records:
-                fresh = self.db.execute(
-                    "INSERT OR IGNORE INTO seen VALUES(?,?,?,?,?)",
-                    (source, account, r["id"], now, int(baseline))).rowcount
-                if baseline or (not fresh and (source == "x_likes" or source.startswith("pixiv_"))):
+        for r in records:
+            fresh = self.db.execute(
+                "INSERT OR IGNORE INTO seen VALUES(?,?,?,?,?)",
+                (source, account, r["id"], now, int(baseline))).rowcount
+            if baseline or (not fresh and (source == "x_likes" or source.startswith("pixiv_"))):
+                continue
+            bundle = "pending" if r.get("bundle") else "none"
+            new_item = self.db.execute("INSERT OR IGNORE INTO items(platform,account,item_id,body,locator,bundle_status) VALUES(?,?,?,?,?,?)",
+                                      (platform, account, r["id"], r.get("text", ""), json.dumps(r["locator"]), bundle)).rowcount
+            if not new_item and r['locator'].get('naming'):
+                row = self.db.execute('SELECT locator,bundle_status FROM items WHERE platform=? AND account=? AND item_id=?',
+                                      (platform, account, r['id'])).fetchone()
+                old = json.loads(row[0])
+                if platform == "xhs" and row[1] == "done":
                     continue
-                bundle = "pending" if r.get("bundle") else "none"
-                new_item = self.db.execute("INSERT OR IGNORE INTO items(platform,account,item_id,body,locator,bundle_status) VALUES(?,?,?,?,?,?)",
-                                          (platform, account, r["id"], r.get("text", ""), json.dumps(r["locator"]), bundle)).rowcount
-                if not new_item and r['locator'].get('naming'):
-                    row = self.db.execute('SELECT locator,bundle_status FROM items WHERE platform=? AND account=? AND item_id=?',
-                                          (platform, account, r['id'])).fetchone()
-                    old = json.loads(row[0])
-                    if platform == "xhs" and row[1] == "done":
-                        continue
-                    # Refresh signed XHS locators while preserving the allocated name.
-                    naming = old.get('naming') or r['locator'].get('naming')
-                    fresh_locator = dict(r['locator'])
-                    for frozen in ('author', 'published'):
-                        if old.get(frozen):
-                            fresh_locator[frozen] = old[frozen]
-                    if naming:
-                        fresh_locator['naming'] = naming
-                    if platform == "xhs" and old.get("url") != fresh_locator.get("url"):
-                        self.db.execute("DELETE FROM xhs_details WHERE account=? AND item_id=?",
-                                        (account, r["id"]))
-                    self.db.execute('UPDATE items SET locator=? WHERE platform=? AND account=? AND item_id=?',
-                                    (json.dumps(fresh_locator), platform, account, r['id']))
-                    if r.get("text"):
-                        self.db.execute("UPDATE items SET body=? WHERE platform=? AND account=? AND item_id=? AND body=''",
-                                        (r["text"], platform, account, r["id"]))
-                for number, filename in (r["assets"] if new_item else []):
-                    self.db.execute("INSERT OR IGNORE INTO assets(platform,account,item_id,number,filename) VALUES(?,?,?,?,?)",
-                                    (platform, account, r["id"], number, filename))
-            self.db.execute("UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,start_date=? WHERE name=? AND account=?",
-                            (now, start_date, source, account))
-            if baseline:
-                self.db.execute("UPDATE sources SET baseline_at=? WHERE name=? AND account=?", (now, source, account))
-            if cursor is not None:
-                self.db.execute("UPDATE sources SET cursor=? WHERE name=? AND account=?", (cursor, source, account))
+                # Refresh signed XHS locators while preserving the allocated name.
+                naming = old.get('naming') or r['locator'].get('naming')
+                fresh_locator = dict(r['locator'])
+                for frozen in ('author', 'published'):
+                    if old.get(frozen):
+                        fresh_locator[frozen] = old[frozen]
+                if naming:
+                    fresh_locator['naming'] = naming
+                if platform == "xhs" and old.get("url") != fresh_locator.get("url"):
+                    self.db.execute("DELETE FROM xhs_details WHERE account=? AND item_id=?",
+                                    (account, r["id"]))
+                self.db.execute('UPDATE items SET locator=? WHERE platform=? AND account=? AND item_id=?',
+                                (json.dumps(fresh_locator), platform, account, r['id']))
+                if r.get("text"):
+                    self.db.execute("UPDATE items SET body=? WHERE platform=? AND account=? AND item_id=? AND body=''",
+                                    (r["text"], platform, account, r["id"]))
+            for number, filename in (r["assets"] if new_item else []):
+                self.db.execute("INSERT OR IGNORE INTO assets(platform,account,item_id,number,filename) VALUES(?,?,?,?,?)",
+                                (platform, account, r["id"], number, filename))
+        self.db.execute("UPDATE sources SET scan_status='complete',error=NULL,last_scan=?,start_date=? WHERE name=? AND account=?",
+                        (now, start_date, source, account))
+        if baseline:
+            self.db.execute("UPDATE sources SET baseline_at=? WHERE name=? AND account=?", (now, source, account))
+        if cursor is not None:
+            self.db.execute("UPDATE sources SET cursor=? WHERE name=? AND account=?", (cursor, source, account))
 
     def ingest_wallabag(self, source, account, records):
         """Commit a complete page walk; retry invalid entries only after repair."""

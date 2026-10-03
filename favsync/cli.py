@@ -112,7 +112,7 @@ def main(argv=None):
                 cycle_ok = engine.cycle(args.source)
                 return 0 if cookie_ok and cycle_ok else 1
         finally:
-            engine.store.close()
+            engine.close()
     except KeyboardInterrupt:
         return 130
     except SyncError as exc:

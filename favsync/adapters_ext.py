@@ -7,6 +7,8 @@ item locator and the private state directory.
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import hashlib
+import math
 import os
 import http.cookiejar
 from pathlib import Path
@@ -26,6 +28,7 @@ from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
 from .media import valid_media
+from .gallery import read_events
 from .sources import ScanResult
 
 
@@ -142,17 +145,89 @@ class XhsAdapter:
 
     def scan(self, source, cursor=0, start=None):
         # The list commands can currently exit with an internal traceback when
-        # web_session has expired.  Check the structured status endpoint first
-        # so the scheduler reports auth_required instead of scan_incomplete.
+        # web_session has expired. Check structured status before enumeration.
         self.identity()
         kind = "favorites" if source == "xhs_favorites" else "likes"
-        records, seen_cursors, cursor_value = [], set(), ""
-        reason = "page_limit"
         account = self.cfg[source]["account"]
+        try:
+            state = self.store.scan_continuation(source, account)
+        except (TypeError, ValueError):
+            raise SyncError("scan_incomplete") from None
+        resumed = state is not None
+        if state is None:
+            state = {"version": 1, "started_at": time.time(), "cursor": "",
+                     "seen_cursors": [], "pending": []}
+        def valid_pending(record):
+            if not isinstance(record, dict):
+                return False
+            locator = record.get("locator")
+            return (isinstance(record.get("id"), str) and bool(record["id"])
+                    and isinstance(record.get("text"), str)
+                    and record.get("assets") == [] and record.get("bundle") is True
+                    and isinstance(locator, dict) and isinstance(locator.get("url"), str)
+                    and isinstance(locator.get("naming"), dict))
+
+        # Do not discard an unread window if its checkpoint cannot be decoded.
+        if (not isinstance(state, dict) or state.get("version") != 1
+                or not isinstance(state.get("started_at"), (int, float))
+                or not math.isfinite(state["started_at"])
+                or "cursor" not in state
+                or (state["cursor"] is not None and not isinstance(state["cursor"], str))
+                or not isinstance(state.get("pending"), list)
+                or not all(valid_pending(record) for record in state["pending"])
+                or not isinstance(state.get("seen_cursors"), list)
+                or not all(isinstance(value, str) for value in state["seen_cursors"])
+                or state.get("phase", "walk") not in ("walk", "verify")
+                or not isinstance(state.get("discovered", 0), int)
+                or state.get("discovered", 0) < 0
+                or any(not isinstance(state.get(key, ""), str) for key in ("digest", "reference_digest"))):
+            raise SyncError("scan_incomplete")
+        records, seen_cursors = [], set(state["seen_cursors"])
+        cursor_value = state["cursor"]
+        pending = state["pending"]
+        phase = state.get("phase", "walk")
+        digest = state.get("digest", "")
+        reference_digest = state.get("reference_digest", "")
+        discovered = state.get("discovered", 0)
+
+        def result(reason):
+            if reason in ("end", "seen_boundary") and (
+                    (resumed and phase == "walk") or
+                    (phase == "verify" and (discovered or digest != reference_digest))):
+                # The API exposes an opaque cursor, not a snapshot guarantee.
+                # Rewalk the moving list from its head against the ORIGINAL
+                # boundary before declaring a cross-run window complete. A
+                # changed pass (even only deletions/reordering) must stabilize
+                # on another budgeted pass; do not promote this window's seen.
+                return ScanResult(records, reason="window_recheck", continuation={
+                    "version": 1, "started_at": state["started_at"], "cursor": "",
+                    "seen_cursors": [], "pending": [], "phase": "verify",
+                    "digest": "", "reference_digest": digest, "discovered": 0})
+            continuation = None if reason in ("end", "seen_boundary") else {
+                "version": 1, "started_at": state["started_at"], "cursor": cursor_value,
+                "seen_cursors": sorted(seen_cursors), "pending": pending,
+                "phase": phase, "digest": digest, "reference_digest": reference_digest,
+                "discovered": discovered}
+            return ScanResult(records, reason=reason, continuation=continuation)
+
+        # Retain the unread part of a fetched page rather than re-reading the
+        # moving head. It must be saved atomically with this run's selected IDs.
+        if pending:
+            selected = pending[:self._discover_remaining]
+            records.extend(selected)
+            pending = pending[len(selected):]
+            for _ in selected:
+                self.observe("new_ids")
+            self._discover_remaining -= len(selected)
+            discovered += len(selected)
+            if pending:
+                return result("request_budget")
+        if cursor_value is None:
+            return result("end")
+
         for _page in range(self.cfg["xhs"]["max_pages_per_run"]):
             if self._discover_remaining <= 0:
-                reason = "request_budget"
-                break
+                return result("request_budget")
             argv = [self.cfg["xhs"]["cli_binary"], kind, "--json"]
             if cursor_value:
                 argv += ["--cursor", cursor_value]
@@ -169,32 +244,44 @@ class XhsAdapter:
                     raise SyncError("rate_limited")
                 raise SyncError("scan_incomplete")
             data = payload.get("data") or {}
-            page_records = [self._note(n) for n in data.get("notes", [])]
+            page_by_id = {r["id"]: r for r in (self._note(n) for n in data.get("notes", []))}
+            page_records = list(page_by_id.values())
+            digest = hashlib.sha256((digest + json.dumps(list(page_by_id))).encode()).hexdigest()
+            # A moving page can repeat a buffered or earlier-page selection in
+            # this uncommitted batch. Refresh its locator without spending a
+            # second discovery slot or emitting a duplicate record.
+            emitted = {r["id"] for r in records}
+            records = [page_by_id.get(r["id"], r) for r in records]
             page_seen = self.store.seen_ids(source, account, (r["id"] for r in page_records))
-            fresh = [r for r in page_records if r["id"] not in page_seen]
+            fresh = [r for r in page_records if r["id"] not in page_seen and r["id"] not in emitted]
             retry_ids = self.store.retry_ids("xhs", account, page_seen)
-            records.extend(r for r in page_records if r["id"] in retry_ids)
+            records.extend(r for r in page_records if r["id"] in retry_ids and r["id"] not in emitted)
             selected = fresh[:self._discover_remaining]
             records.extend(selected)
             for _ in selected:
                 self.observe("new_ids")
             self._discover_remaining -= len(selected)
-            if len(selected) < len(fresh):
-                reason = "request_budget"
-                break
-            # A complete already-seen page is the durable incremental boundary.
-            if page_records and len(page_seen) == len(page_records):
-                reason = "seen_boundary"
-                break
-            if not data.get("has_more"):
-                reason = "end"
-                break
-            next_cursor = str(data.get("cursor") or "")
-            if not next_cursor or next_cursor in seen_cursors:
-                raise SyncError("scan_incomplete")
-            seen_cursors.add(next_cursor)
-            cursor_value = next_cursor
-        return ScanResult(records, reason=reason)
+            discovered += len(selected)
+            # Pages repeated by offset pagination after a head insert are not a
+            # boundary if their IDs were first saved during this unfinished walk.
+            boundary = self.store.seen_ids(source, account, (r["id"] for r in page_records),
+                                           before=state["started_at"])
+            if page_records and len(boundary) == len(page_records):
+                return result("seen_boundary")
+            if data.get("has_more"):
+                next_cursor = str(data.get("cursor") or "")
+                if not next_cursor or next_cursor in seen_cursors:
+                    raise SyncError("scan_incomplete")
+                seen_cursors.add(next_cursor)
+                cursor_value = next_cursor
+            else:
+                cursor_value = None
+            pending = fresh[len(selected):]
+            if pending:
+                return result("request_budget")
+            if cursor_value is None:
+                return result("end")
+        return result("page_limit")
 
     def identity(self):
         if self._identity_cache is not None:
@@ -346,21 +433,9 @@ class EhAdapter:
         finally: Path(name).unlink(missing_ok=True)
 
     def _events(self, url):
-        with self.config_file() as config, tempfile.TemporaryFile() as output:
-            command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
-                    self.cfg["command_timeout_seconds"], output)
-            output.seek(0)
-            try:
-                events = json.load(output)
-            except ValueError:
-                raise SyncError("invalid_export") from None
-            errors = [e[-1] for e in events if isinstance(e, list) and e and e[0] == -1]
-            if errors:
-                names = {str(e.get("error", "")) for e in errors if isinstance(e, dict)}
-                if names & {"AuthenticationError", "AuthorizationError"}:
-                    raise SyncError("auth_required")
-                raise SyncError("scan_incomplete")
-            return events
+        with self.config_file() as config:
+            return read_events(config, url, self.cfg["command_timeout_seconds"],
+                               runner=command, warnings_are_errors=True)
 
     def scan(self, source, cursor=0, start=None):
         events = self._events("https://exhentai.org/favorites.php")
@@ -374,7 +449,7 @@ class EhAdapter:
             if gid.isdigit() and token:
                 records[gid] = {"id": gid, "text": "", "assets": [], "bundle": True,
                                 "locator": {"url": f"https://exhentai.org/g/{gid}/{token}/"}}
-        return list(records.values()), None
+        return ScanResult(list(records.values()), reason="end")
 
     def identity(self):
         path = Path(self.cfg["state_dir"]) / "eh-cookies.txt"

@@ -20,9 +20,11 @@ import zipfile
 import requests
 
 from .media import valid_media
+from .gallery import read_events
 from .common import SyncError, command
 from .config import proxy_url
 from .layout import component
+from .sources import ScanResult
 
 
 class _TextParser(HTMLParser):
@@ -119,26 +121,9 @@ class PixivAdapter:
             Path(name).unlink(missing_ok=True)
 
     def _events(self, url):
-        with self.config_file() as config, tempfile.TemporaryFile() as output:
-            command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
-                    self.cfg["command_timeout_seconds"], output, warnings_are_errors=False)
-            output.seek(0)
-            try:
-                events = json.load(output)
-            except ValueError:
-                raise SyncError("invalid_export") from None
-        errors = [event[-1] for event in events if isinstance(event, list) and event and event[0] == -1]
-        usable = [event for event in events if isinstance(event, list) and event and event[0] in (1, 2, 3)
-                  and isinstance(event[-1], dict) and str(event[-1].get("id") or "").isdigit()]
-        # Deleted and My-Pixiv-only bookmarks appear as per-work errors while
-        # pagination itself completes.  They are outside the interface-visible
-        # download set and must not prevent a baseline from committing.
-        if errors and not usable:
-            names = {str(error.get("error", "")) for error in errors if isinstance(error, dict)}
-            if names & {"AuthenticationError", "AuthorizationError"}:
-                raise SyncError("auth_required")
-            raise SyncError("scan_incomplete")
-        return events
+        with self.config_file() as config:
+            return read_events(config, url, self.cfg["command_timeout_seconds"],
+                               runner=command, warnings_are_errors=False)
 
     def scan(self, source, cursor=0, start=None):
         uid = self._uid()
@@ -172,7 +157,7 @@ class PixivAdapter:
                             "author": author, "title": title, "series": series, "count": count,
                             "naming": {"group": author, "date": ""}},
             }
-        return list(records.values()), None
+        return ScanResult(list(records.values()), reason="end")
 
     @staticmethod
     def _comicinfo(meta, count, url):
@@ -274,6 +259,7 @@ class WallabagAdapter:
         self.cfg, self.store = cfg, store
         self._access_token = None
         self._expires_at = 0
+        self._http_session = None
 
     def _credentials(self):
         try:
@@ -283,11 +269,19 @@ class WallabagAdapter:
         return data
 
     def _session(self):
+        if self._http_session is not None:
+            return self._http_session
         session = requests.Session(); session.trust_env = False
         if proxy := proxy_url(self.cfg, "wallabag"):
             proxy = proxy.replace("socks5://", "socks5h://")
             session.proxies.update({"http": proxy, "https": proxy})
+        self._http_session = session
         return session
+
+    def close(self):
+        if self._http_session is not None:
+            self._http_session.close()
+            self._http_session = None
 
     def _token(self):
         if self._access_token and self._expires_at > time.time() + 60:
@@ -372,7 +366,7 @@ class WallabagAdapter:
             if not entries:
                 raise SyncError("scan_incomplete")
             page += 1
-        return records, None
+        return ScanResult(records, reason="end")
 
     def identity(self):
         try:

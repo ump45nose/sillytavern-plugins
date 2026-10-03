@@ -42,6 +42,7 @@ class ReviewRepairSmoke(unittest.TestCase):
                 if self.fail:
                     raise KeyError("unexpected library failure")
                 (staging / 'fixture').write_bytes(b'complete')
+                return [staging / 'fixture']
         class Later:
             calls = 0
             def sync_metadata(self, store, source, account):

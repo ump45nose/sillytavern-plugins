@@ -8,9 +8,19 @@ version = "0.1.0"
 description = "Config-driven favorite media and EPUB downloader"
 requires-python = ">=3.11"
 dependencies = [
-  "gallery-dl @ git+https://codeberg.org/mikf/gallery-dl.git@74a5aaf276df69f493ca8f68ebb478afe31a45ad",
-  "xiaohongshu-cli @ git+https://github.com/jackwener/xiaohongshu-cli.git@4d63f3c0c85ccd9054fa8e96d7f761aaf2507449",
   "cryptography==50.0.1", "PySocks==1.7.1", "requests>=2.31,<3"
+]
+
+[project.optional-dependencies]
+gallery = [
+  "gallery-dl @ git+https://codeberg.org/mikf/gallery-dl.git@74a5aaf276df69f493ca8f68ebb478afe31a45ad"
+]
+xhs = [
+  "xiaohongshu-cli @ git+https://github.com/jackwener/xiaohongshu-cli.git@4d63f3c0c85ccd9054fa8e96d7f761aaf2507449"
+]
+all = [
+  "gallery-dl @ git+https://codeberg.org/mikf/gallery-dl.git@74a5aaf276df69f493ca8f68ebb478afe31a45ad",
+  "xiaohongshu-cli @ git+https://github.com/jackwener/xiaohongshu-cli.git@4d63f3c0c85ccd9054fa8e96d7f761aaf2507449"
 ]
 
 [project.scripts]

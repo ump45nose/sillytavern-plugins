@@ -1,0 +1,18 @@
+services:
+  bili-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.bili-sync
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${BILI_BIND:-127.0.0.1}:12345:12345"
+    environment:
+      TZ: Asia/Taipei
+      BILI_SYNC_FLAT_OUTPUT: "1"
+      BILI_SYNC_MIN_FREE_BYTES: "214748364800"
+    volumes:
+      - ./state:/app/.config/bili-sync
+      - ${DOWNLOAD_ROOT:-./downloads}:/downloads
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
