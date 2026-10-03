@@ -5,4 +5,6 @@
 !Dockerfile.bili-sync
 !Dockerfile.xhs-downloader
 !bili-sync-v2.11.1-flat.patch
+!bili-sync/
+!bili-sync/**
 favsync/**/__pycache__

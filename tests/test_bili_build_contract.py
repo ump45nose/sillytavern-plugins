@@ -17,6 +17,7 @@ class BiliBuildContract(unittest.TestCase):
         compose = (root / "compose.yaml").read_text()
         self.assertIn("./state/bili-sync:/app/.config/bili-sync", compose)
         self.assertIn("/Bilibili:/downloads/Bilibili", compose)
+        self.assertIn("!bili-sync/**", (root / ".dockerignore").read_text())
 
 
 if __name__ == "__main__":
