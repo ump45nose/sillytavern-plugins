@@ -64,7 +64,7 @@ THEME_PYTHON=/path/to/theme-venv/bin/python tools/test_all.sh
 
 ## Publication and compatibility limits
 
-This tree does not perform a production migration, remote-repository rename, release or deployment. Existing release/icon URLs remain unchanged until a publication target is selected. Film table/API physical migration is outside this change.
+The initial layout refactor did not deploy production services. The subsequent local rollout and retirement of the two original repositories are recorded in [deployment acceptance](docs/deployment-acceptance-2026-10-03.md). ThemeStudio now uses a MoviePilot bundled music icon, so it does not depend on the retired public repository or authenticated access to a private raw-file URL. Film table/API physical migration remains outside this consolidation; Favsync is retained independently.
 
 Favsync's current film API has no conditional revision write, so identity readback immediately before PATCH narrows but cannot eliminate a concurrent source-change race. Theme's automatic first-file publication still has its pre-existing file-to-ownership-DB crash window; explicit replacement/manual-apply recovery has separate durable journal coverage.
 
