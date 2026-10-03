@@ -67,12 +67,28 @@ def execute(
                 if classify(rows, context["business_date"]):
                     journal.set("complete")
 
-            rows = provider.sign(
-                session,
-                read_only=journal.status == "pending",
-                before_write=lambda: journal.set("pending"),
-                on_balance=on_balance,
-            )
+            write_started = False
+
+            def before_write():
+                nonlocal write_started
+                journal.set("pending")
+                write_started = True
+
+            try:
+                rows = provider.sign(
+                    session,
+                    read_only=journal.status == "pending",
+                    before_write=before_write,
+                    on_balance=on_balance,
+                )
+            except Exception:
+                if not write_started:
+                    raise
+                # Redemption may have succeeded before a redirect/transport
+                # error. Reconcile once in the same run, never redeem again.
+                rows = provider.sign(
+                    session, read_only=True, on_balance=on_balance
+                )
             on_balance(rows)
         success = journal.status == "complete"
         return result(
