@@ -1,0 +1,341 @@
+from __future__ import annotations
+
+import logging
+import sys
+import time
+from pathlib import Path
+
+import pytest
+import httpx
+
+from emby_theme_worker.audio import AudioProcessor, sha256
+from emby_theme_worker.config import Config
+from emby_theme_worker.db import StateDB
+from emby_theme_worker.emby import EmbyClient
+from emby_theme_worker.models import Candidate, MediaItem
+from emby_theme_worker.providers import Providers
+from emby_theme_worker.scoring import score_candidate
+from emby_theme_worker.security import RedactingFilter, contained, redact, safe_http_url_from_strm
+from emby_theme_worker.worker import Worker
+from emby_theme_worker.ytdlp_runner import YtDlpTimeout, _run, _writable_cookie
+
+
+def item(path: Path, item_type: str = "Movie") -> MediaItem:
+    return MediaItem("1", "Example Show", "Example Show", 2025, item_type, str(path), {"Tmdb": "1"}, ["Drama"])
+
+
+def test_config_validation(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("allowed_path: /Media\nschedule: '0 3 * * *'\n", encoding="utf-8")
+    assert Config.load(config_file).allowed_path == "/Media"
+    config_file.write_text("allowed_path: relative\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        Config.load(config_file)
+
+
+def test_ytdlp_wall_clock_timeout() -> None:
+    started = time.monotonic()
+    with pytest.raises(YtDlpTimeout):
+        _run([sys.executable, "-c", "import time; time.sleep(10)"], 1)
+    assert time.monotonic() - started < 3
+
+
+def test_ytdlp_uses_disposable_cookie_copy(tmp_path: Path) -> None:
+    source = tmp_path / "source.cookies.txt"
+    source.write_text("secret-cookie", encoding="utf-8")
+    with _writable_cookie(str(source)) as copied:
+        assert copied and Path(copied) != source
+        Path(copied).write_text("changed", encoding="utf-8")
+    assert source.read_text(encoding="utf-8") == "secret-cookie"
+    assert copied and not Path(copied).exists()
+
+
+def test_path_containment() -> None:
+    assert contained("/Media/Movies/A", "/Media")
+    assert not contained("/MediaAdult/A", "/Media")
+    assert not contained("/Adult/A", "/Media")
+
+
+def test_log_redaction() -> None:
+    message = "GET https://example.test/path?q=secret&token=abc cookie=def"
+    output = redact(message)
+    assert "secret" not in output
+    assert "abc" not in output
+    assert "def" not in output
+    record = logging.LogRecord("test", logging.INFO, __file__, 1, message, (), None)
+    assert RedactingFilter().filter(record)
+    assert "abc" not in record.msg
+
+
+def test_candidate_scoring() -> None:
+    media = item(Path("/Media/Example/film.mkv"))
+    good = Candidate("youtube", "Example Show 2025 Official Main Theme Soundtrack", "https://example.test/a", year=2025, media_type="Movie", duration=180)
+    cover = Candidate("youtube", "Example Show 2025 Main Theme Cover Remix Live", "https://example.test/b", year=2025, media_type="Movie", duration=180)
+    assert score_candidate(good, media) >= 75
+    assert score_candidate(cover, media) < score_candidate(good, media)
+    incomplete = Candidate("youtube", "Example Show Main Theme", "https://example.test/c")
+    assert score_candidate(incomplete, media) < 80
+
+
+def test_strm_single_absolute_url() -> None:
+    assert safe_http_url_from_strm("https://example.test/video?id=secret\n").startswith("https://")
+    with pytest.raises(ValueError):
+        safe_http_url_from_strm("https://a.test/1\nhttps://b.test/2")
+    with pytest.raises(ValueError):
+        safe_http_url_from_strm("/local/file.mkv")
+
+
+def test_atomic_no_overwrite(tmp_path: Path) -> None:
+    processor = AudioProcessor(45, "192k", 30, {})
+    target_dir = tmp_path / "movie"
+    target_dir.mkdir()
+    first = tmp_path / "first.mp3"
+    second = tmp_path / "second.mp3"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    created, target, digest = processor.atomic_commit(first, target_dir)
+    assert created and target.read_bytes() == b"first" and digest == sha256(target)
+    created, _, digest2 = processor.atomic_commit(second, target_dir)
+    assert not created and target.read_bytes() == b"first" and digest2 == digest
+    assert (target_dir / ".theme.mp3.lock").exists()
+
+
+def test_atomic_owned_replacement_and_restore(tmp_path: Path) -> None:
+    processor = AudioProcessor(45, "192k", 30, {})
+    target = tmp_path / "theme.mp3"
+    prepared = tmp_path / "new.mp3"
+    backup = tmp_path / "backups" / "old.mp3"
+    target.write_bytes(b"old")
+    prepared.write_bytes(b"new")
+    new_hash, backup_path = processor.atomic_replace_owned(prepared, target, sha256(target), backup)
+    assert target.read_bytes() == b"new" and backup.read_bytes() == b"old"
+    assert new_hash == sha256(target) and backup_path == str(backup)
+    assert processor.restore_replacement(target, backup, new_hash, sha256(backup))
+    assert target.read_bytes() == b"old"
+    target.write_bytes(b"external-edit")
+    assert not processor.restore_replacement(target, backup, new_hash, sha256(backup))
+    assert target.read_bytes() == b"external-edit"
+
+
+def test_evidence_scoring_and_transport_classification(tmp_path: Path) -> None:
+    from emby_theme_worker.ytdlp_runner import classify_error, YtDlpServiceError
+    media = item(tmp_path)
+    good = Candidate("youtube", "Example Show (2025) Film Main Theme", "https://example.test", duration=120, metadata={"channel_verified": True})
+    assert score_candidate(good, media) == 90
+    remake = Candidate("youtube", "Example Show (1990) Film Main Theme", "https://example.test", duration=120)
+    assert score_candidate(remake, media) < 80
+    missing = Candidate("youtube", "Example Show Main Theme", "https://example.test", duration=120)
+    assert score_candidate(missing, media) == 75
+    assert isinstance(classify_error("HTTP 403 https://secret.test/?token=secret"), YtDlpServiceError)
+    assert not isinstance(classify_error("Video unavailable"), YtDlpServiceError)
+    assert "secret" not in str(classify_error("HTTP 403 secret"))
+
+
+def test_only_fetch_service_errors_open_circuit(tmp_path: Path) -> None:
+    from emby_theme_worker.worker import transport_key
+    from emby_theme_worker.ytdlp_runner import YtDlpServiceError
+    db = StateDB(str(tmp_path / "state.db"))
+    db.initialize()
+    worker = object.__new__(Worker)
+    worker.db = db
+    candidate = Candidate("plex_tv", "theme", "https://plex.test/theme")
+    class Audio:
+        error = ValueError("invalid media")
+        def fetch_candidate(self, *_args):
+            raise self.error
+    worker.audio = Audio()
+    for _ in range(3):
+        with pytest.raises(ValueError):
+            worker._fetch_candidate(candidate, tmp_path)
+    assert db.provider_available("transport", transport_key(candidate))
+    worker.audio.error = YtDlpServiceError("blocked")
+    for _ in range(3):
+        with pytest.raises(YtDlpServiceError):
+            worker._fetch_candidate(candidate, tmp_path)
+    assert not db.provider_available("transport", transport_key(candidate))
+    assert db.provider_available("transport", "direct_http:anime.test")
+    with db.connect() as conn:
+        conn.execute("UPDATE provider_health_v2 SET circuit_until='2000-01-01T00:00:00+00:00'")
+    db.provider_failure("transport", transport_key(candidate), "Timeout")
+    assert db.provider_available("transport", transport_key(candidate))
+
+
+def test_migration_backoff_survives_restart(tmp_path: Path) -> None:
+    db = StateDB(str(tmp_path / "state.db"))
+    db.initialize()
+    db.record_item(item(tmp_path), "complete", provider="local_opening", output_sha256="a")
+    assert len(db.local_opening_items()) == 1
+    db.defer_local_migration("1")
+    reopened = StateDB(str(db.path))
+    reopened.initialize()
+    assert reopened.local_opening_items() == []
+
+
+def test_interrupted_replacement_recovery(tmp_path: Path) -> None:
+    db = StateDB(str(tmp_path / "state.db"))
+    db.initialize()
+    target, prepared, backup = (tmp_path / name for name in ("theme.mp3", "new.mp3", "old.mp3"))
+    target.write_bytes(b"old")
+    prepared.write_bytes(b"new")
+    old_hash = sha256(target)
+    db.record_item(item(tmp_path), "complete", provider="local_opening", output_path=str(target), output_sha256=old_hash)
+    candidate = Candidate("themerrdb", "theme", "https://youtube.test", exact=True, transport="youtube")
+    replacement = db.start_replacement("1", candidate, old_hash, 100)
+    db.prepare_replacement(replacement, sha256(prepared), str(backup))
+    worker = object.__new__(Worker)
+    worker.db = db
+    worker.audio = AudioProcessor(45, "192k", 30, {})
+    worker.audio.atomic_replace_owned(prepared, target, old_hash, backup)
+    worker._recover_replacements()
+    assert sha256(target) == old_hash
+    assert db.status()["replacements"]["rolled_back"] == 1
+    backup.write_bytes(b"partial")
+    with pytest.raises(RuntimeError, match="backup hash mismatch"):
+        worker.audio.atomic_replace_owned(prepared, target, old_hash, backup)
+    assert sha256(target) == old_hash
+
+
+def test_existing_theme_is_skipped(tmp_path: Path) -> None:
+    media_dir = tmp_path / "Series"
+    media_dir.mkdir()
+    theme = media_dir / "theme.mp3"
+    theme.write_bytes(b"existing-theme")
+    before = sha256(theme)
+
+    class FakeEmby:
+        def theme_visible(self, _item_id: str) -> bool:
+            return True
+
+        def close(self) -> None:
+            pass
+
+    config = Config(database_path=str(tmp_path / "state.db"), allowed_path=str(tmp_path))
+    db = StateDB(config.database_path)
+    db.initialize()
+    worker = Worker(config, db, FakeEmby())  # type: ignore[arg-type]
+    try:
+        result = worker.process(item(media_dir, "Series"))
+    finally:
+        worker.close()
+    assert result["status"] == "skipped_existing"
+    assert sha256(theme) == before
+
+
+def test_exact_transport_failure_falls_back_to_fuzzy(tmp_path: Path) -> None:
+    media_dir = tmp_path / "Movie"
+    media_dir.mkdir()
+    media = item(media_dir)
+
+    class FakeEmby:
+        def theme_visible(self, _item_id: str) -> bool:
+            return False
+
+    config = Config(database_path=str(tmp_path / "state.db"), allowed_path=str(tmp_path))
+    db = StateDB(config.database_path)
+    db.initialize()
+    worker = object.__new__(Worker)
+    worker.config = config
+    worker.db = db
+    worker.emby = FakeEmby()
+    attempted: list[str] = []
+
+    def from_candidate(_item: MediaItem, candidate: Candidate) -> dict:
+        attempted.append(candidate.provider)
+        if candidate.provider == "themerrdb":
+            raise TimeoutError("exact transport unavailable")
+        return {"item_id": media.id, "status": "complete", "provider": candidate.provider}
+
+    worker._from_candidate = from_candidate  # type: ignore[method-assign]
+    from emby_theme_worker.scoring import score_all
+    candidates = [Candidate('themerrdb', 'Exact theme', 'https://youtube.test/exact', exact=True),
+                  Candidate('archive', 'Example Show 2025 Official Main Theme Soundtrack', 'https://archive.test/theme.mp3',
+                            year=2025, media_type='Movie', duration=180, metadata={'curated_source': True})]
+    worker._search = lambda _item: score_all(candidates, media)
+    result = worker.process(media)
+    assert result["provider"] == "archive"
+    assert attempted == ["themerrdb", "archive"]
+
+
+def test_provider_health_isolated_by_stage(tmp_path: Path) -> None:
+    db = StateDB(str(tmp_path / "state.db"))
+    db.initialize()
+    for _ in range(3):
+        db.provider_failure("transport", "youtube", "Timeout")
+    assert not db.provider_available("transport", "youtube")
+    assert db.provider_available("resolver", "themerrdb")
+
+
+
+def test_televisiontunes_two_stage_parser(tmp_path: Path) -> None:
+    db = StateDB(str(tmp_path / "state.db"))
+    db.initialize()
+    providers = Providers(["televisiontunes"], 5, db, {})
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/":
+            return httpx.Response(200, text='<a href="https://www.televisiontunes.co.uk/example-show">Example Show</a>')
+        return httpx.Response(200, text='{"contentUrl":"https://www.televisiontunes.co.uk/themes/Example.wav"}')
+    providers.http.close()
+    providers.http = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    try:
+        found = providers.televisiontunes(item(tmp_path, "Series"))
+        assert len(found) == 1 and not found[0].exact and found[0].source_url.endswith("Example.wav")
+    finally:
+        providers.close()
+
+
+def test_movie_fallback_uses_tail(tmp_path: Path) -> None:
+    emby = object.__new__(EmbyClient)
+    emby.allowed_path = str(tmp_path)
+    class Reply:
+        def raise_for_status(self): return self
+        def json(self): return {"Items": [{"Id": "1", "Path": str(tmp_path/"movie.mkv"), "RunTimeTicks": 7200*10_000_000}]}
+    class Client:
+        def get(self, *args, **kwargs): return Reply()
+    emby.client = Client()
+    ranges = emby.extraction_sources(item(tmp_path/"movie.mkv"))[0]["ranges"]
+    assert ranges == [(6120., 1075.)]
+
+
+def test_unregistered_pending_output_becomes_registration_failure(tmp_path: Path) -> None:
+    media_dir = tmp_path / "Movie"
+    media_dir.mkdir()
+    media = item(media_dir)
+    config = Config(database_path=str(tmp_path / "state.db"), allowed_path=str(tmp_path))
+    db = StateDB(config.database_path)
+    db.initialize()
+    db.record_item(media, "pending_refresh", provider="local_opening", output_path=str(media_dir / "theme.mp3"), output_sha256="a" * 64)
+
+    class FakeEmby:
+        def trigger_library_scan(self) -> None:
+            pass
+
+        def wait_library_scan(self, _timeout: int, _poll: int) -> bool:
+            return True
+
+        def verify_theme_resource(self, _item_id, _path, _sha):
+            return False
+
+        def theme_visible(self, _item_id: str) -> bool:
+            return False
+
+    worker = object.__new__(Worker)
+    worker.config = config
+    worker.db = db
+    worker.emby = FakeEmby()
+    status, completed = worker._register_pending()
+    state = db.item_state(media.id)
+    assert status == "complete"
+    assert completed == 0
+    assert state and state["status"] == "failed" and state["last_error_class"] == "registration"
+    assert db.pending_item_ids() == []
+    assert not db.is_due(media.id)
+
+
+def test_item_refresh_timeout_does_not_abort_registration() -> None:
+    class TimeoutClient:
+        def post(self, *_args: object, **_kwargs: object) -> object:
+            raise httpx.ReadTimeout("timed out")
+
+    client = object.__new__(EmbyClient)
+    client.client = TimeoutClient()
+    assert client.refresh_and_verify("1") is False
