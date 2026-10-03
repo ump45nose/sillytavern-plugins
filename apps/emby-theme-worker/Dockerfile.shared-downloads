@@ -1,0 +1,8 @@
+# Optional overlay: build context contains only a locally built, audited wheel.
+ARG WORKER_IMAGE=local/emby-theme-worker:0.3.0
+FROM ${WORKER_IMAGE}
+USER root
+COPY favsync_downloads-0.1.0-*.whl /tmp/download-wheels/
+RUN python -m pip install --no-cache-dir --no-index --no-deps /tmp/download-wheels/favsync_downloads-0.1.0-*.whl \
+    && rm -rf /tmp/download-wheels
+USER 1000:1001

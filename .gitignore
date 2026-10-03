@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Test / lint / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environment & secrets
+.env
+.env.*
+*.key
+*.pem
+secrets/*
+!secrets/.gitkeep
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Runtime state
+state/
+backups/
+downloads/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+/tmp/
+
+# Independent frontend and local wheel artifacts
+node_modules/
+*.whl

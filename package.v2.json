@@ -1,0 +1,32 @@
+{
+  "FilmWatchlist": {
+    "name": "片单自动收藏",
+    "description": "Favsync 片单的公网与 M-Team 选源、115 云端任务路由。",
+    "labels": "订阅,下载",
+    "version": "1.3.1",
+    "icon": "Moviepilot_A.png",
+    "author": "yuwk",
+    "level": 1,
+    "system_version": ">=2.14.2,<3",
+    "history": {
+      "v1.3.1": "处理 CF 真人验证控件、复用可下载的会话域名和跳转后同源地址，修正磁力 tracker 转义并区分页面健康与下载权限。",
+      "v1.3.0": "增加公网与 PT 同档质量比较、115 电影／剧集目录路由、任务对账和入库闭环；新路由默认关闭。",
+      "v1.2.2": "Linux 搜索优先，遇到 CF 或登录要求时可使用受保护的 Browser Relay 会话解析资源链接。",
+      "v1.2.1": "根据 Mini4K 实站验证默认使用 Linux 可访问的镜像域名，并区分资源页登录要求。",
+      "v1.2.0": "增加通用公网索引契约与 Mini4K 搜索、链接解析和只读站点预览。",
+      "v1.0.1": "在插件详情页展示候选排除原因。",
+      "v1.0.0": "首次支持 M-Team 片单自动收藏、原盘过滤和入库回写。"
+    }
+  },
+  "ThemeStudio": {
+    "name": "主题曲管理",
+    "description": "自动检索、智能兜底与人工试听裁剪，连接独立 Theme Worker",
+    "version": "0.3.0",
+    "icon": "https://raw.githubusercontent.com/ump45nose/emby-theme-worker/main/moviepilot/icon.svg",
+    "author": "ump45nose",
+    "level": 1,
+    "history": {
+      "v0.3.0": "首次提供主题曲管理界面及私有 Worker 接口"
+    }
+  }
+}

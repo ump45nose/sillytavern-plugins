@@ -1,0 +1,7 @@
+# Offline host-contract tests only; MoviePilot supplies runtime dependencies.
+pytest==8.4.1
+fast-bencode==1.1.8
+beautifulsoup4==4.14.2
+APScheduler==3.11.0
+pytz==2025.2
+requests==2.32.5
