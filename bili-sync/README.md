@@ -4,7 +4,9 @@ Standalone Docker build of [bili-sync](https://github.com/amtoaer/bili-sync) v2.
 
 This directory is the canonical Bili build/patch subsection in the Favsync
 workspace. `UPSTREAM.json` records the exact source and variant provenance; the
-old standalone repository and its history have not been changed or removed.
+old standalone repository was retired after NAS acceptance on 2026-10-03; its
+complete Git history and working tree are retained in private deployment backups.
+The historical origin in `UPSTREAM.json` is provenance, not a build dependency.
 The root `Dockerfile.bili-sync` and patch paths are compatibility symlinks, so
 existing root Compose builds retain their old state/output mounts. The independent
 Compose file below is for a separately configured deployment; do not switch an
