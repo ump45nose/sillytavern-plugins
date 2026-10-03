@@ -4,7 +4,7 @@ const TRANSITIONS = {
   idle: ["request_attempted", "challenge_pending"],
   request_attempted: ["challenge_pending"],
   challenge_pending: ["challenge_pending", "captcha_attempted"],
-  captcha_attempted: ["captcha_rejected", "captcha_accepted"],
+  captcha_attempted: ["captcha_rejected", "captcha_accepted", "challenge_pending"],
   captcha_rejected: ["challenge_pending", "captcha_attempted"],
   captcha_accepted: ["submit_attempted"],
   submit_attempted: [],

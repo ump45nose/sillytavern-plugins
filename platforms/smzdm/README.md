@@ -15,3 +15,13 @@
 离线测试：`node --test tests/adapters.test.cjs tests/smzdm-recovery.test.cjs`。新增测试通过真实 `main()` 绑定和不同本地子进程验证状态恢复，HTTP 全为 fake，不使用真实 Cookie 或站点。
 
 这些检查不证明当前线上 API 兼容或积分实际到账。
+
+## 独立运行
+
+Python 启动器与 Node 内置库即可，不需要 npm、浏览器或其他平台依赖。配置环境变量后从仓库根目录运行：
+
+```sh
+python3 platforms/smzdm/run.py --runtime-root /absolute/private/runtime --execute
+```
+
+2026-10-03 NAS 已确认今日签到；奖励查询返回无法确认为到账的数据，因此保留 reward=unknown，签到确认不会丢失。调度与通知由调用方负责。

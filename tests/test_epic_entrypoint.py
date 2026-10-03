@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class EntryTests(unittest.TestCase):
-    def test_native_gate_does_not_require_old_runtime(self):
+    def test_missing_native_config_does_not_load_old_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "result.json"
             env = {
@@ -31,7 +31,7 @@ class EntryTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 2)
             value = json.loads(output.read_text())
             self.assertEqual(
-                value["reason"], "native_browser_and_approval_bindings_pending"
+                value["reason"], "native_configuration_or_browser_error"
             )
             self.assertNotEqual(value.get("execution"), "ok")
 

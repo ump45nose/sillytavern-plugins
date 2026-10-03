@@ -43,6 +43,7 @@ test("low confidence and oversized puzzle never yield a usable answer", async ()
 });
 test("CAPTCHA acknowledgement is exact and endpoint is official", () => {
   assert.equal(tn.accepted("_ok"), true);
+  assert.equal(tn.accepted("fixtureToken_ok123"), true);
   for (const s of ["not_ok", "error _ok", JSON.stringify({ secret: "_ok" })])
     assert.equal(tn.accepted(s), false);
   assert.equal(tn.checkURL("https://laowang.vip/captcha/check.php?t=1"), true);

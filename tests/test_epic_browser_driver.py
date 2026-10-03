@@ -35,6 +35,10 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_visibility_without_deprecated_timeout(self):
+        d = BrowserDriver(None, None, None)
+        self.assertTrue(await d._visible(Controls()))
+
     async def test_hidden_first_frame_does_not_hide_visible_challenge(self):
         class Element:
             def __init__(self, visible):

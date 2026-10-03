@@ -14,7 +14,9 @@ async function readStatus(page) {
     ["days", "#lxtdays"],
   ]) {
     try {
-      const text = await page.locator(selector).first().inputValue();
+      const input = page.locator(selector).first();
+      if (await input.count() === 0) { details[key] = null; continue; }
+      const text = await input.inputValue({timeout: 3000});
       const number =
         typeof text === "string" && /^\d{1,9}(?:\.\d{1,2})?$/.test(text)
           ? Number(text)
@@ -35,6 +37,7 @@ async function run(
     authorize,
     challengeOptions = {},
     intent = null,
+    onError = () => {},
   } = {},
 ) {
   let context;
@@ -45,6 +48,15 @@ async function run(
       viewport: { width: 1280, height: 800 },
     });
     const page = context.pages()[0] || (await context.newPage());
+    if (process.env.COOKIECLOUD_CONFIG) {
+      const script = "import sys,json;sys.path.insert(0,sys.argv[1]);" +
+        "from common.cookiecloud import browser_cookies;" +
+        "print(json.dumps(browser_cookies(sys.argv[2],'laowang.vip')))";
+      const bytes = require("node:child_process").execFileSync(process.env.BENEFITS_PYTHON,
+        ["-c", script, path.resolve(__dirname, "../.."), process.env.COOKIECLOUD_CONFIG],
+        {timeout: 35000, maxBuffer: 65536, stdio: ["ignore", "pipe", "ignore"]});
+      await context.addCookies(JSON.parse(bytes));
+    }
     await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 45000 });
     challenge.safeTarget(page);
     await page.waitForTimeout(1000);
@@ -101,6 +113,7 @@ async function run(
     const hasChallenge = async () =>
       (await page.locator("#tncode").count()) > 0;
     if (intent.phase !== "idle") {
+      const unsignedAuthenticated = status.details.days !== null;
       const confirmed = await verify();
       if (confirmed) return result(true, "previous_sign_reconciled");
       const resumable =
@@ -109,7 +122,11 @@ async function run(
         (await hasChallenge()) &&
         (await page.locator("#submit-btn").count()) === 1 &&
         (await page.locator('input[type="password"]').count()) === 0;
-      if (!resumable)
+      // No final submit was sent. A fresh authenticated unsigned page permits
+      // rebuilding the challenge; attempts stay bounded across processes.
+      const beforeSubmit = ["challenge_pending", "captcha_attempted", "captcha_rejected"]
+        .includes(intent.phase) && intent.attempts < 2 && unsignedAuthenticated;
+      if (!resumable && !beforeSubmit)
         return result(false, "previous_sign_action_requires_reconciliation");
       // The server still exposes an actual challenge form. Fresh authorization
       // may continue it, without repeating the earlier qiandao request.
@@ -131,7 +148,7 @@ async function run(
           checkin: "blocked",
           details: status.details,
         };
-      intent.mark("request_attempted");
+      if (intent.phase === "idle") intent.mark("request_attempted");
       try {
         await page.goto(
           URL + "&operation=qiandao&formhash=" + hash[1] + "&format=empty",
@@ -173,6 +190,7 @@ async function run(
       confirmed ? "sign_confirmed" : "business_unconfirmed",
     );
   } catch (error) {
+    onError(error);
     challenge.record(error);
     return {
       execution: "failed",
@@ -258,6 +276,13 @@ async function main() {
         {
           proxy: process.env.LAOWANG_PROXY,
           statusOnly: process.argv.includes("--status"),
+          // --execute authorizes this site's ordinary sign-in challenge.
+          // No external approval service or persisted grant is involved.
+          authorize: async (observation) => {
+            if (observation.kind !== "captcha" || observation.capability !== "tncode" ||
+                observation.target !== challenge.TARGET) throw Error("unexpected_challenge");
+            return null;
+          },
           intent: process.argv.includes("--status")
             ? null
             : createIntent(
@@ -281,7 +306,7 @@ async function main() {
     );
     fs.writeFileSync(file, JSON.stringify(r.details), { mode: 0o600 });
   }
-  publish(r.execution, r.reason, { checkin: r.checkin, reward: "unknown" });
+  publish(r.execution, r.reason, { checkin: r.checkin });
 }
 if (require.main === module) main();
 module.exports = { run, readStatus };

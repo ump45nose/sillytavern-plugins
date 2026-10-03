@@ -52,7 +52,8 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
     def finish(reason=None):
         signs = [journal.get(code, "sign") for code in codes]
         bonuses = [journal.get(code, "bonus") for code in codes]
-        sign_complete = bool(signs) and all(x == "complete" for x in signs)
+        sign_complete = "complete" in signs and all(
+            x in {"complete", "not_applicable"} for x in signs)
         success = (
             sign_complete
             and score_known
@@ -68,7 +69,8 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
         # Facts already confirmed survive another community's failure.
         for index, code in enumerate(codes):
             business[f"community_{index}_checkin"] = (
-                "complete" if journal.get(code, "sign") == "complete" else "unknown"
+                journal.get(code, "sign") if journal.get(code, "sign") in
+                {"complete", "not_applicable"} else "unknown"
             )
             bonus = journal.get(code, "bonus")
             business[f"community_{index}_bonus"] = (
@@ -101,6 +103,9 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
                     params={"excode": code},
                 )
                 data = response.get("data") if isinstance(response, dict) else None
+                if (isinstance(response, dict) and str(response.get("code")) == "200"
+                        and "data" in response and data is None):
+                    return None  # Successful authenticated read: no community activity.
                 if not isinstance(data, dict):
                     raise ValueError("invalid_sign_detail")
                 return data
@@ -115,6 +120,12 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
                 )
 
             state = detail()
+            if state is None:
+                if journal.get(code, "sign") != "pending":
+                    journal.set(code, "sign", "not_applicable")
+                if journal.get(code, "bonus") != "pending":
+                    journal.set(code, "bonus", "not_applicable")
+                continue
             group_id = state.get("taskGroupId")
             if not group_id:
                 continue  # Missing community data is unknown, never aggregate completion.
@@ -141,10 +152,8 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
                         client.request(
                             "POST",
                             f"{api}/task/actionLog",
-                            data=body,
-                            headers={
-                                "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
-                            },
+                            json_body=body,
+                            headers={"Content-Type": "application/json;charset=UTF-8"},
                         )
                     except Exception:
                         had_error = True
@@ -169,15 +178,16 @@ def sign_only(context, client, groups, api, sleep=time.sleep, state_dir=None):
                 if isinstance(bonus, dict) and str(bonus.get("code")) == "200"
                 else None
             )
+            if (isinstance(bonus, dict) and str(bonus.get("code")) == "30001"
+                    and bonus.get("message") == "您不满足领奖条件"):
+                eligible = False
             if eligible is True and journal.get(code, "bonus") != "pending":
                 journal.set(code, "bonus", "pending")
                 claimed = client.request(
                     "POST",
                     f"{api}/sign/receiveSignInBonus",
-                    data={"taskGroupId": group_id},
-                    headers={
-                        "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
-                    },
+                    json_body={"taskGroupId": group_id},
+                    headers={"Content-Type": "application/json;charset=UTF-8"},
                 )
                 if isinstance(claimed, dict) and str(claimed.get("code")) == "200":
                     journal.set(code, "bonus", "complete")
@@ -266,6 +276,21 @@ def main():
     logging.getLogger("aliyun_dev").disabled = True
     path = os.getenv("ALIYUN_UPSTREAM_PATH", "")
     cookie = os.getenv("ALIYUN_COOKIE", "")
+    if os.getenv("COOKIECLOUD_CONFIG"):
+        try:
+            from common.cookiecloud import cookie_header
+            cookie = cookie_header(os.environ["COOKIECLOUD_CONFIG"],
+                                   "developer.aliyun.com", ("login_aliyunid_ticket",))
+        except Exception as error:
+            reason = str(error) if str(error) in {
+                "cookiecloud_config_invalid", "cookiecloud_site_cookie_missing",
+                "cookiecloud_cookie_invalid", "cookiecloud_cookie_limit",
+                "cookiecloud_encryption_unsupported", "cookiecloud_response_limit",
+                "cookiecloud_redirect_rejected", "cookiecloud_inventory_invalid",
+            } else "cookiecloud_unavailable"
+            output = result(context, reason=reason)
+            atomic_json(os.environ["BENEFITS_RESULT_PATH"], output)
+            return 1
     if not cookie:
         output = result(context, reason="missing_or_invalid_cookie")
     elif not path:

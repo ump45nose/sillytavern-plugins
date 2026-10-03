@@ -7,6 +7,7 @@ const FLYOUT =
   "https://www.bing.com/rewards/panelflyout/getuserinfo?channel=BingFlyout&partnerId=BingRewards";
 const MAX_STATE = 1024 * 1024,
   MAX_HTML = 2 * 1024 * 1024;
+const MAX_FLYOUT = 4 * 1024 * 1024;
 const obstacles = require("./obstacles.cjs");
 function restricted(raw) {
   const counters = raw?.flyoutResult?.userStatus?.counters;
@@ -274,7 +275,7 @@ async function withBrowser(chromium, state, options, work) {
         Buffer.byteLength(JSON.stringify(next)) > MAX_STATE
       )
         throw Error("session_state_limit");
-      // In-memory handoff only; failed stages do not overwrite a valid snapshot.
+      // Only successful authenticated stages may refresh the session.
       await options.onVerifiedState(next);
     }
     return output;
@@ -287,6 +288,32 @@ async function withBrowser(chromium, state, options, work) {
   }
 }
 async function readFlyout(context, existingPage = null) {
+  if (context.request) {
+    // APIRequestContext shares this browser's cookie jar and avoids homepage
+    // regional redirects/CORS. This is the pinned provider's authenticated path.
+    let response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        response = await context.request.get(FLYOUT, {
+          timeout: 20000, maxRedirects: 0,
+        });
+        break;
+      } catch {
+        // A bounded retry of this read-only request handles observed proxy TLS
+        // drops. Transport exceptions may include the entire Cookie header.
+        if (attempt === 1) throw Error("flyout_request_failed");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    try {
+      if (response.status() !== 200) throw Error("flyout_unavailable");
+      const length = Number(response.headers()["content-length"] || 0);
+      if (length > MAX_FLYOUT) throw Error("response_too_large");
+      const body = await response.body();
+      if (body.length > MAX_FLYOUT) throw Error("response_too_large");
+      return JSON.parse(body);
+    } finally { await response.dispose(); }
+  }
   // Stream and cap the body in the browser before transferring data to Node.
   const page = existingPage || (await context.newPage());
   try {
@@ -327,7 +354,7 @@ async function readFlyout(context, existingPage = null) {
           clearTimeout(timer);
         }
       },
-      { url: FLYOUT, max: MAX_STATE },
+      { url: FLYOUT, max: MAX_FLYOUT },
     );
   } finally {
     if (!existingPage) await page.close();

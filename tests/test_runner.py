@@ -19,10 +19,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RunnerTests(unittest.TestCase):
     def test_original_platform_time_budgets(self):
-        from common.runner import DEFAULT_TIMEOUT
+        from importlib import import_module
+        budgets = {name: import_module("platforms." + name + ".run").TASK.timeout
+                   for name in ("smzdm", "v2ex", "aliyun", "laowang", "rewards", "epic")}
 
         self.assertEqual(
-            DEFAULT_TIMEOUT,
+            budgets,
             {
                 "smzdm": 180,
                 "v2ex": 240,
@@ -62,7 +64,7 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             r = self.invoke("smzdm", root, "--execute", "--status")
             self.assertEqual(r.returncode, 2)
-            self.assertIn("only by Laowang", r.stderr)
+            self.assertIn("unrecognized arguments", r.stderr)
 
     def test_missing_credentials_structured(self):
         with tempfile.TemporaryDirectory() as root:
@@ -292,6 +294,7 @@ class RunnerTests(unittest.TestCase):
     def test_cleanup_failure_dominates_intervention_preserving_business(self):
         from common.lifecycle import Outcome
         from common.runner import run
+        from platforms.rewards.run import TASK
 
         for signal_result in ({"kind": "captcha"}, ValueError("invalid_signal")):
             with (
@@ -328,16 +331,9 @@ class RunnerTests(unittest.TestCase):
                     patch(
                         "common.containment.BrowserScope.cleanup", return_value=False
                     ),
-                    patch(
-                        "common.runner.create_checkpoint",
-                        side_effect=signal_result
-                        if isinstance(signal_result, Exception)
-                        else None,
-                        return_value=signal_result,
-                    ),
                     redirect_stdout(captured),
                 ):
-                    self.assertEqual(run("rewards"), 1)
+                    self.assertEqual(run(TASK), 1)
                 output = json.loads(captured.getvalue())
                 self.assertEqual(output["reason"], "browser_cleanup_unverified")
                 self.assertEqual(
@@ -349,6 +345,7 @@ class RunnerTests(unittest.TestCase):
     def test_cleanup_marker_io_failure_preserves_business(self):
         from common.lifecycle import Outcome
         from common.runner import run
+        from platforms.rewards.run import TASK
 
         with tempfile.TemporaryDirectory() as root:
 
@@ -381,7 +378,7 @@ class RunnerTests(unittest.TestCase):
                 ),
                 redirect_stdout(captured),
             ):
-                self.assertEqual(run("rewards"), 1)
+                self.assertEqual(run(TASK), 1)
             output = json.loads(captured.getvalue())
             self.assertEqual(output["reason"], "browser_cleanup_unverified")
             self.assertEqual(output["business"], {"daily": "complete"})
@@ -389,6 +386,7 @@ class RunnerTests(unittest.TestCase):
     def test_unsupported_pidfd_kernel_refuses_before_adapter_spawn(self):
         import errno
         from common.runner import run
+        from platforms.rewards.run import TASK
 
         for code in (errno.ENOSYS, errno.EPERM):
             with self.subTest(errno=code), tempfile.TemporaryDirectory() as root:
@@ -404,7 +402,7 @@ class RunnerTests(unittest.TestCase):
                     ),
                     redirect_stdout(captured),
                 ):
-                    self.assertEqual(run("rewards"), 1)
+                    self.assertEqual(run(TASK), 1)
                 spawn.assert_not_called()
                 self.assertEqual(
                     json.loads(captured.getvalue())["reason"],

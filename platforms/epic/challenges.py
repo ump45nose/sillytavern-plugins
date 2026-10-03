@@ -1,9 +1,7 @@
 """Lazy bridge to the original hcaptcha-challenger approach.
 
-No model package, API key, browser or network is loaded at module import. Real
-use requires a trusted runtime authorization and separately configured model
-credentials/data-sharing permission. This module is not wired to public claim
-yet; no live challenge was used in tests.
+No model package, API key, browser or network is loaded at module import.
+The public task binds its authorized challenge scope and private model config.
 """
 
 import asyncio
@@ -23,7 +21,10 @@ class HCaptchaHandler:
         # On-demand loading, analogous to upstream hcaptcha_runtime, but without
         # eagerly importing all OpenCV/model patches for non-challenge tasks.
         module = self.loader("hcaptcha_challenger.agent")
-        self.agent = module.AgentV(page=self.page, agent_config=self.config)
+        from loguru import logger
+        logger.remove()  # SDK debug output can include challenge tokens/model replies.
+        if self.agent is None:
+            self.agent = module.AgentV(page=self.page, agent_config=self.config)
         signal = await asyncio.wait_for(
             self.agent.wait_for_challenge(), timeout=timeout
         )

@@ -100,6 +100,8 @@ async function run(request, cookie, sk, state = journal(null, "test", "test")) {
     if (rewards.payload?.error_code == "0") {
       state.set("reward", "complete");
       reward = "complete";
+    } else {
+      reason = "checkin_confirmed_reward_unavailable";
     }
   } catch {
     failed = true;

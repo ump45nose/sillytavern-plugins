@@ -3,7 +3,7 @@
 No Playwright import or browser starts at import time. The caller supplies an
 authenticated context and trusted obstacle handlers. This binding has no
 password/model auto-discovery, no constant recording, and no autonomous retry
-of checkout submission. Real-site integration is still unverified.
+of checkout submission. Site acceptance is recorded separately from code checks.
 """
 
 import asyncio
@@ -83,7 +83,10 @@ class BrowserDriver:
                 raise Paused("observation_controls_ambiguous")
             # Hidden provider iframes can precede an active visible challenge.
             for index in range(count):
-                if await locator.nth(index).is_visible(timeout=500):
+                # Camoufox's patched Frame.is_visible omits the deprecated
+                # timeout argument. Visibility is an immediate observation;
+                # bounded hydration waits belong in observe(), not this call.
+                if await locator.nth(index).is_visible():
                     return True
             return False
         except Paused:
@@ -184,9 +187,9 @@ class BrowserDriver:
 
     async def _ready(self, container, phase, text):
         if phase == "session":
-            return await self._visible(
-                container.locator('egs-navigation[isloggedin="true"]')
-            )
+            # The navigation web component uses display:contents in the live
+            # storefront; its own bounding box is empty even while logged in.
+            return await container.locator('egs-navigation[isloggedin="true"]').count() == 1
         if phase in {"product", "verification"}:
             return await self._visible(
                 container.locator('[data-testid="purchase-cta-button"]')
@@ -203,6 +206,24 @@ class BrowserDriver:
         return False
 
     async def observe(self, phase, *, timeout):
+        # DOMContentLoaded precedes the store's hydrated purchase controls.
+        # Re-probe without navigation or interaction before declaring a layout gap.
+        for attempt in range(8):
+            state = await self._observe_once(phase, timeout=timeout)
+            if state is None or state.kind != "unknown":
+                return state
+            if attempt == 0 and phase in {"product", "verification"}:
+                try:
+                    await self.page.locator('[data-testid="purchase-cta-button"]').first.wait_for(
+                        state="visible", timeout=min(20000, int(timeout * 1000)))
+                except Exception as error:
+                    if not _is_playwright_timeout(error):
+                        raise
+            if attempt == 7:
+                return state
+            await asyncio.sleep(min(1, timeout / 8))
+
+    async def _observe_once(self, phase, *, timeout):
         observations = []
         ready = False
         for container in await self._containers(phase):
@@ -390,9 +411,17 @@ class BrowserDriver:
             await page.close()
 
     async def _ownership(self, page, offer, *, timeout):
-        if clean_target(page.url) != clean_target(offer.url):
+        # The current store can canonicalize /en-US/p/x to /p/x.
+        actual, expected = clean_target(page.url), clean_target(offer.url)
+        if re.sub(r"/en-US/", "/", actual) != re.sub(r"/en-US/", "/", expected):
             return "unknown"
         button = page.locator('[data-testid="purchase-cta-button"]').first
+        try:
+            await button.wait_for(state="visible", timeout=min(15000, int(timeout * 1000)))
+        except Exception as error:
+            if not _is_playwright_timeout(error):
+                raise
+            return "unknown"
         if not await self._visible(button):
             return "unknown"
         text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip()

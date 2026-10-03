@@ -1,7 +1,6 @@
 """Epic claim state machine with injected browser/obstacle handlers.
 
-This is executable orchestration tested with synthetic drivers. It is not the
-unimplemented live browser binding; the public claim entry remains gated.
+Business operations are independent of the concrete browser and challenge SDK.
 """
 
 from dataclasses import dataclass, field
@@ -84,6 +83,7 @@ class ClaimWorkflow:
         expires_at,
         approve=None,
         handlers=None,
+        automatic_kinds=(),
         clock=time.monotonic,
         readback_attempts=3,
         readback_interval=2,
@@ -105,6 +105,7 @@ class ClaimWorkflow:
         self.expires_at = expires_at
         self.approve = approve
         self.handlers = handlers or {}
+        self.automatic_kinds = frozenset(automatic_kinds)
         self.clock = clock
         self.remaining_recoveries = 12
         self.remaining_interventions = 8
@@ -137,6 +138,15 @@ class ClaimWorkflow:
                 continue
             if state.kind not in CONSENT:
                 raise Paused("unsupported_obstacle")
+            if state.kind in self.automatic_kinds and state.kind in self.handlers:
+                # Public --execute may bind already-authorized routine login and
+                # challenge operations locally. No fabricated host approval.
+                if self.remaining_interventions <= 0:
+                    raise Paused("intervention_budget_exhausted")
+                self.remaining_interventions -= 1
+                await self.handlers[state.kind](state, timeout=self.remaining())
+                handled = True
+                continue
             pending = request(
                 self.context,
                 "claim",

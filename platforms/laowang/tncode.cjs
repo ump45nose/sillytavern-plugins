@@ -74,7 +74,11 @@ async function analyzePuzzle(input) {
   return { x: best.x, width, markWidth, samples: samples.length, ratio };
 }
 function accepted(text) {
-  return typeof text === "string" && text.trim() === "_ok";
+  // The live tn_code.js uses indexOf("_ok") and retains the whole token in
+  // clicaptcha-submit-info. It is not the literal string "_ok".
+  return typeof text === "string" && /^[A-Za-z0-9_-]{3,256}$/.test(text.trim()) &&
+    !/^(?:error|not_|fail)/i.test(text.trim()) &&
+    text.trim().includes("_ok");
 }
 function checkURL(value) {
   try {
@@ -147,13 +151,15 @@ async function drag(page, match) {
       typeof declared === "string" && /^\d{1,4}$/.test(declared)
         ? Number(declared)
         : null;
-    if (length === null || length > 4096)
+    if ((declared !== undefined && length === null) || length > 4096)
       return { status: "unknown", reason: "captcha_response_oversized" };
     const text = await reply.text();
     if (Buffer.byteLength(text) > 4096)
       return { status: "unknown", reason: "captcha_response_oversized" };
     return accepted(text)
       ? { status: "accepted" }
+      : /^error_[a-z_]+$/.test(text.trim())
+        ? { status: "rejected", reason: "captcha_rejected" }
       : // The pinned source establishes only the success token. A negative token
         // has not been verified; HTML, errors and unknown bodies are not proof of
         // rejection and therefore must not authorize another drag.

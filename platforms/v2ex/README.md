@@ -18,3 +18,13 @@
 - 可导入严格校验且账号/平台/业务日相符的旧确认结果；损坏动作记录不授权写操作。动作记录不保存 Cookie 或网页内容
 
 离线测试：`python -m unittest discover -s tests -p test_v2ex.py -v`，以及独立 HTTP 环境中的 `PYTHONPATH=. python tests/provider_contract.py`。测试覆盖默认来源等价、真实 requests Session 的 fake transport 绑定、超限流、重定向预读、异常恢复和已确认动作去重；不访问真实 V2EX。
+
+## 独立运行
+
+```sh
+python3 -m venv .venv-http
+.venv-http/bin/pip install --require-hashes -r locks/http-python312-linux-x86_64.txt
+.venv-http/bin/python platforms/v2ex/run.py --runtime-root /absolute/private/runtime --execute
+```
+
+使用仓库外的 V2EX_COOKIE 环境变量；不安装浏览器或其他平台模块。2026-10-03 NAS 通过今日奖励账目只读恢复确认。输出标准 JSON 和结果文件，调度、日报与通知由调用方负责。

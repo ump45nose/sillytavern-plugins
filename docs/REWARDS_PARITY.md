@@ -1,3 +1,5 @@
+> 2026-10-03 更新：原部署启用的八项（daily、extra、punchcards、desktop_search、more_promotions、claim、app_daily、app_promotions）已全部绑定独立 CLI。APP 使用已有会话 OAuth；状态在仓库外持久化。当前实测与仍未确认部分见 [实现验收记录](IMPLEMENTATION_ACCEPTANCE_2026-10-03.md)。下文保留历史能力和开发检查点，不能把原本未启用的实验能力当作本次迁移已完成。
+
 # Rewards 能力与障碍处置对照（重写前基线）
 
 更新：2026-10-02。目标是降低同时存活的浏览器、页面、无界数据和空闲进程开销，**不以删减业务能力换取轻量**。本文件是代码/回归映射，不表示尚未迁移的功能已完成。

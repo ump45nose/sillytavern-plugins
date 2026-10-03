@@ -155,6 +155,15 @@ async function run(chromium, state, parser, options = {}, deps = common) {
       state,
       options,
       async (context, page) => {
+        await page.goto(deps.EARN, {waitUntil: "domcontentloaded", timeout: 45000});
+        await deps.guard(page);
+        common.assertAccountAvailable(await deps.readFlyout(context), options.region);
+        const overview = await deps.boundedHtml(page);
+        const parents = parser.snapshotQuestList(overview);
+        if (parser.snapshotPage(overview).offers.length > 0 &&
+            parents.length > 0 && !parents.some(p => p.offerId === PARENT))
+          return {execution: "ok", reason: "onboarding_not_assigned",
+            business: {punchcards: "not_applicable"}};
         async function html() {
           await page.goto(deps.EARN + "/quest/" + PARENT, {
             waitUntil: "domcontentloaded",

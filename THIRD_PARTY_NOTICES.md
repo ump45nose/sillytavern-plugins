@@ -26,3 +26,11 @@ Rewards activities.cjs 来自所有者私有 daily-activities.cjs 的授权重�
 Rewards vendor/rewards-parser 现在包含官方 v4.3.2 的精确 ReactFunc.ts、可重复构建的 ReactFunc.js/source map 和完整 GPL-3.0 LICENSE；上游 package 声明 GPL-3.0-or-later，PROVENANCE.json 固定来源与生成条件。没有改写解析器或误标 MIT。仅该无运行时依赖的解析器被分发，完整上游仍在外部开发目录。
 
 Rewards server_actions.cjs、punchcards.cjs、app.cjs 的版本绑定协议改造源于同一官方 v4.3.2 BrowserFunc 与 activities/{api,rewards,app}，按 GPL-3.0-or-later 保留；完整许可位于 platforms/rewards/vendor/rewards-parser/LICENSE。goal.cjs 源于所有者私有 extra-activities.cjs 的授权重构。
+
+## 2026-10-03 窄范围实现接入
+
+Epic `native.py`、`model_bridge.py` 现在包含参考 Ronchy2000/epic-freebies-helper 的浏览器、登录和 OpenAI compatible 模型桥适配；依旧按 GPL-3.0-or-later 保留，完整许可在 `upstream/epic-freebies-verifier/LICENSE`，固定提交 `d90190bf3f9f87e9da71c50c81f155c4586bdb33` 由 `platforms/epic/upstream-contract.json` 指定。没有复制完整应用、settings、容器或调度服务。Camoufox、hcaptcha-challenger、Google GenAI 等可选安装包遵循各自原许可证。
+
+Rewards `promotions.cjs`、`app_auth.cjs` 以及 `extra.cjs` 的探索激活部分，窄范围改造自 TheNetsky/Microsoft-Rewards-Script v4.3.2 的 URL 活动、积分领取、OAuth 与 SearchOnBing 协议，沿用 GPL-3.0-or-later，完整许可在 `platforms/rewards/vendor/rewards-parser/LICENSE`。本段取代前述“Epic 上游未复制”和仅 parser 被分发的旧检查点描述。
+
+公共 Task 契约、CookieCloud 读取器为本项目新增代码；可选 cryptography 及传递依赖的原许可随安装包保留。CookieCloud AES 格式的互操作不改变服务本身或其许可。

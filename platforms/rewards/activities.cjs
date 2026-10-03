@@ -5,6 +5,10 @@ const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
 const LABEL = /^(Daily activit(?:y|ies)|Daily Set|每日活动)$/i;
 const DASHBOARD = "https://rewards.bing.com/dashboard";
+const DAILY_SELECTOR = '[role="progressbar"][aria-label="Daily Set" i],'+
+  '[role="progressbar"][aria-label="Daily activities" i],'+
+  '[role="progressbar"][aria-label="Daily activity" i],'+
+  '[role="progressbar"][aria-label="每日活动"]';
 const HOSTS = new Set([
   "www.bing.com",
   "cn.bing.com",
@@ -40,8 +44,9 @@ function allowedCard(href) {
   }
 }
 async function progress(page) {
-  const bar = page.getByRole("progressbar", { name: LABEL });
-  await bar.waitFor({ state: "attached", timeout: 20000 });
+  await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1,
+    DAILY_SELECTOR, {timeout: 20000});
+  const bar = page.locator(DAILY_SELECTOR);
   return parseProgress(
     await bar.getAttribute("aria-valuenow"),
     await bar.getAttribute("aria-valuemax"),
@@ -51,6 +56,7 @@ async function section(page) {
   const control = page.getByRole("button", { name: LABEL, exact: true });
   if ((await control.getAttribute("aria-expanded")) === "false")
     await control.click();
+  await page.waitForTimeout(1000);
   return control.locator("xpath=ancestor::section[1]");
 }
 function outcome(complete, reason) {
@@ -192,6 +198,6 @@ async function main() {
   }
   return publish(output.execution, output.reason, output.business);
 }
-module.exports = { parseProgress, allowedCard, run, loadState };
+module.exports = { parseProgress, progress, allowedCard, run, loadState };
 if (require.main === module)
   main().catch(() => publish("failed", "adapter_error", { daily: "unknown" }));

@@ -1,44 +1,34 @@
-# 阿里云开发者社区
+# 阿里云开发者社区签到
 
-一个账号一次调用，只做现有范围内的签到和领奖。不调用上游 `main()`、完整任务、点赞/评论/分享、清理互动、外部通知或密码登录。默认入口不访问网络，只有显式 `--execute` 才执行。
+独立 HTTP 脚本，只做当前社区签到、连续奖励资格检查和待收积分领取。不导入上游完整 main，不做评论、点赞、分享或通知。
 
-## 外部依赖
+## 依赖与调用
 
-- Python 3.12；`requests` 可复用根目录的已固定 Python 依赖环境
-- 外部 `daily.py`：来源 `WillpowerJin/ql-scripts`，候选版本 `37f42204a8eea3a489e67e866a2b356bed4b9b22` 的 `aliyun_dev/daily.py`
-- 文件 SHA256：`286563810a780f06edaa0eea2dd0633480b403d6634ab3357d0890df77b696c3`
-
-该文件在当前上游仓库的许可证未确认，因此本项目不重新分发。将用户自行取得的文件位置设为 `ALIYUN_UPSTREAM_PATH`；内容哈希不匹配时拒绝导入。该来源是本次可核对的候选基线，不代表已经确认 NAS 旧运行文件的版本。
-
-## 配置
-
-只读取当前账号的 `ALIYUN_COOKIE`、`ALIYUN_UPSTREAM_PATH` 和可选 `ALIYUN_PROXY`。凭据放在源码目录之外，不放在命令行或提交到 Git。账号代号来自通用 `--account` 参数。没有密码登录回退，不读取上游账号 YAML 或会话缓存。
+Python 3.12、requests；可复用仓库根目录的 HTTP venv：
 
 ```sh
-python platforms/aliyun/run.py --runtime-root /absolute/private/runtime --account default
+python3 -m venv .venv-http
+.venv-http/bin/pip install --require-hashes -r locks/http-python312-linux-x86_64.txt
+.venv-http/bin/pip install --require-hashes -r locks/cookiecloud-python312-linux-x86_64.txt
 ```
 
-以上仅生成未请求执行的结果；真实运行需显式增加 `--execute`，并事先准备凭据。请先完成自己的授权与账号检查，离线测试不需要任何真实 Cookie。
+外部 provider 来自 WillpowerJin/ql-scripts 的 `aliyun_dev/daily.py`，固定提交 `37f42204a8eea3a489e67e866a2b356bed4b9b22`，SHA256 `286563810a780f06edaa0eea2dd0633480b403d6634ab3357d0890df77b696c3`。未确认该文件的分发许可证，因此不复制进本仓库；自行取得后用 `ALIYUN_UPSTREAM_PATH` 指定，内容不匹配就拒绝导入。
 
-## 行为与已知限制
+```sh
+ALIYUN_UPSTREAM_PATH=/absolute/reviewed/aliyun_dev/daily.py \
+COOKIECLOUD_CONFIG=/absolute/private/cookiecloud.json \
+.venv-http/bin/python platforms/aliyun/run.py \
+  --runtime-root /absolute/private/runtime --execute
+```
 
-- 每个请求最多一次，发生不明确的签到/领奖结果时只读查询，不自动重放写操作
-- 签到后最多 30 次、每次间隔 2 秒只读确认；整任务同时受通用运行器超时约束，建议沿用旧任务 480 秒作为初始待测值
-- 连续奖励仅在资格接口明确返回成功且 `data` 为布尔 `true` 时尝试领取；明确 `false` 跳过；其他值保持未知。这比旧包装仅判断 code 的方式更保守
-- 领取待收积分的 GET 接口具有副作用，同样禁止自动重试；缺失成功代码不算确认
-- 平台响应格式、实际积分到账和当前 Cookie 有效性没有在线验证
-- 该适配器使用已有 provider 的 HTTP 和认证实现，外部依赖变更需要重新审阅，不能只更新哈希绕过兼容检查
+也可用 `ALIYUN_COOKIE`，可选 `ALIYUN_PROXY`。配置了 CookieCloud 时，每次使用其最新 developer.aliyun.com Cookie，不回退到失效的旧值。格式见 [公共凭据说明](../../docs/CREDENTIALS.md)。凭据不进 Git，不在命令行提供。
 
-离线验证：`python -m unittest discover -s tests -p test_aliyun.py -v`。全部使用 fake client，不导入外部 daily.py，不访问平台。
+## 确认与恢复
 
-## 中断与再次执行（2026-10-02）
+2026-10-03 NAS 使用新推送的 CookieCloud 数据：默认社区签到和待收积分读回确认；14 个旧社区返回明确无活动数据，标记不适用，不当作签到失败。
 
-- `BENEFITS_STATE_DIR/http-actions.json` 是有界、0600 的原子动作记录，只保存账号代号、业务日期及每个社区的签到/奖励事实，不保存 Cookie、请求内容或 API 响应
-- 固定来源的 15 个社区全部纳入汇总，包括空 `excode` 的默认社区。第一个社区完成、后续查询失败时，汇总签到仍为 unknown；已经确认的社区不会丢失。结果的 `community_0_*` 到 `community_14_*` 按固定 `TASK_GROUPS` 顺序对应社区，合计最多 32 个业务字段
-- 不采信旧版 `last-confirmed.json` 的阿里云汇总结论；旧版可能在只完成部分社区时写入 complete。升级后逐个读回社区
-- 签到和领奖发出前先持久化 intent。签到超时后立即只读确认；后续进程也只读恢复，已经确认或仍不明确的签到不重发。奖励查询仍继续，不因签到完成跳过整个平台
-- 奖励资格 false 只能说明当前没有可领取资格，不能证明一次不明确的领奖已经到账。此类 bonus 保持 unknown，重启及跨日均不自动重放；需额外可信证据或人工核对
-- 待收积分为零可确认当前没有待领取积分；不明确的领取只做余额读回。同日已确认过一次领取但再次读到正数时，无法区分新奖励与延迟数据，因此保持 unknown，不盲目重发
-- 动作记录损坏或无法写入时拒绝进一步写请求。新一天的签到可重新执行；未核实的 bonus/待收积分 intent 不因换日而被清空
+签到及连续奖励请求沿用 provider 的 JSON 请求格式。连续奖励仅明确符合资格才领取；精确“不满足领奖条件”回执可表示当前不适用，不推断先前不明确的领奖已到账。
 
-新增离线回归覆盖 15 社区、部分异常、超时写入、跨次运行恢复和损坏动作记录；未访问真实平台。
+`http-actions.json` 在写请求前记录账号/日期/社区 intent。不明确的签到和领奖只读恢复；签到确认后仍查询奖励。15 个社区分别保留结果，汇总允许明确不适用，但不会用第一个社区成功遮盖其他未知结果。未核实奖励 intent 不因换日自动删除。
+
+单请求 30 秒、响应最多 1 MiB；默认总预算 480 秒。损坏状态拒绝进一步写请求。输出通用 JSON 与逐社区结果，不保留 Cookie 或完整响应。

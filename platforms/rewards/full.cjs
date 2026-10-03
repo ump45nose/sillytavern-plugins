@@ -163,6 +163,9 @@ async function execute(
         reason: "capability_binding_pending",
         business: { [capability]: "unknown" },
       };
+    else if (capability === "app_daily" && snapshots.before.business.app_daily === "complete")
+      out = {execution: "ok", reason: "app_checkin_already_confirmed",
+        business: {app_daily: "complete"}};
     else
       try {
         out = validateOutput(await bindings[capability]());
@@ -222,6 +225,8 @@ function createBindings({
     "extra",
     "punchcards",
     "desktop_search",
+    "more_promotions",
+    "claim",
   ].some((capability) => requested.has(capability));
   const mobileRequired = requested.has("mobile_search");
   // Check every required browser account before snapshots or any mutation.
@@ -238,7 +243,11 @@ function createBindings({
     }
   }
   const state = (device) => sessions.get(device);
-  const preserve = (device) => (value) => sessions.set(device, value);
+  const preserve = (device) => (value) => {
+    writeReport(path.join(stateDir, device === "mobile" ?
+      "storage-state.mobile.json" : "storage-state.json"), value, 1024 * 1024);
+    sessions.set(device, value);
+  };
   // Only enabled browser capabilities need Chromium. Parser-only dependencies
   // remain lazy, so a daily/search or APP request cannot fail loading a parser.
   if ((desktopRequired || mobileRequired) && !chromium)
@@ -284,12 +293,23 @@ function createBindings({
           business: { snapshot: "not_applicable" },
         });
   const bindings = {
+    more_promotions: () => require("./promotions.cjs").run(
+      chromium, state("desktop"), parser(), {...base,
+        journal: journal("promotions-journal.json"),
+        businessDate: process.env.BENEFITS_BUSINESS_DATE,
+        timezoneOffset: config.timezoneOffset || 0}, "more_promotions"),
+    claim: () => require("./promotions.cjs").run(
+      chromium, state("desktop"), parser(), {...base,
+        journal: journal("claim-journal.json"),
+        businessDate: process.env.BENEFITS_BUSINESS_DATE}, "claim"),
     daily: () =>
       require("./activities.cjs").run(chromium, state("desktop"), base),
     extra: () =>
       require("./extra.cjs").run(chromium, state("desktop"), parser(), {
         ...base,
         goal: goal(),
+        journal: journal("explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json"),
+        timezoneOffset: config.timezoneOffset || 0,
       }),
     punchcards: () =>
       require("./punchcards.cjs").run(chromium, state("desktop"), parser(), {
@@ -309,22 +329,30 @@ function createBindings({
         search: config.search,
       }),
   };
-  if (typeof host.appClient === "function")
+  let appSession;
+  const appClient = host.appClient || (async () => {
+    appSession ||= await require("./app_auth.cjs").create({
+      stateDir, proxy, state: state("desktop"), chromium, config,
+      onVerifiedState: preserve("desktop"),
+    });
+    return appSession.client;
+  });
+  if (["app_daily", "app_promotions", "read_to_earn"].some(key => requested.has(key)))
     for (const [capability, method] of [
       ["app_daily", "submitDaily"],
       ["app_promotions", "runPromotions"],
       ["read_to_earn", "readToEarn"],
     ])
       bindings[capability] = async () => {
-        const client = await host.appClient();
+        const client = await appClient();
         const app = require("./app.cjs");
         const out =
           method === "runPromotions"
             ? await app[method](client, journal("app-journal.json"))
             : await app[method](
                 client,
-                app.dailyJournal(stateDir, host.businessDate),
-                host.businessDate,
+                app.dailyJournal(stateDir, host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
+                host.businessDate || process.env.BENEFITS_BUSINESS_DATE,
               );
         return {
           ...out,
@@ -337,11 +365,12 @@ function createBindings({
       Object.entries(bindings).filter(([key]) => requested.has(key)),
     ),
     snapshot,
+    close: async () => { if (appSession) await appSession.close(); },
   };
 }
-function writeReport(file, value) {
+function writeReport(file, value, max = 65536) {
   const text = JSON.stringify(value);
-  if (Buffer.byteLength(text) > 65536) throw Error("report_too_large");
+  if (Buffer.byteLength(text) > max) throw Error("report_too_large");
   const temp = file + ".tmp-" + process.pid;
   fs.writeFileSync(temp, text, { mode: 0o600 });
   fs.renameSync(temp, file);
@@ -381,7 +410,7 @@ async function main() {
       path.dirname(process.env.BENEFITS_RESULT_PATH),
       "rewards-report.json",
     );
-    out = await execute(requested, native.bindings, {
+    try { out = await execute(requested, native.bindings, {
       snapshot: native.snapshot,
       onProgress: (value) => {
         // Publish the existing protocol first: the runner can recover confirmed
@@ -390,7 +419,7 @@ async function main() {
         publish("failed", "full_in_progress", confirmedBusiness);
         writeReport(reportPath, value);
       },
-    });
+    }); } finally { await native.close(); }
     writeReport(reportPath, out.report);
   } catch (error) {
     out = {

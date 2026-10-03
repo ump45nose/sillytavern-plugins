@@ -284,6 +284,8 @@ test("duplicate or conflicting inventory cannot authorize action", () => {
   );
 });
 test("offer counters require recognized eligibility unless completion explicit", () => {
+  assert.equal(snapshot.group([{pointProgress: 0, pointProgressMax: 10,
+    exclusiveLockedFeatureStatus: "notsupported"}], {requireEligibility: true}), "incomplete");
   const values = { pointProgress: 10, pointProgressMax: 10 };
   assert.equal(snapshot.group([values]), "complete");
   for (const state of [undefined, null, "unknown-new-enum"]) {

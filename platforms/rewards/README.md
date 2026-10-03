@@ -1,102 +1,58 @@
-# Rewards 原生受限能力
+# Microsoft Rewards
 
-## 已实现模式
+按启用清单顺序执行一次账号任务，阶段之间关闭浏览器，最后输出通用 JSON 和本次 `rewards-report.json`。Hermes 决定何时运行、如何汇总和推送。
 
-所有模式只通过同一个 run.py 入口运行，持有同账号锁和全局浏览器锁，受总 deadline 监督。latest 结果按 results/rewards/<account>/<mode>/ 分开，防止只读 snapshot 覆盖每日活动或完整任务状态。
+## 安装和账号状态
 
-- `--mode activities`：每日活动卡片，原有迁移功能
-- `--mode snapshot`：只读当前 dashboard/flyout；不点击登录、领奖、目标或活动
-- `--mode extra`：已有社交卡片/Explore 静态查询主题；先验证当次明确 unlocked 资格，再一次点击/有限查询，只读回确认。当前目标设置暂为 blocked；完整手动兑换目标设置/授权恢复属于待补齐能力，不是永久删除，不开启自动兑换
-- 默认 `--mode full`：原生顺序编排，必须提供明确启用的 capabilities.json；不导入上游 Main。未实现或缺可信调用方的已请求能力会明确 pending
-
-上述模式均需显式 `--execute`；这里只开发/离线测试，没有使用真实 Cookie、会话或网站动作。`daily=complete` 或 snapshot 返回不能代表完整 Rewards 全部完成。
-
-## 小型运行依赖
-
-`REWARDS_ROOT` 是安装 patchright 1.61.1 的目录；本目录的 package-lock.json 可用于 npm ci --ignore-scripts。浏览器二进制另行安装，用 run.py 的 --browser-cache 指定。不关闭 Chromium sandbox。
-
-唯一账号会话：runtime-root/state/rewards/<opaque-account>/storage-state.json，最多 1 MiB，owner-only。无自动登录，无 SQL 账号扫描、无外部通知。遇到可识别的登录/挑战页返回 human_required。页面/字段异常返回 unknown；没有自动解验证码。
-
-## 受控 parser 构建
-
-extra 运行时直接加载 vendor/rewards-parser 中的精确独立 React parser（生成 JS 约26KiB），零 runtime require/import；原 TypeScript、source map、完整 GPL-3.0 许可证及 commit/compiler/hash 证明同时保留，不执行上游 Main。不需要下载/安装上游168个依赖，也不需要 REWARDS_UPSTREAM_DIR。
-
-下列完整构建仅用于开发者核验 parser 可重复生成，不是运行前提：
+Python 3.12、Node 24、patchright 1.61.1 和原生 Chromium。保留 sandbox，不导入上游 Main 或其通知/数据库/账号扫描代码。
 
 ```sh
-python platforms/rewards/build.py /path/to/exact-upstream /path/to/empty-build --install-build
-node tests/rewards_build_contract.cjs /path/to/empty-build
+cd platforms/rewards
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --ignore-scripts
+npx patchright install chromium
 ```
 
-精确上游：TheNetsky/Microsoft-Rewards-Script v4.3.2、提交 f61f4e982bbb435f37133bed0dc5b4c582ed1e73。源码文件均由 build-source.json 固定 SHA256；依赖以其 package-lock.json 安装，禁用安装 scripts 和浏览器自动下载。仅独立 parser 成品、原源码和许可证进入本仓库；完整输出/依赖缓存不进本仓库。
-
-唯一入口补丁位于 build.py 的 patch_entry：去掉导入即运行的 CLI main 定义和调用及对应未用 import；保留导出的 MicrosoftRewardsBot 和 executionContext。它不会将 Main 改造成安全运行器，不能直接调用。
-
-编译调整：原 tsconfig 的 commonjs + bundler resolution 与 TypeScript 6 组合不兼容；尝试 Node16 module/resolution 后，p-queue 的 ESM 导入报 TS1479。最终使用 `--module Node20 --moduleResolution Node16`，匹配本轮 Node 24.19.0 对 require(ESM) 的支持，编译通过。没有 suppress 类型错误或 noEmitOnError 绕过。每次 benefits-build.json 记录 source commit、具体 Node/TypeScript 版本、编译参数、补丁说明和完整 dist hash。
-
-本轮开发核验曾按上游锁安装168个包、TypeScript编译、资源复制，全部通过；这些依赖不属于最终原生日常运行需求。离线 contract 在模块导入前阻断 Node 网络入口和 subprocess，验证移除自主 main 后能导入，及真实 React parser 的合成页面。它不证明旧 NAS local/rewards:4.3.2 与此候选源码一致。
-
-## 内存与输出
-
-HTML 仅在浏览器侧限定 2 MiB 后传回解析，flyout 响应在浏览器侧流式读取上限 1 MiB。只返回固定业务分类，不保存完整 HTML、截图、账号字段、原始 server payload 或无限历史。最多300条输入记录/30个选定活动，主题最多2个查询；确认轮询和等待均有限。popup、verification page、context、browser 随阶段关闭，禁止浏览器任务并行。
-
-有限输入不等于整个 Chromium 的硬 RAM 上限；真实浏览器和网站尚未验收。
-
-## 完整 Main 的未决设计
-
-官方 Main 包含账号/.env 发现、自动登录、多种浏览器/APP token路径、SQLite写入、HTTP写重试、通知以及 process.exit。简单配置不能全部关闭这些影响。要保持原完整 Main，至少需要多个版本绑定兼容替换；用户已明确要求以独立能力重写并保留完整合理业务与障碍恢复，不继续堆叠大范围 Main monkeypatch，也不靠减少能力降低内存。完整对照和待补齐项见 ../../docs/REWARDS_PARITY.md。当前不运行原 Main，不声称完整 Rewards 已迁移。
-
-
-## 第三轮：独立搜索与可恢复障碍
-
-新增 --mode desktop-search / mobile-search：复用当前账号各自保存的会话，独立严格读取 desktop/Edge/mobile quota，序列化搜索、延迟入账只读确认、停滞退出、上限预算、未知/倒退 counter 停止；Enter超时先读回，绝不盲目重放。默认最多100次搜索、连续3次无进展停止，均受总 deadline。默认30秒间隔；实际搜索建议显式配置足够 --timeout，不会自动延长上限。
-
-mobile-search 需要 storage-state.mobile.json 及 native-config.json 的 mobile 设备侧配置（isMobile=true 和已有稳定 userAgent；可提供viewport/locale等），缺失就明确报告 mobile_device_profile_required，不用桌面状态冒充移动完成。desktop 使用原 storage-state.json。只准有限浏览器 context 参数，不准借配置开启录屏、权限或跳过TLS。
-
-native-config.json 可配置 search.maxSearches/stagnantLimit/delayMs/readbackAttempts/readbackDelayMs/queries/clusterSearch/clusters，以及 region。clusterSearch 是词组聚类，**不是浏览器并行**，故没有为省RAM删除。当前本地词库与显式配置词组已实现；完整远程词源/随机结果访问/额外搜索等仍按能力矩阵逐项补齐，不声称被替代或完成。
-
-obstacles.cjs 为typed探测与恢复计划，common/intervention_signal.py把子进程信号转为待审批checkpoint；文件不等于授权。登录/验证码/新条款/年龄/安全设置/目标设置有各自类型。当前识别器没有真实验证码solver、协议或年龄执行器绑定；具体验证插件需提供当次公共内容指纹和可信授权回调。没有精确证据提供器时使用单次nonce，防止旧许可跨页面复用，不能据此直接执行恢复。
-
-已具备安全的非绑定Bing cookie拒绝操作（一次点击后读回，不点泛化Accept/Next），以及账号限制/地区不一致/迟到账/弹窗/异常中断等测试。剩余完整业务与现场处理器保持pending，见能力对照表。
-
-## 第四轮：punchcard、APP 与目标设置
-
---mode punchcards 只处理原私有部署允许的 WW_pcparent_redesign_existinguser_onboarding_offer_punchcard。保持 search/day/streak 子项延期、奖励领取默认关闭；native-config.json 的 punchcards.autoClaim=true 才请求这些子奖励。资格来自新鲜 quest 数据；缺失字段保持 unknown。不能拿上游 FlyoutDashboard 人工创建的空 punchCards 数组当成「无任务」。
-
-server_actions.cjs 逐个读取当前页面引用的 chunk，最多60个、总12MiB；每个响应最多2MiB，发现冲突action ID即退出。提交沿用已审查的 Next server-action 协议，POST不自动重试。punchcard-journal.json 在提交前持久记录，跨进程再次执行只读核验，不能盲目重发。当前未暴露重置journal开关，需人工确认真实状态后再设计恢复。
-
-APP 的 app.cjs 是实际HTTP绑定与 caller API：createClient 接收调用方提供的现有有效token/country/language，不创建token、不做OAuth、不写凭据、不自动加载环境凭据。runPromotions 保留 type=sapphire 的已知任务、最多40项、逐项三次读回；只有确切活动complete才完成。submitDaily 发送原type103并读回，但原响应没有独立签到完成字段，故目前标unknown，不能用余额增加冒充归因证据。ReadToEarn 已保留原type101与最多10次顺序调度、缺资格/停滞/不确定写入停止，只有特定offer完成才报告complete；该offer的实际现场数据形态仍待验证。APP没有自动读取凭据的CLI；full 的可信调用方可以通过 host.appClient 接入现有token客户端，普通JSON不能配置该回调。
-
-goal.cjs 恢复原手动目标浏览器操作，准确SKU URL、明确手动兑换radio、Next/Okay、刷新读回；不下兑换订单，不选auto-redeem。extra 的 native-config.json.goal.url 可以指定既有目标URL，缺少可信授权回调时生成该目标的待处理checkpoint。调用方 setManualGoal 需传入经认证授权器验证的checkpoint、authorize回调、journal；配置JSON自身不能批准执行。已有目标不会切换其现有兑换设置。目标设置成功后 extra 还必须核验对应卡片完成。
-
-初始总预算继承旧部署：Rewards7500秒（各mode相同），显式 --timeout 可覆盖；重试和阶段共用单次总预算，不重置计时。上述增加均仅通过离线假页面/传输测试，未运行真实账号或平台操作。
-
-
-## 原生 full 编排与显式任务范围
-
-每账号 state 目录必须提供 capabilities.json，例如：
+在仓库外的 `state/rewards/<account>/` 准备 `storage-state.json` 和 `capabilities.json`。当前迁移保留旧部署启用的八项：
 
 ```json
-{"schema_version": 1, "enabled": ["daily", "desktop_search"]}
+{"schema_version":1,"enabled":["daily","extra","punchcards","desktop_search","more_promotions","claim","app_daily","app_promotions"]}
 ```
 
-这里只是明确请求两项能力的例子，不代表原账号真实启用配置。根据自己的旧任务范围填写；缺失清单返回 capability_manifest_required，未知/重复名称、空列表或额外字段拒绝。完整名称见 full.cjs 的 ORDER：daily、extra、punchcards、desktop_search、mobile_search、bonus_search、more_promotions、claim、search_perk、streak_protection、app_daily、app_promotions、read_to_earn、visual_search，以及三个原实验能力。未接入的请求能力会列入报告并返回unknown，不偷偷忽略，也不启用未列出的可选任务。
+可选 `native-config.json` 保存已有稳定地区/设备和搜索配置，例如：
 
-full按启用能力预检所需设备会话；需要浏览器的任务先只读快照，按固定顺序执行请求阶段，再只读快照。纯APP可信调用方任务不读取桌面会话、不加载Chromium/parser、不运行浏览器快照；只启用mobile-search时使用手机会话快照。最多一个浏览器/上下文，阶段结束关闭。成功阶段的会话轮换仅在进程内按desktop/mobile分别传递，失败不替换有效副本、不新写凭据。全部阶段/重试共用runner总超时。初始快照或阶段的timeout/busy、账号限制、认证或需要授权的阻碍，都会停止后续动作；所请求浏览器能力的必要会话缺失，在任何APP调用前失败；纯APP任务的账号与认证由可信APP客户端负责。
+```json
+{"region":"US","language":"en-US","search":{"maxSearches":100,"stagnantLimit":3,"delayMs":30000}}
+```
 
-业务结果以请求能力为单位；本次run的 rewards-report.json 保存阶段明细（最多64KiB、每阶段原子覆盖、无网页/凭据）。每完成一阶段还原子保存标准 adapter-result.json：含全部请求能力，未运行项unknown、执行状态failed/full_in_progress，完成时再写最终状态。监督者超时或中断时可保留已核验的同run业务事实；不能将中间结果当成功。快照只是观察，不能覆盖动作失败；已确认结果、unknown、partial、blocked与缺失绑定分别保留。full_requested_capabilities_complete只表示清单内能力确认完成，不意味着所有官方能力都已开发或验收。
+请用账号实际地区；不根据示例改变地区。凭据文件不进 Git。
 
-可信host可在进程内调用createBindings({...,enabled:[...],host})，enabled为必填，应与execute的清单一致；旧可信调用方必须补传明确清单，省略会在读取会话/依赖前返回capability_manifest_invalid：host.appClient为当前账号已有APP客户端工厂；host.businessDate为明确业务日；host.goalCheckpoint/authorizeGoal提供经认证、精确范围校验的目标恢复接口。没有从JSON加载代码/授权，也不自动OAuth。CLI尚无聊天授权桥；checkpoint由可信宿主验证并重新探测后才能进入相应恢复入口。验证码、条款、年龄真实处理器及剩余业务继续按矩阵pending。
+```sh
+REWARDS_ROOT=/absolute/project/platforms/rewards \
+REWARDS_PROXY=http://your-existing-proxy:7890 \
+python3 platforms/rewards/run.py --runtime-root /absolute/private/runtime \
+  --execute --browser-cache /absolute/browser-cache
+```
 
+## 能力与确认
 
-## 2026-10-02 审阅修复与验证边界
+- `daily`：逐个执行当前每日活动卡片，重新读进度到上限。
+- `extra`：社交、已配置目标和探索必应。探索先用当前任务 hash 激活，再用对应主题搜索，以该任务自身的完成/积分读回确认。锁定任务保留 blocked。
+- `desktop_search`：读取当前账号桌面额度，未满时搜索、等待入账，达到额度或连续停滞则退出；已满不重复搜索。
+- `punchcards`：旧部署白名单 onboarding 任务；完整清单没有分配该任务时不适用。不会把其他任务组冒充同一任务。
+- `more_promotions`：当前可执行 URL 活动，当前 action ID 和任务 hash 绑定，发出前记录 intent。
+- `claim`：明确有待收积分时提交一次；无待收积分不适用。
+- `app_daily` / `app_promotions`：通过已有浏览器登录进行 OAuth，token 存在私有账号目录；随后一次性 HTTP 客户端执行 APP 任务，不保留后台浏览器。APP 签到优先用当前页面进度确认，不能把 1000 分连续签到奖励误认作每日签到。
 
-- 默认搜索词库7000条，执行前限定到最多1000条候选；用户自定义词库仍按1000条上限校验。无自定义词库的desktop/mobile原生绑定已有回归
-- snapshot与daily/extra/punchcards/search共用flyout账号限制检查；BotScore警告先于任务动作停止，不能等到搜索阶段才发现
-- punchcard真实metadata保留search类型、活动次数与目标URL，执行默认claim关闭与搜索延期规则；动作ID、payload和当前页面在写journal前预检。缺ID不会把零提交误记为已尝试
-- action ID冲突检测覆盖同一chunk和不同chunk；已完成的extra分类在后续授权障碍或错误后保留；未来日期extra不执行
-- goal先打开选择对话框，确认手动radio与Next，再在Next提交前写journal；缺少控件不产生提交意图，可在修复后重新运行。不确定Next仍需只读确认，不能直接重放
-- APP daily/read改用一个最多11项的app-daily-journal.json，仅在新业务日开始写入时轮换，拒绝业务日期倒退。迁移会保留旧app-journal.json内当天的意图，不删除旧文件。120个业务日离线回归确认文件数量和当日项数有界
-- 多日APP promotion与onboarding/goal仍使用各自不可盲重放的持久journal；没有把跨日清理当成通用重试许可。其100项上限、无法自动解除未确认promotion意图仍需真实生命周期依据，不声称自动恢复已完成
+2026-10-03 实测每日活动、桌面搜索、APP 签到与 APP 活动确认；无分配的 onboarding 和无待收积分均不适用。更多活动有平台锁定项；探索必应仍按 [验收记录](../../docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 报告，不用部分成功代表全部完成。
 
-这些是本地假页面、假HTTP和真实入口子进程回归。CLI仍没有APP token/聊天授权桥，APP签到归因、真实浏览器/账户链路及剩余能力仍pending；未运行真实领取、登录、搜索、CAPTCHA或NAS调度。
+## 独立模式与边界
+
+`--mode activities / snapshot / extra / desktop-search / mobile-search / punchcards` 可单独调用。snapshot 只读，结果按 mode 保存，避免覆盖 full 日报事实。
+
+移动搜索需要自己的 `storage-state.mobile.json`，以及 `native-config.json` 中 `mobile.isMobile=true` 和稳定 userAgent；不拿桌面会话冒充移动设备。read_to_earn 有独立 APP 组件，但不是当前旧部署启用项。Edge 时长、视觉搜索、实验 API 搜索等未绑定的请求会明确保持未完成，不静默跳过。
+
+登录失效、验证码、地区不一致、账号限制等会返回明确原因。新增兑换目标需真实目标 URL 和对应操作授权；没有默认目标、自动兑换或伪造年龄数据。
+
+HTML 最多 2 MiB，flyout 最多 4 MiB，账号状态最多 1 MiB。有限活动、查询、轮询和总时限共同限制运行；结果不保存网页/截图/完整 API 响应。实际浏览器内存不是硬限额。
+
+解析器仅加载 `vendor/rewards-parser/` 中固定的约 26 KiB JS，无运行时依赖；不安装完整上游应用。协议适配参考 TheNetsky/Microsoft-Rewards-Script v4.3.2，GPL-3.0-or-later；来源、编译证明和完整许可证保留。历史能力对照见 [REWARDS_PARITY](../../docs/REWARDS_PARITY.md)。

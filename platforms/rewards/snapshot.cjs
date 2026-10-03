@@ -2,7 +2,7 @@
 // Compact read-only replacement for the GPL snapshot source retained in upstream/.
 const { publish } = require("../../common/result.cjs");
 const common = require("./browser_common.cjs");
-const { parseProgress } = require("./activities.cjs");
+const { parseProgress, progress } = require("./activities.cjs");
 function counter(current, max) {
   const p = parseProgress(String(current ?? ""), String(max ?? ""));
   return p ? (p.current >= p.max ? "complete" : "incomplete") : "unknown";
@@ -15,14 +15,13 @@ function group(items, { requireEligibility = false } = {}) {
     if (!x || typeof x !== "object") return "unknown";
     if (x.complete === true || x.isCompleted === true) return "complete";
     if (
-      x.exclusiveLockedFeatureStatus === "locked" ||
-      x.exclusiveLockedFeatureStatus === "notsupported"
+      x.exclusiveLockedFeatureStatus === "locked"
     )
       return "blocked";
     // Explicit counter progress is enough for counter records, but offer eligibility is separate.
     if (
       (requireEligibility || "exclusiveLockedFeatureStatus" in x) &&
-      x.exclusiveLockedFeatureStatus !== "unlocked"
+      !["unlocked", "notsupported"].includes(x.exclusiveLockedFeatureStatus)
     )
       return "unknown";
     return counter(x.pointProgress, x.pointProgressMax);
@@ -59,16 +58,16 @@ async function run(chromium, state, options = {}, deps = common) {
           timeout: 45000,
         });
         await deps.guard(page);
-        const bar = page.getByRole("progressbar", {
-          name: /^(Daily activit(?:y|ies)|Daily Set|每日活动)$/i,
-        });
-        await bar.waitFor({ state: "attached", timeout: 20000 });
-        const daily = parseProgress(
-          await bar.getAttribute("aria-valuenow"),
-          await bar.getAttribute("aria-valuemax"),
-        );
+        const daily = await progress(page);
         const raw = await deps.readFlyout(context);
         const business = summarize(raw, daily, options.region);
+        const app = await page.evaluate(() => {
+          const rows = [...document.querySelectorAll('[role="progressbar"]')]
+            .filter(x => /^(Mobile App|移动应用)$/i.test(x.getAttribute('aria-label') || ''));
+          return rows.length === 1 ? {current: rows[0].getAttribute('aria-valuenow'),
+            max: rows[0].getAttribute('aria-valuemax')} : null;
+        });
+        business.app_daily = app ? counter(app.current, app.max) : "unknown";
         return { execution: "ok", reason: "fresh_readonly_snapshot", business };
       },
     );
