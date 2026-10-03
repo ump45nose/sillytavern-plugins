@@ -6,14 +6,20 @@ are read-only and use only the sources documented in each business directory.
 ## Business directories
 
 - favsync/: exception-only alert for the existing daily Favsync cron. Alerts
-  identify the affected platform and problem. The existing Ops topic and
-  09:10 schedule remain on the Hermes job.
+  identify the affected platform and problem. The existing 09:10 schedule
+  remains on the Hermes job.
 - media-automation/: daily report from MoviePilot downloadhistory,
   FilmWatchlist plugindata.records, and Emby Theme worker items.
-  SQLite connections use read-only mode; no new API or database write is used.
+  SQLite connections are read-only; the worker DB is queried in immutable mode
+  only when no WAL/journal exists and the file remains stable for the read.
+  No new API or database write is used.
   Planned cadence: daily at 09:30 (Asia/Taipei), after the 09:10 Favsync run.
-  Hermes cron registration awaits runtime read access and the Film Telegram topic.
-- benefits-automation/: reserved until the benefits task's JSON contract is
-  available.
+- benefits-automation/: exception-only report from the six existing benefits
+  task delivery JSON files; no benefits API is called.
+
+Cron delivery through `@yuwk_notice_bot` awaits the per-topic IDs for that bot.
+The notice-bot sender validates its token with `getMe`, verifies each returned
+chat/topic, and reads its token from Hermes' protected `.hermes/.env` file.
+Per-topic routing is kept in the Hermes-local `cron/notice_topics.json` file.
 
 Database snapshots, credentials, and runtime state must not be committed.

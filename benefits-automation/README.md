@@ -1,7 +1,10 @@
 # Benefits automation
 
-This business directory is reserved for the daily exception report.
+`daily_report.py` reads only the six existing task result files under the
+Hermes benefits runtime `delivery/` directory. It reports missing or invalid
+daily results, failed execution, and business steps that are not complete or
+not applicable. Normal results produce no output. The report names the affected
+platform and describes the task status or failure reason.
 
-Implementation is pending the JSON output contract from the benefits cron.
-Until that source is available, this repository does not infer fields, issue
-definitions, or report content for benefits automation.
+No benefits API is called and no runtime JSON is modified. Hermes owns the
+daily schedule and delivery.

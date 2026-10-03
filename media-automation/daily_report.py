@@ -39,8 +39,10 @@ def parse_time(value: object) -> datetime | None:
         return None
 
 
-def open_readonly(path: Path) -> sqlite3.Connection:
+def open_readonly(path: Path, *, immutable: bool = False) -> sqlite3.Connection:
     uri = f"{path.resolve().as_uri()}?mode=ro"
+    if immutable:
+        uri += "&immutable=1"
     connection = sqlite3.connect(uri, uri=True, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA query_only = ON")
@@ -81,12 +83,53 @@ def moviepilot_rows() -> tuple[list[dict], list[dict]]:
 
 
 def theme_worker_rows() -> list[dict]:
-    with closing(open_readonly(THEME_WORKER_DB)) as connection:
-        return [
+    # Use SQLite's read-only WAL support when its worker-created sidecars are
+    # present. When the worker has checkpointed and removed them, use immutable
+    # mode because normal read-only SQLite tries to create a missing SHM file.
+    wal = Path(str(THEME_WORKER_DB) + "-wal")
+    shm = Path(str(THEME_WORKER_DB) + "-shm")
+    journal = Path(str(THEME_WORKER_DB) + "-journal")
+
+    def signature() -> tuple[int, int, int, bytes]:
+        stat = THEME_WORKER_DB.stat()
+        with THEME_WORKER_DB.open("rb") as stream:
+            header = stream.read(28)
+        if not header.startswith(b"SQLite format 3\x00"):
+            raise ValueError("Theme worker database header is invalid")
+        if header[18:20] != b"\x02\x02":
+            raise ValueError("Theme worker database journal mode changed")
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns, header[24:28]
+
+    def file_signature(path: Path) -> tuple[int, int, int] | None:
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return None
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+    if file_signature(journal) is not None:
+        raise RuntimeError("Theme worker database has an active rollback journal")
+    before = signature()
+    before_wal = file_signature(wal)
+    if before_wal is not None:
+        if file_signature(shm) is None:
+            raise RuntimeError("Theme worker WAL is present without its shared-memory file")
+        immutable = False
+    else:
+        immutable = True
+    with closing(open_readonly(THEME_WORKER_DB, immutable=immutable)) as connection:
+        rows = [
             dict(row) for row in connection.execute(
                 "SELECT name, status, source_provider, updated_at FROM items"
             )
         ]
+    if (
+        signature() != before
+        or file_signature(wal) != before_wal
+        or file_signature(journal) is not None
+    ):
+        raise RuntimeError("Theme worker database changed during the read")
+    return rows
 
 
 def wrapped_title(value: object) -> str:
