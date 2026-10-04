@@ -88,6 +88,13 @@ def test_init_and_infra_restore(tmp_path):
     journal.replace_file(shared, candidate)
     assert journal.restore_files() == [str(shared)]
     assert shared.read_text() == old
+    import hashlib
+    expected = hashlib.sha256(old.encode()).hexdigest()
+    shared.write_text(old + "# external change\n")
+    with pytest.raises(RuntimeError, match="外部修改"):
+        journal.replace_file(shared, candidate, expected_hash=expected)
+    assert shared.read_text() == old + "# external change\n"
+    shared.write_text(old)
     journal.replace_file(shared, candidate)
     shared.write_text(candidate + "# external change\n")
     with pytest.raises(RuntimeError, match="外部修改"):
@@ -116,6 +123,8 @@ def test_failed_deploy_rolls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "prepare_env", lambda *a: (tmp_path / "env", {}))
     monkeypatch.setattr(module, "authelia_text", lambda *a: "candidate-auth")
     monkeypatch.setattr(module, "tunnel_text", lambda *a: "candidate-tunnel")
+    monkeypatch.setattr(module, "validate_authelia_candidate", lambda *a: None)
+    monkeypatch.setattr(module, "validate_tunnel_candidate", lambda *a: None)
     monkeypatch.setattr(module, "container_for", lambda *a: None)
     monkeypatch.setattr(module, "build_bundle", lambda *a: ("test:image", "commit", "core"))
     monkeypatch.setattr(module, "run", lambda *a, **kw: "commit")

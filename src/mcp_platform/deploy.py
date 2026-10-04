@@ -25,6 +25,8 @@ from .infra import (
     run,
     switch_tunnel,
     tunnel_text,
+    validate_authelia_candidate,
+    validate_tunnel_candidate,
 )
 from .manifest import private_write
 
@@ -209,8 +211,12 @@ def deploy(app, source, target):
         cf = None
         try:
             env_path, env = prepare_env(app, target)
-            auth_candidate = authelia_text(Path(target.authelia_config).read_text(), app, env)
-            tunnel_candidate = tunnel_text(Path(target.tunnel_config).read_text(), app)
+            auth_original = Path(target.authelia_config).read_text()
+            tunnel_original = Path(target.tunnel_config).read_text()
+            auth_candidate = authelia_text(auth_original, app, env)
+            tunnel_candidate = tunnel_text(tunnel_original, app)
+            ddns_original = Path(target.ddns_config).read_text() if target.ddns_config else None
+            ddns_candidate = ddns_text(ddns_original, app.hostname) if ddns_original is not None else None
             cf = Cloudflare(target)
             cf.find_zone(app.hostname)
             cf.records(app.hostname)  # 凭据与域名预检先于服务更新。
@@ -222,13 +228,17 @@ def deploy(app, source, target):
             env_fingerprint = hashlib.sha256(json.dumps(env, sort_keys=True).encode()).hexdigest()
             if previous_state and previous_state["source_sha"] == source_sha and previous_state["env_fingerprint"] == env_fingerprint and old_container and old_container["Image"] == previous_state["image_id"]:
                 # 重复部署仍校验公网和共享配置；不重复重启或生成新密钥。
-                if auth_candidate == Path(target.authelia_config).read_text() and tunnel_candidate == Path(target.tunnel_config).read_text():
+                if auth_candidate == auth_original and tunnel_candidate == tunnel_original and ddns_candidate == ddns_original:
                     records = cf.records(app.hostname)
                     if len(records) == 1 and records[0]["content"] == target.tunnel_id + ".cfargotunnel.com" and records[0].get("proxied"):
                         wait_health(app, public=True)
                         journal.set(status="unchanged")
                         print("版本和配置已一致，验证通过；未更新服务")
                         return journal.path
+            if auth_candidate != auth_original:
+                validate_authelia_candidate(target, auth_candidate)
+            if tunnel_candidate != tunnel_original:
+                validate_tunnel_candidate(target, tunnel_candidate)
             image, source_sha, core_sha = build_bundle(app, source, target, release / "build")
             new_compose = release / "compose.yaml"
             private_write(new_compose, compose_text(app, image, env_path))
@@ -271,7 +281,8 @@ def deploy(app, source, target):
                 run(["docker", "exec", old_id, "python", "-c",
                      "from pathlib import Path;Path('/tmp/mcp-platform-oauth.tar').unlink()"])
             # 共享文件均写入日志后应用，失败只恢复记录的变更。
-            if journal.replace_file(Path(target.authelia_config), auth_candidate):
+            if journal.replace_file(Path(target.authelia_config), auth_candidate,
+                                    expected_hash=hashlib.sha256(auth_original.encode()).hexdigest()):
                 restart_authelia(target)
             journal.set(service_attempted=True)
             run([*compose_args(app, new_compose), "up", "-d", "--no-deps", app.compose_service])
@@ -281,11 +292,13 @@ def deploy(app, source, target):
             if app.migration_command:
                 # 显式命令；失败不自动恢复数据库，防止覆盖部署期间写入。
                 run(["docker", "exec", container_for(app), *app.migration_command])
-            if journal.replace_file(Path(target.tunnel_config), tunnel_candidate):
+            if journal.replace_file(Path(target.tunnel_config), tunnel_candidate,
+                                    expected_hash=hashlib.sha256(tunnel_original.encode()).hexdigest()):
                 switch_tunnel(target)
             if target.ddns_config:
                 ddns_path = Path(target.ddns_config)
-                if journal.replace_file(ddns_path, ddns_text(ddns_path.read_text(), app.hostname)):
+                if journal.replace_file(ddns_path, ddns_candidate,
+                                        expected_hash=hashlib.sha256(ddns_original.encode()).hexdigest()):
                     run(["docker", "restart", target.ddns_container])
             cf.switch(app, target, journal)
             wait_health(app, public=True)

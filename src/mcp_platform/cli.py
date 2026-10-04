@@ -8,6 +8,7 @@ import os
 import pwd
 import sys
 import zipfile
+from importlib.metadata import version
 from pathlib import Path
 
 import yaml
@@ -193,7 +194,7 @@ def doctor(target):
 
 def main():
     parser = argparse.ArgumentParser(description="MCP 公共基座部署工具")
-    parser.add_argument("--version", action="version", version="mcp-platform 0.1.0")
+    parser.add_argument("--version", action="version", version="mcp-platform " + version("mcp-platform"))
     parser.add_argument("--targets", type=Path, default=default_targets())
     sub = parser.add_subparsers(dest="command", required=True)
     init = sub.add_parser("init", help="创建业务项目")

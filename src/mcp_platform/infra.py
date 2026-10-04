@@ -8,8 +8,10 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import time
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import yaml
@@ -52,11 +54,14 @@ class Journal:
         self.data.update(kwargs)
         self.save()
 
-    def replace_file(self, path: Path, text: str, *, validate=None):
+    def replace_file(self, path: Path, text: str, *, expected_hash=None):
         before = path.read_text()
+        before_hash = hashlib.sha256(before.encode()).hexdigest()
+        if expected_hash is not None and before_hash != expected_hash:
+            raise RuntimeError("共享文件在候选配置生成后发生外部修改")
         if before == text:
             return False
-        entry = {"path": str(path), "before": before, "before_hash": digest(path),
+        entry = {"path": str(path), "before": before, "before_hash": before_hash,
                  "after_hash": hashlib.sha256(text.encode()).hexdigest(),
                  "mode": path.stat().st_mode & 0o777,
                  "uid": path.stat().st_uid, "gid": path.stat().st_gid}
@@ -67,8 +72,6 @@ class Journal:
         private_write(path, text)
         os.chmod(path, entry["mode"])
         os.chown(path, entry["uid"], entry["gid"])
-        if validate:
-            validate()
         return True
 
     def restore_files(self):
@@ -223,6 +226,8 @@ class Cloudflare:
             self.request("DELETE", f"zones/{self.zone}/dns_records/{record['id']}")
             journal.data["dns"]["after"] = self.shape(self.records(app.hostname))
             journal.save()
+        if self.shape(self.records(app.hostname)) != journal.data["dns"]["after"]:
+            raise RuntimeError("DNS 在部署期间被其他程序修改")
         self.request("POST", f"zones/{self.zone}/dns_records", json={
             "type": "CNAME", "name": app.hostname, "content": desired, "proxied": True, "ttl": 1,
         })
@@ -240,6 +245,39 @@ class Cloudflare:
         for record in state["before"]:
             fields = {k: v for k, v in record.items() if k != "id"}
             self.request("POST", f"zones/{self.zone}/dns_records", json=fields)
+
+
+def validate_authelia_candidate(target, text):
+    """在运行容器的原环境校验副本，不改写生效配置。"""
+    candidate = "/config/.mcp-platform-candidate-" + uuid4().hex + ".yml"
+    with tempfile.TemporaryDirectory(prefix="mcp-platform-auth-") as directory:
+        path = Path(directory) / "configuration.yml"
+        private_write(path, text)
+        run(["docker", "cp", path, target.authelia_container + ":" + candidate])
+        try:
+            run(["docker", "exec", "--user", "0", target.authelia_container,
+                 "authelia", "config", "validate", "--config", candidate,
+                 "--config.experimental.filters", "template"])
+        finally:
+            run(["docker", "exec", "--user", "0", target.authelia_container,
+                 "rm", "-f", candidate])
+
+
+def validate_tunnel_candidate(target, text):
+    """用现有镜像与凭据目录校验独立候选文件。"""
+    original = Path(target.tunnel_config)
+    container = json.loads(run(["docker", "inspect", target.tunnel_container]))[0]
+    candidate = original.parent / (".mcp-platform-candidate-" + uuid4().hex + ".yml")
+    try:
+        private_write(candidate, text)
+        os.chown(candidate, original.stat().st_uid, original.stat().st_gid)
+        run(["docker", "run", "--rm", "--network", "host",
+             "--user", container["Config"].get("User") or "0",
+             "--mount", f"type=bind,source={original.parent},target=/etc/cloudflared,readonly",
+             container["Image"], "tunnel", "--config", "/etc/cloudflared/" + candidate.name,
+             "ingress", "validate"])
+    finally:
+        candidate.unlink(missing_ok=True)
 
 
 def restart_authelia(target):

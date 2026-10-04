@@ -4,6 +4,8 @@
 
 首版版本 `0.1.0`，Python 3.12、FastMCP 3.4.4、MCP SDK 1.28.1、Authlib 1.7.2。协议栈和兼容修正一起升级。
 
+NAS 部署 CLI 使用 `0.1.1` 修复版，在写入前校验候选配置，并检查候选生成以来的外部修改。CRM 和生成项目的运行时继续锁定 `v0.1.0`；已发布标签和业务依赖不改写。
+
 ## 安装与新建服务
 
 ```bash
@@ -85,6 +87,8 @@ sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target 
 
 部署保留业务卷，创建业务数据与 OAuth 状态的私有备份；只协调当前 Authelia 客户端，配置一致时不重启 Authelia。新增客户端必须引用已存在的授权及声明策略。现有客户端配置冲突时失败，不自动改变身份策略。
 
+Authelia 与 Tunnel 候选文件先用现有容器／镜像的官方命令校验，再写入生效配置。候选生成后共享文件发生变化时停止覆盖；不将外部变化记为本次部署的原配置。
+
 Tunnel 先验证配置，再通过临时副本更新主连接，保留其他域名路由。启用 DDNS 配置时，仅从 IPv4/IPv6 管理列表移除当前应用域名，然后将该域名 A/AAAA 切换为 Tunnel CNAME；回滚恢复原列表和 DNS。
 
 同版本、环境和入口配置重复部署时只验证，不重建、不重启、不重复注册。部署过程使用宿主机文件锁。
@@ -116,3 +120,5 @@ uv run mcpctl package personal-crm --target nas
 只执行必要的冒烟验证：HTTP/初始化、权限、两种存储重启、URL client_id、共享文件冲突、模拟部署失败回滚、CRM 隔离读写、生产只读、部署重复执行。命令：`uv run pytest -q tests/test_smoke.py`。
 
 CRM 作为真实示例继续在自己的仓库维护业务实现。SmartSearch、远程执行器与 MCPHub 本轮不迁移。
+
+本次 NAS 部署和客户端验证结果见 [首次迁移验收记录](docs/validation-2026-10-04.md)。
