@@ -30,6 +30,7 @@ from .infra import (
     validate_tunnel_candidate,
 )
 from .manifest import private_write
+from .public_http import public_transport
 
 
 @contextmanager
@@ -164,7 +165,8 @@ def build_bundle(app, source, target, destination):
 
 def wait_health(app, *, public=False):
     url = app.public_url if public else f"http://{app.bind_address}:{app.host_port}"
-    with httpx.Client(timeout=5, trust_env=public, follow_redirects=True) as client:
+    transport = public_transport(app.hostname) if public else None
+    with httpx.Client(timeout=5, trust_env=False, follow_redirects=True, transport=transport) as client:
         for _ in range(24):
             try:
                 health = client.get(url + app.health_path)

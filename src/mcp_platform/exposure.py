@@ -23,6 +23,7 @@ from .infra import (
     validate_tunnel_candidate,
 )
 from .manifest import private_write
+from .public_http import public_transport
 
 
 def rpc_result(response):
@@ -44,7 +45,8 @@ def probe_existing(app, target, *, public=False):
     if not public:
         headers.update(Host=app.hostname, **{"X-Forwarded-Proto": "https"})
     # 不让 NAS 的出口代理影响回环、LAN 或公网入口验证。
-    with httpx.Client(timeout=15, trust_env=False, headers=headers) as client:
+    transport = public_transport(app.hostname) if public else None
+    with httpx.Client(timeout=15, trust_env=False, headers=headers, transport=transport) as client:
         if app.health_path:
             health = client.get(base + app.health_path)
             health.raise_for_status()
