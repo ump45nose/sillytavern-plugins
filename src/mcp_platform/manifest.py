@@ -59,6 +59,10 @@ class AppManifest(BaseModel):
     expected_tools: list[str] = Field(default_factory=list)
     compose_project: str = ""
     compose_service: str = "app"
+    user: str = ""
+    working_dir: str = ""
+    init: bool = False
+    external_networks: list[str] = Field(default_factory=list)
     volumes: list[Volume] = Field(default_factory=list)
     environment: dict[str, str] = Field(default_factory=dict)
     required_env: list[str] = Field(default_factory=list)
@@ -106,6 +110,7 @@ class Target(BaseModel):
     source_roots: dict[str, str] = Field(default_factory=dict)
     env_files: dict[str, str] = Field(default_factory=dict)
     probe_token_files: dict[str, str] = Field(default_factory=dict)
+    compose_files: dict[str, str] = Field(default_factory=dict)
     runtime_root: str
     build_user: str = "yuwk"
     uv: str = "/home/yuwk/.local/bin/uv"

@@ -155,6 +155,11 @@ def package_app(app, source, output):
         "plugin.json": json.dumps(plugin, ensure_ascii=False, indent=2).encode(),
         ".codex-plugin/plugin.json": json.dumps(codex_plugin, ensure_ascii=False, indent=2).encode(),
         ".app.json": json.dumps(binding, ensure_ascii=False, indent=2).encode(),
+        "mcp.json": json.dumps({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            "mcpServers": {app.id: {"type": "streamable-http",
+                                    "url": app.public_url + app.mcp_path}},
+        }, indent=2).encode(),
         "mcp-connection.json": json.dumps({"url": app.public_url + "/mcp", "transport": "streamable-http"}, indent=2).encode(),
         "接入说明.md": (
             f"# {app.name}\n\nMCP 地址：{app.public_url}/mcp\n\n"
