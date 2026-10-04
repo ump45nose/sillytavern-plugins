@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Read MoviePilot and Emby Theme worker SQLite data and print a daily report."""
+"""Read MoviePilot databases, plugin job APIs, and theme-worker data."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
+import urllib.error
+import urllib.request
 from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -14,6 +16,234 @@ from zoneinfo import ZoneInfo
 TIMEZONE = ZoneInfo("Asia/Taipei")
 MOVIEPILOT_DB = Path("/vol2/1000/Docker/moviepilot/config/user.db")
 THEME_WORKER_DB = Path("/vol2/1000/Docker/emby-theme-worker/data/worker.db")
+HERMES_ENV = Path("/home/hermes/.hermes/.env")
+MOVIEPILOT_API_BASE = "http://127.0.0.1:28300/api/v1"
+MOVIEPILOT_TOKEN_ENV_KEY = "AUXILIARY_MEDIA_AUTOMATION_API_KEY"
+MOVIEPILOT_PLUGINS = ("MediaArchive", "DiscRemux")
+MAX_PLUGIN_JOB_DETAILS = 30
+
+TASK_STAGE_LABELS = {
+    "ANALYZING": "分析中",
+    "CHECKING": "检查中",
+    "CLEANING": "清理中",
+    "CLOUD_VERIFY": "云端校验中",
+    "CONVERTING": "转换中",
+    "DONE": "已完成",
+    "FAILED": "失败",
+    "MIGRATING": "迁移中",
+    "PREPARING": "准备中",
+    "PREVIEW": "预检中",
+    "SEED_WAIT": "等待做种",
+    "STRM_VERIFY": "STRM 校验中",
+    "UPLOADING": "上传中",
+}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Keep the local MoviePilot credential on the configured loopback API."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class MoviePilotAPIError(RuntimeError):
+    def __init__(self, detail: str):
+        super().__init__(detail)
+        self.detail = detail
+
+
+def moviepilot_api_token() -> str:
+    """Read the shared MoviePilot credential without logging or exporting it."""
+    try:
+        lines = HERMES_ENV.read_text(encoding="utf-8-sig").splitlines()
+    except OSError as exc:
+        raise MoviePilotAPIError(
+            f"无法读取 Hermes 根凭据文件（{type(exc).__name__}）"
+        ) from None
+
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator or key.strip() != MOVIEPILOT_TOKEN_ENV_KEY:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+        elif len(value) >= 2 and value[0] == value[-1] == "'":
+            value = value[1:-1]
+        if not value:
+            break
+        if not value.isascii() or any(ord(char) < 33 or ord(char) == 127 for char in value):
+            raise MoviePilotAPIError("Hermes 中的 MoviePilot 凭据格式无效")
+        return value
+    raise MoviePilotAPIError(
+        f"Hermes 根凭据中缺少 {MOVIEPILOT_TOKEN_ENV_KEY}"
+    )
+
+
+def _job_records(value: object) -> list[dict] | None:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        if "stage" in value or "id" in value:
+            return [value]
+        return [item for item in value.values() if isinstance(item, dict)]
+    return None
+
+
+def moviepilot_job_snapshots() -> tuple[dict[str, list[dict] | None], list[str], str]:
+    """Read both plugin /jobs APIs with the API_TOKEN in X-API-KEY only."""
+    snapshots: dict[str, list[dict] | None] = {}
+    issues: list[str] = []
+    try:
+        token = moviepilot_api_token()
+    except MoviePilotAPIError as exc:
+        detail = exc.detail
+        return {plugin: None for plugin in MOVIEPILOT_PLUGINS}, [detail], ""
+
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _NoRedirect()
+    )
+    for plugin in MOVIEPILOT_PLUGINS:
+        route = f"/plugin/{plugin}/jobs"
+        request = urllib.request.Request(
+            MOVIEPILOT_API_BASE + route,
+            headers={"X-API-KEY": token, "Accept": "application/json"},
+            method="GET",
+        )
+        try:
+            with opener.open(request, timeout=15) as response:
+                payload = json.loads(response.read(5 * 1024 * 1024 + 1).decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            snapshots[plugin] = None
+            issues.append(f"{plugin} /jobs 查询失败（HTTP {exc.code}）")
+            continue
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            snapshots[plugin] = None
+            issues.append(
+                f"{plugin} /jobs 请求失败（{type(exc).__name__}）"
+            )
+            continue
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            snapshots[plugin] = None
+            issues.append(f"{plugin} /jobs 返回内容不是有效 JSON")
+            continue
+
+        if not isinstance(payload, dict):
+            snapshots[plugin] = None
+            issues.append(f"{plugin} /jobs 返回结构无效，缺少 jobs 对象")
+            continue
+        if payload.get("busy") is True:
+            issues.append(f"{plugin} 当前 busy，任务快照可能不完整")
+        if payload.get("error"):
+            issues.append(f"{plugin} 响应包含 error，任务快照可能不完整")
+        if payload.get("scan_error"):
+            issues.append(f"{plugin} 扫描发生异常，任务快照可能不完整")
+
+        records = _job_records(payload.get("jobs"))
+        if records is None:
+            snapshots[plugin] = None
+            issues.append(f"{plugin} /jobs 响应缺少可读取的 jobs 数据")
+        else:
+            snapshots[plugin] = records
+    return snapshots, issues, token
+
+
+def _safe_api_text(value: object, token: str, limit: int = 180) -> str:
+    text = " ".join(str(value or "").split())
+    if token:
+        text = text.replace(token, "[凭据已隐藏]")
+    return text[:limit]
+
+
+def _api_title(job: dict, plugin: str, token: str) -> str:
+    candidates: list[object] = []
+    if plugin == "MediaArchive":
+        unit = job.get("unit")
+        if isinstance(unit, dict):
+            candidates.extend((unit.get("title"), unit.get("name")))
+        candidates.extend((job.get("title"), job.get("name")))
+    else:
+        request = job.get("request")
+        if isinstance(request, dict):
+            candidates.extend((request.get("title"), request.get("name")))
+        candidates.extend((job.get("title"), job.get("name")))
+        for title in job.get("titles", []) if isinstance(job.get("titles"), list) else []:
+            if isinstance(title, dict):
+                candidates.extend((title.get("name"), title.get("output_name")))
+    for candidate in candidates:
+        cleaned = _safe_api_text(candidate, token, 120)
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _collection_size(value: object) -> int | None:
+    if isinstance(value, (list, dict)):
+        return len(value)
+    return None
+
+
+def _plugin_job_lines(plugin: str, jobs: list[dict], token: str) -> list[str]:
+    lines = [f"{plugin} 任务当前状态（{len(jobs)}）"]
+    if not jobs:
+        lines.append("- 当前无任务记录")
+        return lines
+
+    stage_counts: dict[str, int] = {}
+    for job in jobs:
+        stage = _safe_api_text(job.get("stage") or "状态未知", token, 60)
+        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+    summaries = [
+        f"{TASK_STAGE_LABELS.get(stage, stage)} ×{count}"
+        for stage, count in sorted(stage_counts.items())
+    ]
+    lines.append("阶段汇总：" + "；".join(summaries))
+
+    shown = jobs[:MAX_PLUGIN_JOB_DETAILS]
+    for job in shown:
+        title = _api_title(job, plugin, token)
+        media = wrapped_title(title or "媒体名称缺失")
+        stage = _safe_api_text(job.get("stage") or "状态未知", token, 60)
+        label = TASK_STAGE_LABELS.get(stage, "状态未知")
+        detail = f"- {media}：{label}（{stage}）"
+        if not title:
+            detail += "；任务记录未提供影视名称"
+
+        if plugin == "MediaArchive":
+            cleanup = job.get("cleanup")
+            if isinstance(cleanup, dict) and isinstance(cleanup.get("complete"), bool):
+                detail += "；清理已完成" if cleanup["complete"] else "；清理未完成"
+            asset_count = _collection_size(job.get("assets"))
+            if asset_count is not None:
+                detail += f"；资产 {asset_count} 项"
+        else:
+            output_count = _collection_size(job.get("outputs"))
+            if output_count is not None:
+                detail += f"；产物 {output_count} 项"
+            title_count = _collection_size(job.get("titles"))
+            if title_count is not None:
+                detail += f"；解析条目 {title_count} 项"
+
+        reason = _safe_api_text(job.get("reason"), token)
+        if reason:
+            detail += f"；说明：{reason}"
+        elif stage not in {"DONE", "状态未知"} and not title:
+            detail += "；异常原因和影视名称均未提供"
+        elif stage not in {"DONE", "状态未知"}:
+            detail += "；记录未提供阶段说明"
+        lines.append(detail)
+
+    if len(jobs) > len(shown):
+        lines.append(
+            f"数据不足：另有 {len(jobs) - len(shown)} 条任务未展开；"
+            "接口记录没有更新时间，无法识别过去24小时内变更的记录。"
+        )
+    return lines
 
 
 def parse_time(value: object) -> datetime | None:
@@ -180,6 +410,7 @@ def build_report(now: datetime) -> tuple[str, int]:
     cutoff = now - timedelta(hours=24)
     downloads, records = moviepilot_rows()
     theme_items = theme_worker_rows()
+    plugin_jobs, plugin_issues, api_token = moviepilot_job_snapshots()
     recent_downloads, invalid_downloads = recent_rows(downloads, "date", cutoff)
     recent_records, invalid_records = recent_rows(records, "updated_at", cutoff)
     recent_theme, invalid_theme = recent_rows(theme_items, "updated_at", cutoff)
@@ -229,12 +460,29 @@ def build_report(now: datetime) -> tuple[str, int]:
             f"更新时间 {display_time(row['_parsed_time'])}"
         )
 
+    lines.append(
+        "MoviePilot 插件任务当前快照（接口未提供任务更新时间，"
+        "不代表过去24小时新增或变更）"
+    )
+    for plugin in MOVIEPILOT_PLUGINS:
+        jobs = plugin_jobs.get(plugin)
+        if jobs is None:
+            lines.append(f"{plugin}：当前状态不可用")
+        else:
+            lines.extend(_plugin_job_lines(plugin, jobs, api_token))
+    if plugin_issues:
+        lines.append("任务数据提示：" + "；".join(plugin_issues))
+
     invalid = invalid_downloads + invalid_records + invalid_theme
     if invalid:
         lines.append(f"数据提示：{invalid} 条记录的时间字段无法解析，报告可能不完整。")
-    if not recent_downloads and not independent_records and not recent_theme and not invalid:
+    if (
+        not recent_downloads and not independent_records and not recent_theme
+        and not invalid and not any(plugin_jobs.get(plugin) for plugin in MOVIEPILOT_PLUGINS)
+        and not plugin_issues
+    ):
         lines.append("过去24小时无新增下载、片单状态更新或主题曲处理记录。")
-    return "\n".join(lines), invalid
+    return "\n".join(lines), invalid + len(plugin_issues)
 
 
 def main() -> int:

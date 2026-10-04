@@ -9,10 +9,14 @@ are read-only and use only the sources documented in each business directory.
   identify the affected platform and problem. The existing 09:10 schedule
   remains on the Hermes job.
 - media-automation/: daily report from MoviePilot downloadhistory,
-  FilmWatchlist plugindata.records, and Emby Theme worker items.
+  FilmWatchlist plugindata.records, Emby Theme worker items, and the read-only
+  MediaArchive/DiscRemux `/jobs` APIs. The API token is read from Hermes'
+  protected root `.env` under a subprocess-scrubbed key and sent only as
+  `X-API-KEY`; it is never placed in a cron definition or report output.
+  Plugin jobs have no update timestamp, so
+  that section is a current-state snapshot rather than a 24-hour change list.
   SQLite connections are read-only; the worker DB is queried in immutable mode
   only when no WAL/journal exists and the file remains stable for the read.
-  No new API or database write is used.
   Planned cadence: daily at 09:30 (Asia/Taipei), after the 09:10 Favsync run.
 - benefits-automation/: exception-only report from the six existing benefits
   task delivery JSON files; no benefits API is called.
