@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from contextlib import contextmanager
@@ -177,7 +178,11 @@ def wait_health(app, *, public=False):
                     headers={"Accept": "application/json, text/event-stream"})
                 if denied.status_code != 401 or "resource_metadata" not in denied.headers.get("www-authenticate", ""):
                     raise RuntimeError("MCP 未认证请求未返回预期挑战")
-                metadata = client.get(url + "/.well-known/oauth-protected-resource").json()
+                challenge = re.search(r'resource_metadata="([^"]+)"', denied.headers.get("www-authenticate", ""))
+                if not challenge or not challenge[1].startswith(app.public_url + "/"):
+                    raise RuntimeError("OAuth 资源发现挑战与清单入口不一致")
+                # SDK 按 RFC 在 /.../oauth-protected-resource/mcp 发布元数据。
+                metadata = client.get(url + challenge[1][len(app.public_url):]).json()
                 auth = client.get(url + "/.well-known/oauth-authorization-server").json()
                 if metadata.get("resource") != app.public_url + "/mcp" or auth.get("issuer") not in metadata.get("authorization_servers", []):
                     raise RuntimeError("OAuth 发现元数据与清单不一致")

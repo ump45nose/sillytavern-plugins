@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -222,15 +223,27 @@ def main(prepared_release=None):
             stopped = True
             data = root / "data"
             if data.exists():
-                raise ValueError("平台数据目录已存在，拒绝覆盖")
+                if not prepared_release or "data" not in prior:
+                    raise ValueError("平台数据目录已存在，拒绝覆盖")
+                data = root / ("data-" + release.name)
             snapshot(old_data, data)
             migrate_copy(image, data, release)
             oauth = root / "oauth"
-            oauth.mkdir(mode=0o700)
+            oauth.mkdir(mode=0o700, exist_ok=True)
             os.chown(oauth, 1000, 1001)
+            journal.set(data=str(data), original_data=str(old_data))
             for name, path in [("email-mcp-data", data), ("email-mcp-oauth", oauth)]:
                 if name in run(["docker", "volume", "ls", "--format", "{{.Name}}"] ).split():
-                    raise ValueError("邮件卷已存在，拒绝重新绑定")
+                    existing = json.loads(run(["docker", "volume", "inspect", name]))[0]
+                    expected_device = str(oauth) if name == "email-mcp-oauth" else prior.get("data") if prepared_release else None
+                    if existing.get("Options", {}).get("device") != expected_device:
+                        raise ValueError("邮件卷已有不同的绑定，拒绝覆盖")
+                    if expected_device == str(path):
+                        continue
+                    journal.data.setdefault("volume_changes", []).append({"name": name,
+                        "before": expected_device, "after": str(path)})
+                    journal.save()
+                    run(["docker", "volume", "rm", name])
                 run(["docker", "volume", "create", "--driver", "local", "--opt", "type=none",
                      "--opt", "o=bind", "--opt", f"device={path}", name])
             if not stable.exists():
@@ -277,7 +290,19 @@ def main(prepared_release=None):
             journal.set(status="failed")
             try:
                 if new_started:
+                    from mcp_platform.deploy import container_for
+                    new_id = container_for(app)
+                    if new_id:
+                        logs = subprocess.run(["docker", "logs", new_id], capture_output=True, text=True)
+                        private_write(release / "new-container.log", logs.stdout + logs.stderr)
                     run([*compose_args(app, stable), "rm", "--stop", "--force", app.compose_service])
+                for change in reversed(journal.data.get("volume_changes", [])):
+                    current = json.loads(run(["docker", "volume", "inspect", change["name"]]))[0]
+                    if current.get("Options", {}).get("device") != change["after"]:
+                        raise ValueError("卷绑定存在外部变化，停止恢复")
+                    run(["docker", "volume", "rm", change["name"]])
+                    run(["docker", "volume", "create", "--driver", "local", "--opt", "type=none",
+                         "--opt", "o=bind", "--opt", "device=" + change["before"], change["name"]])
                 if journal.data.get("dns"):
                     cf.restore(journal.data["dns"])
                 restored = journal.restore_files()
