@@ -47,3 +47,7 @@ downloads/
 node_modules/
 *.whl
 .build/
+!plugins.v2/mediaarchive/dist/
+!plugins.v2/mediaarchive/dist/**
+!plugins.v2/discremux/dist/
+!plugins.v2/discremux/dist/**

@@ -127,6 +127,16 @@ class P115TaskAdapter:
 
     def cloud_items(self, media_type: str, names: tuple[str, ...]) -> list[dict]:
         """Find copied root entries by name without moving other cloud files."""
+        try:
+            from media_capabilities.p115 import P115Gateway
+        except ModuleNotFoundError as exc:
+            if exc.name not in ('media_capabilities', 'media_capabilities.p115'):
+                raise
+        else:
+            gateway = P115Gateway()
+            gateway.service = self._service
+            return [row for row in gateway.entries(self.target_path(media_type))
+                    if row.get('name') in set(names)]
         from p115client.tool.fs_files import fs_files_iter
         from p115client.tool.attr import normalize_attr
         client = self._service().client
@@ -142,6 +152,18 @@ class P115TaskAdapter:
     def ensure_strm(self, media_type: str, root_ids: tuple[int, ...]) -> int:
         """Generate STRM only for files belonging to this task, under the matching local directory."""
         media_type = normalize_media_type(media_type)
+        try:
+            from media_capabilities.p115 import P115Gateway
+        except ModuleNotFoundError as exc:
+            if exc.name not in ('media_capabilities', 'media_capabilities.p115'):
+                raise
+        else:
+            gateway = P115Gateway()
+            gateway.service = self._service
+            local_root = Path(self.local_strm_root) / ('Movie' if media_type == 'movie' else 'TV_Show')
+            return gateway.generate_strm(self.target_path(media_type), str(local_root), root_ids,
+                                         refresh_library=True)
+        # Compatibility for existing installations before the shared wheel rollout.
         from p115client.tool.attr import get_attr
         from p115client.tool.iterdir import iter_files_with_path_skim
         from app.plugins.p115strmhelper.api import Api

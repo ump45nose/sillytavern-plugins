@@ -9,8 +9,9 @@ import tomllib
 
 def check(root: Path) -> None:
     manifest = json.loads((root / 'package.v2.json').read_text())
-    assert {'FilmWatchlist', 'ThemeStudio'} <= set(manifest)
-    for identity, directory in [('FilmWatchlist', 'filmwatchlist'), ('ThemeStudio', 'themestudio')]:
+    assert {'FilmWatchlist', 'ThemeStudio', 'MediaArchive', 'DiscRemux'} <= set(manifest)
+    for identity, directory in [('FilmWatchlist', 'filmwatchlist'), ('ThemeStudio', 'themestudio'),
+                                ('MediaArchive', 'mediaarchive'), ('DiscRemux', 'discremux')]:
         plugin = root / 'plugins.v2' / directory
         assert plugin.is_dir() and not plugin.is_symlink()
         module = ast.parse((plugin / '__init__.py').read_text())
@@ -20,6 +21,12 @@ def check(root: Path) -> None:
                        for target in node.targets if isinstance(target, ast.Name)}
         assert assignments['plugin_version'] == manifest[identity]['version']
         assert assignments['plugin_config_prefix'] == directory + '_'
+        if identity in {'MediaArchive', 'DiscRemux'}:
+            assert (plugin / 'dist' / 'remoteEntry.js').is_file()
+            tree = ast.parse((plugin / 'workflow.py').read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    assert not (node.module or '').startswith(('app.', 'httpx', 'subprocess', 'pathlib'))
     app = root / 'apps' / 'emby-theme-worker'
     project = tomllib.loads((app / 'pyproject.toml').read_text())
     assert project['project']['name'] == 'emby-theme-worker'

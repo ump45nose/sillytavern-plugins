@@ -40,7 +40,7 @@ class FilmWatchlist(_PluginBase):
     plugin_name = "片单自动收藏"
     plugin_desc = "从 Favsync 片单比较公网和 M-Team 资源，按来源下载并在入库后回写。"
     plugin_icon = "Moviepilot_A.png"
-    plugin_version = "1.3.1"
+    plugin_version = "1.3.2"
     plugin_author = "yuwk"
     author_url = ""
     plugin_config_prefix = "filmwatchlist_"

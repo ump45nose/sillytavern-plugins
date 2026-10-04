@@ -3,12 +3,13 @@
     "name": "片单自动收藏",
     "description": "Favsync 片单的公网与 M-Team 选源、115 云端任务路由。",
     "labels": "订阅,下载",
-    "version": "1.3.1",
+    "version": "1.3.2",
     "icon": "Moviepilot_A.png",
     "author": "yuwk",
     "level": 1,
     "system_version": ">=2.14.2,<3",
     "history": {
+      "v1.3.2": "共享能力包可用时复用115文件查询与STRM接口，保留已有安装的兼容路径。",
       "v1.3.1": "处理 CF 真人验证控件、复用可下载的会话域名和跳转后同源地址，修正磁力 tracker 转义并区分页面健康与下载权限。",
       "v1.3.0": "增加公网与 PT 同档质量比较、115 电影／剧集目录路由、任务对账和入库闭环；新路由默认关闭。",
       "v1.2.2": "Linux 搜索优先，遇到 CF 或登录要求时可使用受保护的 Browser Relay 会话解析资源链接。",
@@ -17,6 +18,28 @@
       "v1.0.1": "在插件详情页展示候选排除原因。",
       "v1.0.0": "首次支持 M-Team 片单自动收藏、原盘过滤和入库回写。"
     }
+  },
+  "MediaArchive": {
+    "name": "媒体收藏归档",
+    "description": "Emby 收藏驱动的115归档、保种保护、STRM校验与状态迁移。",
+    "labels": "整理,云盘",
+    "version": "0.1.0",
+    "icon": "Moviepilot_A.png",
+    "author": "yuwk",
+    "level": 1,
+    "system_version": ">=2.14.2,<3",
+    "history": {"v0.1.0": "独立归档业务层、公共能力适配、可恢复任务和收藏归档页面。"}
+  },
+  "DiscRemux": {
+    "name": "原盘REMUX",
+    "description": "独立ISO/BDMV原盘分析、自动及人工选片、无损MKV产物管理。",
+    "labels": "整理,工具",
+    "version": "0.1.0",
+    "icon": "Moviepilot_A.png",
+    "author": "yuwk",
+    "level": 1,
+    "system_version": ">=2.14.2,<3",
+    "history": {"v0.1.0": "MakeMKV引擎适配、人工选片页面、独立转换任务与产物校验。"}
   },
   "ThemeStudio": {
     "name": "主题曲管理",
