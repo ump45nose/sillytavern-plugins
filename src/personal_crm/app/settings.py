@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     wechat_webhook_secret: str = ""
     host: str = "127.0.0.1"
     port: int = 8080
+    mcp_development_no_auth: bool = False
+    mcp_proxy_sni_compatibility: bool = False
     public_base_url: str = ""
     oidc_discovery_url: str = ""
     oidc_client_id: str = ""

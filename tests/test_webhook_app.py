@@ -13,7 +13,7 @@ def _client():
     """创建禁用 OAuth、启用 Webhook 的测试应用。"""
 
     repository = CrmRepository("sqlite:///:memory:")
-    settings = Settings(wechat_webhook_secret="secret")
+    settings = Settings(mcp_development_no_auth=True, wechat_webhook_secret="secret")
     return TestClient(create_app(settings, repository)), repository
 
 

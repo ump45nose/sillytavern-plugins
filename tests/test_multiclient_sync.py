@@ -49,7 +49,7 @@ def _file_client(tmp_path):
     """使用真实文件型 SQLite 验证多个 HTTP 工作线程共享数据库。"""
 
     repo = CrmRepository(f"sqlite:///{tmp_path / 'multi.db'}")
-    settings = Settings(wechat_webhook_secret="secret", reminder_scheduler_enabled=False)
+    settings = Settings(mcp_development_no_auth=True, wechat_webhook_secret="secret", reminder_scheduler_enabled=False)
     return TestClient(create_app(settings, repo)), repo
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -802,9 +801,10 @@ class CrmRepository:
             raise ValueError("in-memory database cannot be backed up")
         target = Path(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
-        with self.engine.connect() as connection:
-            connection.execute(text("PRAGMA wal_checkpoint(FULL)"))
-        shutil.copy2(database, target)
+        import sqlite3
+
+        with sqlite3.connect(database) as source, sqlite3.connect(target) as destination:
+            source.backup(destination)
         return target
 
     def integrity_check(self) -> str:

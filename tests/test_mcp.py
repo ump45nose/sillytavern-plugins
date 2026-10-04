@@ -7,11 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 from fastmcp.server.auth.oidc_proxy import OIDCConfiguration
 from fastmcp.server.auth.redirect_validation import validate_redirect_uri
+from mcp_platform.auth import build_provider
 
 from personal_crm.app.server import create_app
 from personal_crm.app.settings import Settings
 from personal_crm.core import CrmService
-from personal_crm.mcp import _auth_check, _provider, create_mcp
+from personal_crm.mcp import _auth_check, _runtime, create_mcp
 from personal_crm.storage import CrmRepository
 
 
@@ -20,13 +21,14 @@ async def test_mcp_registers_required_tools_and_calls_person_flow():
     """验证十四个公共工具存在，且本地模式可完成建档和搜索。"""
 
     service = CrmService(CrmRepository("sqlite:///:memory:"))
-    server = create_mcp(service, Settings())
+    server = create_mcp(service, Settings(mcp_development_no_auth=True))
     required = {
         "search_people",
         "get_person",
         "upsert_person",
         "list_interactions",
         "get_daily_summary",
+        "get_daily_chat_records",
         "record_interaction",
         "list_facts",
         "add_fact",
@@ -68,9 +70,10 @@ async def test_daily_summary_excludes_private_text_and_groups_changes():
         observed_at=datetime(2026, 9, 6, 12, 5, tzinfo=UTC),
         source_interaction_id=interaction.id,
     )
-    server = create_mcp(service, Settings())
+    server = create_mcp(service, Settings(mcp_development_no_auth=True))
     result = await server.call_tool(
         "get_daily_summary",
+        "get_daily_chat_records",
         {"day": "2026-09-06", "timezone": "Asia/Shanghai"},
         run_middleware=False,
     )
@@ -130,7 +133,7 @@ def test_oauth_requires_authorized_oidc_usernames(tmp_path):
         tmp_path,
         oidc_authorized_usernames="",
     )
-    with pytest.raises(ValueError, match="OIDC_AUTHORIZED_USERNAMES"):
+    with pytest.raises(ValueError, match="白名单"):
         create_mcp(service, settings)
 
 
@@ -160,7 +163,7 @@ def test_oidc_authorization_uses_upstream_preferred_username(tmp_path):
 async def test_oidc_storage_accepts_cimd_url_client_id(tmp_path, mock_oidc_discovery):
     """验证 ChatGPT CIMD URL 经文件名清洗后可持久化，不会被斜杠拆成目录。"""
 
-    _provider_instance, raw_store = _provider(oidc_settings(tmp_path))
+    _provider_instance, raw_store = build_provider(_runtime(oidc_settings(tmp_path)))
     assert raw_store is not None
     await raw_store.put(
         key="https://chatgpt.com/oauth/client.json",
@@ -177,7 +180,7 @@ async def test_oidc_storage_accepts_cimd_url_client_id(tmp_path, mock_oidc_disco
 def test_default_oauth_redirect_allowlist_supports_agents_and_ai_vendors():
     """验证默认白名单覆盖本机 Agent 与 GPT、Claude、Grok 厂商域名。"""
 
-    redirect_uris = Settings().client_redirect_uris
+    redirect_uris = Settings(mcp_development_no_auth=True).client_redirect_uris
     assert "http://localhost:*" in redirect_uris
     assert "http://127.0.0.1:*" in redirect_uris
     for vendor_pattern in {
@@ -216,7 +219,7 @@ def test_streamable_http_mcp_initialize():
 
     repository = CrmRepository("sqlite:///:memory:")
     # 上下文管理器会启动父 ASGI 与 FastMCP 共享的 lifespan。
-    with TestClient(create_app(Settings(), repository)) as client:
+    with TestClient(create_app(Settings(mcp_development_no_auth=True), repository)) as client:
         response = client.post(
             "/mcp",
             headers={

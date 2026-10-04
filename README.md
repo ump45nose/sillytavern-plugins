@@ -63,3 +63,31 @@ uv run personal-crm backup /safe/path/personal-crm.db
 ## 插件展示与场景说明
 
 本仓库同时维护 **Personal CRM** 的名称、场景描述和图标。插件包位于仓库根目录，接入和维护说明见 [插件说明](docs/plugin.md)，图标来源见 [图标来源](assets/plugin/SOURCES.md)。
+
+
+## MCP 公共基座部署
+
+本服务使用私有仓库 `ump45nose/mcp-platform` 的版本依赖。业务工具、Webhook、提醒及数据库继续由 CRM 维护，认证、权限和 HTTP 装配由公共基座提供。
+
+`mcp.app.yaml` 是生产入口、认证引用、持久化卷和插件身份的唯一清单。SDK Git 来源使用 `v0.1.0`，`uv.lock` 锁定提交；普通更新不清空 `/data/oauth`，不轮换签名或加密密钥。
+
+NAS 更新使用以下命令（需管理员权限读取现有 env 和共享配置）：
+
+```bash
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan personal-crm --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy personal-crm --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target nas
+/home/yuwk/mcp-platform/.venv/bin/mcpctl package personal-crm --target nas
+```
+
+部署要求仓库没有未提交修改。构建在宿主机获取私有依赖并生成 wheel，镜像不包含 GitHub 凭据、env 或生产数据。发布记录、SQLite 在线备份和 OAuth 状态备份位于 `/vol2/1000/Docker/stacks/mcp-platform/runtime/personal-crm/releases/`，权限 600。
+
+公网 MCP 地址仍为 `https://crm-home.172906573.xyz/mcp`，入口切换到共享 Cloudflare Tunnel 直达 CRM。原 NPM 配置保留用于回退；ddns-go 停止维护 CRM 的 A/AAAA 记录，其他域名不变。Authelia discovery、issuer 和 `28443` 授权／token 地址保持原样。
+
+现有 `personal-crm_crm-data` 数据卷、`/data/oauth`、`personal-crm-oauth-v1` 加密盐、Authelia 客户端、App ID 与插件身份保持不变。代码回滚恢复镜像和本次配置，不恢复旧业务数据或 OAuth 快照。
+
+首次接入需用户登录并同意授权；更新后通过原 GPT/dots 连接调用只读工具验证，无需重建 App。插件打包不自动发布或重新连接账号。
+
+本地离线开发必须显式设置 `MCP_DEVELOPMENT_NO_AUTH=true` 并监听 `127.0.0.1`；生产凭据缺失时拒绝启动，不自动降级为匿名服务。
+
+MCP 保留线上已有 `get_daily_chat_records`，支持按日期分页读取已同步微信聊天原文，不代发消息。公共基座的新增限流、超时及输出限制在本次 CRM 迁移中关闭，保留原成功返回结构。

@@ -11,7 +11,7 @@ def test_personal_review_public_pages(tmp_path) -> None:
     """首页必须链接隐私政策，且三个公开页面均可匿名读取。"""
 
     repository = CrmRepository(f"sqlite:///{tmp_path / 'crm.db'}")
-    client = TestClient(create_app(Settings(), repository))
+    client = TestClient(create_app(Settings(mcp_development_no_auth=True), repository))
 
     homepage = client.get("/personal-review")
     privacy = client.get("/personal-review/privacy")

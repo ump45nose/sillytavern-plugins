@@ -2,22 +2,12 @@
 
 from __future__ import annotations
 
-import hmac
 from datetime import datetime, time, timedelta
-from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastmcp import FastMCP
-from fastmcp.server.auth import AuthContext
-from fastmcp.server.auth.oidc_proxy import OIDCProxy
-from key_value.aio.stores.filetree import (
-    FileTreeStore,
-    FileTreeV1CollectionSanitizationStrategy,
-    FileTreeV1KeySanitizationStrategy,
-)
-from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
+from mcp_platform import RuntimeConfig, authorize, create_http_app, create_server
 
 from personal_crm.core.domain import ensure_utc, utcnow
 from personal_crm.metrics import weekly_metrics
@@ -29,105 +19,40 @@ def _row(service, entity: Any | None) -> dict[str, Any] | None:
     return service.repo.to_dict(entity)
 
 
-def _auth_check(settings: Any, *, write: bool):
-    """按 Authelia 的 preferred_username 映射 CRM 读写权限。"""
+def _runtime(settings: Any) -> RuntimeConfig:
+    """适配原有 CRM 环境变量，保留 OAuth 状态格式与公开地址。"""
 
-    if not getattr(settings, "oauth_enabled", False):
-        return None
-
-    def check(context: AuthContext) -> bool:
-        """拒绝非白名单用户，并阻止只读用户调用修改工具。"""
-
-        token = context.token
-        if token is None:
-            return False
-        claims = dict(token.claims) if isinstance(token.claims, dict) else {}
-        # OIDCProxy 把上游身份放入 upstream_claims；兼容直接声明以便测试和升级。
-        upstream_claims = claims.get("upstream_claims")
-        if isinstance(upstream_claims, dict):
-            for key, value in upstream_claims.items():
-                claims.setdefault(key, value)
-        username = claims.get("preferred_username")
-        if not isinstance(username, str):
-            return False
-        authorized = any(
-            hmac.compare_digest(username, candidate)
-            for candidate in settings.authorized_usernames
-        )
-        if not authorized:
-            return False
-        return not (
-            write
-            and any(
-                hmac.compare_digest(username, candidate)
-                for candidate in settings.read_only_usernames
-            )
-        )
-
-    return check
-
-
-def _provider(settings: Any) -> tuple[OIDCProxy | None, FileTreeStore | None]:
-    """在生产配置完整时创建与 SmartSearch 同构的 Authelia OIDCProxy。"""
-
-    if not getattr(settings, "oauth_enabled", False):
-        return None, None
-    if not settings.authorized_usernames:
-        raise ValueError("OIDC_AUTHORIZED_USERNAMES is required when OAuth is enabled")
-    if len(settings.oauth_jwt_signing_key) < 32:
-        raise ValueError("OAUTH_JWT_SIGNING_KEY must contain at least 32 characters")
-    if len(settings.oauth_storage_encryption_key) < 32:
-        raise ValueError("OAUTH_STORAGE_ENCRYPTION_KEY must contain at least 32 characters")
-
-    base_url = settings.public_base_url.rstrip("/")
-    storage_path = Path(settings.oauth_storage_path)
-    storage_path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    storage_path.chmod(0o700)
-    # CIMD 的 client_id 是 URL；必须清洗斜杠等文件名字符，否则写入会形成不存在的子目录。
-    raw_store = FileTreeStore(
-        data_directory=storage_path,
-        key_sanitization_strategy=FileTreeV1KeySanitizationStrategy(storage_path),
-        collection_sanitization_strategy=FileTreeV1CollectionSanitizationStrategy(
-            storage_path
-        ),
-    )
-    encrypted_store = FernetEncryptionWrapper(
-        raw_store,
-        source_material=settings.oauth_storage_encryption_key,
-        salt="personal-crm-oauth-v1",
-        raise_on_decryption_error=True,
-    )
-    provider = OIDCProxy(
-        config_url=settings.oidc_discovery_url,
-        client_id=settings.oidc_client_id,
-        client_secret=settings.oidc_client_secret,
-        base_url=base_url,
-        resource_base_url=base_url,
-        issuer_url=base_url,
-        redirect_path="/auth/callback",
-        required_scopes=["openid", "profile", "offline_access"],
-        verify_id_token=True,
-        allowed_client_redirect_uris=settings.client_redirect_uris,
-        client_storage=encrypted_store,
+    return RuntimeConfig(
+        name="personal-crm", host=settings.host, port=settings.port,
+        development_no_auth=settings.mcp_development_no_auth,
+        public_base_url=settings.public_base_url,
+        oidc_discovery_url=settings.oidc_discovery_url,
+        oidc_client_id=settings.oidc_client_id, oidc_client_secret=settings.oidc_client_secret,
         jwt_signing_key=settings.oauth_jwt_signing_key,
-        token_endpoint_auth_method="client_secret_basic",
-        require_authorization_consent=True,
-        enable_cimd=True,
-        forward_resource=False,
-        token_expiry_threshold_seconds=30,
+        storage_encryption_key=settings.oauth_storage_encryption_key,
+        storage_path=settings.oauth_storage_path, storage_salt="personal-crm-oauth-v1",
+        authorized_usernames=settings.authorized_usernames,
+        read_only_usernames=settings.read_only_usernames,
+        client_redirect_uris=settings.client_redirect_uris,
+        allowed_hosts=["localhost", "127.0.0.1", "personal-crm"],
+        allowed_origins=["https://chatgpt.com", "https://claude.ai", "https://claude.com",
+                         "https://grok.com", "https://x.ai", "https://x.com"],
+        proxy_sni_compatibility=settings.mcp_proxy_sni_compatibility,
+        requests_per_minute=0, tool_timeout_seconds=0, max_output_bytes=0,
     )
-    return provider, raw_store
+
+
+def _auth_check(settings: Any, *, write: bool):
+    return authorize("write" if write else "read", _runtime(settings))
 
 
 def create_mcp(service: Any, settings: Any) -> FastMCP:
     """创建完整 MCP 服务；本地无 OAuth 配置时便于离线测试。"""
 
-    provider, _oauth_store = _provider(settings)
-
-    server = FastMCP(
-        "personal-crm",
-        instructions="只读微信摘要，不代发消息；修改工具会返回 before/after。",
-        auth=provider,
+    runtime = _runtime(settings)
+    server = create_server(
+        runtime,
+        instructions="可读取指定日期的微信聊天原文，不代发消息；修改工具会返回 before/after。",
     )
     read_auth = _auth_check(settings, write=False)
     write_auth = _auth_check(settings, write=True)
@@ -180,6 +105,23 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
         """按时间倒序列出互动。"""
 
         return [_row(service, item) for item in service.repo.list_interactions(person_id, limit)]
+
+    @server.tool(auth=read_auth)
+    def get_daily_chat_records(
+        day: str, timezone: str = "Asia/Shanghai", offset: int = 0, limit: int = 200,
+    ) -> dict[str, Any]:
+        """分页返回当天微信聊天原文；不在 CRM 内压缩或生成摘要。"""
+
+        try:
+            business_day = datetime.strptime(day, "%Y-%m-%d").date()
+            zone = ZoneInfo(timezone)
+        except (ValueError, ZoneInfoNotFoundError) as error:
+            raise ValueError("day 或 timezone 无效") from error
+        start = datetime.combine(business_day, time.min, zone)
+        rows = service.repo.daily_chat_records(start, start + timedelta(days=1), offset, limit)
+        return {"date": day, "timezone": timezone, "offset": offset,
+                "limit": limit, "records": rows,
+                "next_offset": offset + len(rows) if len(rows) == limit else None}
 
     @server.tool(auth=read_auth)
     def get_daily_summary(day: str, timezone: str = "Asia/Shanghai") -> dict[str, Any]:
@@ -347,28 +289,6 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
 
 
 def http_app(service: Any, settings: Any):
-    """返回适配公网 Agent 客户端的无状态 Streamable HTTP ASGI 应用。"""
+    """公共基座提供无状态 HTTP、发现路由及生命周期。"""
 
-    public_hostname = urlsplit(settings.public_base_url).hostname
-    # Cloudflare/Nginx 保留公网 Host；本地与容器名只用于健康检查和离线验收。
-    allowed_hosts = ["localhost", "127.0.0.1", "personal-crm"]
-    if public_hostname:
-        allowed_hosts.insert(0, public_hostname)
-    # 显式覆盖 ChatGPT、Claude、Grok 的网页来源，避免浏览器客户端被来源保护误拒绝。
-    allowed_origins = [
-        "https://chatgpt.com",
-        "https://claude.ai",
-        "https://claude.com",
-        "https://grok.com",
-        "https://x.ai",
-        "https://x.com",
-    ]
-    return create_mcp(service, settings).http_app(
-        path="/mcp",
-        transport="streamable-http",
-        # ChatGPT 的 OAuth 回调会立即初始化并枚举工具；无状态模式避免等待 GET 事件流超时。
-        stateless_http=True,
-        json_response=False,
-        allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
-    )
+    return create_http_app(create_mcp(service, settings), _runtime(settings))
