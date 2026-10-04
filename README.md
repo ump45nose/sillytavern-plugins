@@ -34,3 +34,15 @@
 1.1.1 已将展示名缩短，保留全部场景描述、示例提示和原 App ID。平台保存了图标清单与资源，但安装后详情图标仍可能回退为默认图标，需以实际页面验收，不能将包上传成功视为图标已生效。
 
 1.1.2 用仅含兼容清单的 ZIP 通过网页上传原 ID，刷新后仍显示默认图标；1.1.3 恢复两份同步清单，保留官方 PNG 和原 App 映射。两种格式均未解决安装后的图标回退。
+
+## NAS Tunnel 接入
+
+公网 MCP 地址仍为 `https://mcphub-home.172906573.xyz/mcp`。`mcp.app.yaml` 使用公共基座 existing 模式：共享 Cloudflare Tunnel 直接转发至现有 MCPHub，不替换官方钉钉服务或北向 OAuth，不移动 `/opt/mcphub/data`，不重建账号授权。
+
+```bash
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan dingtalk --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy dingtalk --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback dingtalk --target nas
+```
+
+首次迁移保留 NPM 原配置作为回退路径；DDNS 不再管理该域名的 A/AAAA，其他域名不变。入口验收使用健康检查、未认证 401 与 OAuth 发现，不调用钉钉写工具。GPT Web App／插件发布是下一阶段，本轮不更新插件文件或身份。

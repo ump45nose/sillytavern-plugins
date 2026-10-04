@@ -1,0 +1,11 @@
+schema_version: 1
+id: dingtalk
+name: 钉钉 MCP
+deployment_mode: existing
+authentication: oauth
+public_url: https://mcphub-home.172906573.xyz
+port: 3000
+host_port: 3100
+bind_address: 192.168.31.201
+health_path: /health
+mcp_path: /mcp
