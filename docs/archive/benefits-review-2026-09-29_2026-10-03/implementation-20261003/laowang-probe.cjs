@@ -1,0 +1,3 @@
+const root='/home/yuwk/benefits-automation/platforms/laowang';const {run}=require(root+'/adapter.cjs');const {createIntent}=require(root+'/intent.cjs');
+const f=require(root+'/node_modules/playwright-firefox').firefox;
+run(f,'/vol2/1000/Docker/benefits-automation/acceptance-20261003/state/laowang/default/browser', {proxy:'http://192.168.31.201:7890',authorize:async()=>null,intent:createIntent('/vol2/1000/Docker/benefits-automation/acceptance-20261003/state/laowang/default/sign-intent.json','2026-10-03'),onError:e=>console.log(JSON.stringify({error:e.name,message:e.message.slice(0,400).replace(/https?:\/\/\S+/g,'[url]')}))}).then(r=>console.log(JSON.stringify(r)));

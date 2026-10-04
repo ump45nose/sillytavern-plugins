@@ -1,0 +1,192 @@
+{
+  "ok": true,
+  "error_type": "",
+  "error": "",
+  "session_id": "2780c28b9308",
+  "query": "TheNetsky Microsoft Rewards Script Explore on Bing activation offer completion progress urlreward SocialMedia Set a goal",
+  "platform": "",
+  "model": "grok-4.20-multi-agent-0309",
+  "primary_api_mode": "xai-responses",
+  "content": "**TheNetsky/Microsoft-Rewards-Script** is an open-source GitHub repository that provides an automated TypeScript script using Playwright (browser automation) and Cheerio (HTML parsing) to complete Microsoft Rewards tasks and earn points.[[1]](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/main/README.md)\n\nMicrosoft Rewards is a loyalty program (formerly Bing Rewards) that awards points for Bing searches, daily offers, quizzes, promotions, and other activities. These points can be redeemed for gift cards or other rewards. The script automates many of these to reduce manual effort.[[2]](https://github.com/TheNetsky/Microsoft-Rewards-Script)\n\n### Feature Mapping to Your Query\nYour keywords align directly with the script’s configurable tasks and dashboard interactions (especially in the actively maintained **v4** branch, which supports the modern Bing Rewards dashboard as of 2026):\n\n- **Explore on Bing** — Covered by `activities.searchOnBing` and search workers. It performs Bing searches (desktop, mobile, Edge emulation) using geo-localized queries or local hot-search sources. Supports scrolling, clicking results, and fallback methods.[[2]](https://github.com/TheNetsky/Microsoft-Rewards-Script)\n- **Activation / offer** — `workers.doActivateSearchPerk` and promotion workers handle activating search perks, offers, and bonuses. `doMorePromotions`, `doPunchCards`, `doDailySet`, and `doClaimBonusPoints` manage offer completion.[[3]](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v4/config.example.json)\n- **Completion / progress** — The script parses the Rewards dashboard for points balance, task completion status, streaks, and progress toward daily/overall caps. It logs results and supports webhooks (Discord, Telegram, ntfy) for notifications.\n- **urlreward** — Explicit config option: `activities.urlReward` (enabled by default in examples) completes URL-based reward activities.[[2]](https://github.com/TheNetsky/Microsoft-Rewards-Script)\n- **SocialMedia** — Handled under “More Promotions” / `doMorePromotions`. Many promotional cards involve social sharing, polls, or related engagement that the script can target.[[4]](http://gitmemories.com/TheNetsky/Microsoft-Rewards-Script?__cf_chl_rt_tk=Ef6UnVYctViMkcyWxFMqhyWF5BK85zWD03H4giYTcis-1789619718-1.0.1.1-821wVUlWSzPciElLhbYEK_0kKcJi2JP1.gAYH30NtfU)\n- **Set a goal** — Likely refers to dashboard features for setting redemption goals or tracking progress toward point targets. The script focuses on earning/completion rather than directly setting goals, but it reports overall progress.\n\nAdditional supported tasks include Daily Set, quizzes (10-pt and higher variants), polls, Read-to-Earn, punch cards, visual search, and bonus searches. It offers multi-account support, persistent sessions/fingerprints, proxy support, headless mode, and configurable delays to appear more human-like.[[5]](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v3/README.md)\n\n### Technical Overview and Setup (High-Level)\n- **Requirements**: Node.js ≥ 24, Git (or Docker option).\n- **Structure**: Clone the repo, configure accounts (email, optional password/TOTP, proxies, locale), copy and edit `config.example.json` (or use environment variables in Docker), build, and run.\n- **Main toggles** are in the `workers` and `activities` sections of the config (e.g., enable/disable specific tasks like `doActivateSearchPerk`, `urlReward`, or search behaviors).\n- There are popular forks (e.g., Chinese-localized versions with Baidu/Weibo/头条 hot searches, Chinese logging, and WeChat/PushPlus notifications).[[6]](https://raw.githubusercontent.com/chiihero/Microsoft-Rewards-Script/main/README.md)\n\n**Latest activity** (as of late 2026): The repository has over 1k stars, regular releases (v4.3.x), and ongoing maintenance for the new dashboard.[[7]](https://github.com/TheNetsky/Microsoft-Rewards-Script/releases)\n\n### Important Warnings and Risks\nMicrosoft’s Terms of Service for Rewards explicitly prohibit automation, bots, scripts, and farming. Using this or similar tools (including Tampermonkey userscripts or extensions) carries a **real risk of account suspension or permanent ban**. The repository itself repeatedly states: “Use at your own risk… Automation of Microsoft Rewards may lead to account suspension or bans. This software is provided for educational purposes only.”[[8]](https://www.gstars.dev/repo/TheNetsky/Microsoft-Rewards-Script)\n\n**Recommendation**: Perform tasks manually through the official Rewards dashboard or Bing app to avoid issues. Automation scripts have been increasingly detected over time.\n\nIf you are researching browser automation techniques, dashboard parsing with Playwright/Cheerio, or want details on a *specific* aspect (e.g., how the config controls URL rewards or search query sources), provide more context. For legitimate use, stick to official Microsoft methods.\n\n**Main repository**: https://github.com/TheNetsky/Microsoft-Rewards-Script (check the v4 branch and README for current configuration examples).",
+  "sources": [
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/main/README.md",
+      "title": "1"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script",
+      "title": "2"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v4/config.example.json",
+      "title": "3"
+    },
+    {
+      "url": "http://gitmemories.com/TheNetsky/Microsoft-Rewards-Script?__cf_chl_rt_tk=Ef6UnVYctViMkcyWxFMqhyWF5BK85zWD03H4giYTcis-1789619718-1.0.1.1-821wVUlWSzPciElLhbYEK_0kKcJi2JP1.gAYH30NtfU",
+      "title": "4"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v3/README.md",
+      "title": "5"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/chiihero/Microsoft-Rewards-Script/main/README.md",
+      "title": "6"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/releases",
+      "title": "7"
+    },
+    {
+      "url": "https://www.gstars.dev/repo/TheNetsky/Microsoft-Rewards-Script",
+      "title": "8"
+    },
+    {
+      "url": "https://github.com/thenetsky/microsoft-rewards-script",
+      "provider": "tavily",
+      "title": "GitHub - TheNetsky/Microsoft-Rewards-Script: Automated Microsoft Rewards script, using TypeScript and Playwright. · GitHub",
+      "description": "### Activities\n\n| Setting | Type | Default | Description | Docker environment variable |\n ---  --- \n| `activities.urlReward` | boolean | `true` | Complete URL reward activities | `CONFIG_ACTIVITY_URL_REWARD` |\n| `activities.searchOnBing` | boolean | `true` | Complete ExploreOnBing offers | `CONFIG_ACTIVITY_SEARCH_ON_BING` |\n\n### Search Settings [...] Opt-in features that may change. Disabled by default.\n\n| Setting | Type | Default | Description | Docker environment variable |\n ---  --- \n| `experimental.apiSearch` | boolean | `false` | Perform Bing searches over HTTP instead of driving a browser page | `CONFIG_EXPERIMENTAL_API_SEARCH` |\n| `experimental.apiSearchOnBing` | boolean | `false` | Complete ExploreOnBing offers over HTTP instead of the browser | `CONFIG_EXPERIMENTAL_API_SEARCH_ON_BING` |\n| `experimental.blockMedia` | boolean | `false` | Block post-login browser `image` and `media` requests to reduce traffic | `CONFIG_EXPERIMENTAL_BLOCK_MEDIA` |\n| `experimental.edgeBrowsing` | boolean | `false` | Report the 30-minute Edge browsing activity as a background HTTP task | `CONFIG_EXPERIMENTAL_EDGE_BROWSING` | [...] | `contintueOnBotWarning` | boolean | `false` | Continue despite the Microsoft bot-score warning (not recommended) | `CONFIG_CONTINTUE_ON_BOT_WARNING` |\n| `skipNonPointTasks` | boolean | `true` | Skip tasks that award no points | `CONFIG_SKIP_NON_POINT_TASKS` |\n| `accountDelay.min` | string | `\"1min\"` | Minimum delay before starting the next configured account | `CONFIG_ACCOUNT_DELAY_MIN` |\n| `accountDelay.max` | string | `\"3min\"` | Maximum delay before starting the next configured account | `CONFIG_ACCOUNT_DELAY_MAX` |\n| `searchOnBingLocalQueries` | boolean | `false` | Use the local query list for ExploreOnBing | `CONFIG_SEARCH_ON_BING_LOCAL` |\n| `globalTimeout` | string | `\"30sec\"` | Timeout for all actions | `CONFIG_GLOBAL_TIMEOUT` |"
+    }
+  ],
+  "sources_count": 9,
+  "primary_sources": [
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/main/README.md",
+      "title": "1"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script",
+      "title": "2"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v4/config.example.json",
+      "title": "3"
+    },
+    {
+      "url": "http://gitmemories.com/TheNetsky/Microsoft-Rewards-Script?__cf_chl_rt_tk=Ef6UnVYctViMkcyWxFMqhyWF5BK85zWD03H4giYTcis-1789619718-1.0.1.1-821wVUlWSzPciElLhbYEK_0kKcJi2JP1.gAYH30NtfU",
+      "title": "4"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/v3/README.md",
+      "title": "5"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/chiihero/Microsoft-Rewards-Script/main/README.md",
+      "title": "6"
+    },
+    {
+      "url": "https://github.com/TheNetsky/Microsoft-Rewards-Script/releases",
+      "title": "7"
+    },
+    {
+      "url": "https://www.gstars.dev/repo/TheNetsky/Microsoft-Rewards-Script",
+      "title": "8"
+    }
+  ],
+  "primary_sources_count": 8,
+  "extra_sources": [
+    {
+      "url": "https://github.com/thenetsky/microsoft-rewards-script",
+      "provider": "tavily",
+      "title": "GitHub - TheNetsky/Microsoft-Rewards-Script: Automated Microsoft Rewards script, using TypeScript and Playwright. · GitHub",
+      "description": "### Activities\n\n| Setting | Type | Default | Description | Docker environment variable |\n ---  --- \n| `activities.urlReward` | boolean | `true` | Complete URL reward activities | `CONFIG_ACTIVITY_URL_REWARD` |\n| `activities.searchOnBing` | boolean | `true` | Complete ExploreOnBing offers | `CONFIG_ACTIVITY_SEARCH_ON_BING` |\n\n### Search Settings [...] Opt-in features that may change. Disabled by default.\n\n| Setting | Type | Default | Description | Docker environment variable |\n ---  --- \n| `experimental.apiSearch` | boolean | `false` | Perform Bing searches over HTTP instead of driving a browser page | `CONFIG_EXPERIMENTAL_API_SEARCH` |\n| `experimental.apiSearchOnBing` | boolean | `false` | Complete ExploreOnBing offers over HTTP instead of the browser | `CONFIG_EXPERIMENTAL_API_SEARCH_ON_BING` |\n| `experimental.blockMedia` | boolean | `false` | Block post-login browser `image` and `media` requests to reduce traffic | `CONFIG_EXPERIMENTAL_BLOCK_MEDIA` |\n| `experimental.edgeBrowsing` | boolean | `false` | Report the 30-minute Edge browsing activity as a background HTTP task | `CONFIG_EXPERIMENTAL_EDGE_BROWSING` | [...] | `contintueOnBotWarning` | boolean | `false` | Continue despite the Microsoft bot-score warning (not recommended) | `CONFIG_CONTINTUE_ON_BOT_WARNING` |\n| `skipNonPointTasks` | boolean | `true` | Skip tasks that award no points | `CONFIG_SKIP_NON_POINT_TASKS` |\n| `accountDelay.min` | string | `\"1min\"` | Minimum delay before starting the next configured account | `CONFIG_ACCOUNT_DELAY_MIN` |\n| `accountDelay.max` | string | `\"3min\"` | Maximum delay before starting the next configured account | `CONFIG_ACCOUNT_DELAY_MAX` |\n| `searchOnBingLocalQueries` | boolean | `false` | Use the local query list for ExploreOnBing | `CONFIG_SEARCH_ON_BING_LOCAL` |\n| `globalTimeout` | string | `\"30sec\"` | Timeout for all actions | `CONFIG_GLOBAL_TIMEOUT` |"
+    }
+  ],
+  "extra_sources_count": 1,
+  "source_warning": "extra_sources are retrieved in parallel and are not automatically used to verify generated content; use fetch on key URLs for claim-level evidence.",
+  "routing_decision": {
+    "docs_intent": false,
+    "zh_current_intent": false,
+    "web_current_intent": false,
+    "fetch_intent": false,
+    "supplemental_paths": [],
+    "validation_level": "balanced",
+    "fallback_mode": "auto",
+    "providers": "auto",
+    "main_search_chain": [
+      "xai-responses",
+      "openai-compatible"
+    ],
+    "openai_compatible_stream": true
+  },
+  "providers_used": [
+    "xAI Responses",
+    "tavily"
+  ],
+  "provider_attempts": [
+    {
+      "capability": "main_search",
+      "provider": "xAI Responses",
+      "status": "ok",
+      "error_type": "",
+      "error": "",
+      "elapsed_ms": 35906.17,
+      "result_count": 1
+    },
+    {
+      "capability": "web_search",
+      "provider": "tavily",
+      "status": "ok",
+      "error_type": "",
+      "error": "",
+      "elapsed_ms": 39769.09,
+      "result_count": 1
+    }
+  ],
+  "fallback_used": false,
+  "validation_level": "balanced",
+  "minimum_profile_ok": true,
+  "capability_status": {
+    "main_search": {
+      "configured": [
+        "xai-responses",
+        "openai-compatible"
+      ],
+      "fallback_chain": [
+        "xai-responses",
+        "openai-compatible"
+      ],
+      "ok": true
+    },
+    "web_search": {
+      "configured": [
+        "tavily"
+      ],
+      "fallback_chain": [
+        "zhipu",
+        "tavily",
+        "firecrawl"
+      ],
+      "ok": true
+    },
+    "docs_search": {
+      "configured": [
+        "context7"
+      ],
+      "fallback_chain": [
+        "context7",
+        "exa"
+      ],
+      "ok": true
+    },
+    "web_fetch": {
+      "configured": [
+        "tavily"
+      ],
+      "fallback_chain": [
+        "tavily",
+        "firecrawl"
+      ],
+      "ok": true
+    },
+    "vertical_search": {
+      "configured": [],
+      "fallback_chain": [
+        "anysearch"
+      ],
+      "experimental": true,
+      "ok": false
+    }
+  },
+  "elapsed_ms": 39769.12
+}

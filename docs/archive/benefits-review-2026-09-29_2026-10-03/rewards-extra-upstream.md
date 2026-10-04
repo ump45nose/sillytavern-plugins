@@ -1,0 +1,5 @@
+Follow-up from the same 4.3.2 deployment: opening the visible SocialMedia TikTok/YouTube cards also changed their actual offer completion flags, while the generic promotion runner had skipped them (flyout priority -10 / `notsupported`). That metadata alone is therefore not sufficient to classify every visible card as unavailable.
+
+Explore on Bing was a separate deployment routing issue: the Rewards site and Bing search were reaching different regional endpoints. After making their routes consistent, all four currently unlocked Explore offers completed with one topic-appropriate browser search each. The authenticated flyout counters then reported 40/40, with `complete=true` on each activation offer. No repeated search loop was needed.
+
+The Set a goal card needs more than opening its link or toggling the SKU switch: the current UI opens a dialog requiring a redemption mode. Selecting "Track and manually redeem your reward" and proceeding sets the goal; persistence should be checked after reload. The automatic-redemption option must not be chosen implicitly. These findings are from the normal site UI; no credentials or private network settings are included.
