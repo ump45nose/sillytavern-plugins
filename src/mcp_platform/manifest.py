@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -46,18 +47,22 @@ class AppManifest(BaseModel):
     schema_version: int = 1
     id: str = Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")
     name: str
-    command: list[str]
+    deployment_mode: Literal["build", "existing"] = "build"
+    authentication: Literal["oauth", "bearer"] = "oauth"
+    command: list[str] = Field(default_factory=list)
     public_url: str
     port: int = Field(default=8080, ge=1, le=65535)
     host_port: int = Field(ge=1, le=65535)
     bind_address: str = "127.0.0.1"
     health_path: str = "/healthz"
+    mcp_path: str = "/mcp"
+    expected_tools: list[str] = Field(default_factory=list)
     compose_project: str = ""
     compose_service: str = "app"
     volumes: list[Volume] = Field(default_factory=list)
     environment: dict[str, str] = Field(default_factory=dict)
     required_env: list[str] = Field(default_factory=list)
-    auth: AuthSpec
+    auth: AuthSpec | None = None
     backup_command: list[str] = Field(default_factory=list)
     integrity_command: list[str] = Field(default_factory=list)
     migration_command: list[str] = Field(default_factory=list)
@@ -70,8 +75,16 @@ class AppManifest(BaseModel):
         p = urlsplit(self.public_url)
         if p.scheme != "https" or not p.hostname or p.path not in ("", "/") or p.query or p.fragment or p.username:
             raise ValueError("public_url 必须是 HTTPS 独立域名根地址")
-        if not self.command:
-            raise ValueError("command 不能为空")
+        if self.deployment_mode == "build" and (not self.command or self.auth is None):
+            raise ValueError("构建模式必须提供 command 和 auth")
+        if self.deployment_mode == "build" and self.authentication != "oauth":
+            raise ValueError("公共运行时构建模式使用 OAuth")
+        if self.deployment_mode == "build" and self.mcp_path != "/mcp":
+            raise ValueError("公共运行时构建模式目前使用 /mcp")
+        if not self.mcp_path.startswith("/") or self.mcp_path.startswith("//") or "?" in self.mcp_path:
+            raise ValueError("mcp_path 必须是本服务的绝对路径")
+        if self.health_path and (not self.health_path.startswith("/") or self.health_path.startswith("//")):
+            raise ValueError("health_path 必须是本服务的绝对路径")
         self.public_url = self.public_url.rstrip("/")
         return self
 
@@ -81,6 +94,8 @@ class AppManifest(BaseModel):
 
     @property
     def runtime_environment(self):
+        if self.auth is None:
+            return dict(self.environment)
         return {**self.environment, "PUBLIC_BASE_URL": self.public_url,
                 "OIDC_DISCOVERY_URL": self.auth.discovery_url,
                 "OIDC_CLIENT_ID": self.auth.client_id}
@@ -90,6 +105,7 @@ class Target(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_roots: dict[str, str] = Field(default_factory=dict)
     env_files: dict[str, str] = Field(default_factory=dict)
+    probe_token_files: dict[str, str] = Field(default_factory=dict)
     runtime_root: str
     build_user: str = "yuwk"
     uv: str = "/home/yuwk/.local/bin/uv"

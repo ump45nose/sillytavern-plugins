@@ -4,7 +4,7 @@
 
 首版版本 `0.1.0`，Python 3.12、FastMCP 3.4.4、MCP SDK 1.28.1、Authlib 1.7.2。协议栈和兼容修正一起升级。
 
-NAS 部署 CLI 使用 `0.1.1` 修复版，在写入前校验候选配置，并检查候选生成以来的外部修改。CRM 和生成项目的运行时继续锁定 `v0.1.0`；已发布标签和业务依赖不改写。
+NAS 部署 CLI 使用 `0.1.2`，在写入前校验候选配置，检查候选生成以来的外部修改，并支持已有服务的 Tunnel 接入。CRM 和生成项目的运行时继续锁定 `v0.1.0`；已发布标签和业务依赖不改写。
 
 ## 安装与新建服务
 
@@ -50,8 +50,13 @@ targets:
   nas:
     source_roots:
       personal-crm: /home/yuwk/personal-crm
+      dingtalk: /home/yuwk/dingtalk-workspace-plugin
+      local-env-mcp: /home/yuwk/mcp-platform/integrations/local-env-mcp
+      media-download-mcp: /home/yuwk/media-automation/apps/media-download-mcp
     env_files:
       personal-crm: /vol2/1000/Docker/personal-crm/.env
+    probe_token_files:
+      media-download-mcp: /path/to/private/access.token
     runtime_root: /vol2/1000/Docker/stacks/mcp-platform/runtime
     platform_repo: /home/yuwk/mcp-platform
     build_user: yuwk
@@ -93,6 +98,39 @@ Tunnel 先验证配置，再通过临时副本更新主连接，保留其他域�
 
 同版本、环境和入口配置重复部署时只验证，不重建、不重启、不重复注册。部署过程使用宿主机文件锁。
 
+## 已有服务的 Tunnel 接入
+
+`deployment_mode: existing` 使用当前业务进程及其原认证。`deploy` 仅协调 Tunnel、DDNS 和 DNS，先验证本机协议、匿名拒绝，再更新入口并验证公网。OAuth 服务检查发现文档与原 issuer；Bearer 服务使用目标文件中的 `probe_token_files` 私下验证 initialize／tools/list。入口回滚不停止或重启业务进程，也不改写 OAuth 配置。
+
+```yaml
+schema_version: 1
+id: my-existing-mcp
+name: 已有 MCP
+deployment_mode: existing
+authentication: bearer
+public_url: https://my-existing-mcp.example.com
+host_port: 8091
+bind_address: 127.0.0.1
+health_path: ''
+mcp_path: /mcp
+expected_tools: [search_resources, download_media, get_download_status]
+```
+
+该模式要求已有服务先启动，公共 CLI 不构建或管理它的业务镜像／systemd。实际配置的 Host 白名单应包含清单域名；凭据仅用请求头传递。应用目录可用 `path` 登记清单在业务仓库内的子目录；本机目标的 source_roots 可直接指向该子目录。
+
+新域名可能暂时命中旧通配 DDNS。公网检查最多等待五分钟处理 DNS／TLS 传播，始终验证证书和域名，失败时回滚入口；不会把令牌发送到证书校验失败的地址。
+
+| 服务 | 公网 MCP 地址 | 当前运行与认证 |
+|---|---|---|
+| CRM | `https://crm-home.172906573.xyz/mcp` | Compose，公共运行时与 Authelia |
+| 钉钉 | `https://mcphub-home.172906573.xyz/mcp` | 原 MCPHub 与北向 OAuth |
+| 远程服务器 | `https://local-env-home.172906573.xyz/mcp` | 原 systemd 网关／执行器与 Authelia |
+| Media Download | `https://media-download-home.172906573.xyz/mcp` | 独立 systemd／虚拟环境，文件 Bearer |
+
+后三者使用已有服务模式，本轮不替换 SDK 或业务认证，不创建／发布 GPT Web App 或插件。Media 的协议与公网入口已接入；MoviePilot 公共宿主及有效上游 Bearer 凭据仍需业务阶段配置，不把工具枚举通过视为真实下载可用。
+
+SmartSearch 已退役：NAS 容器、NPM 入口、DNS、DDNS 管理与独立 Authelia 客户端移除，NAS／Mac 工作目录移入私有回退备份，GitHub 仓库归档。`smartsearch_yuwk`／`smartsearch_identity` 仍被 CRM 和远程网关使用，保留共享策略；上游 smart-search CLI 是独立工具，不随该自建服务删除。
+
 失败会恢复本次镜像、共享配置和 DNS。文件及 DNS 恢复前检查是否发生外部修改，发生冲突时停止覆盖并记录 `needs_attention`。网络中断导致 DNS 操作结果不确定时，可能需要人工核对，不能把外部变更当成本次变更覆盖。
 
 发布记录位于目标 runtime 的 `<app>/releases/<timestamp>/journal.json`，完整诊断 `error.log` 及备份均为 600 权限。代码回滚不会恢复旧业务数据库或 OAuth 状态，避免覆盖部署期间的写入和新授权。
@@ -119,6 +157,8 @@ uv run mcpctl package personal-crm --target nas
 
 只执行必要的冒烟验证：HTTP/初始化、权限、两种存储重启、URL client_id、共享文件冲突、模拟部署失败回滚、CRM 隔离读写、生产只读、部署重复执行。命令：`uv run pytest -q tests/test_smoke.py`。
 
-CRM 作为真实示例继续在自己的仓库维护业务实现。SmartSearch、远程执行器与 MCPHub 本轮不迁移。
+CRM 作为真实示例继续在自己的仓库维护业务实现。首轮完成 CRM 公共运行时迁移；随后登记钉钉、远程网关和 Media 的公网入口。
 
 本次 NAS 部署和客户端验证结果见 [首次迁移验收记录](docs/validation-2026-10-04.md)。
+
+后续 Tunnel 接入及 SmartSearch 退役结果见 [入口迁移记录](docs/tunnel-rollout-2026-10-04.md)。后续构建约定见 [AGENTS.md](AGENTS.md)。

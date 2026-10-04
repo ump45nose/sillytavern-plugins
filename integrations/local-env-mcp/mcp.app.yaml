@@ -1,0 +1,11 @@
+schema_version: 1
+id: local-env-mcp
+name: 远程服务器 MCP
+deployment_mode: existing
+authentication: oauth
+public_url: https://local-env-home.172906573.xyz
+port: 18087
+host_port: 18087
+bind_address: 127.0.0.1
+health_path: /health
+mcp_path: /mcp

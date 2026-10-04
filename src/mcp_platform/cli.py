@@ -18,6 +18,7 @@ from .deploy import (
     deployment_lock,
     rollback_journal,
 )
+from .exposure import deploy_existing
 from .infra import Cloudflare, Journal, authelia_text, run, tunnel_text
 from .manifest import AppManifest, load_app, load_target, private_write
 
@@ -51,7 +52,10 @@ def resolve_source(app_id, target, explicit):
     if not destination.exists():
         run(["git", "clone", "--no-checkout", entry["repository"], destination], user=target.build_user)
         run(["git", "checkout", "--detach", revision], cwd=destination, user=target.build_user)
-    return destination
+    source = (destination / entry.get("path", ".")).resolve()
+    if not source.is_relative_to(destination.resolve()):
+        raise ValueError("清单子目录不能离开业务仓库")
+    return source
 
 
 def init_project(name, destination):
@@ -228,12 +232,14 @@ def main():
             from dotenv import dotenv_values
             env_path = Path(target.env_files.get(app.id, ""))
             env = {**dict(dotenv_values(env_path)), **app.runtime_environment} if env_path.is_file() else {}
-            changed_auth = None if not env else authelia_text(Path(target.authelia_config).read_text(), app, env) != Path(target.authelia_config).read_text()
+            changed_auth = False if app.deployment_mode == "existing" else (
+                None if not env else authelia_text(Path(target.authelia_config).read_text(), app, env) != Path(target.authelia_config).read_text())
             cf = Cloudflare(target)
             try:
                 cf.find_zone(app.hostname)
                 records = cf.records(app.hostname)
-                print(json.dumps({"app": app.id, "source": str(source), "endpoint": app.public_url + "/mcp",
+                print(json.dumps({"app": app.id, "source": str(source), "endpoint": app.public_url + app.mcp_path,
+                    "deployment_mode": app.deployment_mode, "authentication": app.authentication,
                     "authelia_change": changed_auth,
                     "tunnel_change": tunnel_text(Path(target.tunnel_config).read_text(), app) != Path(target.tunnel_config).read_text(),
                     "dns_types": [r["type"] for r in records], "existing_env": env_path.is_file(),
@@ -241,7 +247,10 @@ def main():
             finally:
                 cf.client.close()
         elif args.command == "deploy":
-            deploy(app, source, target)
+            if app.deployment_mode == "existing":
+                deploy_existing(app, source, target)
+            else:
+                deploy(app, source, target)
         else:
             if os.geteuid() != 0:
                 raise PermissionError("回滚需要 sudo -n 权限")
