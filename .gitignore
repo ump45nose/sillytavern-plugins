@@ -1,0 +1,11 @@
+.env
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.json.partial
+ai-summary.json
+report.html
+__pycache__/
+*.pyc

@@ -1,0 +1,14 @@
+[Unit]
+Description=Export rolling ShellCrash traffic JSON for AI analysis
+After=shellcrash-traffic-collector.service
+
+[Service]
+Type=oneshot
+User=shellcrash
+Group=Users
+ExecStart=/home/yuwk/cron/scripts/shellcrash-traffic-ai-export --db /var/lib/shellcrash-traffic/traffic.sqlite3 --out /var/lib/shellcrash-traffic/ai-summary.json --days 30 --top 100
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/shellcrash-traffic

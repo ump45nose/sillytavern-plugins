@@ -1,0 +1,27 @@
+[Unit]
+Description=ShellCrash per-destination traffic collector
+After=network.target shellcrash.service
+Requires=shellcrash.service
+
+[Service]
+Type=simple
+User=shellcrash
+Group=Users
+UMask=0027
+StateDirectory=shellcrash-traffic
+StateDirectoryMode=0750
+ExecStart=/home/yuwk/cron/scripts/shellcrash-traffic
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/shellcrash-traffic
+
+[Install]
+WantedBy=multi-user.target
