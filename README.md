@@ -2,6 +2,12 @@
 
 FilmWatchlist and Emby Theme share a maintenance tree while keeping their original plugin IDs, Python packages, runtime state and independent entry points.
 
+MediaArchive and DiscRemux add favorite-driven archival and independent ISO/BDMV
+preparation. Their business workflows use injected capability interfaces; the
+separately built `packages/media-capabilities` wheel supplies shared file, Emby,
+qB, 115 and MakeMKV integrations. Both plugins start disabled, archive starts in
+preview, and source cleanup is opt-in. See [architecture and installation](docs/media-archive-and-remux.md).
+
 ## Layout and entry points
 
 - `package.v2.json` and `plugins.v2/filmwatchlist` retain MoviePilot's repository-root installation contract and the `FilmWatchlist` class/config prefix
