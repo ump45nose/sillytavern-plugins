@@ -43,5 +43,5 @@ plugin:
   version: 0.1.0
   display_name: 邮件
   description: 管理已配置的邮箱：查找和阅读邮件、浏览文件夹、查看附件，并按现有邮箱权限保存草稿、发送或整理邮件。邮件收发与账号配置沿用现有服务。
-  logo: assets/zoho-mail.svg
+  logo: assets/zoho-mail.png
   keywords: [邮件, 邮箱, IMAP, SMTP, Zoho]

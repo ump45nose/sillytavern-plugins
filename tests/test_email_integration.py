@@ -28,7 +28,7 @@ def test_email_manifest_compose_and_package(tmp_path):
     with zipfile.ZipFile(tmp_path / "plugin.zip") as archive:
         connection = json.loads(archive.read("mcp.json"))
         assert connection["mcpServers"]["email-mcp"]["url"] == app.public_url + "/mcp"
-        assert "assets/zoho-mail.svg" in archive.namelist()
+        assert app.plugin.logo in archive.namelist()
 
 
 def test_email_permission():
