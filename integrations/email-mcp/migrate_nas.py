@@ -194,7 +194,10 @@ def main(prepared_release=None):
                 if changed.strip():
                     raise ValueError("运行代码或锁文件已变化，必须重新构建")
                 run(["docker", "image", "inspect", image])
-                private_write(release / "build-artifacts.json", (prepared / "build/artifacts.json").read_text())
+                artifacts = prepared / "build/artifacts.json"
+                if not artifacts.exists():
+                    artifacts = prepared / "build-artifacts.json"
+                private_write(release / "build-artifacts.json", artifacts.read_text())
                 journal.set(prepared_release=str(prepared))
             else:
                 image, source_sha, core_sha = build_bundle(app, source, target, release / "build")
@@ -204,10 +207,13 @@ def main(prepared_release=None):
             trial = release / "trial-data"
             snapshot(old_data, trial)
             migrate_copy(image, trial, release)
-            bridge_smoke(image, trial, release)
+            if prepared_release and (prepared / "bridge-smoke.json").is_file():
+                private_write(release / "bridge-smoke.json", (prepared / "bridge-smoke.json").read_text())
+            else:
+                bridge_smoke(image, trial, release)
             print("镜像及四账号升级副本检查通过；进入容器切换", flush=True)
             # 精确检查共享库使用者，不允许仍有 UI/CLI 与升级后的副本交叉使用。
-            processes = run(["docker", "top", "email-mcp", "-eo", "comm"]).splitlines()[1:]
+            processes = run(["docker", "top", "email-mcp", "-eo", "pid,comm"]).splitlines()[1:]
             if len(processes) != 2 or not any("mcp-email" in p for p in processes):
                 raise ValueError("旧容器存在额外进程；需核对目录使用者")
             if digest(old_compose) != hashlib.sha256(old_text.encode()).hexdigest():
