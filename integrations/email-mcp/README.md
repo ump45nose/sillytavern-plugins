@@ -25,3 +25,7 @@
 图标复用 [Zoho Mail 官方资源](https://www.zohowebstatic.com/sites/zweb/images/productlogos/mail.svg)，来源见 `assets/SOURCE.md`。从原始矢量图渲染 256×256 透明 PNG（8999 字节），满足网页 PNG／10 KB 限制，保持原配色和形状。
 
 验收仅检查协议、工具枚举、账号发现及只读邮箱查询，不发送、删除或移动邮件。Tunnel、协议、邮箱后端和客户端连接分别记录状态。当前部署及网页接入进度见 [部署记录](../../docs/email-mcp-rollout-2026-10-05.md)。
+
+已通过网页表单完成注册与用户 OAuth，账户显示已连接，Zoho 图标及 19 个工具已在真实页面验收。[打开“邮件”](https://chatgpt.com/plugins/plugin_asdk_app_6ac285e95d74819193f153ce16dc5640)。真实 App ID 已登记正式清单；后续保留该连接身份。
+
+GPT Web 只读验收通过：账号发现与 INBOX 文件夹查询各一次，返回 4 个账号、1 个文件夹；服务端审计均为 ok。未发送、保存草稿、删除、移动或修改邮件。
