@@ -31,7 +31,7 @@ auth:
 backup_command:
 - python
 - -c
-- import os,sqlite3;from sqlalchemy.engine import make_url;p=make_url(os.environ['DATABASE_URL']).database;a=sqlite3.connect(p);b=sqlite3.connect('{backup_path}');a.backup(b);b.close();a.close()
+- import os,sqlite3;p=os.environ['DATABASE_URL'];assert p.startswith('sqlite:///');a=sqlite3.connect(p[len('sqlite:///'):]);b=sqlite3.connect('{backup_path}');a.backup(b);b.close();a.close()
 integrity_command:
 - personal-crm
 - integrity
