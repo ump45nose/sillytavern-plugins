@@ -5,3 +5,5 @@
 官方资源：https://www.zohowebstatic.com/sites/zweb/images/productlogos/mail.svg
 
 原始资源 SHA256：`3cb38a0c323bd83d2233453d98e049ab2543e198076d636e17ee126640609d3d`。
+
+网页上传资产：`zoho-mail.png`，256×256、透明 PNG，8999 字节。SVG 保留原路径，PNG 从该矢量图直接渲染；未修改官方图形的颜色与形状。

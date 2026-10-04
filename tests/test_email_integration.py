@@ -26,9 +26,10 @@ def test_email_manifest_compose_and_package(tmp_path):
     assert compose["networks"] == {"tool_net": {"external": True}}
     package_app(app, source, tmp_path / "plugin.zip")
     with zipfile.ZipFile(tmp_path / "plugin.zip") as archive:
-        connection = json.loads(archive.read("mcp.json"))
+        connection_path = next(n for n in archive.namelist() if n == "mcp.json" or n.endswith("/mcp.json"))
+        connection = json.loads(archive.read(connection_path))
         assert connection["mcpServers"]["email-mcp"]["url"] == app.public_url + "/mcp"
-        assert app.plugin.logo in archive.namelist()
+        assert any(n.endswith(app.plugin.logo) for n in archive.namelist())
 
 
 def test_email_permission():
@@ -71,7 +72,9 @@ def test_health_uses_oauth_challenge_path(monkeypatch):
                 "token_endpoint": app.public_url + "/token",
                 "code_challenge_methods_supported": ["S256"]})
         return httpx.Response(404)
-    monkeypatch.setattr(module.httpx, "Client", lambda **kwargs: real_client(
-        transport=httpx.MockTransport(respond), **kwargs))
+    def client(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(respond)
+        return real_client(**kwargs)
+    monkeypatch.setattr(module.httpx, "Client", client)
     module.wait_health(app)
     assert "/.well-known/oauth-protected-resource" not in visited

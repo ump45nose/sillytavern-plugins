@@ -162,3 +162,11 @@ CRM 作为真实示例继续在自己的仓库维护业务实现。首轮完成 
 本次 NAS 部署和客户端验证结果见 [首次迁移验收记录](docs/validation-2026-10-04.md)。
 
 后续 Tunnel 接入及 SmartSearch 退役结果见 [入口迁移记录](docs/tunnel-rollout-2026-10-04.md)。后续构建约定见 [AGENTS.md](AGENTS.md)。
+
+## 邮件 MCP 更新与迁移
+
+邮件已从 `mcp-email-server 1.4.1` 升级为锁定的正式版 `1.11.0`，由 `integrations/email-mcp/` 的同进程薄适配接入公共运行时 `v0.1.0`。原项目及上游业务代码不改写。新服务运行在平台 Compose，使用回环端口 9557、现有 `tool_net` 与原出口代理；四账号及原策略保留，原数据目录保留。
+
+公网入口为 `https://email-home.172906573.xyz/mcp`，共享 Tunnel 已接入，匿名请求返回 401，OAuth 发现与 19 个工具桥接已通过。Compose 清单支持可选 `user`、`working_dir`、`init`、`external_networks`；目标配置可用 `compose_files` 指定稳定 Compose 文件，更新只协调目标服务。新版 schema v5 使用独立迁移副本，业务卷与 OAuth 卷分别持久化；常规回滚必须使用兼容 v5 的镜像，不能将旧库倒灌。
+
+GPT 网页按“创建自定义 MCP 服务器”表单接入，名称“邮件”，使用 Zoho Mail 官方图标；禁止调用 Plugin Creator。后端通过不代表网页连接已完成。实际状态、构建摘要及回滚说明见 [邮件部署记录](docs/email-mcp-rollout-2026-10-05.md)及[适配说明](integrations/email-mcp/README.md)。
