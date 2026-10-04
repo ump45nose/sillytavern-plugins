@@ -1,0 +1,15 @@
+schema_version: 1
+id: media-download-mcp
+name: Media Download MCP
+deployment_mode: existing
+authentication: bearer
+public_url: https://media-download-home.172906573.xyz
+port: 8091
+host_port: 8091
+bind_address: 127.0.0.1
+health_path: ''
+mcp_path: /mcp
+expected_tools:
+  - search_resources
+  - download_media
+  - get_download_status

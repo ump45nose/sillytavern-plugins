@@ -1,0 +1,22 @@
+[Unit]
+Description=Media Download MCP Streamable HTTP gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yuwk
+Group=Users
+WorkingDirectory=/home/yuwk/.config/mcp-platform/media-download-mcp
+ExecStart=/home/yuwk/.config/mcp-platform/media-download-mcp/venv/bin/media-download-mcp --config /home/yuwk/.config/mcp-platform/media-download-mcp/config.systemd.json --transport streamable-http
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
