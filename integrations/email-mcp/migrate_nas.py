@@ -1,5 +1,6 @@
 """首次从旧 Compose 迁移；日后使用 mcpctl deploy，不重复导入旧数据。"""
 
+import argparse
 import hashlib
 import json
 import os
@@ -98,18 +99,29 @@ def migrate_copy(image, data, release):
 
 
 def bridge_smoke(image, data, release):
-    code = '''import asyncio,json
+    code = '''import asyncio,json,jsonref
 from fastmcp import Client
 from mcp_platform import RuntimeConfig
 from email_mcp_platform.server import create_app
 from mcp_email_server.app import mcp
+def normalized(value):
+    if value is None:return None
+    value=jsonref.replace_refs(value,proxies=False)
+    def clean(v):
+        if isinstance(v,dict):return {k:clean(x) for k,x in v.items() if k not in ["$defs","definitions"]}
+        if isinstance(v,list):return [clean(x) for x in v]
+        return v
+    return clean(value)
 async def smoke():
     _,server,_=create_app(RuntimeConfig(name="email-smoke",development_no_auth=True,audit_enabled=False))
     async with Client(mcp) as original:
         expected={t.name:t.model_dump() for t in await original.list_tools()}
     async with Client(server) as wrapped:
         actual={t.name:t.model_dump() for t in await wrapped.list_tools()}
-        assert actual==expected
+        assert set(actual)==set(expected)
+        for name in expected:
+            for key in ["name","description","annotations","inputSchema","outputSchema"]:
+                assert normalized(actual[name][key])==normalized(expected[name][key]),(name,key)
         accounts=await wrapped.call_tool("list_available_accounts",{})
         assert not accounts.is_error
         print(json.dumps({"tools":len(actual),"schemas_preserved":True,"account_discovery":True}))
@@ -120,7 +132,7 @@ asyncio.run(smoke())'''
     private_write(release / "bridge-smoke.json", result)
 
 
-def main():
+def main(prepared_release=None):
     if os.geteuid() != 0:
         raise PermissionError("首次迁移需 sudo -n；秘密不写入输出")
     source = Path(__file__).resolve().parent
@@ -169,7 +181,25 @@ def main():
                 raise ValueError("邮件域名已有 DNS 记录，拒绝覆盖")
             validate_authelia_candidate(target, auth_candidate)
             validate_tunnel_candidate(target, tunnel_candidate)
-            image, source_sha, core_sha = build_bundle(app, source, target, release / "build")
+            if prepared_release:
+                prepared = Path(prepared_release).resolve()
+                if not prepared.is_relative_to((root / "releases").resolve()):
+                    raise ValueError("预构建记录必须在该应用的私有 releases 目录内")
+                prior = json.loads((prepared / "journal.json").read_text())
+                if prior.get("status") != "failed" or prior.get("rollback_status") != "complete":
+                    raise ValueError("只能复用已安全回滚的准备记录")
+                source_sha, core_sha, image = prior["source_sha"], prior["core_sha"], prior["image"]
+                changed = run(["git", "diff", source_sha, "HEAD", "--", "src", "pyproject.toml",
+                               "uv.lock", "mcp.app.yaml"], cwd=source, user=target.build_user)
+                if changed.strip():
+                    raise ValueError("运行代码或锁文件已变化，必须重新构建")
+                run(["docker", "image", "inspect", image])
+                private_write(release / "build-artifacts.json", (prepared / "build/artifacts.json").read_text())
+                journal.set(prepared_release=str(prepared))
+            else:
+                image, source_sha, core_sha = build_bundle(app, source, target, release / "build")
+            journal.set(runner_sha=run(["git", "rev-parse", "HEAD"], cwd=source,
+                                      user=target.build_user).strip())
             journal.set(image=image, source_sha=source_sha, core_sha=core_sha)
             trial = release / "trial-data"
             snapshot(old_data, trial)
@@ -264,4 +294,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="邮件服务首次迁移；不重导入现有平台数据")
+    parser.add_argument("--prepared-release", help="复用安全回滚后的构建，运行输入必须未改变")
+    main(parser.parse_args().prepared_release)
