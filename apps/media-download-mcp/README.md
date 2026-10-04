@@ -67,20 +67,21 @@ Host 检查由 SDK 执行。访问令牌可以通过替换文件轮换，不使�
 
 ## NAS 与共享 Tunnel
 
-本服务公网地址为 `https://media-download-home.172906573.xyz/mcp`，独立 systemd 服务监听 `127.0.0.1:8091`，共享 Tunnel 直接转发。现阶段保留 SDK 2.3.0 与本服务的文件 Bearer 认证，不接入公共 FastMCP 运行时或 OAuth，也不发布 GPT Web 插件。部署约定见本目录 `AGENTS.md`。
+本服务公网地址为 `https://media-download-home.172906573.xyz/mcp`，独立 Docker 容器监听 `127.0.0.1:8091`，共享 Tunnel 直接转发。现阶段保留 SDK 2.3.0 与本服务的文件 Bearer 认证，不接入公共 FastMCP 运行时或 OAuth，也不发布 GPT Web 插件。部署约定见本目录 `AGENTS.md`。
 
-生产配置与秘密放在 `/home/yuwk/.config/mcp-platform/media-download-mcp`，由 `MEDIA_DOWNLOAD_RUNTIME_DIR` 指向。访问令牌在 `secrets/access.token`，宿主凭据在 `secrets/moviepilot.token`，均为 600；客户端以 Authorization 请求头携带本服务令牌，不把令牌放进 URL。MoviePilot 凭据必须是该宿主接受的有效 Bearer 凭据，原 API_TOKEN 不能直接充当 JWT。当前公共宿主未安装，业务调用会报告不可用；本轮不安装或更新 MoviePilot 插件。
+生产配置与秘密放在 `/home/yuwk/.config/mcp-platform/media-download-mcp`，由 `MEDIA_DOWNLOAD_RUNTIME_DIR` 指向。访问令牌在 `secrets/access.token`，宿主凭据在 `secrets/moviepilot.token`，均为 600；客户端以 Authorization 请求头携带本服务令牌，不把令牌放进 URL。MoviePilot 凭据必须是该宿主接受的有效 Bearer 凭据，原 API_TOKEN 不能直接充当 JWT。公共宿主已由业务开发部署；凭据和真实搜索／下载仍按业务阶段单独验收，本轮不调用真实下载。
 
-NAS 当前使用独立虚拟环境运行锁定 wheel，服务文件为 `deploy/media-download-mcp.service`。更新业务 wheel 后重启服务，入口由公共基座协调：
+NAS 当前使用 media-automation 根 Compose 中的 media-download-mcp 服务，容器为 media-automation-media-download-mcp-1；入口由公共基座协调：
 
 ```bash
-sudo -n systemctl restart media-download-mcp.service
+sudo -n env MEDIA_DOWNLOAD_RUNTIME_DIR=/home/yuwk/.config/mcp-platform/media-download-mcp \
+  docker compose --project-name media-automation -f /home/yuwk/media-automation/compose.yaml up -d --no-build media-download-mcp
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan media-download-mcp --target nas
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy media-download-mcp --target nas
 ```
 
-`mcp.app.yaml` 是公网入口的唯一来源，实际配置的 public_hosts 包含其域名。首次构建使用受保护的最小源码快照，记录文件 SHA256、wheel 摘要与运行版本；仓库中其他未提交内容未批量提交或回退。运行使用 Python 3.12，业务锁定依赖不变。源码与 wheel 位于上述私有目录的 builds／wheels，虚拟环境为 venv，运行配置为 config.systemd.json（引用宿主机秘密绝对路径）。
+`mcp.app.yaml` 是公网入口的唯一来源，实际配置的 public_hosts 包含其域名。首次构建使用受保护的最小源码快照，记录文件 SHA256、wheel 摘要与运行版本；仓库中其他未提交内容未批量提交或回退。运行使用 Python 3.12，业务锁定依赖不变。容器读取 config.json 和 secrets；首次构建的受保护源码与 wheel 位于上述私有目录的 builds／wheels。
 
-入口验收检查匿名请求 401、带令牌 initialize 和三个工具枚举，不触发真实下载。入口回滚使用 `mcpctl rollback media-download-mcp --target nas`，只恢复本次 Tunnel／DNS，不停止业务服务或恢复数据。业务 wheel 更新和后端宿主安装独立管理。
+入口验收检查匿名请求 401、带令牌 initialize 和三个工具枚举，不触发真实下载。入口回滚使用 `mcpctl rollback media-download-mcp --target nas`，只恢复本次 Tunnel／DNS，不停止业务服务或恢复数据。业务镜像更新和后端宿主更新独立管理。
 
-Compose 保留为可选部署方式，使用 `MEDIA_DOWNLOAD_RUNTIME_DIR` 挂载仓库外配置与秘密；容器配置的 host 为 0.0.0.0，宿主端口仍仅绑定回环地址。本次因镜像站鉴权失败及构建器超时，实际部署采用 systemd，未创建第二个业务进程。
+容器配置的 host 为 0.0.0.0，宿主端口仍仅绑定回环地址。Tunnel 接入期间曾因镜像站与构建器故障临时使用 systemd；业务部署随后切换为 Docker，临时 systemd 已停用。deploy/media-download-mcp.service 仅作备用参考，不与容器同时启用。
