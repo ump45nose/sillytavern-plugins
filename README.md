@@ -125,9 +125,9 @@ expected_tools: [search_resources, download_media, get_download_status]
 | CRM | `https://crm-home.172906573.xyz/mcp` | Compose，公共运行时与 Authelia |
 | 钉钉 | `https://mcphub-home.172906573.xyz/mcp` | 原 MCPHub 与北向 OAuth |
 | 远程服务器 | `https://local-env-home.172906573.xyz/mcp` | 原 systemd 网关／执行器与 Authelia |
-| Media Download | `https://media-download-home.172906573.xyz/mcp` | 独立 systemd／虚拟环境，文件 Bearer |
+| Media Download | `https://media-download-home.172906573.xyz/mcp` | 原业务 Compose／独立容器，文件 Bearer |
 
-后三者使用已有服务模式，本轮不替换 SDK 或业务认证，不创建／发布 GPT Web App 或插件。Media 的协议与公网入口已接入；MoviePilot 公共宿主及有效上游 Bearer 凭据仍需业务阶段配置，不把工具枚举通过视为真实下载可用。
+后三者使用已有服务模式，本轮不替换 SDK 或业务认证，不创建／发布 GPT Web App 或插件。Media 的协议与公网入口已接入；MoviePilot 公共宿主已由业务开发部署，业务配置和真实下载单独验收，不把工具枚举通过视为真实下载可用。
 
 SmartSearch 已退役：NAS 容器、NPM 入口、DNS、DDNS 管理与独立 Authelia 客户端移除，NAS／Mac 工作目录移入私有回退备份，GitHub 仓库归档。`smartsearch_yuwk`／`smartsearch_identity` 仍被 CRM 和远程网关使用，保留共享策略；上游 smart-search CLI 是独立工具，不随该自建服务删除。
 
