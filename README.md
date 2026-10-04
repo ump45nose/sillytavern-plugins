@@ -1,6 +1,6 @@
 # personal-crm
 
-面向个人 Agent 的模块化个人 CRM。NAS 保存唯一 SQLite 数据源并提供 Webhook 与 MCP；Mac Connector 通过本机 `chatlog-keeper message-stream-v1` 只读微信数据库，仅向 NAS 推送无正文互动摘要和本机定位引用。系统不自动发微信，也不包含 RPA、自动回复或代发能力。
+面向个人 Agent 的模块化个人 CRM。NAS 保存唯一 SQLite 数据源并提供 Webhook 与 MCP；Mac Connector 通过本机 `chatlog-keeper message-stream-v1` 只读微信数据库，向 NAS 同步白名单联系人的互动与聊天记录。系统不自动发微信，也不包含 RPA、自动回复或代发能力。
 
 ## 架构
 
@@ -17,16 +17,20 @@
 
 ## 快速开始
 
-需要 Python 3.12 与 [uv](https://docs.astral.sh/uv/)：
+需要 Python 3.12、[uv](https://docs.astral.sh/uv/) 及有权读取私有 `mcp-platform` 仓库的 GitHub 凭据：
 
 ```bash
+gh auth setup-git
 uv sync --extra dev
 cp .env.example .env
+# 本地开发使用独立数据库、回环地址和显式无认证模式。
+export HOST=127.0.0.1 MCP_DEVELOPMENT_NO_AUTH=true
+export DATABASE_URL=sqlite:///./personal-crm-dev.db
 uv run alembic upgrade head
 uv run personal-crm-server
 ```
 
-本地未配置 OAuth 时，可直接用 MCP 客户端连接 `http://127.0.0.1:8080/mcp` 验证十四个工具。管理 CLI：
+上述开发模式下，MCP 客户端连接 `http://127.0.0.1:8080/mcp`。生产配置缺失时拒绝启动。管理 CLI：
 
 ```bash
 uv run personal-crm integrity
@@ -36,14 +40,14 @@ uv run personal-crm backup /safe/path/personal-crm.db
 ## 对外端点
 
 - `POST /mcp`：Streamable HTTP MCP。
-- `GET /.well-known/oauth-protected-resource`：兼容发现入口，跳转到权威的 `/mcp` 后缀元数据（启用 OAuth 后）。
+- `GET /.well-known/oauth-protected-resource`：兼容发现入口，直接返回与 `/mcp` 后缀入口相同的资源元数据（启用 OAuth 后）。
 - `GET /healthz`：进程与 SQLite 完整性检查。
 - `POST /api/v1/webhooks/wechat`：Mac Connector 批量导入。
 
 ## 当前交付状态
 
 - P0：四表、迁移、Repository、事务、备份恢复和领域测试已实现。
-- P1：十四个 MCP 工具、本地 `initialize` 与工具调用已实现。
+- P1：MCP 工具、本地 `initialize` 与工具调用已实现，包含线上已有的每日聊天记录工具。
 - P2：每周三条上限、重要日期优先、cadence、自动完成和周绩效已实现。
 - P3：Authelia OIDCProxy 与用户名白名单代码、反代样例已实现；各客户端实机鉴权需分别验收。
 - P4：Webhook 共享密钥、严格输入、幂等事务及合成数据测试已实现。
@@ -56,7 +60,7 @@ uv run personal-crm backup /safe/path/personal-crm.db
 
 公网模式使用与 SmartSearch 相同的 FastMCP `OIDCProxy` 对接 Authelia。上游申请 `openid profile offline_access`，并从 `preferred_username` 映射 CRM 权限：`OIDC_AUTHORIZED_USERNAMES` 可读写，列入 `OIDC_READ_ONLY_USERNAMES` 的账号只读。动态 MCP 客户端仍由 OIDCProxy 管理，Authelia 只需登记固定的 `personal-crm` 客户端。
 
-只向反代暴露 `/mcp`、OAuth 路由、`/healthz` 和精确的微信 Webhook 路径。所有秘密仅从环境变量或密钥管理注入；数据库和日志不得出现完整微信正文。
+只向入口暴露 `/mcp`、OAuth 路由、`/healthz` 和精确的微信 Webhook 路径。所有秘密仅从环境变量或密钥管理注入。数据库与备份包含同步的私人聊天资料；审计日志只记录身份摘要、工具名、耗时和状态，不记录聊天正文、工具参数或令牌。
 
 使用和部署细节见 [`docs/usage.md`](docs/usage.md) 与 [`docs/deployment.md`](docs/deployment.md)。
 

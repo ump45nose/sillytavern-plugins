@@ -18,7 +18,7 @@ from personal_crm.storage import CrmRepository
 
 @pytest.mark.asyncio
 async def test_mcp_registers_required_tools_and_calls_person_flow():
-    """验证十四个公共工具存在，且本地模式可完成建档和搜索。"""
+    """验证公共工具存在，且本地模式可完成建档和搜索。"""
 
     service = CrmService(CrmRepository("sqlite:///:memory:"))
     server = create_mcp(service, Settings(mcp_development_no_auth=True))
@@ -73,7 +73,6 @@ async def test_daily_summary_excludes_private_text_and_groups_changes():
     server = create_mcp(service, Settings(mcp_development_no_auth=True))
     result = await server.call_tool(
         "get_daily_summary",
-        "get_daily_chat_records",
         {"day": "2026-09-06", "timezone": "Asia/Shanghai"},
         run_middleware=False,
     )

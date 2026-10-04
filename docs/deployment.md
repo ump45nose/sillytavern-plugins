@@ -1,48 +1,54 @@
 # 部署说明
 
-## NAS Docker
+## NAS 公共基座部署
 
-从 `.env.example` 创建仅管理员可读的 `.env`。在 Authelia 中为 CRM 创建独立 OIDC client，callback URL 配为：
+CRM 使用私有 `ump45nose/mcp-platform` 的版本依赖，`uv.lock` 锁定 SDK 的完整 Git 提交。生产配置集中在本仓库 `mcp.app.yaml`；NAS 目标配置、GitHub 凭据及业务秘密保存在仓库外。
 
-```text
-https://crm.example.com/auth/callback
-```
+已迁移的生产地址为 `https://crm-home.172906573.xyz/mcp`。业务进程由共享 Cloudflare Tunnel 直接访问 NAS 的 `192.168.31.201:18086`，不增加数据库或网关进程。原 NPM 配置保留作为迁移回退路径。
 
-`PUBLIC_BASE_URL` 必须与公网源完全一致。OIDC client 使用授权码、刷新令牌、PKCE S256 和 `client_secret_basic`；scope 为 `openid profile offline_access`，claims policy 必须签发 `preferred_username`。为 `WECHAT_WEBHOOK_SECRET`、`OAUTH_JWT_SIGNING_KEY` 和 `OAUTH_STORAGE_ENCRYPTION_KEY` 分别生成随机长密钥，且不要复用 OIDC client secret。
-
-`CRM_BIND_ADDRESS` 和 `CRM_HOST_PORT` 只控制宿主机端口映射；应用容器内仍监听 `PORT=8080`。仅供同机 Hermes 使用时保持绑定 `127.0.0.1`，需要接入容器化反向代理时再绑定 NAS 内网地址并配置防火墙。
-
-首次启动与升级：
+NAS 本机执行：
 
 ```bash
-docker compose build
-docker compose run --rm crm uv run --no-dev alembic upgrade head
-docker compose up -d
-docker compose ps
-curl -fsS http://127.0.0.1:8080/healthz
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl doctor --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan personal-crm --target nas
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy personal-crm --target nas
 ```
 
-HTTPS 反代参考 `deploy/nginx/personal-crm.conf.example`。MCP 流式端点必须关闭代理缓冲并保留较长读取超时；OAuth 还需要转发 `/.well-known/`、`/auth/`、`/authorize`、`/token`、`/register` 和 `/consent`。
+更新前提交业务修改，并检查 `plan`。构建步骤使用宿主机 GitHub 凭据获取锁定版本，生成 wheel 后注入镜像；镜像和构建上下文不包含凭据、生产 env 或数据。旧 `Dockerfile`、`compose.yml` 与 Nginx 样例保留用于历史部署参考，生产更新以公共基座 CLI 为准，不再直接运行旧目录的 `docker compose build`。
 
-部署后的独立验收顺序：
+部署保留 `personal-crm_crm-data`、`/data/oauth`、签名及加密密钥、`personal-crm-oauth-v1` 盐。Authelia 客户端 `personal-crm`、原 discovery/issuer、`28443` 授权与 token 端点以及 `/auth/callback` 不变。共享 Tunnel 的其他路由不变；ddns-go 只停止管理 CRM 的 A/AAAA 记录。
 
-1. 未登录请求 `/mcp` 返回 401，资源发现文档可访问。
-2. 白名单用户完成 Authelia 登录，非白名单用户无法调用工具。
-3. 只读用户能查询，但修改工具被拒绝。
-4. Hermes、Codex、Claude 分别完成 `initialize → tools/list → tools/call`。
+业务生命周期、Webhook 和提醒任务仍在 CRM 内运行。新增公共限流、超时和输出限制在本次迁移关闭，以保留原调用行为和成功返回结构。
 
-任一客户端未通过时，不声明公网通用 MCP 已完成。
-
-## 备份与恢复
-
-备份使用应用提供的 SQLite 一致性备份入口，避免直接复制仍在 WAL 写入中的数据库：
+## 接入与冒烟检查
 
 ```bash
-docker compose exec crm uv run --no-dev personal-crm backup /data/backups/crm.db
-docker compose exec crm uv run --no-dev personal-crm integrity
+curl -fsS https://crm-home.172906573.xyz/healthz
+/home/yuwk/mcp-platform/.venv/bin/mcpctl package personal-crm --target nas
 ```
 
-恢复前停止写入，保留当前库副本，再替换数据库文件。恢复后执行完整性检查，并回放人物、互动、Fact、Reminder 核心查询和一个重复 Webhook 批次。数据库和备份都含敏感资料，应加密保存。
+未登录 MCP 请求应返回 401 和资源发现地址。授权用户可读取；只读用户不能写入。业务读写只在隔离数据库验证，生产只读。新连接首次登录需同意授权；已有 GPT/dots 连接继续使用原 App 和插件身份。插件包生成不代表客户端已发布，用户界面验收需分别确认。
+
+## 备份与代码回滚
+
+每次更新在 `/vol2/1000/Docker/stacks/mcp-platform/runtime/personal-crm/releases/` 保存私有变更记录、SQLite 在线备份和 OAuth 状态备份。备份文件权限为 600，发布目录为 700。
+
+手工备份使用当前镜像的管理命令：
+
+```bash
+sudo -n docker exec personal-crm-crm-1 personal-crm backup /data/backups/crm.db
+sudo -n docker exec personal-crm-crm-1 personal-crm integrity
+```
+
+代码与本次入口配置回滚：
+
+```bash
+sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target nas
+```
+
+回滚恢复原镜像、共享配置和 DNS，不恢复旧数据库或 OAuth 快照。共享配置或 DNS 出现外部修改时停止覆盖并记录 `needs_attention`。首次迁移回退会恢复 NPM 对应 DNS 和原 DDNS 列表；后续回退恢复上一个基座版本。
+
+数据恢复需单独安排停止写入并保留当前库副本，再恢复备份和检查完整性。数据库、OAuth 状态及备份含私人资料，应按原备份策略保护。单实例更新允许短暂重启和流连接重建。
 
 ## Mac launchd
 
