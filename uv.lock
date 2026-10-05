@@ -652,8 +652,8 @@ wheels = [
 
 [[package]]
 name = "mcp-platform"
-version = "0.1.4"
-source = { git = "https://github.com/ump45nose/mcp-platform.git?rev=f9281abd5db0bf0614aa817832d2440e4b7ae57b#f9281abd5db0bf0614aa817832d2440e4b7ae57b" }
+version = "0.1.5"
+source = { git = "https://github.com/ump45nose/mcp-platform.git?rev=3084004d1011687f1b029003dcd073c078735b68#3084004d1011687f1b029003dcd073c078735b68" }
 dependencies = [
     { name = "authlib" },
     { name = "fastmcp" },
@@ -1249,7 +1249,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "dingtalk-events", git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git?subdirectory=mmp-platform%2Fevents&rev=59f91c009207528a4183e6d6db242f6ccf4117cd" },
-    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=f9281abd5db0bf0614aa817832d2440e4b7ae57b" },
+    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=3084004d1011687f1b029003dcd073c078735b68" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 

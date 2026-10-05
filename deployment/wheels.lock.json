@@ -6,10 +6,10 @@
   },
   "wheels": {
     "mcp-platform": {
-      "version": "0.1.4",
-      "sha256": "c261c95acf0bcdb14f693fcbc4cd80ec754f5e29649d59adfb09ab017f2e8dce",
+      "version": "0.1.5",
+      "sha256": "74b5f1399f4dd79c438edca5632ac5bce1e5706b58e1e9935eb4e5aca84c8be7",
       "repository": "https://github.com/ump45nose/mcp-platform.git",
-      "source_commit": "f9281abd5db0bf0614aa817832d2440e4b7ae57b"
+      "source_commit": "3084004d1011687f1b029003dcd073c078735b68"
     },
     "dingtalk-events": {
       "version": "0.1.1",

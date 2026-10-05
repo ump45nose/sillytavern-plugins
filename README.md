@@ -59,6 +59,8 @@ mcp.app.yaml 是部署唯一清单，明确使用 deployment_mode: existing。�
 
 ## 构建和验证
 
+当前固定公共运行时 mcp-platform 0.1.5（提交 3084004d1011687f1b029003dcd073c078735b68），包含 MCP 2.0 必需的 cache 字段修复；钉钉事件包保持 0.1.1。公共运行时升级时同时更新业务 wheel 的精确依赖，再校验 pip check。
+
 生产使用 Python 3.12。由宿主机取得并构建固定提交的 mcp-platform、usage-monitor-mcp、dingtalk-events 三个 wheel；容器构建使用本项目 Dockerfile，从已有、已核验的认证运行时镜像离线安装。这样私有 Git 依赖在宿主机完成，不进入镜像内的依赖安装步骤。
 
 1. 检查 deployment/wheels.lock.json：记录三个 wheel 的名称、版本、来源提交、SHA256，以及基础镜像 local/personal-crm:refresh-policy-0.1.3 的完整镜像 ID。公共包和钉钉的来源必须同时与 uv.lock 一致。业务 wheel 若早于当前文档提交，脚本会核验其后 Python 源码及依赖没有变化。

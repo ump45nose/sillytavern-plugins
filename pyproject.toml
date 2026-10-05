@@ -7,7 +7,7 @@ name = "usage-monitor-mcp"
 version = "0.1.0"
 description = "Token Monitor 与 ShellCrash 只读日报及 MCP Events"
 requires-python = ">=3.12"
-dependencies = ["mcp-platform==0.1.4", "dingtalk-events==0.1.1", "uvicorn>=0.30,<1"]
+dependencies = ["mcp-platform==0.1.5", "dingtalk-events==0.1.1", "uvicorn>=0.30,<1"]
 
 [project.scripts]
 usage-monitor-mcp = "usage_monitor_mcp.server:main"
@@ -17,5 +17,5 @@ usage-monitor-check = "usage_monitor_mcp.cli:main"
 packages = ["src/usage_monitor_mcp"]
 
 [tool.uv.sources]
-mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "f9281abd5db0bf0614aa817832d2440e4b7ae57b" }
+mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "3084004d1011687f1b029003dcd073c078735b68" }
 dingtalk-events = { git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git", rev = "59f91c009207528a4183e6d6db242f6ccf4117cd", subdirectory = "mmp-platform/events" }
