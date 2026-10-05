@@ -6,9 +6,11 @@ NAS 的 CRM、邮件、用量统计三个服务已升级公共运行时 0.1.5，
 
 用户已完成 Google 验证及 ChatGPT 登录。0.1.4 阶段在原生界面刷新 CRM 和邮件后，事件源仍只返回 GitHub、Gmail；0.1.5 部署后，2026-10-05 14:41:52（UTC+8）原生 `list_event_sources` 已实际返回 CRM、邮件，两者的事件 schema 发现及原有业务只读调用均成功。
 
-四项请求中，“CRM 当天聊天记录”“重要新邮件”两项事件订阅已建立并启用。2026-10-05 14:45:30（UTC+8）只读复核：CRM、邮件各有 1 条订阅、1 条有效订阅，均已验证回调，没有未验证的有效订阅；用量统计仍为 0 条。“钉钉待办／审批”“每日用量统计”两项待新原生 App 完成 OAuth，尚未创建。三库待发送、失败及留存业务事件均为 0；没有制造合成业务事件，实际业务事件送达仍待自然触发。
+四项请求中，“CRM 当天聊天记录”“重要新邮件”两项事件订阅已建立并启用。2026-10-05 14:45:30（UTC+8）只读复核：CRM、邮件各有 1 条订阅、1 条有效订阅，均已验证回调，没有未验证的有效订阅；用量统计仍为 0 条。“钉钉待办／审批”“每日用量统计”两项尚未创建；本轮 OAuth 已完成，剩余阻塞是当前会话没有加载用量统计的 7 个工具，尚不能完成要求的实际只读调用验收。该次 14:45:30 复核时，三库待发送、失败及留存业务事件均为 0；没有制造合成业务事件，实际业务事件送达等待自然触发。
 
-“用量统计”原生 App 已创建，App ID 为 `asdk_app_6ac33f40ad208191a08fbcfe6894796d`，插件 ID 为 `plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d`，安全详情页是 <https://chatgpt.com/plugins/plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d>。OAuth 尚未完成：Authelia 用户名／密码阶段已通过，当前仍停在 TOTP 二步验证与后续授权，ChatGPT 仍显示“继续连接”。浏览器原生凭据保护阻止代理继续操作其他页面，需要用户在同一云浏览器完成当前验证；不另建 App，也不记录认证事务参数或凭据。
+“用量统计”原生 App 的 OAuth 已完成：用户完成当前验证后，原详情页显示已连接账户，`automations.list_event_sources` 已返回该 App，事件 schema 发现成功，包含原有 4 个钉钉事件与 `usage.daily_ready`。App ID 保留为 `asdk_app_6ac33f40ad208191a08fbcfe6894796d`，插件 ID 为 `plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d`，原详情页是 [用量统计](https://chatgpt.com/plugins/plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d)。
+
+本轮主会话与部署复核代理的新一轮检查均未暴露该 App 的 7 个工具；事件 schema 可发现不替代实际只读工具调用成功。下一步需要在新会话或显式 @ 选中“用量统计”后加载工具，完成要求的实际只读验证，再创建钉钉与每日用量两项事件任务。原 CRM、邮件订阅继续启用，不重复创建。
 
 ### 原生客户端与订阅
 
@@ -16,9 +18,22 @@ NAS 的 CRM、邮件、用量统计三个服务已升级公共运行时 0.1.5，
 |---|---|---|
 | CRM | `asdk_app_6ac28369423081918d34fa531d15a62d` | “CRM 当天聊天记录”，`crm.daily_chat.ready`；2026-10-05 14:42:43（UTC+8）创建成功并启用；服务端与回调已验证 |
 | 邮件 | `asdk_app_6ac285e95d74819193f153ce16dc5640` | “重要新邮件”，`email.important_received`；2026-10-05 14:43:07（UTC+8）创建成功并启用；服务端与回调已验证 |
-| 用量统计 | `asdk_app_6ac33f40ad208191a08fbcfe6894796d` | OAuth 未完成，尚未列入事件源；钉钉与用量两项订阅未创建 |
+| 用量统计 | `asdk_app_6ac33f40ad208191a08fbcfe6894796d` | OAuth 已完成；原生事件源及 5 个事件 schema 已发现；7 个工具未加载，实际只读调用待验收；钉钉与用量两项订阅未创建 |
 
 CRM、邮件的事件参数 schema 均为空对象。两项自动化仅使用事件 trigger，没有另设独立 schedule；自动化默认时区为 `Asia/Shanghai`，每日事件的报告边界继续由事件源的 `Asia/Taipei` 规则控制。
+
+### 用量统计图标与网页编辑
+
+用户指定采用 Token Monitor 原始蓝底白色 Σ 图标，来源为 `/vol2/1000/Docker/token-monitor/app/assets/icon.png`（1024 × 1024）。资产已在 `ump45nose/usage-monitor-mcp` 提交并推送：`0ff2cef851ef58937ac29538fba280a5a48b2ce7`；保留原生 App ID，未改变服务或 OAuth。
+
+| 资产 | 规格 | SHA-256 |
+|---|---|---|
+| `assets/plugin/token-monitor-original.png` | 1024 × 1024，707,382 字节 | `2c4a2e0bc9ad588ffa2efc64777a612f3fc879c6b6f9d9360ccae48d3d141edd` |
+| `assets/plugin/token-monitor-web.png` | 256 × 256，7,606 字节，满足网页 10 KB 限制 | `76acfd21ec0d64cb7e602d2cef5b33d2d920946798c7923a1b825230e77dfff1` |
+
+来源与尚未应用到网页的状态记录在 `assets/plugin/icon-source.json`。固定提交中的[网页上传图标](https://github.com/ump45nose/usage-monitor-mcp/blob/0ff2cef851ef58937ac29538fba280a5a48b2ce7/assets/plugin/token-monitor-web.png)已就绪。
+
+原生 App 设置当前只提供名称、描述和刷新工具，没有独立图标编辑入口。尝试从网页下载现有包时遇到浏览器原生凭据保护；重新连接标签页的尝试被自动审批拒绝。本轮没有成功上传图标或修改网页图标，也没有通过其他路径绕过保护。浏览器恢复需要用户处理当前凭据状态或完成相应授权；资产准备完成不能记为网页图标已应用。
 
 ## 0.1.5 客户端兼容修复与生产验证
 
@@ -42,7 +57,7 @@ CRM、邮件的事件参数 schema 均为空对象。两项自动化仅使用事
 
 CRM、邮件 wheel 从各自固定提交导出源码后离线构建，METADATA 均要求 `mcp-platform==0.1.5`。用量 wheel 来源为干净提交 `a0373131e81cbb73edaedc90753c0d2fcc27afb5`，最终提交另记录构建摘要；新旧 wheel 的 9 个业务 Python 文件逐字节一致。
 
-0.1.5 独立发布目录为 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261005-runtime-0.1.5`，主 `journal.json` 及三个 `switch/<crm|email|usage>/journal.json` 均为 `complete`。各服务的 `protocol-probe.json` 记录健康 200／匿名 initialize 401；`logs/<service>-runtime-version.log` 与 `logs/<service>-pip-check.log` 记录实际版本及依赖检查。该目录 `post-deploy-readonly.json` 是订阅创建前 14:42–14:43 的旧计数；当前订阅状态以上节 14:45:30 的只读复核为准。下节 0.1.4 为已完成的前一轮部署记录。
+0.1.5 独立发布目录为 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261005-runtime-0.1.5`，主 `journal.json` 及三个 `switch/<crm|email|usage>/journal.json` 均为 `complete`。各服务的 `protocol-probe.json` 记录健康 200／匿名 initialize 401；`logs/<service>-runtime-version.log` 与 `logs/<service>-pip-check.log` 记录实际版本及依赖检查。该目录 `post-deploy-readonly.json` 是订阅创建前 14:42–14:43 的旧计数；服务端最近一次计数见上节 14:45:30 的只读复核，之后的 OAuth 和工具加载进展单独记录。下节 0.1.4 为已完成的前一轮部署记录。
 
 ## 0.1.4 已完成部署与版本
 
