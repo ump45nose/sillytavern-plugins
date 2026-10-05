@@ -1,8 +1,6 @@
 """把 Favsync 片单接入 MoviePilot V2 的 M-Team 搜索与下载链路。"""
 
 import json
-import re
-from collections import UserList
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,18 +15,15 @@ from app.chain.download import DownloadChain
 from app.chain.media import MediaChain
 from app.chain.search import SearchChain
 from app.core.config import settings
-from app.core.context import TorrentInfo
 from app.db.downloadhistory_oper import DownloadHistoryOper
 from app.db.site_oper import SiteOper
-from app.helper.sites import SitesHelper
 from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import MediaType
 from app.utils.http import RequestUtils
 
 from app.plugins.filmwatchlist.selection import normalize_title
-from app.plugins.filmwatchlist.public_index import IndexStatus, MediaQuery, Mini4KIndexer
-from app.plugins.filmwatchlist.browser_relay import BrowserRelayTransport
+from app.plugins.filmwatchlist.public_index import IndexStatus, MediaQuery
 from app.plugins.filmwatchlist.p115_task_adapter import P115TaskAdapter
 from app.plugins.filmwatchlist.media_types import normalize_media_type
 from app.plugins.filmwatchlist import observe, state, workflow
@@ -40,7 +35,7 @@ class FilmWatchlist(_PluginBase):
     plugin_name = "片单自动收藏"
     plugin_desc = "从 Favsync 片单比较公网和 M-Team 资源，按来源下载并在入库后回写。"
     plugin_icon = "Moviepilot_A.png"
-    plugin_version = "1.3.2"
+    plugin_version = "1.4.3"
     plugin_author = "yuwk"
     author_url = ""
     plugin_config_prefix = "filmwatchlist_"
@@ -53,20 +48,12 @@ class FilmWatchlist(_PluginBase):
         self._dry_run = True
         self._api_url = "http://192.168.31.201:18082"
         self._token_path = "/config/filmwatchlist.token"
-        self._site_id = 1
         self._interval_minutes = 360
         self._identity_hints = {}
-        self._public_site_preview = False
-        self._mini4k_base_url = "https://mini4k.io"
-        self._public_indexer = None
         self._public_selection_enabled = False
-        self._p115_route_enabled = False
-        self._share_115_enabled = False
-        self._near_size_ratio = 0.10
-        self._p115_movie_path = '/Media/Movie'
-        self._p115_tv_path = '/Media/TV_Show'
         self._scheduler = None
         self._lock = Lock()
+        self._legacy_registered = False
 
     def init_plugin(self, config: dict = None):
         """读取配置，并为一次性运行建立可清理的后台任务。"""
@@ -76,37 +63,13 @@ class FilmWatchlist(_PluginBase):
         self._dry_run = bool(config.get("dry_run", True))
         self._api_url = str(config.get("api_url") or self._api_url).rstrip("/")
         self._token_path = str(config.get("token_path") or self._token_path)
-        self._site_id = int(config.get("site_id") or 1)
         self._interval_minutes = max(30, int(config.get("interval_minutes") or 360))
-        self._public_site_preview = bool(config.get("public_site_preview", False))
         self._public_selection_enabled = bool(config.get('public_selection_enabled', False))
-        self._p115_route_enabled = bool(config.get('p115_route_enabled', False))
-        self._share_115_enabled = bool(config.get('share_115_enabled', False))
-        try:
-            self._near_size_ratio = max(0.0, min(float(config.get('near_size_ratio', 0.10)), 0.5))
-        except (TypeError, ValueError):
-            self._near_size_ratio = 0.10
-        self._p115_movie_path = str(config.get('p115_movie_path') or '/Media/Movie')
-        self._p115_tv_path = str(config.get('p115_tv_path') or '/Media/TV_Show')
-        self._mini4k_base_url = str(config.get("mini4k_base_url") or "https://mini4k.io").rstrip("/")
-        try:
-            self._public_indexer = self._make_public_indexer()
-        except ValueError:
-            logger.warning("Mini4K 索引域名无效，恢复为默认镜像站")
-            self._mini4k_base_url = "https://mini4k.io"
-            self._public_indexer = self._make_public_indexer()
         try:
             hints = json.loads(config.get("identity_hints") or "{}")
             self._identity_hints = hints if isinstance(hints, dict) else {}
         except (TypeError, ValueError):
             self._identity_hints = {}
-        if self._public_site_preview:
-            domain = "mini4k.filmwatchlist.preview"
-            SitesHelper().add_indexer(domain, {
-                "id": "FilmWatchlist-Mini4K", "name": "Mini4K（搜索预览）",
-                "url": self._mini4k_base_url, "domain": domain,
-                "public": True, "proxy": False,
-            })
         if self._enabled and config.get("run_now"):
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
             self._scheduler.add_job(
@@ -136,41 +99,48 @@ class FilmWatchlist(_PluginBase):
              "methods": ["GET"], "auth": "bear", "summary": "解析公网候选链接"},
         ]
 
+    def _capabilities(self):
+        from media_capabilities.acquisition.runtime import get_runtime
+        runtime = get_runtime(readonly=True)
+        if not self._legacy_registered:
+            runtime.import_legacy_records(self.get_data('records') or {})
+            self._legacy_registered = True
+        return runtime
+
+    @property
+    def _site_id(self):
+        return self._capabilities().settings.site_id
+
+    @property
+    def _near_size_ratio(self):
+        return self._capabilities().settings.near_size_ratio
+
+    @property
+    def _public_only(self):
+        return self._capabilities().settings.public_only
+
+    @property
+    def _p115_route_enabled(self):
+        return self._capabilities().settings.p115_route_enabled
+
+    @property
+    def _share_115_enabled(self):
+        return self._capabilities().settings.share_115_enabled
+
     def get_module(self) -> dict[str, Any]:
-        """站点预览只注册搜索，不提供可直接提交的下载地址。"""
-        return ({"search_torrents": self.search_public_torrents,
-                 "async_search_torrents": self.search_public_torrents}
-                if self._public_site_preview else {})
+        return {}
 
-    def _make_public_indexer(self) -> Mini4KIndexer:
-        path = Path("/config/filmwatchlist-browser-relay.device-id")
-        fallback = BrowserRelayTransport(device_id_path=str(path)) if path.is_file() else None
-        return Mini4KIndexer(base_url=self._mini4k_base_url, fallback_browser=fallback)
-
-    def _indexer(self) -> Mini4KIndexer:
-        if self._public_indexer is None:
-            self._public_indexer = self._make_public_indexer()
-        elif self._public_indexer.fallback_browser is None and Path(
-                "/config/filmwatchlist-browser-relay.device-id").is_file():
-            self._public_indexer = self._make_public_indexer()
-        return self._public_indexer
+    def _indexer(self):
+        return self._capabilities().indexer()
 
     def _search_public(self, query: MediaQuery) -> tuple[IndexStatus, list, str]:
-        """遍历名称和站点搜索分页，保留失败状态。"""
-        items = {}
-        cursor = None
-        for _ in range(12):
-            page = self._indexer().search(query, cursor)
-            if page.status not in (IndexStatus.OK, IndexStatus.NO_RESULTS):
-                return page.status, list(items.values()), page.reason
-            for item in page.candidates:
-                items[item.candidate_id] = item
-            cursor = page.next_cursor
-            if not cursor:
-                return (IndexStatus.OK if items else IndexStatus.NO_RESULTS), list(items.values()), ""
-        return IndexStatus.PARSE_CHANGED, list(items.values()), "搜索超过分页上限"
+        return self._capabilities().search_public(query)
 
     def public_health_api(self) -> dict:
+        from media_capabilities.acquisition.runtime import guarded
+        return guarded(self._public_health_result)
+
+    def _public_health_result(self) -> dict:
         result = self._indexer().health()
         return {"status": result.status.value, "reason": result.reason,
                 "page_status": result.page_status.value if result.page_status else None,
@@ -179,6 +149,10 @@ class FilmWatchlist(_PluginBase):
     def public_search_api(self, title: str, year: int = None, country: str = None,
                           media_type: str = None, aliases: str = "",
                           tmdb_id: int = None, imdb_id: str = None, season: int = None) -> dict:
+        from media_capabilities.acquisition.runtime import guarded
+        return guarded(self._public_search_result, title, year, country, media_type, aliases, tmdb_id, imdb_id, season)
+
+    def _public_search_result(self, title, year, country, media_type, aliases, tmdb_id, imdb_id, season):
         """预览接口只返回候选，不解析所有链接或提交任务。"""
         query = MediaQuery(title=title, year=year, country=country, media_type=media_type,
                            aliases=tuple(x.strip() for x in aliases.split(",") if x.strip()),
@@ -188,6 +162,10 @@ class FilmWatchlist(_PluginBase):
                 "reason": reason}
 
     def public_resolve_api(self, candidate_id: str) -> dict:
+        from media_capabilities.acquisition.runtime import guarded
+        return guarded(self._public_resolve_result, candidate_id)
+
+    def _public_resolve_result(self, candidate_id):
         """种子字节仅供插件内部后续链路使用，不写入 API 响应。"""
         result = self._indexer().resolve(candidate_id)
         links = [{key: value for key, value in asdict(link).items() if key != "torrent_bytes"}
@@ -196,25 +174,7 @@ class FilmWatchlist(_PluginBase):
                 "links": links, "reason": result.reason}
 
     def search_public_torrents(self, site: dict, keyword: str, mtype=None, page: int = 0):
-        """向 MoviePilot 投影只读候选；UserList 避免原生索引器重复抓取本站。"""
-        if not self._public_site_preview or site.get("id") != "FilmWatchlist-Mini4K":
-            return []
-        if page:
-            return UserList()
-        year_match = re.search(r"(?:19|20)\d{2}", keyword or "")
-        title = (keyword or "").replace(year_match.group(0), "").strip() if year_match else keyword
-        media_type = ("movie" if mtype == MediaType.MOVIE else "tv") if mtype else None
-        status, items, _ = self._search_public(MediaQuery(
-            title=title or keyword, year=int(year_match.group(0)) if year_match else None,
-            media_type=media_type))
-        if status not in (IndexStatus.OK, IndexStatus.NO_RESULTS):
-            logger.warning(f"Mini4K 预览搜索不可用：{status.value}")
-            return UserList()
-        return UserList(TorrentInfo(site_name="Mini4K（搜索预览）", title=item.title,
-                            description="仅供预览，下载路由尚未接入", enclosure="",
-                            page_url=item.resource_page_url, size=item.size_bytes or 0,
-                            category=MediaType.MOVIE.value if item.media_type == "movie" else MediaType.TV.value)
-                for item in items)
+        return self._capabilities().preview_torrents(site, keyword, mtype, page)
 
     def get_service(self) -> list[dict[str, Any]]:
         """注册片单定时扫描；同一时刻仅有一次运行。"""
@@ -226,20 +186,12 @@ class FilmWatchlist(_PluginBase):
     def get_form(self) -> tuple[list[dict], dict]:
         """提供预览开关、片单连接和调度参数。"""
         fields = [
-            ("VSwitch", "enabled", "启用插件"),
-            ("VSwitch", "dry_run", "仅预览，不提交下载或回写"),
-            ("VSwitch", "public_site_preview", "Mini4K 公网站点搜索预览"),
+            ("VSwitch", "enabled", "启用片单扫描"),
+            ("VSwitch", "dry_run", "片单仅预览，不提交下载或回写"),
             ("VSwitch", "public_selection_enabled", "启用公网与 PT 统一选源"),
-            ("VSwitch", "p115_route_enabled", "允许已核实公网 BT 提交 115"),
-            ("VSwitch", "share_115_enabled", "允许 115 分享转存"),
             ("VSwitch", "run_now", "保存后立即运行一次"),
-            ("VTextField", "mini4k_base_url", "Mini4K 索引域名"),
             ("VTextField", "api_url", "片单 API 地址"),
             ("VTextField", "token_path", "令牌文件路径"),
-            ("VTextField", "site_id", "M-Team 站点 ID"),
-            ("VTextField", "near_size_ratio", "同档体积相近阈值（默认 0.10）"),
-            ("VTextField", "p115_movie_path", "115 电影目录"),
-            ("VTextField", "p115_tv_path", "115 剧集目录"),
             ("VTextField", "interval_minutes", "扫描间隔（分钟，最少 30）"),
             ("VTextarea", "identity_hints", "已核实媒体 ID（按片单 ID 填 JSON）"),
         ]
@@ -249,14 +201,8 @@ class FilmWatchlist(_PluginBase):
                    for component, model, label in fields]
         return [{"component": "VForm", "content": content}], {
             "enabled": False, "dry_run": True, "run_now": False,
-            "public_site_preview": False,
-            "public_selection_enabled": False, "p115_route_enabled": False,
-            "share_115_enabled": False, "near_size_ratio": 0.10,
-            "p115_movie_path": "/Media/Movie", "p115_tv_path": "/Media/TV_Show",
-            "mini4k_base_url": "https://mini4k.io",
-            "api_url": "http://192.168.31.201:18082",
-            "token_path": "/config/filmwatchlist.token", "site_id": 1,
-            "interval_minutes": 360, "identity_hints": "{}",
+            "public_selection_enabled": False, "api_url": "http://192.168.31.201:18082",
+            "token_path": "/config/filmwatchlist.token", "interval_minutes": 360, "identity_hints": "{}",
         }
 
     def get_page(self) -> list[dict]:
@@ -289,7 +235,7 @@ class FilmWatchlist(_PluginBase):
         ]
 
     def stop_service(self):
-        """停止插件自己的单次运行调度器。"""
+        """停止片单调度，不影响公共宿主及其他消费者。"""
         if self._scheduler:
             self._scheduler.shutdown(wait=False)
             self._scheduler = None
@@ -492,14 +438,7 @@ class FilmWatchlist(_PluginBase):
         return state.store(self, records, film_id, **values)
 
     def _p115(self, record: dict | None = None) -> P115TaskAdapter:
-        movie_path, tv_path = self._p115_movie_path, self._p115_tv_path
-        if record and record.get('target_path'):
-            if normalize_media_type(record.get('media_type')) == 'movie':
-                movie_path = record['target_path']
-            else:
-                tv_path = record['target_path']
-        return P115TaskAdapter(movie_path, tv_path,
-                               (record or {}).get('local_strm_root') or '/Media/115_strm')
+        return self._capabilities().p115(record)
 
     @staticmethod
     def _pending_record(record: dict) -> bool:

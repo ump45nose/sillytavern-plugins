@@ -33,10 +33,11 @@ class Relay(BrowserRelayTransport):
         self.clicks = 0
         self.download_failure = False
         self.background = False
+        self.tabs = [{'id': 't_test123456', 'url': 'https://www.mini4k.com/'}]
 
     def _rpc(self, method, path, body=None):
         if path == '/api/tabs':
-            return {'tabs': [{'id': 't_test123456'}]}
+            return {'tabs': self.tabs}
         if path == '/api/navigate':
             self.url = body['url'].replace('https://mini4k.com/', 'https://www.mini4k.com/')
             return {'url': self.url}
@@ -87,5 +88,16 @@ with tempfile.TemporaryDirectory() as directory:
     transport.passed = False
     assert transport._complete_challenge('t_test123456') is False
     assert transport.clicks == 1, 'background focus success must not imply CF passed'
+    transport.tab_id_path.unlink()
+    transport.passed = True
+    transport.background = False
+    transport.download_failure = False
+    assert indexer.resolve(candidate).status == IndexStatus.OK, 'reuse an existing Mini4K tab after device change'
+    assert transport.tab_id_path.read_text() == 't_test123456'
+    transport.tabs = [{'id': 't_unrelated', 'url': 'https://example.com/'}]
+    unavailable = indexer.resolve(candidate)
+    assert unavailable.status == IndexStatus.UNAVAILABLE
+    assert 'Mini4K 标签' in unavailable.reason
+    assert transport.tab_id_path.read_text() == 't_test123456', 'do not capture unrelated tabs'
 
 print('Relay smoke passed: CF semantic action, origin isolation, torrent and session reuse')

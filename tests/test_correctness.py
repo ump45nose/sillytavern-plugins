@@ -17,6 +17,7 @@ from app.plugins.filmwatchlist.public_index import (
     DownloadLink, IndexCandidate, IndexStatus, MediaQuery, Mini4KIndexer, ResolvedCandidate,
 )
 from app.schemas.types import MediaType
+from host_stub import PluginBase, PluginManager
 
 
 def torrent(size=100, name='Film.2024.1080p.Remux.mkv'):
@@ -30,6 +31,9 @@ def context(title='Film.2024.1080p.Remux', page='https://m-team.test/1'):
 
 @pytest.fixture
 def env(monkeypatch):
+    for data in PluginBase.data_by_id.values():
+        data.clear()
+    PluginManager.registry['MediaCapabilities'].init_plugin({'enabled': True})
     plugin = fw.FilmWatchlist()
     plugin._enabled = True
     plugin._dry_run = False
@@ -47,6 +51,7 @@ def env(monkeypatch):
     downloader.download_torrent.return_value = (torrent(), '', ['Film.mkv'])
     downloader.download_single.return_value = ('download-hash', None)
     monkeypatch.setattr(workflow, 'DownloadChain', Mock(return_value=downloader))
+    monkeypatch.setattr(sys.modules['app.chain.download'], 'DownloadChain', Mock(return_value=downloader))
     search = Mock()
     search.process.return_value = [context(), context(page='https://m-team.test/2')]
     monkeypatch.setattr(workflow, 'SearchChain', Mock(return_value=search))
@@ -79,7 +84,8 @@ def test_unified_pt_success_records_receipt(env, monkeypatch):
 def test_unified_share_success_records_roots(env, monkeypatch):
     plugin, media, download, search = env
     search.process.return_value = []
-    plugin._share_115_enabled = plugin._p115_route_enabled = True
+    host = PluginManager.registry['MediaCapabilities']
+    host.init_plugin({**host.config, 'share_115_enabled': True, 'p115_route_enabled': True})
     candidate = IndexCandidate('id', 'mini4k', 'Film.1080p.Remux',
                                'https://mini4k.io/movies/1', 'https://mini4k.io/movies/1',
                                100, 'movie', '', '115_share', 'exact')
@@ -92,6 +98,7 @@ def test_unified_share_success_records_roots(env, monkeypatch):
     adapter.local_strm_root = '/Media/115_strm'
     adapter.cloud_items.return_value = []
     adapter.submit_share.return_value = True
+    adapter.last_submission_receipt = None
     monkeypatch.setattr(plugin, '_p115', lambda *args: adapter)
     records = {}
     plugin._process_unified(7, item(), media, '电影', None, common(), records)

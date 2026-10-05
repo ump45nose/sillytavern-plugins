@@ -96,4 +96,27 @@ pages[search] = '<form><input type="password"></form>请登录'
 assert indexer.search(query).status == IndexStatus.AUTH_REQUIRED
 pages[search] = '<form><input name="text"></form><p>没有搜索结果</p>'
 assert indexer.search(query).status == IndexStatus.NO_RESULTS
+
+# Live Mini4K returns this markup for an unmatched foreign-language alias.
+alias_names = ('Movie', 'The Movie', 'Gaqceva shoushenkidan')
+alias_pages = {base + '/search?text=' + quote(name):
+               '<a href="/movies/3">Movie</a>' for name in alias_names[:2]}
+alias_pages[base + '/movies/3'] = '<h1>Movie (2025)</h1><table><tr><td><a href="/torrents/4">Movie.2160p.BluRay</a></td></tr></table>'
+alias_url = base + '/search?text=' + quote(alias_names[2])
+alias_pages[alias_url] = '<div class="search-count-label">0 个结果</div><div class="chart-list search">无任何结果，请尝试其它关键词。</div>'
+alias_browser = FakeBrowser(alias_pages)
+aliases = Mini4KIndexer(alias_browser, base_url=base)
+alias_query = MediaQuery(alias_names[0], aliases=alias_names[1:], year=2025, media_type='movie')
+first = aliases.search(alias_query)
+second = aliases.search(alias_query, first.next_cursor)
+empty = aliases.search(alias_query, second.next_cursor)
+assert first.status == second.status == IndexStatus.OK
+assert empty.status == IndexStatus.NO_RESULTS and empty.next_cursor is None
+assert alias_browser.downloads == 0
+alias_pages[alias_url] = '<div class="search-count-label">0 个结果</div>'
+assert aliases.search(alias_query, second.next_cursor).status == IndexStatus.NO_RESULTS
+alias_pages[alias_url] = '<h1>Unknown search layout</h1>'
+assert aliases.search(alias_query, second.next_cursor).status == IndexStatus.PARSE_CHANGED
+alias_pages[base + '/search?text=Movie'] = '<div class="content"><span class="meta-item year">2024</span><a href="/movies/3">Movie</a></div>'
+assert aliases.search(alias_query).status == IndexStatus.NO_RESULTS
 print("Mini4K index smoke: identity, torrent, magnet, cloud shares, CF, auth and empty passed")

@@ -9,9 +9,10 @@ import tomllib
 
 def check(root: Path) -> None:
     manifest = json.loads((root / 'package.v2.json').read_text())
-    assert {'FilmWatchlist', 'ThemeStudio', 'MediaArchive', 'DiscRemux'} <= set(manifest)
+    assert {'FilmWatchlist', 'MediaCapabilities', 'ThemeStudio', 'MediaArchive', 'DiscRemux'} <= set(manifest)
     for identity, directory in [('FilmWatchlist', 'filmwatchlist'), ('ThemeStudio', 'themestudio'),
-                                ('MediaArchive', 'mediaarchive'), ('DiscRemux', 'discremux')]:
+                                ('MediaArchive', 'mediaarchive'), ('DiscRemux', 'discremux'),
+                                ('MediaCapabilities', 'mediacapabilities')]:
         plugin = root / 'plugins.v2' / directory
         assert plugin.is_dir() and not plugin.is_symlink()
         module = ast.parse((plugin / '__init__.py').read_text())

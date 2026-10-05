@@ -40,7 +40,8 @@ with patch.object(plugin, "_identify", return_value=(media, None, "")), \
         patch.object(plugin, "_store", side_effect=record), \
         patch.object(plugin, "_writeback_record", side_effect=lambda client, film_id, record: (marked.append(film_id) or True, "完成")), \
         patch("app.plugins.filmwatchlist.workflow.SearchChain") as search_chain, \
-        patch("app.plugins.filmwatchlist.workflow.DownloadChain", return_value=downloader):
+        patch("app.plugins.filmwatchlist.workflow.DownloadChain", return_value=downloader), \
+        patch("app.chain.download.DownloadChain", return_value=downloader):
     search_chain.return_value.process.return_value = [disc, fallback]
     item = {"id": 99, "title": "Film", "release_year": 2024}
     plugin._process_one(item, object(), records)
