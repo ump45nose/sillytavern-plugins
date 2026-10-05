@@ -1,10 +1,13 @@
 import asyncio
 import base64
+import io
 import json
+import logging
 
 import httpx
 import pytest
 from fastmcp.server.auth import AccessToken, TokenVerifier
+from jsonschema import Draft202012Validator
 
 from mcp_platform.auth import authorize
 from mcp_platform.config import RuntimeConfig
@@ -24,6 +27,15 @@ from mcp_platform.runtime import create_http_app, create_server
 
 SECRET = "whsec_" + base64.b64encode(bytes(range(32))).decode()
 CALLBACK = "https://callback.example.com/mcp-event"
+# Required CacheableResult fields in the 2026-07-28 protocol schema.
+CACHEABLE_COMPLETE = Draft202012Validator({
+    "type": "object", "required": ["resultType", "ttlMs", "cacheScope"],
+    "properties": {
+        "resultType": {"const": "complete"},
+        "ttlMs": {"type": "number", "minimum": 0},
+        "cacheScope": {"enum": ["public", "private"]},
+    },
+})
 
 
 class Clock:
@@ -265,20 +277,75 @@ async def test_authenticated_mcp2_and_legacy_tools_keep_permissions(config, monk
             assert denied.status_code == 403
             discovered = await client.post("/mcp", json=rpc("server/discover"), headers=headers("server/discover"))
             assert discovered.status_code == 200
-            assert discovered.json()["result"]["capabilities"]["events"] == {}
+            discovery = discovered.json()["result"]
+            assert discovery["capabilities"]["events"] == {}
+            CACHEABLE_COMPLETE.validate(discovery)
+            assert discovery["ttlMs"] == 0 and discovery["cacheScope"] == "private"
             listed = await client.post("/mcp", json=rpc("tools/list"), headers=headers("tools/list", token="bob-token"))
             tools = response_json(listed)["result"]
-            assert tools["resultType"] == "complete"
+            CACHEABLE_COMPLETE.validate(tools)
+            assert tools["ttlMs"] == 0 and tools["cacheScope"] == "private"
             assert [t["name"] for t in tools["tools"]] == ["read_subject"]
             called = await client.post("/mcp", json=rpc("tools/call", {"name": "read_subject", "arguments": {}}), headers=headers("tools/call", name="read_subject"))
             result = response_json(called)["result"]
             assert result["resultType"] == "complete" and result["content"][0]["text"] == "alice"
+            assert not {"ttlMs", "cacheScope"}.intersection(result)
             blocked = await client.post("/mcp", json=rpc("tools/call", {"name": "write_record", "arguments": {}}), headers=headers("tools/call", token="bob-token", name="write_record"))
             assert response_json(blocked).get("error") or response_json(blocked).get("result", {}).get("isError")
             assert writes == []
             mismatched = await client.post("/mcp", json=rpc("tools/call", {"name": "write_record", "arguments": {}}), headers=headers("tools/call", name="read_subject"))
             assert mismatched.status_code == 400 and mismatched.json()["error"]["code"] == -32020
             legacy = await client.post("/mcp", json={"jsonrpc": "2.0", "id": 8, "method": "tools/list", "params": {}}, headers={"Authorization": "Bearer alice-token", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25"})
-            assert "resultType" not in response_json(legacy)["result"]
+            assert not {"resultType", "ttlMs", "cacheScope"}.intersection(response_json(legacy)["result"])
             initialized = await client.post("/mcp", json={"jsonrpc": "2.0", "id": 9, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "legacy", "version": "1"}}}, headers={"Authorization": "Bearer alice-token", "Accept": "application/json, text/event-stream"})
             assert response_json(initialized)["result"]["protocolVersion"] == "2025-11-25"
+
+
+async def test_diagnostic_logs_are_metadata_only_and_include_legacy(config, monkeypatch):
+    monkeypatch.setattr("mcp_platform.runtime.build_provider", lambda cfg: (TestVerifier(), None))
+    config.audit_enabled = True
+    events = service(config)
+    app = create_http_app(create_server(config), config, events=events)
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    logger = logging.getLogger("mcp_platform.audit.events")
+    assert logger.isEnabledFor(logging.INFO), "diagnostics must inherit the runtime INFO setup"
+    logger.addHandler(handler)
+    try:
+        async with app.lifespan(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://events.example.com") as client:
+                await client.post("/mcp", json=rpc("server/discover"), headers=headers("server/discover"))
+                await client.post("/mcp", json=rpc("events/list"), headers=headers("events/list"))
+                unknown = await client.post("/mcp", json=rpc("private-method-canary"), headers=headers("private-method-canary"))
+                assert unknown.status_code == 404
+                invalid = rpc("server/discover")
+                invalid["params"]["_meta"][META_VERSION] = "private-protocol-canary"
+                invalid_headers = headers("server/discover")
+                invalid_headers["MCP-Protocol-Version"] = "private-protocol-canary"
+                invalid_response = await client.post("/mcp", json=invalid, headers=invalid_headers)
+                assert invalid_response.status_code == 400
+                non_string = await client.post("/mcp", json=rpc(["private-method-canary"]), headers=headers("server/discover"))
+                assert non_string.status_code == 400
+                legacy_headers = {"Authorization": "Bearer alice-token", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25"}
+                await client.post("/mcp", json={"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, headers=legacy_headers)
+                del legacy_headers["MCP-Protocol-Version"]
+                await client.post("/mcp", json={"jsonrpc": "2.0", "id": 6, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "private-client-canary", "version": "1"}}}, headers=legacy_headers)
+                subscribed = await client.post("/mcp", json=rpc("events/subscribe", params(arguments={"kind": "private-filter-canary"})), headers=headers("events/subscribe"))
+                assert subscribed.status_code == 200
+                before = stream.getvalue()
+                config.audit_enabled = False
+                await client.post("/mcp", json=rpc("events/list"), headers=headers("events/list"))
+                assert stream.getvalue() == before
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+    records = [json.loads(line) for line in stream.getvalue().splitlines()]
+    assert len(records) == 8
+    assert all(set(record) == {"method", "protocol", "status", "event_count"} for record in records)
+    assert records[1] == {"method": "events/list", "protocol": PROTOCOL_VERSION, "status": 200, "event_count": 1}
+    assert records[2]["method"] == records[4]["method"] == "unknown"
+    assert records[3]["protocol"] == "unknown"
+    assert records[5] == {"method": "tools/list", "protocol": "2025-11-25", "status": 200, "event_count": None}
+    assert records[6] == {"method": "initialize", "protocol": "2025-11-25", "status": 200, "event_count": None}
+    for private in ("alice", "alice-token", SECRET, CALLBACK, "private-method-canary", "private-protocol-canary", "private-client-canary", "private-filter-canary"):
+        assert private not in stream.getvalue()

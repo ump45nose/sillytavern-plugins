@@ -47,6 +47,14 @@ META_VERSION = "io.modelcontextprotocol/protocolVersion"
 META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
 MAX_BODY_BYTES = 256 * 1024
 _LOG = logging.getLogger("mcp_platform.events")
+_DIAGNOSTIC_LOG = logging.getLogger("mcp_platform.audit.events")
+_DIAGNOSTIC_METHODS = frozenset({
+    "initialize", "notifications/initialized", "server/discover", "tools/list", "tools/call",
+    "events/list", "events/subscribe", "events/unsubscribe",
+})
+_DIAGNOSTIC_VERSIONS = frozenset({
+    "2024-11-05", "2025-03-26", "2025-06-18", LEGACY_VERSION, PROTOCOL_VERSION,
+})
 _NETWORK_ERRORS = (OSError, TimeoutError, httpcore.NetworkError, httpcore.TimeoutException,
                    httpcore.ProtocolError, httpcore.ProxyError)
 
@@ -593,6 +601,16 @@ class _EventEndpoint:
     def __init__(self, delegate, service, server):
         self.delegate, self.service, self.server = delegate, service, server
 
+    def _diagnose(self, method, protocol, status, event_count):
+        if self.service.config.audit_enabled:
+            # Never echo arbitrary client strings into logs, even for invalid requests.
+            _DIAGNOSTIC_LOG.info(json.dumps({
+                "method": method if isinstance(method, str) and method in _DIAGNOSTIC_METHODS else "unknown",
+                "protocol": protocol if isinstance(protocol, str) and protocol in _DIAGNOSTIC_VERSIONS else "unknown",
+                "status": status,
+                "event_count": event_count,
+            }))
+
     def _subject(self, scope):
         user = scope.get("user")
         token = getattr(user, "access_token", None)
@@ -631,6 +649,18 @@ class _EventEndpoint:
         meta = params.get("_meta", {}) if isinstance(params, dict) else {}
         version = meta.get(META_VERSION) if isinstance(meta, dict) else None
         header_version = request.headers.get("mcp-protocol-version")
+        diagnostic_version = version or header_version
+        if not diagnostic_version and method == "initialize" and isinstance(params, dict):
+            diagnostic_version = params.get("protocolVersion")
+        event_count = None
+        original_send = send
+
+        async def diagnostic_send(response):
+            if response["type"] == "http.response.start":
+                self._diagnose(method, diagnostic_version, response["status"], event_count)
+            await original_send(response)
+
+        send = diagnostic_send
         modern = version is not None or header_version == PROTOCOL_VERSION or method in (
             "server/discover", "events/list", "events/subscribe", "events/unsubscribe")
         if not modern:
@@ -658,12 +688,13 @@ class _EventEndpoint:
                           "capabilities": {"tools": {}, "events": {}},
                           "_meta": {"io.modelcontextprotocol/serverInfo": {
                               "name": self.service.config.name, "version": self.service.config.version}},
-                          "ttlMs": 0}
+                          "ttlMs": 0, "cacheScope": "private"}
                 instructions = getattr(self.server, "instructions", None)
                 if instructions:
                     result["instructions"] = instructions
             elif method == "events/list":
                 result = self.service.list_events(subject, params.get("cursor"))
+                event_count = len(result["events"])
             elif method == "events/subscribe":
                 result = await self.service.subscribe(subject, params)
             elif method == "events/unsubscribe":
@@ -695,6 +726,8 @@ class _EventEndpoint:
             value = json.loads(payload)
             if isinstance(value, dict) and isinstance(value.get("result"), dict):
                 value["result"]["resultType"] = "complete"
+                if request_message["method"] == "tools/list":
+                    value["result"].update(ttlMs=0, cacheScope="private")
             return _json(value)
 
         async def adapt_send(message):
