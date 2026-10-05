@@ -41,7 +41,7 @@
 
 1. 读取业务 `mcp.app.yaml`、应用目录及仓库外 NAS 目标配置，核对当前运行进程、共享设施、数据卷、认证和现有域名。新项目由 `mcpctl init <service>` 初始化；已有服务使用原清单。
 2. 在 NAS 本机运行 `mcpctl doctor --target nas`、`mcpctl plan <service> --target nas`，确认真实变更范围。正式 CLI 路径为 `/home/yuwk/mcp-platform/.venv/bin/mcpctl`；需要读取受保护的目标配置或协调部署时使用 `sudo -n`。服务仅变更网页资料时复用已经通过的后端结果。
-3. 新建／代码更新按锁定依赖构建；已有服务的 existing 模式只协调入口。运行 `mcpctl deploy <service> --target nas`；Media OAuth 网关的构建与首次协调使用 `integrations/media-download-mcp/README.md` 的专用流程。私有依赖凭据由宿主机取得，wheel 注入镜像。
+3. 新建／代码更新按锁定依赖构建；已有服务的 existing 模式协调入口与已登记认证配置。远程网关的刷新期限 env／重载绑定保存在 NAS 私有目标，期限变化仅重启网关，不重启执行器。运行 `mcpctl deploy <service> --target nas`；Media OAuth 网关的构建与首次协调使用 `integrations/media-download-mcp/README.md` 的专用流程，镜像 tag 从 Compose 读取，基础镜像必须包含当前锁定公共包并核对 digest。私有依赖凭据由宿主机取得，wheel 注入镜像。
 4. 部署持有共享锁并写私有变更记录；更新前备份本次配置，校验 Authelia／Tunnel 候选，只协调目标客户端、刷新期限和域名，保留其他路由。无差异跳过共享设施重启；仅调整认证可运行 `mcpctl deploy <service> --target nas --auth-only`，其回滚也使用 `--auth-only`。失败按摘要比较后恢复本次镜像／配置／DNS，发生外部修改时停止覆盖，业务数据和 OAuth 状态不回退。
 5. 做一次必要冒烟：健康、未认证 initialize POST 拒绝、OAuth 发现，以及授权的 initialize／tools/list。核对共享远程路由仍可用；本轮网页发布不触发生产写入、远程执行或下载。
 

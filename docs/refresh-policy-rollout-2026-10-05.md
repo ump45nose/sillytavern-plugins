@@ -5,6 +5,7 @@
 ## 改动与部署
 
 - 公共运行时及部署 CLI 升级为 0.1.3。运行时从清单生成的 `OAUTH_REFRESH_TOKEN_LIFETIME_DAYS` 取得代理刷新凭据期限。
+- 私有仓库已发布不可改写的 `v0.1.3` 标签，提交为 `c7ec37bb41629b39abd22df707a16881dc9d245c`；CRM 和邮件的版本依赖与 uv 锁定提交已同步。Media 网关后续构建改为校验含 0.1.3 公共包的锁定基础镜像。
 - Authelia 为四个客户端生成独立的 `mcp_platform_<client_id>` lifespan；保留原客户端 ID、密钥、回调、策略、模板、issuer 和 28443 端点。候选经过官方校验、部署锁及摘要比较后生效。
 - 钉钉继续使用 MCPHub；`oauth_provider: mcphub` 将北向 OAuth 的 `refreshTokenLifetime` 设置为 15552000 秒。共享设置更新时短暂停止进程，回滚只恢复期限字段，保留新令牌与注册信息。
 - CRM、邮件与 Media OAuth 网关复用原镜像，注入宿主机构建的 0.1.3 wheel 后更新；没有构建或替换业务后端。wheel、源码及原／新镜像摘要保存在仓库外私有运行记录中。
