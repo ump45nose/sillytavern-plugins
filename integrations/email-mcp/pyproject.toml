@@ -1,15 +1,15 @@
 [project]
 name = "email-mcp-platform"
-version = "0.1.1"
+version = "0.1.2"
 description = "Unmodified upstream email tools with MCP Platform OAuth"
 requires-python = ">=3.12"
-dependencies = ["mcp-platform==0.1.4", "mcp-email-server==1.11.0"]
+dependencies = ["mcp-platform==0.1.5", "mcp-email-server==1.11.0"]
 
 [project.scripts]
 email-mcp-platform = "email_mcp_platform.server:main"
 
 [tool.uv.sources]
-mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "f9281abd5db0bf0614aa817832d2440e4b7ae57b" }
+mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "3084004d1011687f1b029003dcd073c078735b68" }
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]
