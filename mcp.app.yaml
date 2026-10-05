@@ -55,6 +55,8 @@ plugin:
   name: usage-monitor-mcp
   version: 0.1.0
   display_name: 用量统计
+  app_id: asdk_app_6ac33f40ad208191a08fbcfe6894796d
+  logo: assets/plugin/token-monitor-web.png
   description: 汇总多设备 Token Monitor 和 ShellCrash 流量。按日期查询 Token、模型、工具、设备、估算成本、订阅配置、网络上传下载及采集缺口；每天推送当日数据摘要与可分页读取的报告。可接收已配置的钉钉待办与审批事件，查看事件详情。
   short_description: 每日汇总 AI 用量和网络流量，接收钉钉事件
   brand_color: '#315EFB'
