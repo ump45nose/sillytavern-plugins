@@ -166,6 +166,8 @@ def load_config(path: Path) -> dict:
             raise ValueError("dingtalk_source_enabled_must_be_boolean")
         if not source.get("enabled", True) and not source.get("url"):
             continue
+        if key == "approval" and source.get("enabled", True) and not source.get("user_id"):
+            raise ValueError("dingtalk_verified_current_user_id_required")
         headers = source.get("headers", {})
         if not isinstance(headers, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in headers.items()):
             raise ValueError("dingtalk_upstream_headers_invalid")
@@ -190,7 +192,7 @@ class DingTalkProducer:
         os.chmod(self.directory, 0o700)
         self.path = self.directory / "state.json"
         self.credential_epoch = _hash({"subject": self.subject, "sources": {
-            key: {"url": source.get("url"), "headers": source.get("headers", {})}
+            key: {"url": source.get("url"), "headers": source.get("headers", {}), "user_id": source.get("user_id")}
             for key, source in self.sources.items()
         }})
         self.state = self._load()
@@ -228,6 +230,7 @@ class DingTalkProducer:
                 name, description,
                 {"type": "object", "properties": {}, "additionalProperties": False},
                 PAYLOAD_SCHEMA,
+                subjects={self.subject},
             )
 
     async def _fetch(self, source: str, now: datetime) -> list[dict]:
@@ -239,9 +242,9 @@ class DingTalkProducer:
                     args = {"pageNum": str(page), "pageSize": str(PAGE_SIZE), "roleTypes": ["executor"], "todoStatus": "false"}
                     key = "todoCards"
                 elif source == "approval":
-                    # Omitting userId preserves the authenticated upstream account;
-                    # no create-time filter omits old approvals awaiting a new step.
-                    args = {"pageNumber": page, "pageSize": PAGE_SIZE}
+                    # This ID is resolved from get_current_user_profile during
+                    # configuration; it is never accepted from an event subscriber.
+                    args = {"pageNumber": page, "pageSize": PAGE_SIZE, "userId": self.sources[source]["user_id"]}
                     key = "values"
                 else:
                     day = now.astimezone(TZ).replace(hour=0, minute=0, second=0, microsecond=0)

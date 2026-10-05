@@ -25,7 +25,7 @@ class Bus:
         self.registrations = []
         self.fail_after_accept_once = False
 
-    def register_event(self, *args):
+    def register_event(self, *args, **kwargs):
         self.registrations.append(args[0])
 
     async def publish(self, name, data, **kwargs):
@@ -57,7 +57,7 @@ class EventTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.config = {"subject": "owner", "sources": {"todo": {}, "approval": {}}}
+        self.config = {"subject": "owner", "sources": {"todo": {}, "approval": {"user_id": "verified-current-user"}}}
         self.client, self.bus = Client(), Bus()
         self.producer = DingTalkProducer(self.bus, config=self.config, storage_path=self.temp.name, client=self.client)
 
@@ -75,6 +75,8 @@ class EventTests(unittest.IsolatedAsyncioTestCase):
         await self.poll()
         self.assertEqual({e["name"] for e in self.bus.events.values()}, {"dingtalk.todo.assigned", "dingtalk.approval.pending"})
         self.assertTrue(all(e["subject"] == "owner" for e in self.bus.events.values()))
+        approval_calls = [args for source, args in self.client.calls if source == "approval"]
+        self.assertTrue(all(args["userId"] == "verified-current-user" for args in approval_calls))
 
     async def test_due_threshold_emits_once_and_uses_timezone(self):
         due = NOW + timedelta(hours=25)

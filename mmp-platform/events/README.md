@@ -11,7 +11,7 @@
 | `dingtalk.todo.due` | 待办进入未来 24 小时到期范围，或首次逾期 |
 | `dingtalk.approval.pending` | 当前用户出现新待处理审批 |
 
-轮询间隔默认为 300 秒，时间为 `Asia/Taipei`。第一次完整读取只保存基准，不推送历史待办、历史逾期或历史审批；同一状态不会重复推送。一次关键字段变化与临期变化同时出现时合并为一次关键变化事件。审批查询没有创建时间范围限制，也不传其他用户 ID。
+轮询间隔默认为 300 秒，时间为 `Asia/Taipei`。第一次完整读取只保存基准，不推送历史待办、历史逾期或历史审批；同一状态不会重复推送。一次关键字段变化与临期变化同时出现时合并为一次关键变化事件。审批查询没有创建时间范围限制，显式传入通过当前用户资料接口核实的本人 ID。
 
 正常轮询不产生事件，失败只记诊断并逐步延后重试至最多一小时。分页未完整读完、接口报错、记录缺少唯一 ID 时保留旧状态。记录从列表消失不能据此判断已完成或已批准，因此不会发出这两种结论。
 
@@ -23,7 +23,7 @@
 
 秘密配置保存在仓库外并设为 `0600`；运行容器只读挂载该文件，不挂载完整 MCPHub 配置或北向 OAuth 状态。根字段为 `subject`、`poll_interval_seconds`、`sources`。`subject` 必须等于现有 MCPHub 数据拥有者，并由宿主运行时再次校验在其授权用户名集合中。
 
-`sources.todo` 与 `sources.approval` 各自只包含从现有对应服务定向提取的 `url`、可选 `headers` 和 `enabled`。代码仅接受官方 HTTPS 主机；不会转发至其他主机或自动跟随重定向。未启用的 `sources.calendar` 可只填 `enabled=false`、已核实的 `calendar_id` 和 `disabled_reason`，无需提取日历凭据。不要把任何上游连接地址或凭据写入源码、日志、发布资料。
+`sources.todo` 与 `sources.approval` 各自包含从现有对应服务定向提取的 `url`、可选 `headers` 和 `enabled`。审批配置还必须包含由 `get_current_user_profile` 核验的 `user_id`；生产器不会接受订阅者提供的其他用户 ID，也不挂载通讯录凭据。代码仅接受官方 HTTPS 主机；不会转发至其他主机或自动跟随重定向。未启用的 `sources.calendar` 可只填 `enabled=false`、已核实的 `calendar_id` 和 `disabled_reason`，无需提取日历凭据。不要把任何上游连接地址或凭据写入源码、日志、发布资料。
 
 宿主环境变量：
 
