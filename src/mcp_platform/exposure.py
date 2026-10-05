@@ -1,4 +1,4 @@
-"""将已有 MCP 进程接入共享 Tunnel，不变更业务运行时和认证。"""
+"""将已有 MCP 接入共享 Tunnel，并协调清单声明的认证期限。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 
 import httpx
 
+from .auth_deploy import apply_auth_change, prepare_auth_change, validate_auth_change
 from .deploy import deployment_lock, rollback_journal
 from .infra import (
     Cloudflare,
@@ -23,6 +24,7 @@ from .infra import (
     validate_tunnel_candidate,
 )
 from .manifest import private_write
+from .public_http import public_transport
 
 
 def rpc_result(response):
@@ -44,7 +46,8 @@ def probe_existing(app, target, *, public=False):
     if not public:
         headers.update(Host=app.hostname, **{"X-Forwarded-Proto": "https"})
     # 不让 NAS 的出口代理影响回环、LAN 或公网入口验证。
-    with httpx.Client(timeout=15, trust_env=False, headers=headers) as client:
+    transport = public_transport(app.hostname) if public else None
+    with httpx.Client(timeout=15, trust_env=False, headers=headers, transport=transport) as client:
         if app.health_path:
             health = client.get(base + app.health_path)
             health.raise_for_status()
@@ -127,6 +130,8 @@ def deploy_existing(app, source, target):
         cf = None
         try:
             probe_existing(app, target)
+            auth_change = prepare_auth_change(app, target)
+            validate_auth_change(auth_change, target)
             original = Path(target.tunnel_config).read_text()
             candidate = tunnel_text(original, app)
             ddns_original = Path(target.ddns_config).read_text() if target.ddns_config else None
@@ -144,8 +149,9 @@ def deploy_existing(app, source, target):
                                       expected_hash=hashlib.sha256(ddns_original.encode()).hexdigest()):
                 run(["docker", "restart", target.ddns_container])
             cf.switch(app, target, journal)
+            auth_updated = apply_auth_change(auth_change, target, journal)
             wait_public_probe(app, target)
-            if previous and previous.get("manifest_fingerprint") == fingerprint and desired and not journal.data["files"]:
+            if previous and previous.get("manifest_fingerprint") == fingerprint and desired and not journal.data["files"] and not auth_updated:
                 journal.set(status="unchanged")
                 print("入口和清单已一致，验证通过；未更新业务、认证或 Tunnel")
                 return journal.path

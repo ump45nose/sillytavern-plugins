@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ from .infra import (
     validate_tunnel_candidate,
 )
 from .manifest import private_write
+from .public_http import public_transport
 
 
 @contextmanager
@@ -57,7 +59,7 @@ def container_for(app):
     return containers[0] if containers else None
 
 
-def compose_text(app, image, env_file):
+def compose_text(app, image, env_file, original=""):
     volumes = {v.name: ({"name": v.name, "external": True} if v.external else {"name": v.name})
                for v in app.volumes}
     service = {
@@ -70,7 +72,29 @@ def compose_text(app, image, env_file):
             "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "20s"},
         "logging": {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}},
     }
-    return yaml.safe_dump({"services": {app.compose_service: service}, "volumes": volumes}, sort_keys=False)
+    if app.user:
+        service["user"] = app.user
+    if app.working_dir:
+        service["working_dir"] = app.working_dir
+    if app.init:
+        service["init"] = True
+    result = {"services": {app.compose_service: service}, "volumes": volumes}
+    if app.external_networks:
+        service["networks"] = app.external_networks
+        result["networks"] = {name: {"external": True} for name in app.external_networks}
+    if original:
+        existing = yaml.safe_load(original) or {}
+        for section in ("volumes", "networks"):
+            for name, value in result.get(section, {}).items():
+                prior = existing.get(section, {}).get(name)
+                if prior is not None and prior != value:
+                    raise ValueError("共享 Compose 的卷或网络定义冲突")
+        existing.setdefault("services", {})[app.compose_service] = service
+        for section in ("volumes", "networks"):
+            if section in result:
+                existing.setdefault(section, {}).update(result[section])
+        result = existing
+    return yaml.safe_dump(result, sort_keys=False)
 
 
 def prepare_env(app, target):
@@ -141,7 +165,8 @@ def build_bundle(app, source, target, destination):
 
 def wait_health(app, *, public=False):
     url = app.public_url if public else f"http://{app.bind_address}:{app.host_port}"
-    with httpx.Client(timeout=5, trust_env=public, follow_redirects=True) as client:
+    transport = public_transport(app.hostname) if public else None
+    with httpx.Client(timeout=5, trust_env=False, follow_redirects=True, transport=transport) as client:
         for _ in range(24):
             try:
                 health = client.get(url + app.health_path)
@@ -155,7 +180,11 @@ def wait_health(app, *, public=False):
                     headers={"Accept": "application/json, text/event-stream"})
                 if denied.status_code != 401 or "resource_metadata" not in denied.headers.get("www-authenticate", ""):
                     raise RuntimeError("MCP 未认证请求未返回预期挑战")
-                metadata = client.get(url + "/.well-known/oauth-protected-resource").json()
+                challenge = re.search(r'resource_metadata="([^"]+)"', denied.headers.get("www-authenticate", ""))
+                if not challenge or not challenge[1].startswith(app.public_url + "/"):
+                    raise RuntimeError("OAuth 资源发现挑战与清单入口不一致")
+                # SDK 按 RFC 在 /.../oauth-protected-resource/mcp 发布元数据。
+                metadata = client.get(url + challenge[1][len(app.public_url):]).json()
                 auth = client.get(url + "/.well-known/oauth-authorization-server").json()
                 if metadata.get("resource") != app.public_url + "/mcp" or auth.get("issuer") not in metadata.get("authorization_servers", []):
                     raise RuntimeError("OAuth 发现元数据与清单不一致")
@@ -176,6 +205,8 @@ def rollback_journal(app, target, journal):
             cf.restore(journal.data["dns"])
         finally:
             cf.client.close()
+    from .auth_deploy import restore_auth_json
+    restore_auth_json(target, journal)
     restored = journal.restore_files()
     if target.tunnel_config in restored:
         switch_tunnel(target)
@@ -183,6 +214,9 @@ def rollback_journal(app, target, journal):
         restart_authelia(target)
     if target.ddns_config in restored:
         run(["docker", "restart", target.ddns_container])
+    runtime_app = journal.data.get("auth_runtime_app")
+    if runtime_app and target.auth_runtime_env_files.get(runtime_app) in restored:
+        run(target.auth_reload_commands[runtime_app])
     old = journal.data.get("previous")
     if old and journal.data.get("service_attempted"):
         run([*compose_args(app, old["rollback_compose"]), "up", "-d", "--no-deps", app.compose_service])
@@ -217,6 +251,8 @@ def deploy(app, source, target):
             tunnel_candidate = tunnel_text(tunnel_original, app)
             ddns_original = Path(target.ddns_config).read_text() if target.ddns_config else None
             ddns_candidate = ddns_text(ddns_original, app.hostname) if ddns_original is not None else None
+            stable_compose = Path(target.compose_files[app.id]) if app.id in target.compose_files else None
+            compose_original = stable_compose.read_text() if stable_compose else ""
             cf = Cloudflare(target)
             cf.find_zone(app.hostname)
             cf.records(app.hostname)  # 凭据与域名预检先于服务更新。
@@ -241,7 +277,7 @@ def deploy(app, source, target):
                 validate_tunnel_candidate(target, tunnel_candidate)
             image, source_sha, core_sha = build_bundle(app, source, target, release / "build")
             new_compose = release / "compose.yaml"
-            private_write(new_compose, compose_text(app, image, env_path))
+            private_write(new_compose, compose_text(app, image, env_path, compose_original))
             run([*compose_args(app, new_compose), "config", "--quiet"])
             journal.set(image=image, source_sha=source_sha, core_sha=core_sha, compose=str(new_compose))
             if old_container:
@@ -285,6 +321,11 @@ def deploy(app, source, target):
                                     expected_hash=hashlib.sha256(auth_original.encode()).hexdigest()):
                 restart_authelia(target)
             journal.set(service_attempted=True)
+            if stable_compose:
+                journal.replace_file(stable_compose, new_compose.read_text(),
+                    expected_hash=hashlib.sha256(compose_original.encode()).hexdigest())
+                new_compose = stable_compose
+                journal.set(compose=str(new_compose))
             run([*compose_args(app, new_compose), "up", "-d", "--no-deps", app.compose_service])
             wait_health(app)
             if app.integrity_command:

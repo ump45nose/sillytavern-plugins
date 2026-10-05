@@ -26,6 +26,7 @@ class RuntimeConfig(BaseModel):
     storage_path: str = "/data/oauth"
     storage_backend: Literal["filetree", "disk"] = "filetree"
     storage_salt: str = "mcp-platform-oauth-v1"
+    refresh_token_lifetime_days: int = Field(default=180, ge=1, strict=True)
     client_storage: Any = Field(default=None, exclude=True)
     authorized_usernames: set[str] = Field(default_factory=set)
     read_only_usernames: set[str] = Field(default_factory=set)
@@ -58,6 +59,7 @@ class RuntimeConfig(BaseModel):
             "storage_path": os.getenv("OAUTH_STORAGE_PATH", "/data/oauth"),
             "storage_salt": os.getenv("OAUTH_STORAGE_SALT", name + "-oauth-v1"),
             "storage_backend": os.getenv("OAUTH_STORAGE_BACKEND", "filetree"),
+            "refresh_token_lifetime_days": int(os.getenv("OAUTH_REFRESH_TOKEN_LIFETIME_DAYS", "180")),
             "authorized_usernames": set(csv("OIDC_AUTHORIZED_USERNAMES")),
             "read_only_usernames": set(csv("OIDC_READ_ONLY_USERNAMES")),
             "execute_usernames": set(csv("OIDC_EXECUTE_USERNAMES")),

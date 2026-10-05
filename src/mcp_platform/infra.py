@@ -89,6 +89,127 @@ class Journal:
             restored.append(str(path))
         return restored
 
+    def replace_json_value(self, path, keys, value, *, expected_hash):
+        """只记录配置字段；回退时保留最新 OAuth 令牌及其他动态状态。"""
+        path = Path(path)
+        original = path.read_text()
+        if hashlib.sha256(original.encode()).hexdigest() != expected_hash:
+            raise RuntimeError("共享文件在候选配置生成后发生外部修改")
+        data = json.loads(original)
+        node = data
+        for key in keys[:-1]:
+            node = node[key]
+        before = node[keys[-1]]
+        if before == value:
+            return False
+        self.data.setdefault("json_values", []).append({
+            "path": str(path), "keys": keys, "before": before, "after": value,
+        })
+        self.save()
+        node[keys[-1]] = value
+        if digest(path) != expected_hash:
+            raise RuntimeError("共享文件在写入前发生外部修改")
+        stat = path.stat()
+        private_write(path, json.dumps(data, ensure_ascii=False, indent=2))
+        os.chmod(path, stat.st_mode & 0o777)
+        os.chown(path, stat.st_uid, stat.st_gid)
+        return True
+
+    def restore_json_values(self):
+        restored = []
+        for entry in reversed(self.data.get("json_values", [])):
+            path = Path(entry["path"])
+            original_hash = digest(path)
+            data = json.loads(path.read_text())
+            node = data
+            for key in entry["keys"][:-1]:
+                node = node[key]
+            value = node[entry["keys"][-1]]
+            if value == entry["before"]:
+                continue
+            if value != entry["after"]:
+                raise RuntimeError("共享认证配置字段发生外部修改，停止覆盖")
+            node[entry["keys"][-1]] = entry["before"]
+            if digest(path) != original_hash:
+                raise RuntimeError("共享文件在恢复前发生外部修改")
+            stat = path.stat()
+            private_write(path, json.dumps(data, ensure_ascii=False, indent=2))
+            os.chmod(path, stat.st_mode & 0o777)
+            os.chown(path, stat.st_uid, stat.st_gid)
+            restored.append(str(path))
+        return restored
+
+
+def set_yaml_value(original, keys, value):
+    """按节点定位修改一个值；保留其余原文、模板及客户端。"""
+    tree = yaml.compose(re.sub(r"\{\{.*?\}\}", '"TEMPLATE_PLACEHOLDER"', original))
+    lines = original.splitlines(keepends=True)
+
+    def offset(mark):
+        return sum(map(len, lines[:mark.line])) + mark.column
+
+    node = tree
+    for index, key in enumerate(keys):
+        if isinstance(key, int):
+            node = node.value[key]
+            continue
+        found = next((v for k, v in node.value if k.value == key), None)
+        if found is None:
+            nested = value
+            for remaining in reversed(keys[index + 1:]):
+                nested = {remaining: nested}
+            addition = {key: nested}
+            indent = node.value[0][0].start_mark.column if node.value else node.start_mark.column
+            if node.flow_style:
+                # 空映射通常写成 custom: {}，转为等价块映射。
+                rendered = "\n" + "".join(" " * indent + line + "\n" for line in
+                    yaml.safe_dump(addition, sort_keys=False, allow_unicode=True).splitlines())
+                return original[:offset(node.start_mark)] + rendered.rstrip("\n") + original[offset(node.end_mark):]
+            position = sum(map(len, lines[:node.end_mark.line]))
+            rendered = "".join(" " * indent + line + "\n" for line in
+                yaml.safe_dump(addition, sort_keys=False, allow_unicode=True).splitlines())
+            return original[:position] + rendered + original[position:]
+        node = found
+    if not isinstance(node, yaml.ScalarNode):
+        raise ValueError("只支持修改标量或新增配置节点")
+    rendered = yaml.safe_dump(value, allow_unicode=True).removesuffix("...\n").strip()
+    return original[:offset(node.start_mark)] + rendered + original[offset(node.end_mark):]
+
+
+def authelia_lifespan_text(original, app):
+    import copy
+
+    oidc = template_yaml(original)["identity_providers"]["oidc"]
+    clients = oidc["clients"]
+    index = next(i for i, c in enumerate(clients) if c["client_id"] == app.auth.client_id)
+    profile_name = "mcp_platform_" + app.auth.client_id.replace("-", "_")
+    profiles = oidc.get("lifespans", {}).get("custom", {})
+    profile = profiles.get(profile_name)
+    base = ["identity_providers", "oidc", "lifespans", "custom", profile_name]
+    duration = f"{app.refresh_token_lifetime_days}d"
+    result = original
+    if profile is None:
+        profile = copy.deepcopy(profiles.get(clients[index].get("lifespan"), {}))
+        if "TEMPLATE_PLACEHOLDER" in str(profile):
+            raise ValueError("既有期限使用模板，不能自动复制为独立客户端策略")
+        profile["refresh_token"] = duration
+        for grant in profile.get("grants", {}).values():
+            if "refresh_token" in grant:
+                grant["refresh_token"] = duration
+        result = set_yaml_value(result, base, profile)
+    else:
+        if profile.get("refresh_token") != duration:
+            result = set_yaml_value(result, [*base, "refresh_token"], duration)
+        for name, grant in profile.get("grants", {}).items():
+            if "refresh_token" in grant and grant["refresh_token"] != duration:
+                result = set_yaml_value(result, [*base, "grants", name, "refresh_token"], duration)
+    if clients[index].get("lifespan") != profile_name:
+        result = set_yaml_value(result, ["identity_providers", "oidc", "clients", index, "lifespan"], profile_name)
+    actual = template_yaml(result)["identity_providers"]["oidc"]
+    if actual["clients"][index].get("lifespan") != profile_name or actual["lifespans"]["custom"][profile_name]["refresh_token"] != duration:
+        raise ValueError("认证期限候选未通过结构校验")
+    return result
+
 
 def authelia_text(original, app, env):
     parsed = template_yaml(original)
@@ -104,7 +225,7 @@ def authelia_text(original, app, env):
         if any(existing.get(k) != v for k, v in expected.items()):
             # 显式失败而不是借部署偷偷改变授权策略。
             raise ValueError("既有 Authelia 客户端配置与清单不一致，请显式协调后部署")
-        return original
+        return authelia_lifespan_text(original, app)
     if app.auth.authorization_policy not in oidc.get("authorization_policies", {}):
         raise ValueError("清单引用的 Authelia 授权策略不存在")
     if app.auth.claims_policy not in oidc.get("claims_policies", {}):
@@ -136,7 +257,7 @@ def authelia_text(original, app, env):
     after = template_yaml(result)
     if after["identity_providers"]["oidc"]["clients"] != clients + [client]:
         raise ValueError("Authelia 候选配置未通过结构检查")
-    return result
+    return authelia_lifespan_text(result, app)
 
 
 def tunnel_text(original, app):

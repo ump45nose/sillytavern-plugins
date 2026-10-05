@@ -36,6 +36,8 @@ class PluginSpec(BaseModel):
     version: str
     description: str
     display_name: str
+    short_description: str | None = Field(default=None, min_length=1, max_length=30)
+    brand_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     app_id: str = ""
     app_binding: str = ""
     logo: str = ""
@@ -49,6 +51,8 @@ class AppManifest(BaseModel):
     name: str
     deployment_mode: Literal["build", "existing"] = "build"
     authentication: Literal["oauth", "bearer"] = "oauth"
+    oauth_provider: Literal["authelia", "mcphub"] = "authelia"
+    refresh_token_lifetime_days: int = Field(default=180, ge=1, strict=True)
     command: list[str] = Field(default_factory=list)
     public_url: str
     port: int = Field(default=8080, ge=1, le=65535)
@@ -59,6 +63,10 @@ class AppManifest(BaseModel):
     expected_tools: list[str] = Field(default_factory=list)
     compose_project: str = ""
     compose_service: str = "app"
+    user: str = ""
+    working_dir: str = ""
+    init: bool = False
+    external_networks: list[str] = Field(default_factory=list)
     volumes: list[Volume] = Field(default_factory=list)
     environment: dict[str, str] = Field(default_factory=dict)
     required_env: list[str] = Field(default_factory=list)
@@ -96,7 +104,9 @@ class AppManifest(BaseModel):
     def runtime_environment(self):
         if self.auth is None:
             return dict(self.environment)
-        return {**self.environment, "PUBLIC_BASE_URL": self.public_url,
+        return {**self.environment,
+                "OAUTH_REFRESH_TOKEN_LIFETIME_DAYS": str(self.refresh_token_lifetime_days),
+                "PUBLIC_BASE_URL": self.public_url,
                 "OIDC_DISCOVERY_URL": self.auth.discovery_url,
                 "OIDC_CLIENT_ID": self.auth.client_id}
 
@@ -106,6 +116,8 @@ class Target(BaseModel):
     source_roots: dict[str, str] = Field(default_factory=dict)
     env_files: dict[str, str] = Field(default_factory=dict)
     probe_token_files: dict[str, str] = Field(default_factory=dict)
+    compose_files: dict[str, str] = Field(default_factory=dict)
+    compose_files: dict[str, str] = Field(default_factory=dict)
     runtime_root: str
     build_user: str = "yuwk"
     uv: str = "/home/yuwk/.local/bin/uv"
@@ -116,6 +128,10 @@ class Target(BaseModel):
     tunnel_id: str
     authelia_config: str
     authelia_container: str = "authelia"
+    mcphub_config: str = ""
+    mcphub_container: str = "mcphub"
+    auth_runtime_env_files: dict[str, str] = Field(default_factory=dict)
+    auth_reload_commands: dict[str, list[str]] = Field(default_factory=dict)
     cloudflare_env: str
     cloudflare_zone_id: str = ""
     ddns_config: str = ""

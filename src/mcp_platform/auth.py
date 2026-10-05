@@ -93,5 +93,6 @@ def build_provider(config: RuntimeConfig):
         client_storage=storage, jwt_signing_key=config.jwt_signing_key.get_secret_value(),
         token_endpoint_auth_method="client_secret_basic", require_authorization_consent=True,
         enable_cimd=True, forward_resource=False, token_expiry_threshold_seconds=30,
+        fallback_refresh_token_expiry_seconds=config.refresh_token_lifetime_days * 86400,
     )
     return provider, raw

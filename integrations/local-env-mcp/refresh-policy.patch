@@ -1,0 +1,10 @@
+--- a/src/local_env_mcp/gateway.py
++++ b/src/local_env_mcp/gateway.py
+@@ -79,6 +79,7 @@
+         enable_cimd=True,
+         forward_resource=False,
+         token_expiry_threshold_seconds=30,
++        fallback_refresh_token_expiry_seconds=int(env.get("OAUTH_REFRESH_TOKEN_LIFETIME_DAYS", "180")) * 86400,
+     )
+ 
+ 
