@@ -1,5 +1,7 @@
 """同进程挂载原邮件 SDK，不启动第二个 HTTP 后端。"""
 
+import asyncio
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 
 import uvicorn
@@ -7,6 +9,8 @@ from fastmcp.server import create_proxy
 from fastmcp.server.middleware.authorization import AuthMiddleware
 
 from mcp_platform import RuntimeConfig, authorize, create_http_app, create_server
+
+from .events import EmailEventProducer, EventSettings, register_email_event
 
 
 def email_permission(config):
@@ -38,18 +42,52 @@ def create_app(config=None):
             "max_output_bytes": 0,
         }
     )
+    settings = EventSettings.from_env(config)
+    events = producer = None
+    event_lifetime = None
+    if settings.enabled:
+        from mcp_platform.events import EventService
+
+        from .event_provider import UpstreamHeaderProvider
+
+        events = EventService(config, storage_path=settings.state_path / "deliveries")
+        register_email_event(events, settings.owner)
+        producer = EmailEventProducer(
+            settings, config.authorized_usernames, UpstreamHeaderProvider(), events
+        )
+
+        @asynccontextmanager
+        async def event_lifetime(_server):
+            async with asyncio.TaskGroup() as group:
+                tasks = [
+                    group.create_task(events.serve()),
+                    group.create_task(producer.serve()),
+                ]
+                try:
+                    yield
+                finally:
+                    for task in tasks:
+                        task.cancel()
+
     server = create_server(
         config,
+        lifespan=event_lifetime,
         healthcheck=lambda: {
             "status": "ok",
             "database": "ok",
             "email_server": version("mcp-email-server"),
+            "email_events_enabled": events is not None,
+            "email_header_failures": producer.store.header_failure_count() if producer else 0,
         },
     )
     server.mount(create_proxy(upstream))
     if not config.development_no_auth:
         server.add_middleware(AuthMiddleware(auth=email_permission(config)))
-    return create_http_app(server, config), server, config
+    app = (create_http_app(server, config, events=events)
+           if events is not None else create_http_app(server, config))
+    app.state.email_events = events
+    app.state.email_event_producer = producer
+    return app, server, config
 
 
 def main():

@@ -381,7 +381,7 @@ wheels = [
 
 [[package]]
 name = "email-mcp-platform"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "mcp-email-server" },
@@ -391,7 +391,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "mcp-email-server", specifier = "==1.11.0" },
-    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?tag=v0.1.3" },
+    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=f9281abd5db0bf0614aa817832d2440e4b7ae57b" },
 ]
 
 [[package]]
@@ -889,13 +889,14 @@ wheels = [
 
 [[package]]
 name = "mcp-platform"
-version = "0.1.3"
-source = { git = "https://github.com/ump45nose/mcp-platform.git?tag=v0.1.3#c7ec37bb41629b39abd22df707a16881dc9d245c" }
+version = "0.1.4"
+source = { git = "https://github.com/ump45nose/mcp-platform.git?rev=f9281abd5db0bf0614aa817832d2440e4b7ae57b#f9281abd5db0bf0614aa817832d2440e4b7ae57b" }
 dependencies = [
     { name = "authlib" },
     { name = "fastmcp" },
     { name = "httpcore" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "mcp" },
     { name = "py-key-value-aio", extra = ["disk"] },
     { name = "pydantic" },
