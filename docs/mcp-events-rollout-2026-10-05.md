@@ -2,11 +2,49 @@
 
 ## 当前状态
 
-NAS 服务端已经部署并通过本机／公网健康与权限检查。CRM、邮件原连接的真实只读调用成功。四个接收邮箱均完成实际 IMAP 基线；钉钉待办、审批在新容器内也完成真实只读基线。
+NAS 的 CRM、邮件、用量统计三个服务已升级公共运行时 0.1.5，并通过实际版本、依赖、健康及匿名权限检查。CRM、邮件原连接的真实只读调用成功；四个接收邮箱及钉钉待办、审批的既有基线保留。
 
-ChatGPT 推送订阅尚未建立：当前可操作的浏览器尚未完成登录；用户已选择 Google 登录并通过安全表单提交账号标识，Google 随后要求 reCAPTCHA 人机验证，需要在当前云浏览器完成验证和后续登录；事件源发现仍只返回既有 GitHub 和 Gmail，需要刷新原 CRM、邮件原生 MCP 连接的发现，并注册“用量统计”后创建用户订阅。服务已运行不代表 ChatGPT 已开始推送。
+用户已完成 Google 验证及 ChatGPT 登录。0.1.4 阶段在原生界面刷新 CRM 和邮件后，事件源仍只返回 GitHub、Gmail；0.1.5 部署后，2026-10-05 14:41:52（UTC+8）原生 `list_event_sources` 已实际返回 CRM、邮件，两者的事件 schema 发现及原有业务只读调用均成功。
 
-## 部署与版本
+四项请求中，“CRM 当天聊天记录”“重要新邮件”两项事件订阅已建立并启用。2026-10-05 14:45:30（UTC+8）只读复核：CRM、邮件各有 1 条订阅、1 条有效订阅，均已验证回调，没有未验证的有效订阅；用量统计仍为 0 条。“钉钉待办／审批”“每日用量统计”两项待新原生 App 完成 OAuth，尚未创建。三库待发送、失败及留存业务事件均为 0；没有制造合成业务事件，实际业务事件送达仍待自然触发。
+
+“用量统计”原生 App 已创建，App ID 为 `asdk_app_6ac33f40ad208191a08fbcfe6894796d`，插件 ID 为 `plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d`，安全详情页是 <https://chatgpt.com/plugins/plugin_asdk_app_6ac33f40ad208191a08fbcfe6894796d>。OAuth 尚未完成：Authelia 用户名／密码阶段已通过，当前仍停在 TOTP 二步验证与后续授权，ChatGPT 仍显示“继续连接”。浏览器原生凭据保护阻止代理继续操作其他页面，需要用户在同一云浏览器完成当前验证；不另建 App，也不记录认证事务参数或凭据。
+
+### 原生客户端与订阅
+
+| 原生连接 | App ID | 事件订阅与状态 |
+|---|---|---|
+| CRM | `asdk_app_6ac28369423081918d34fa531d15a62d` | “CRM 当天聊天记录”，`crm.daily_chat.ready`；2026-10-05 14:42:43（UTC+8）创建成功并启用；服务端与回调已验证 |
+| 邮件 | `asdk_app_6ac285e95d74819193f153ce16dc5640` | “重要新邮件”，`email.important_received`；2026-10-05 14:43:07（UTC+8）创建成功并启用；服务端与回调已验证 |
+| 用量统计 | `asdk_app_6ac33f40ad208191a08fbcfe6894796d` | OAuth 未完成，尚未列入事件源；钉钉与用量两项订阅未创建 |
+
+CRM、邮件的事件参数 schema 均为空对象。两项自动化仅使用事件 trigger，没有另设独立 schedule；自动化默认时区为 `Asia/Shanghai`，每日事件的报告边界继续由事件源的 `Asia/Taipei` 规则控制。
+
+## 0.1.5 客户端兼容修复与生产验证
+
+原生刷新之后发现 MCP 2 的 `server/discover`、`tools/list` 成功结果缺少必填缓存字段。公共运行时 0.1.5 补齐 `ttlMs: 0`、`cacheScope: "private"`，并在既有审计开关下仅记录 `method`、`protocol`、`status`、`event_count` 四项有限诊断字段。`status` 是 HTTP 响应开始时的状态，SSE 的 200 不能单独证明客户端成功解析。
+
+运行时提交 `3084004d1011687f1b029003dcd073c078735b68`、新标签 `v0.1.5` 已推送。公共 wheel SHA-256 为 `74b5f1399f4dd79c438edca5632ac5bce1e5706b58e1e9935eb4e5aca84c8be7`；19 项针对性测试、Ruff、差异检查及离线锁检查通过。业务依赖已固定到该完整提交，业务实现未改变：
+
+| 组件 | 固定依赖提交 | 生产状态 |
+|---|---|---|
+| CRM 0.1.3 | `505643d76ce4511d17dfcd766f057cf171c7e9b2` | 实际运行时 0.1.5；14:39:33（UTC+8）验收完成 |
+| 邮件适配 0.1.2 | `647253ed9cad410ace5299a999c370c82c66f151`；子树 `14eb0527560299ce9fd5d1bc5ede7a375ca12279` | 实际运行时 0.1.5；14:39:51（UTC+8）验收完成 |
+| 用量统计 0.1.0 | `bc83dd3bdd183b09586125940d9104ff91e7f3b7` | 实际运行时 0.1.5；14:40:09（UTC+8）验收完成；钉钉仍为 0.1.1 |
+
+三个容器均实际加载公共运行时 0.1.5；依赖一致性及导入检查通过，健康请求返回 200，匿名 initialize 返回 401。原 env 内容、运行环境摘要，以及卷、端口、网络、运行用户和命令的完整签名保持一致。
+
+| 组件 | 本次业务 wheel SHA-256 | 最终镜像 ID |
+|---|---|---|
+| CRM | `f8f818fd372311a1cfa06ed0f08065dc7010d39c6d3767b7dd14c07e1ed3bdeb` | `sha256:294f93393dfd3121dfbe7833983838b546dcf1af56f8ea53675a7903fe67ea9c` |
+| 邮件 | `199ef9cb32853a28637ce554a405c62c9a234e8ebac33649c592e6909825a774` | `sha256:b397e71ba8508dfe97613bcc291bc01bb4e617033b3ff3bf3ece0770bab08828` |
+| 用量统计 | `c46e9028bb8713b17e1acf0300736ba0a87914adaccd527c4202afd9c3560c57` | `sha256:169b0c852a856d979eacc37e83d7a19b3f3380df09e6c58f9088d88f798c119a` |
+
+CRM、邮件 wheel 从各自固定提交导出源码后离线构建，METADATA 均要求 `mcp-platform==0.1.5`。用量 wheel 来源为干净提交 `a0373131e81cbb73edaedc90753c0d2fcc27afb5`，最终提交另记录构建摘要；新旧 wheel 的 9 个业务 Python 文件逐字节一致。
+
+0.1.5 独立发布目录为 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261005-runtime-0.1.5`，主 `journal.json` 及三个 `switch/<crm|email|usage>/journal.json` 均为 `complete`。各服务的 `protocol-probe.json` 记录健康 200／匿名 initialize 401；`logs/<service>-runtime-version.log` 与 `logs/<service>-pip-check.log` 记录实际版本及依赖检查。该目录 `post-deploy-readonly.json` 是订阅创建前 14:42–14:43 的旧计数；当前订阅状态以上节 14:45:30 的只读复核为准。下节 0.1.4 为已完成的前一轮部署记录。
+
+## 0.1.4 已完成部署与版本
 
 | 组件 | 版本／提交 | 生产状态 |
 |---|---|---|
@@ -42,7 +80,9 @@ CRM 镜像 ID：`sha256:cefda7173690682f2e6744db5e25f3c8debb98bf754657cc4601fde2
 
 CRM 仅有摘要、未采集原文的记录明确标记缺失；不能恢复入库前已被去除的外围空白。统计显示采集缺口、设备离线和额度未知，模型／工具／设备是同一用量的不同分类；估算成本与实际订阅付款分开，当前订阅列表未配置。
 
-## 验证
+## 首轮业务与兼容性验证
+
+以下为 0.1.4 首轮部署及业务实现的验证记录；0.1.5 增量验证见上节。
 
 公共协议与只读挂载 24 项测试通过；CRM 15 项、邮件 28 项、钉钉 9 项针对性测试通过；统计 11 项日期与数据边界检查通过。覆盖原 MCP 协议兼容、认证与主体隔离、签名、订阅保存、重试、报告分页和去重、邮件超长头隔离及账号公平轮转。
 
@@ -50,7 +90,9 @@ CRM 仅有摘要、未采集原文的记录明确标记缺失；不能恢复入�
 
 ## 维护与回退
 
-CRM／邮件此次切换仅更换业务镜像并合并事件环境变量，原卷、网络、命令、运行用户及认证字段保持一致。私有发布目录是 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261005-events-0.1.4`，各 `switch/<crm|email>/journal.json` 记录完整事务。需要回退本次 overlay 时使用同目录上级的 `switch_overlay.py --release <发布目录> rollback <crm|email>`；保留当前业务数据与 OAuth，不恢复旧数据快照。
+0.1.5 使用上述独立发布目录及三个服务的切换记录；旧 0.1.4 发布证据完整保留。恢复仅比较并恢复本次镜像／Compose，必须先核对记录中的摘要，发生外部变更时停止覆盖。业务数据、事件订阅及 OAuth 状态不恢复旧快照。
+
+CRM／邮件 0.1.4 首次事件部署仅更换业务镜像并合并事件环境变量，原卷、网络、命令、运行用户及认证字段保持一致。私有发布目录是 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261005-events-0.1.4`，各 `switch/<crm|email>/journal.json` 记录完整事务。需要回退本次 overlay 时使用同目录上级的 `switch_overlay.py --release <发布目录> rollback <crm|email>`；保留当前业务数据与 OAuth，不恢复旧数据快照。
 
 统计使用 `usage-data` 持久卷、三个只读绑定目录及独立私有秘密文件。清单为 `deployment_mode: existing`：业务仓库准备固定 wheel／基础镜像的离线构建和 Compose；公共 mcpctl 协调认证、Tunnel 和 DNS。首次独立 OAuth 客户端使用公共 prepare_auth_change 显式传入私有 env 后创建；既有客户端后续由 mcpctl 正常协调。首次未提供 env 的入口尝试在任何共享配置改变前停止，回退记录 complete；之后独立客户端与公开入口均成功。
 
