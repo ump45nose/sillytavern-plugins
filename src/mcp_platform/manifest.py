@@ -18,6 +18,23 @@ class Volume(BaseModel):
     external: bool = False
 
 
+class BindMount(BaseModel):
+    """只读挂载既有数据目录，不授予容器写宿主机文件的权限。"""
+
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    mount: str
+    read_only: Literal[True] = True
+
+    @model_validator(mode="after")
+    def check_paths(self):
+        for value in (self.source, self.mount):
+            path = Path(value)
+            if not path.is_absolute() or ".." in path.parts or value == "/":
+                raise ValueError("只读绑定挂载必须使用非根目录的绝对路径")
+        return self
+
+
 class AuthSpec(BaseModel):
     client_id: str
     discovery_url: str
@@ -68,6 +85,7 @@ class AppManifest(BaseModel):
     init: bool = False
     external_networks: list[str] = Field(default_factory=list)
     volumes: list[Volume] = Field(default_factory=list)
+    bind_mounts: list[BindMount] = Field(default_factory=list)
     environment: dict[str, str] = Field(default_factory=dict)
     required_env: list[str] = Field(default_factory=list)
     auth: AuthSpec | None = None

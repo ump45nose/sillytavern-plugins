@@ -108,11 +108,14 @@ def create_server(config: RuntimeConfig, *, instructions=None, lifespan=None,
     return server
 
 
-def create_http_app(server: FastMCP, config: RuntimeConfig):
+def create_http_app(server: FastMCP, config: RuntimeConfig, *, events=None):
     hosts = list(config.allowed_hosts)
     public_host = urlsplit(config.public_base_url).hostname
     if public_host and public_host not in hosts:
         hosts.insert(0, public_host)
-    return server.http_app(path="/mcp", transport="streamable-http", stateless_http=True,
-                           json_response=False, allowed_hosts=hosts,
-                           allowed_origins=config.allowed_origins)
+    app = server.http_app(path="/mcp", transport="streamable-http", stateless_http=True,
+                          json_response=False, allowed_hosts=hosts,
+                          allowed_origins=config.allowed_origins)
+    if events is not None:
+        events.attach(app, server)
+    return app

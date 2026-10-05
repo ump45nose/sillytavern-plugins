@@ -66,7 +66,10 @@ def compose_text(app, image, env_file, original=""):
         "image": image, "restart": "unless-stopped", "env_file": [str(env_file)],
         "environment": app.runtime_environment, "command": app.command,
         "ports": [f"{app.bind_address}:{app.host_port}:{app.port}"],
-        "volumes": [f"{v.name}:{v.mount}" for v in app.volumes],
+        "volumes": [f"{v.name}:{v.mount}" for v in app.volumes] + [
+            {"type": "bind", "source": v.source, "target": v.mount, "read_only": True}
+            for v in app.bind_mounts
+        ],
         "healthcheck": {"test": ["CMD", "python", "-c",
             f"import urllib.request; urllib.request.urlopen('http://127.0.0.1:{app.port}{app.health_path}', timeout=3)"],
             "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "20s"},
