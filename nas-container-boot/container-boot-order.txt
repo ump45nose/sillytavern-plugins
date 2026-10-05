@@ -1,0 +1,51 @@
+# Current persistent containers after 2026-10-04 cleanup.
+# APISIX is intentionally excluded: manual/on-demand only.
+# Format: stage container [required-container ...]
+
+10 dockge
+10 postgresql
+10 redis
+10 minio
+
+20 tailscale
+20 ddns-go
+20 nginx-proxy-manager
+20 authelia redis
+20 cli-proxy-api
+
+30 qbittorrent
+30 navidrome
+30 memos
+30 new-api postgresql
+30 cpa-manager-plus cli-proxy-api
+30 subboost-app-1 postgresql
+30 personal-crm-crm-1
+30 vaultwarden
+30 clouddrive2
+30 duplicati
+30 email-mcp
+30 homeassistant
+30 embyserver
+30 mdc
+30 ilab-conjure
+30 mcphub
+30 sillytavern
+30 hermes-studio
+30 agi-job-rsshub
+30 favsync-wallabag-1
+30 favsync-cookiecloud-1
+30 favsync-xhs-downloader-1
+30 favsync-bili-sync-1
+30 komga
+30 token-monitor-hub
+30 local-env-mcp-cloudflared
+30 media-automation-media-search-1
+30 media-automation-media-download-mcp-1
+30 moviepilot
+
+40 qbit_manage qbittorrent
+40 IYUUPlus qbittorrent
+40 emby-theme-worker embyserver
+40 favsync-favsync-1 favsync-wallabag-1
+40 favsync-favsync-api-1 favsync-favsync-1
+45 watchtower

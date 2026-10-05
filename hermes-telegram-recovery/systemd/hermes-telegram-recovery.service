@@ -1,0 +1,6 @@
+[Unit]
+Description=Recover Hermes after unrecoverable Telegram polling failure
+
+[Service]
+Type=oneshot
+ExecStart=/home/yuwk/cron/scripts/hermes-telegram-recovery-check

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SubBoost rule-index refresh hourly
+
+[Timer]
+OnCalendar=*-*-* *:00:00
+AccuracySec=15s
+Persistent=true
+Unit=subboost-update-rule-index.service
+
+[Install]
+WantedBy=timers.target
