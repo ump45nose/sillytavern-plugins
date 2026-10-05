@@ -11,12 +11,30 @@ preview, and source cleanup is opt-in. See [architecture and installation](docs/
 ## Layout and entry points
 
 - `package.v2.json` and `plugins.v2/filmwatchlist` retain MoviePilot's repository-root installation contract and the `FilmWatchlist` class/config prefix
+- `plugins.v2/mediacapabilities` independently hosts shared acquisition settings, adapters, browser sessions and submission receipts
 - `plugins.v2/themestudio` contains the `ThemeStudio` plugin and its existing frontend distribution; it remains a thin proxy to `/run/theme-worker/control.sock`
 - `apps/emby-theme-worker` is an independently installable Python project, CLI and Docker build context, with its original config, compose, docs, tests and state schema
 - `frontends/theme-studio` contains the Vue source and lockfile; its build writes to the root ThemeStudio plugin distribution
 - Compatibility links under `apps/emby-theme-worker/moviepilot` retain the previous frontend, plugin and manifest paths for existing Unix-based tooling
 
-The Film plugin never imports the Theme worker or its audio dependencies. The Theme worker never imports MoviePilot or FilmWatchlist. There is no new root Python package, shared database, scheduler or always-on service.
+The Film plugin never imports the Theme worker or its audio dependencies. The Theme worker never imports MoviePilot or FilmWatchlist. There is no root Python package. Optional independent search and MCP services are described below.
+
+## Media Search and Download MCP
+
+`apps/media-search` adds an independent Vue/Python query page; `apps/media-download-mcp`
+adds a generic three-tool MCP service (stdio and Streamable HTTP). They reuse the
+`media-capabilities` acquisition package through the independently installed **MediaCapabilities
+0.1.1** MoviePilot host plugin, requiring the shared **0.3.2 acquisition wheel**.
+Neither service requires FilmWatchlist to be installed. FilmWatchlist 1.4.3 connects to the
+same runtime and registry through MoviePilot's plugin manager; its scans and preview flag
+remain business settings. The public host starts disabled and owns download permissions.
+
+The new entrypoints search M-Team and Mini4K, support quality/subtitle/balanced profiles,
+and download movies, complete seasons, single episodes, or one complete BT resource for
+an ended series. They return download receipts without managing version replacement or
+library writeback. Existing FilmWatchlist records and writeback keep their own lifecycle.
+See [architecture and host setup](docs/media-acquisition.md),
+[web startup](apps/media-search/README.md), and [MCP startup](apps/media-download-mcp/README.md).
 
 ## FilmWatchlist
 
