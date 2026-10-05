@@ -36,8 +36,14 @@ required_env:
   - OIDC_AUTHORIZED_USERNAMES
 auth:
   client_id: email-mcp
-  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
-expected_tools: [list_available_accounts, list_emails_metadata, list_mailboxes, send_email, save_draft]
+  discovery_url: >-
+    https://authelia-home.172906573.xyz/.well-known/openid-configuration
+expected_tools:
+  - list_available_accounts
+  - list_emails_metadata
+  - list_mailboxes
+  - send_email
+  - save_draft
 plugin:
   name: email-mcp
   version: 0.1.0

@@ -11,6 +11,7 @@ from mcp_platform import RuntimeConfig, authorize, create_http_app, create_serve
 
 def email_permission(config):
     """未知或未明确标记只读的工具按写权限处理。"""
+
     def check(context):
         annotations = getattr(context.component, "annotations", None)
         readonly = annotations is not None and annotations.readOnlyHint is True
@@ -29,13 +30,22 @@ def create_app(config=None):
     get_application_runtime().management.legacy_compatibility.validate_runtime()
     config = config or RuntimeConfig.from_env("email-mcp")
     # 原业务已有查询/结果限制；不再叠加可能改变邮件写入行为的超时。
-    config = config.model_copy(update={
-        "version": version("mcp-email-server"), "requests_per_minute": 0,
-        "tool_timeout_seconds": 0, "max_output_bytes": 0,
-    })
-    server = create_server(config, healthcheck=lambda: {
-        "status": "ok", "database": "ok", "email_server": version("mcp-email-server"),
-    })
+    config = config.model_copy(
+        update={
+            "version": version("mcp-email-server"),
+            "requests_per_minute": 0,
+            "tool_timeout_seconds": 0,
+            "max_output_bytes": 0,
+        }
+    )
+    server = create_server(
+        config,
+        healthcheck=lambda: {
+            "status": "ok",
+            "database": "ok",
+            "email_server": version("mcp-email-server"),
+        },
+    )
     server.mount(create_proxy(upstream))
     if not config.development_no_auth:
         server.add_middleware(AuthMiddleware(auth=email_permission(config)))
