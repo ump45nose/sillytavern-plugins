@@ -2,7 +2,7 @@ services:
   favsync:
     build: .
     image: local/favsync:0.1.0
-    restart: unless-stopped
+    restart: on-failure
     init: true
     # The host SOCKS/HTTP mixed proxy listens on loopback. Host networking also
     # gives future download adapters the same default proxy path.
@@ -57,7 +57,7 @@ services:
   cookiecloud:
     profiles: [cookiecloud]
     image: easychen/cookiecloud:latest
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "${COOKIECLOUD_BIND:-127.0.0.1}:${COOKIECLOUD_PORT:-18088}:8088"
     volumes:
@@ -74,7 +74,7 @@ services:
       context: .
       dockerfile: Dockerfile.xhs-downloader
     image: local/xhs-downloader:2.8
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "127.0.0.1:5556:5556"
     user: "${PUID:-1000}:${PGID:-1001}"
@@ -94,7 +94,7 @@ services:
       context: .
       dockerfile: Dockerfile.bili-sync
     image: local/bili-sync-rs:2.11.1-flat1
-    restart: unless-stopped
+    restart: on-failure
     user: "${PUID:-1000}:${PGID:-1001}"
     ports:
       - "192.168.31.201:12345:12345"
@@ -111,7 +111,7 @@ services:
   wallabag:
     profiles: [wallabag]
     image: wallabag/wallabag:2.6.14
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "${WALLABAG_BIND:-127.0.0.1}:${WALLABAG_PORT:-18081}:80"
     environment:
