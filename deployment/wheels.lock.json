@@ -20,9 +20,9 @@
     },
     "usage-monitor-mcp": {
       "version": "0.1.0",
-      "sha256": "3c50847ece0222d1bee0191606a9c1cdfbac1226b6768682a9ef77b6d2980f20",
+      "sha256": "c46e9028bb8713b17e1acf0300736ba0a87914adaccd527c4202afd9c3560c57",
       "repository": "https://github.com/ump45nose/usage-monitor-mcp.git",
-      "source_commit": "d564b991d6355a9a6cfaf6d6e17ddb79b52d8094"
+      "source_commit": "a0373131e81cbb73edaedc90753c0d2fcc27afb5"
     }
   }
 }
