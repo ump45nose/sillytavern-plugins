@@ -6,7 +6,7 @@
 - 公网 Tunnel 入口与四个私有原生 GPT Web MCP 连接已完成。CRM 使用名称「CRM」与图标 C；远程服务器采用 C 方案「远程工作台」直接连接独立 MCP；钉钉使用官方图标，Media Download 使用 MoviePilot 官方图标。实际网页 App ID、URL 与验证结果见 `docs/gpt-web-rollout-2026-10-05.md` 和 `docs/gpt-web-release-2026-10-05.json` 的 `native_web_connections`。旧展示包 release 仅为历史记录。
 - 展示候选存放在 `docs/gpt-web-plugin-drafts/`，仅用于评审。选定后以业务 `mcp.app.yaml` 为正式配置来源，不让候选资料成为第二份部署配置。CRM 与远程服务器使用原创图标，Media Download 原样复用 MoviePilot 官方图标并登记来源；不在图标中加入令牌、域名或设备标识。
 - CRM 使用公共运行时；钉钉继续由现有 MCPHub 聚合官方服务，远程网关保留 systemd 与独立执行器。Media Download 业务容器保留 SDK 2.3.0 与文件 Bearer，由 `integrations/media-download-mcp/` 的公共运行时网关提供公网 OAuth；保留原 Bearer 客户端兼容。不要替换业务 SDK、重复运行下载后端或把后端令牌放入插件。
-- 钉钉正式清单与发布资料归入 `integrations/dingtalk/`，NAS source_roots 已指向该目录；不要恢复已删除的旧工作目录。旧远程展示包的云端 skill 路径和指引仅保留作历史；原生远程工作台使用实际工具及 MCP 描述，不引用旧 App。
+- 钉钉业务与展示归入上游仓 `dingtalk-workspace-plugin`；NAS 部署适配层在该仓克隆的 `mmp-platform/` 子目录（`/yuwk/code/mmp/dingding-workspace-plugin`），NAS source_roots 已指向该处。公共仓库 `integrations/` 不再持有钉钉适配，不要恢复旧路径或重建旧工作目录。旧远程展示包的云端 skill 路径和指引仅保留作历史；原生远程工作台使用实际工具及 MCP 描述，不引用旧 App。
 - 复用 `local-env-mcp-cloudflared` 的共享 Tunnel，每个服务使用独立域名直达原进程。不要新建重复 Tunnel、数据库、Redis、反代或聚合网关。
 
 ## 版本、构建与配置

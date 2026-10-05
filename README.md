@@ -49,8 +49,8 @@ app = create_http_app(server, config)
 targets:
   nas:
     source_roots:
-      personal-crm: /home/yuwk/personal-crm
-      dingtalk: /home/yuwk/mcp-platform/integrations/dingtalk
+      personal-crm: /yuwk/code/mmp/personal-crm
+      dingtalk: /yuwk/code/mmp/dingding-workspace-plugin/mmp-platform
       local-env-mcp: /home/yuwk/mcp-platform/integrations/local-env-mcp
       media-download-mcp: /home/yuwk/media-automation/apps/media-download-mcp
     env_files:
