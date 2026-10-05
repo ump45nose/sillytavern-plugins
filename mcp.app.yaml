@@ -1,6 +1,7 @@
 schema_version: 1
 id: usage-monitor-mcp
 name: 用量统计
+deployment_mode: existing
 command:
 - usage-monitor-mcp
 public_url: https://usage-home.172906573.xyz

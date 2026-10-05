@@ -35,7 +35,9 @@
 
 ## 配置与权限
 
-mcp.app.yaml 是部署唯一清单。公网地址、OAuth 客户端、监听端口与挂载由公共 mcpctl 协调。新服务运行用户为 1000:1001，保留两个上游项目的读权限；来源目录以只读 bind mount 挂载，SQLite 以 mode=ro 和 query_only 读取，且挂载目录保留 WAL/SHM。
+mcp.app.yaml 是部署唯一清单，明确使用 deployment_mode: existing。本项目负责离线构建镜像和启动业务容器；公共 mcpctl 的 existing 路径仅协调 OAuth、共享 Tunnel、DNS 与入口核验。业务监听端口和挂载依据清单生成独立 Compose 配置，不走公共 generic build_bundle 的镜像构建路径。
+
+新服务运行用户为 1000:1001，保留两个上游项目的读权限；来源目录以只读 bind mount 挂载，SQLite 以 mode=ro 和 query_only 读取，且挂载目录保留 WAL/SHM。
 
 | 环境变量 | 配置 |
 |---|---|
@@ -57,7 +59,14 @@ mcp.app.yaml 是部署唯一清单。公网地址、OAuth 客户端、监听端�
 
 ## 构建和验证
 
-生产使用 Python 3.12。由宿主机构建并核对锁定提交的 mcp-platform、usage-monitor-mcp、dingtalk-events wheel，注入干净 wheels 目录。Dockerfile 支持 MCP_RUNTIME_IMAGE 参数，以已核对 digest 的现有公共认证运行时镜像为基础；只在本地镜像中安装 wheel，不在镜像内获取 Git 凭据。若使用默认 Python 基础镜像，wheels 必须包含全部传递依赖。
+生产使用 Python 3.12。由宿主机取得并构建固定提交的 mcp-platform、usage-monitor-mcp、dingtalk-events 三个 wheel；容器构建使用本项目 Dockerfile，从已有、已核验的认证运行时镜像离线安装。这样私有 Git 依赖在宿主机完成，不进入镜像内的依赖安装步骤。
+
+1. 检查 deployment/wheels.lock.json：记录三个 wheel 的名称、版本、来源提交、SHA256，以及基础镜像 local/personal-crm:refresh-policy-0.1.3 的完整镜像 ID。公共包和钉钉的来源必须同时与 uv.lock 一致。业务 wheel 若早于当前文档提交，脚本会核验其后 Python 源码及依赖没有变化。
+2. 在干净业务仓库运行 scripts/prepare_build.py，提供 --build-dir、--platform-wheel、--dingtalk-wheel、--usage-wheel 和 --image-tag。脚本校验来源、哈希、wheel metadata、实际本地基础镜像 ID，再把受控源码和三个 wheel 复制到新的仓库外目录，生成 build-record.json。--check-only 仅校验；脚本始终不构建或启动容器，也不读取秘密文件。
+3. 审核 build-record.json 内的 source_commit、source_files、wheels 与 build_command，执行其 Docker 构建命令。构建指定 --pull=false 与 --network=none。Dockerfile 仅在新镜像层移除继承的 personal-crm 分发包，离线安装三个 wheel 并执行 pip check；原 CRM 镜像和容器不变。
+4. 宿主机部署步骤准备 /data 卷权限、只读来源和秘密挂载，启动本服务；随后运行 mcpctl doctor、plan、deploy 的 existing 路径，协调认证和公网入口。OAuth 签名、存储密钥及事件状态保存在仓库外的持久目录，升级保留它们。
+
+build-record.json 与构建目录不加入 Git。每次构建目录必须是新的绝对路径，脚本不会覆盖已有构建；输入只允许已审定的三个 wheel，源码只复制 Git 跟踪的 Python 包、Dockerfile 与指定构建资料。镜像中的依赖安装不使用 uv export 或私有 Git URL。
 
 只读诊断命令 usage-monitor-check 默认只打印日期和来源可用性。--summary 会显示实际统计，日常部署冒烟不需要该选项。验证涵盖日界线、离线设备、历史精确日期、费用缺失、跨日流量空缺、报告不可覆盖、分页限制和每日事件重试；测试使用临时数据，不触碰实际来源、不外发。
 
