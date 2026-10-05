@@ -2,14 +2,46 @@ schema_version: 1
 id: media-download-mcp
 name: Media Download MCP
 deployment_mode: existing
-authentication: bearer
+authentication: oauth
 public_url: https://media-download-home.172906573.xyz
-port: 8091
-host_port: 8091
+port: 8092
+host_port: 8092
 bind_address: 127.0.0.1
-health_path: ''
+health_path: /healthz
 mcp_path: /mcp
 expected_tools:
-  - search_resources
-  - download_media
-  - get_download_status
+- search_resources
+- download_media
+- get_download_status
+auth:
+  client_id: media-download-mcp
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+  authorization_policy: smartsearch_yuwk
+  claims_policy: smartsearch_identity
+  secret_env: OIDC_CLIENT_SECRET
+  generated_secret_envs:
+  - OAUTH_JWT_SIGNING_KEY
+  - OAUTH_STORAGE_ENCRYPTION_KEY
+  usernames_env: OIDC_AUTHORIZED_USERNAMES
+  scopes:
+  - openid
+  - profile
+  - offline_access
+environment:
+  MEDIA_BACKEND_URL: http://127.0.0.1:8091/mcp
+  MEDIA_BACKEND_HOST: media-download-home.172906573.xyz
+  MEDIA_BACKEND_TOKEN_FILE: /secrets/backend.token
+  MEDIA_LEGACY_BEARER_USERNAME: yuwk
+plugin:
+  name: media-download-mcp
+  version: 0.1.0
+  description: 通过 MoviePilot 搜索电影和电视剧资源，按片名、TMDB 或 IMDb 标识定位作品，支持单集、整季和已完结整剧。可按画质、字幕或均衡偏好选择资源，提交下载并查询任务状态，也可下载搜索结果中的指定候选。
+  display_name: Media Download
+  app_binding: dev-6ac288ae39908191a239ef999f71fa54
+  app_id: asdk_app_6ac288ae39908191a239ef999f71fa54
+  short_description: 搜索影视资源、提交下载并查看任务状态
+  logo: assets/plugin/moviepilot.png
+  keywords:
+  - MoviePilot
+  - 影视
+  - 下载

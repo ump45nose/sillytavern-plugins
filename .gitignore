@@ -47,6 +47,11 @@ downloads/
 node_modules/
 *.whl
 .build/
+apps/media-search/media_search/static/
+apps/media-search/config.json
+apps/media-search/secrets/
+apps/media-download-mcp/config.json
+apps/media-download-mcp/secrets/
 !plugins.v2/mediaarchive/dist/
 !plugins.v2/mediaarchive/dist/**
 !plugins.v2/discremux/dist/

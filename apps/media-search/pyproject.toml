@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "media-search"
+version = "0.1.1"
+requires-python = ">=3.11"
+dependencies = ["media-capabilities==0.3.2", "fastapi==0.142.2", "uvicorn==0.54.0"]
+
+[project.scripts]
+media-search = "media_search.app:main"
+
+[tool.setuptools.packages.find]
+include = ["media_search*"]
+
+[tool.setuptools.package-data]
+media_search = ["static/**/*", "static/*"]

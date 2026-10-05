@@ -1,6 +1,6 @@
 services:
   media-download-mcp:
-    image: local/media-download-mcp:0.1.1-tunnel
+    image: local/media-download-mcp:0.1.2-fallback
     build:
       context: ../..
       dockerfile: apps/media-download-mcp/Dockerfile

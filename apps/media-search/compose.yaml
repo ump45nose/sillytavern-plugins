@@ -1,0 +1,11 @@
+services:
+  media-search:
+    image: local/media-search:0.1.1
+    build:
+      context: ../..
+      dockerfile: apps/media-search/Dockerfile
+    ports: ["127.0.0.1:8090:8090"]
+    volumes:
+      - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/config.json:/config/config.json:ro
+      - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/secrets:/run/secrets:ro
+    restart: unless-stopped

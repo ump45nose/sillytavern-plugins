@@ -1,0 +1,12 @@
+# Unified deployment entry for media-automation services.
+# Services keep independent runtime boundaries; deployment is owned by this repository.
+include:
+  - path:
+      - ./apps/emby-theme-worker/compose.yaml
+      - /vol2/1000/Docker/emby-theme-worker/deploy/media-automation.override.json
+  - path:
+      - ./apps/media-search/compose.yaml
+      - /home/yuwk/.config/media-automation/media-search/deploy.override.json
+  - path:
+      - ./apps/media-download-mcp/compose.yaml
+      - /home/yuwk/.config/mcp-platform/media-download-mcp/deploy.override.json

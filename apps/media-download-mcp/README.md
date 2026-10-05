@@ -18,7 +18,7 @@ python3 -m venv .venv
 
 复制 `config.example.json` 为 `config.json`，配置 MoviePilot 地址和 API 令牌文件。
 HTTP 模式另外需要本服务访问令牌文件；文件权限必须为 `0600`，不提交到 Git。
-MoviePilot 必须安装共享包 0.3.0、MediaCapabilities 0.1.0 并启用公共宿主。
+MoviePilot 必须安装共享包 0.3.2、MediaCapabilities 0.1.1 并启用公共宿主。
 无需安装或更新 FilmWatchlist；站点、浏览器和 115 设置由公共宿主独立管理。
 
 ```sh
@@ -56,6 +56,8 @@ Host 检查由 SDK 执行。访问令牌可以通过替换文件轮换，不使�
 
 - `search_resources` 首次给 `request`；返回 `session_id` 后，仅给 `session_id` 续查，
   加 `source_id=mteam|mini4k` 读取下一页。展示阶段不获取种子元数据。
+  身份识别无结果或上游异常时，按片名和可选年份继续查询；`identity_status=unverified`
+  表示仅完成名称查询，此类候选需用媒体 ID 重新搜索后下载。
 - `download_media` 可给媒体身份自动选源，或给搜索返回的 `candidate_id` 下载指定资源。
   候选范围必须与搜索一致。默认 `quality`，另有 `subtitle`、`balanced`；
   指定候选不受自动偏好限制，仍执行身份、范围、格式、private 与路由检查。
