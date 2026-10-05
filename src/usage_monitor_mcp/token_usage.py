@@ -194,13 +194,14 @@ def aggregate_tokens(document, window: Window, stale_after_seconds=600):
     included = [x for x in devices if x["included"]]
     cost_known = bool(included) and all(x.get("estimated_cost_usd") is not None for x in included)
     exclusions = [x["device_id"] for x in devices if not x["included"]]
+    stale_included = any(x["stale"] for x in included)
     totals = {"tokens": sum(x["tokens"] for x in included) if included else None,
               "estimated_cost_usd": round(sum(x["estimated_cost_usd"] for x in included), 8) if cost_known else None,
               "cost_complete": cost_known}
     for field in ("cache_read_tokens", "cache_write_tokens", "output_tokens", "unclassified_tokens"):
         totals[field] = sum(x[field] for x in included) if included and all(x.get(field) is not None for x in included) else None
     return {
-        "status": "ok" if included and not exclusions else "partial" if included else "unavailable",
+        "status": "ok" if included and not exclusions and not stale_included else "partial" if included else "unavailable",
         "totals": totals, "models": _merge(models), "tools": _merge(tools), "devices": devices,
         "coverage": {"included_devices": len(included), "known_devices": len(devices),
                      "excluded_devices": exclusions, "stale_devices": [x["device_id"] for x in devices if x["stale"]]},

@@ -63,6 +63,15 @@ class TokenDateTests(unittest.TestCase):
         self.assertEqual(result["subscriptions"]["status"], "not_configured")
         self.assertIsNone(result["subscriptions"]["actual_paid_today"])
 
+    def test_same_day_stale_snapshot_is_retained_but_partial(self):
+        source = record()
+        source["receivedAt"] = "2026-10-05T15:00:00+08:00"
+        source["updatedAt"] = "2026-10-05T15:00:00+08:00"
+        result = aggregate_tokens({"devices": {"a": source}}, Window.make(now=NOW))
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["totals"]["tokens"], 100)
+        self.assertTrue(result["devices"][0]["stale"])
+
     def test_missing_or_duplicate_history_fails_closed(self):
         source = record()
         source["periodWindows"].pop("timeZone")

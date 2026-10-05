@@ -55,7 +55,7 @@ def build_application(settings=None, runtime_config=None, extra_producers=None):
         "估算成本不等于实付，缺失额度不等于 0。模型、工具、设备分别是同一用量的不同维度，不能重复相加。"
         "usage.daily_ready 提供已存档报告 ID，get_usage_report 可分页取明细。"
         "钉钉事件与只读事件记录如已配置也由此服务提供，业务操作仍使用原钉钉 MCP。"),
-        lifespan=lifespan, healthcheck=lambda: {"ok": True, "service": "usage-monitor-mcp"})
+        lifespan=lifespan, healthcheck=lambda: {"status": "ok", "ok": True, "service": "usage-monitor-mcp"})
     store = ReportStore(settings.data_dir)
     permission = authorize("read", config)
 
