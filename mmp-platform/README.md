@@ -11,3 +11,8 @@ NAS `source_roots.dingtalk` 指向本目录；旧业务工作目录已删除，�
 ```bash
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan dingtalk --target nas
 ```
+
+
+## 钉钉事件
+
+`events/` 维护只读事件生产器，由用量统计 MCP 加载并交给公共事件服务投递。已支持当前用户待办新增、重要字段变化、临期与新待审批；首次完整读取只建立基准。当前官方主日历查询缺少日程 ID，日历事件暂不启用。原钉钉 App、MCPHub 与北向 OAuth 保留原身份；没有新增聚合网关或钉钉业务写入。配置、主体隔离、状态和回退方法见 [事件生产器说明](events/README.md)。
