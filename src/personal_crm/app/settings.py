@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     )
     reminder_scheduler_enabled: bool = True
     reminder_poll_seconds: int = 3600
+    # 主动事件必须显式启用并绑定已授权用户，复用现有 /data 持久卷。
+    chat_events_enabled: bool = False
+    chat_event_owner: str = ""
+    chat_event_storage_path: str = "/data/events"
+    chat_event_timezone: str = "Asia/Taipei"
+    chat_event_time: str = "23:00"
+    chat_event_poll_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 

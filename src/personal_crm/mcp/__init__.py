@@ -46,7 +46,7 @@ def _auth_check(settings: Any, *, write: bool):
     return authorize("write" if write else "read", _runtime(settings))
 
 
-def create_mcp(service: Any, settings: Any) -> FastMCP:
+def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
     """创建完整 MCP 服务；本地无 OAuth 配置时便于离线测试。"""
 
     runtime = _runtime(settings)
@@ -285,10 +285,18 @@ def create_mcp(service: Any, settings: Any) -> FastMCP:
 
         return get_weekly_metrics()
 
+    if chat_reports is not None:
+        from personal_crm.events import register_chat_event_tools
+
+        register_chat_event_tools(server, chat_reports, auth=read_auth)
     return server
 
 
-def http_app(service: Any, settings: Any):
-    """公共基座提供无状态 HTTP、发现路由及生命周期。"""
+def http_app(service: Any, settings: Any, *, events=None, chat_reports=None):
+    """公共基座提供 HTTP、发现路由及经过同一认证的事件协议。"""
 
-    return create_http_app(create_mcp(service, settings), _runtime(settings))
+    server = create_mcp(service, settings, chat_reports=chat_reports)
+    config = _runtime(settings)
+    if events is not None:
+        return create_http_app(server, config, events=events)
+    return create_http_app(server, config)

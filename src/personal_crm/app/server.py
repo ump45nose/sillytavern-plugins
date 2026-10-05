@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from personal_crm.core import CrmService
-from personal_crm.mcp import http_app
+from personal_crm.mcp import _runtime, http_app
 from personal_crm.reminders import ReminderService
 from personal_crm.storage import CrmRepository
 from personal_crm.webhook import create_router
@@ -26,7 +26,25 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
     repo = repository or CrmRepository(runtime.database_url)
     service = CrmService(repo)
     reminder_service = ReminderService(repo)
-    mcp_application = http_app(service, runtime)
+    events, chat_reports = None, None
+    if runtime.chat_events_enabled:
+        if (
+            runtime.mcp_development_no_auth
+            or runtime.chat_event_owner not in runtime.authorized_usernames
+        ):
+            raise ValueError("chat events require an explicitly authorized OAuth owner")
+        from mcp_platform.events import EventService
+
+        from personal_crm.events import ChatEventProducer
+
+        events = EventService(_runtime(runtime), storage_path=runtime.chat_event_storage_path)
+        chat_reports = ChatEventProducer(
+            repo, events, owner=runtime.chat_event_owner,
+            storage_path=runtime.chat_event_storage_path.rstrip("/") + "/chat-reports",
+            timezone=runtime.chat_event_timezone, send_time=runtime.chat_event_time,
+            poll_seconds=runtime.chat_event_poll_seconds,
+        )
+    mcp_application = http_app(service, runtime, events=events, chat_reports=chat_reports)
 
     async def run_reminder_scheduler() -> None:
         """定期补齐本周提醒；持久化周预算保证重复执行不会超额。"""
@@ -44,17 +62,21 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
         """把 FastMCP 的生命周期纳入主 ASGI 应用。"""
 
         del app
-        scheduler_task = None
+        tasks = []
         async with mcp_application.lifespan(mcp_application):
             if runtime.reminder_scheduler_enabled:
-                scheduler_task = asyncio.create_task(run_reminder_scheduler())
+                tasks.append(asyncio.create_task(run_reminder_scheduler()))
+            if chat_reports is not None:
+                tasks.append(asyncio.create_task(chat_reports.serve()))
+                tasks.append(asyncio.create_task(events.serve()))
             try:
                 yield
             finally:
-                if scheduler_task is not None:
-                    scheduler_task.cancel()
+                for task in tasks:
+                    task.cancel()
+                for task in tasks:
                     with contextlib.suppress(asyncio.CancelledError):
-                        await scheduler_task
+                        await task
 
     app = FastAPI(title="Personal CRM", lifespan=lifespan)
     app.state.repository = repo
