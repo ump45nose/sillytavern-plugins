@@ -5,8 +5,9 @@ Requires=shellcrash.service
 
 [Service]
 Type=simple
-User=shellcrash
+User=shellcrash-traffic
 Group=Users
+SupplementaryGroups=shellcrash
 UMask=0027
 StateDirectory=shellcrash-traffic
 StateDirectoryMode=0750
