@@ -13,7 +13,7 @@
 set -u
 
 LOG_FILE="/home/hermes/.hermes/profiles/lingjun/cron/output/restart-services.log"
-LIST_FILE="/home/hermes/.hermes/profiles/lingjun/scripts/restart-services.list"
+LIST_FILE="/home/yuwk/cron/hermes/restart-services.list"
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
 

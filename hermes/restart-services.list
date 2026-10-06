@@ -1,0 +1,4 @@
+# restart-services.list - 每行一个服务，格式：type:name
+# 类型：systemd:<unit> 或 docker:<container>
+# 以 # 开头的行为注释
+systemd:hermes-dashboard.service

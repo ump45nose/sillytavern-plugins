@@ -1,8 +1,6 @@
 {
   "profile_scripts": {
     "plaud-daily.sh": "model/plaud-daily.sh",
-    "agi-job-ats-sync.sh": "model/agi-job-ats-sync.sh",
-    "agi-job-social-daily.sh": "hermes/agi-job-social-daily.sh",
     "benefits_aliyun.py": "hermes/benefits_aliyun.py",
     "benefits_automation_daily_report.py": "hermes/benefits_automation_daily_report.py",
     "benefits_automation_notice_daily.py": "hermes/benefits_automation_notice_daily.py",

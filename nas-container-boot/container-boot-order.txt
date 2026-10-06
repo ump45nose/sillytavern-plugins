@@ -32,7 +32,6 @@
 30 mcphub
 30 sillytavern
 30 hermes-studio
-30 agi-job-rsshub
 30 favsync-wallabag-1
 30 favsync-cookiecloud-1
 30 favsync-xhs-downloader-1

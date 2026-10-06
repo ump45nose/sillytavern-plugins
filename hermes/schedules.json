@@ -130,16 +130,6 @@
     "source": "hermes/ha-watchdog.sh"
   },
   {
-    "name": "china-social-referrals-exclude-campus-daily",
-    "schedule": {
-      "kind": "cron",
-      "expr": "0 18 * * *",
-      "display": "0 18 * * *"
-    },
-    "no_agent": true,
-    "source": "hermes/agi-job-social-daily.sh"
-  },
-  {
     "name": "health-data-freshness-hourly",
     "schedule": {
       "kind": "cron",

@@ -53,16 +53,6 @@
     "source": "model/learning-candidates-local.sh"
   },
   {
-    "name": "hangzhou-ats-sync-wed-sat",
-    "schedule": {
-      "kind": "cron",
-      "expr": "0 10 * * 3,6",
-      "display": "0 10 * * 3,6"
-    },
-    "no_agent": true,
-    "source": "model/agi-job-ats-sync.sh"
-  },
-  {
     "name": "hermes-mem0-retry-gate-2230",
     "schedule": {
       "kind": "cron",
