@@ -21,15 +21,27 @@ import argparse
 import json
 import os
 import sqlite3
+import sys
 import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 
 _parser = argparse.ArgumentParser()
 _parser.add_argument("--profile", required=True, help="Hermes profile name")
 _parser.add_argument("--db", default=None, help="Shared SQLite path (override)")
+_parser.add_argument(
+    "--commit-domain",
+    default=None,
+    help="Trusted collector mode: commit stdin JSON to this domain",
+)
+_parser.add_argument(
+    "--commit-key",
+    default=None,
+    help="Trusted collector mode: commit stdin JSON under this key",
+)
 _args, _ = _parser.parse_known_args()
 PROFILE = _args.profile
 
@@ -56,6 +68,7 @@ READ_PERMS: dict[str, object] = {
     "ops": {"infra", "homeassistant", "media", "shared"},
     "research": {"research", "shared"},
     "xp": {"xp"},
+    "codex": ALL,
 }
 WRITE_PERMS: dict[str, set[str]] = {
     "lingjun": {"tasks", "shared"},
@@ -63,7 +76,17 @@ WRITE_PERMS: dict[str, set[str]] = {
     "ops": {"infra", "homeassistant", "media", "shared"},
     "research": {"research", "shared"},
     "xp": {"xp"},
+    "codex": {"infra"},
 }
+CODEX_RESERVED_INFRA_KEYS = {
+    "host_environment",
+    "container_summary",
+    "container_inventory",
+    "host",
+    "containers",
+}
+AUDIT_RETENTION_SECONDS = 180 * 24 * 60 * 60
+MAX_FACT_VERSIONS_PER_KEY = 1000
 
 
 def _can(perms: dict, domain: str) -> bool:
@@ -111,9 +134,41 @@ def _db() -> sqlite3.Connection:
         );
         CREATE INDEX IF NOT EXISTS ix_events_domain_ts ON events(domain, ts);
         CREATE INDEX IF NOT EXISTS ix_obs_domain_ts ON observations(domain, ts);
+        CREATE INDEX IF NOT EXISTS ix_fact_history_key_ts
+            ON fact_history(domain, key, ts DESC);
         """
     )
     return conn
+
+
+def _canonical_json(value) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _prune_audit(conn: sqlite3.Connection, timestamp: float) -> None:
+    cutoff = timestamp - AUDIT_RETENTION_SECONDS
+    conn.execute("DELETE FROM fact_history WHERE ts < ?", (cutoff,))
+    conn.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
+    # ``observations`` is a legacy compatibility table. New observations are
+    # written only to ``events``; bound the old rows while readers migrate.
+    conn.execute("DELETE FROM observations WHERE ts < ?", (cutoff,))
+
+
+def _prune_fact_versions(
+    conn: sqlite3.Connection, domain: str, key: str
+) -> None:
+    conn.execute(
+        "DELETE FROM fact_history WHERE id IN ("
+        "SELECT id FROM fact_history WHERE domain=? AND key=? "
+        "ORDER BY ts DESC, id DESC LIMIT -1 OFFSET ?"
+        ")",
+        (domain, key, MAX_FACT_VERSIONS_PER_KEY),
+    )
 
 
 def _structured(value):
@@ -139,22 +194,67 @@ def _structured(value):
     return None, "REJECTED: unsupported value type"
 
 
-mcp = FastMCP("shared-state")
+SERVER_INSTRUCTIONS = """\
+Authoritative runtime context for this local Hermes environment. Before
+diagnosing or changing local networking, DNS/proxies, ports, Docker/containers,
+shared infrastructure, Hermes profiles, gateways/Telegram, Home Assistant, or
+media services, use the smallest relevant baseline: infra/host_environment for
+host, network, proxy, or Hermes/gateway questions; infra/container_summary for
+Docker or shared-service questions. Read infra/container_inventory only when
+exact container, port, or network details are needed. Check updated_at:
+observations can become stale and are evidence, not permission to mutate. Never
+request or store credentials. Codex may write only directly verified,
+structured infra facts and observations. Collector-owned baseline keys are
+ops-only. After commit_fact, read the exact resource back and verify it.
+"""
+
+READ_ONLY_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+WRITE_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=False,
+)
+
+mcp = FastMCP("shared-state", instructions=SERVER_INSTRUCTIONS)
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 def commit_fact(domain: str, key: str, value: str) -> str:
-    """Store an authoritative environment fact with audit history."""
+    """Store a verified structured fact with audit history.
+
+    Use only after direct observation or a deterministic collector result.
+    Never store credentials, preferences, inference, or unverified prose.
+    """
     if domain not in VALID_DOMAINS:
         return f"ERROR: unknown domain '{domain}'"
     if not _write_ok(domain):
         return f"DENIED: profile '{PROFILE}' cannot write domain '{domain}'"
+    if (
+        PROFILE == "codex"
+        and domain == "infra"
+        and key in CODEX_RESERVED_INFRA_KEYS
+    ):
+        return (
+            f"DENIED: profile 'codex' cannot overwrite collector-owned "
+            f"fact '{domain}/{key}'"
+        )
     parsed, error = _structured(value)
     if error:
         return error
-    stored = json.dumps(parsed, ensure_ascii=False)
+    stored = _canonical_json(parsed)
     timestamp = time.time()
     with _db() as conn:
+        previous = conn.execute(
+            "SELECT value FROM facts WHERE domain=? AND key=?",
+            (domain, key),
+        ).fetchone()
+        changed = previous is None or previous[0] != stored
         conn.execute(
             "INSERT INTO facts(domain,key,value,source_profile,updated_at) "
             "VALUES(?,?,?,?,?) ON CONFLICT(domain,key) DO UPDATE SET "
@@ -162,17 +262,37 @@ def commit_fact(domain: str, key: str, value: str) -> str:
             "updated_at=excluded.updated_at",
             (domain, key, stored, PROFILE, timestamp),
         )
-        conn.execute(
-            "INSERT INTO fact_history(domain,key,value,source_profile,ts) "
-            "VALUES(?,?,?,?,?)",
-            (domain, key, stored, PROFILE, timestamp),
-        )
+        if changed:
+            conn.execute(
+                "INSERT INTO fact_history(domain,key,value,source_profile,ts) "
+                "VALUES(?,?,?,?,?)",
+                (domain, key, stored, PROFILE, timestamp),
+            )
+            conn.execute(
+                "INSERT INTO events(domain,etype,payload,source_profile,ts) "
+                "VALUES(?,?,?,?,?)",
+                (
+                    domain,
+                    "fact_changed",
+                    _canonical_json({"key": key, "value": parsed}),
+                    PROFILE,
+                    timestamp,
+                ),
+            )
+        _prune_fact_versions(conn, domain, key)
+        _prune_audit(conn, timestamp)
     return f"OK commit_fact {domain}/{key}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def get_context(domain: str, query: str = "") -> str:
-    """Read facts in a domain, optionally filtering keys by substring."""
+    """Read runtime facts in a domain, optionally filtering keys by substring.
+
+    Use before local infrastructure diagnosis or changes when several related
+    facts may matter. For the basic host and container baseline, prefer exact
+    get_resource calls for infra/host_environment and infra/container_summary.
+    Fetch infra/container_inventory only for exact container details.
+    """
     if domain not in VALID_DOMAINS:
         return f"ERROR: unknown domain '{domain}'"
     if not _read_ok(domain):
@@ -201,9 +321,16 @@ def get_context(domain: str, query: str = "") -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def get_resource(domain: str, id: str) -> str:
-    """Read one environment fact by its exact key."""
+    """Read one runtime fact by exact domain and key.
+
+    Proactively call infra/host_environment for host, network, proxy, Hermes,
+    or Telegram/gateway work, and infra/container_summary for basic Docker or
+    shared-service orientation. Fetch infra/container_inventory only when exact
+    container, port, network, or image details are needed. Check updated_at
+    before relying on the value.
+    """
     if domain not in VALID_DOMAINS:
         return f"ERROR: unknown domain '{domain}'"
     if not _read_ok(domain):
@@ -226,9 +353,12 @@ def get_resource(domain: str, id: str) -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 def record_observation(domain: str, observation: str) -> str:
-    """Append a structured observation and matching event."""
+    """Append a verified structured observation event.
+
+    Use for point-in-time execution results, not credentials or inference.
+    """
     if domain not in VALID_DOMAINS:
         return f"ERROR: unknown domain '{domain}'"
     if not _write_ok(domain):
@@ -236,25 +366,25 @@ def record_observation(domain: str, observation: str) -> str:
     parsed, error = _structured(observation)
     if error:
         return error
-    stored = json.dumps(parsed, ensure_ascii=False)
+    stored = _canonical_json(parsed)
     timestamp = time.time()
     with _db() as conn:
-        conn.execute(
-            "INSERT INTO observations(domain,payload,source_profile,ts) "
-            "VALUES(?,?,?,?)",
-            (domain, stored, PROFILE, timestamp),
-        )
         conn.execute(
             "INSERT INTO events(domain,etype,payload,source_profile,ts) "
             "VALUES(?,?,?,?,?)",
             (domain, "observation", stored, PROFILE, timestamp),
         )
+        _prune_audit(conn, timestamp)
     return f"OK record_observation {domain}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def list_events(domain: str, since: float = 0.0) -> str:
-    """Read the event stream for a domain after a Unix timestamp."""
+    """Read verified runtime events in a domain after a Unix timestamp.
+
+    Use when recent changes, restarts, or observations may explain a current
+    infrastructure symptom.
+    """
     if domain not in VALID_DOMAINS:
         return f"ERROR: unknown domain '{domain}'"
     if not _read_ok(domain):
@@ -287,4 +417,14 @@ def list_events(domain: str, since: float = 0.0) -> str:
 
 
 if __name__ == "__main__":
+    if bool(_args.commit_domain) != bool(_args.commit_key):
+        _parser.error("--commit-domain and --commit-key must be provided together")
+    if _args.commit_domain:
+        result = commit_fact(
+            _args.commit_domain,
+            _args.commit_key,
+            sys.stdin.read(),
+        )
+        print(result)
+        raise SystemExit(0 if result.startswith("OK ") else 1)
     mcp.run()

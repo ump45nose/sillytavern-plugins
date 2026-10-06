@@ -43,24 +43,60 @@ Hermes 多 profile 集群，围绕"多 profile + Kanban 编排"运转：
 域：`infra` `homeassistant` `media` `social` `research` `xp` `tasks` `shared`。
 **权限按 profile 强制**：越权读/写会返回 `DENIED`，这是设计，不是 bug。只写你负责的域。
 - 只存**确定性事实/执行结果/观测**；禁止把“偏好/情绪/推测”写进 shared-state（那属于用户层）。
+- `facts` 保存当前值并在每次成功写入时刷新时间；`fact_history` 只在 canonical
+  JSON 值变化时追加。`events` 是事实变化和观测的唯一事件流，旧
+  `observations` 表仅保留只读兼容。历史和事件最多保留 180 天，每键最多
+  1,000 个事实版本。
+- `codex` 可读全部域，只能写 `infra` 中经过直接验证的结构化公共环境事实与观测；
+  自动采集键 `host_environment`、`container_summary`、`container_inventory` 及 legacy
+  `host|containers` 仍仅允许 ops/采集器覆盖。`commit_fact` 后必须按原键复读确认。
+
+### 主机事实采集
+
+lingjun 的常驻 gateway 承载两个 no-agent cron；采集器以 `ops` 身份只写 `infra`：
+
+- `shared-state-container-inventory`：每 15 分钟更新
+  `infra/container_summary` 和 `infra/container_inventory`。前者是主动读取的
+  小型摘要，后者仅在需要精确容器/端口/网络信息时读取。详细清单只保存容器名、镜像、运行/健康状态、
+  Compose project/service、网络、已发布端口、重启策略和 privileged 标志；
+  不保存环境变量、完整 labels、日志或挂载源。
+- `shared-state-host-environment`：每小时第 7 分钟更新
+  `infra/host_environment`。保存主机/OS、主机负载/内存/根磁盘健康、全局地址、默认路由、DNS、
+  Tailscale self 状态、脱敏代理端点、Hermes profile gateway 状态及
+  Telegram 配置存在性/显式启用覆盖；
+  不保存 token、cookie、API key 或代理认证信息。
+
+源码在 `hermes-authoring/collectors/`，部署和 cron 对账统一使用
+`hermes-authoring/scripts/deploy_collectors.sh`。采集成功保持 stdout 为空，
+cron 只在失败时留下错误；不要用 LLM cron 重做确定性采集。legacy 系统
+crontab 的 `mcp-servers/collect_infra.py` 已停用；旧
+`infra/host|containers` 只保留为历史兼容数据，不再刷新。
 
 Kanban 不属于 shared-state MCP。任务板使用 Hermes 原生 `kanban` toolset
 （`kanban_create/list/show/complete/block/...`）或人工 CLI `hermes kanban`。
 
 shared-state 的权威源码在 `hermes-authoring/mcp/shared_state_mcp.py`；部署必须使用
-`hermes-authoring/scripts/deploy_shared_state.sh`，脚本会先编译、执行契约/ACL 测试，
+`hermes-authoring/scripts/deploy_shared_state.sh`，脚本会先做最小编译检查，
 再安装并校验源码哈希。不要直接修改运行目录中的副本。
 
-## Kanban worker 协议
+## Kanban 闭环协议
 
-1. dispatcher 负责认领和启动 worker；人工操作使用 `hermes kanban claim`。
-2. 干活：在返回的 workspace 内完成；`skill_view` 先查现成脚本 → dry run → 再执行。
-3. 交付：使用原生 `kanban_complete(summary=..., artifacts=[...])`；阻塞则用
-   `kanban_block`，把结论、改动和下游交接写清楚。
-4. 观测入库：执行结果/发现写进你负责域的 shared-state。
-5. 不越界：不自领跨域任务；跨域需求 `kanban_create` 派回对应 profile 或交编排器路由。
-6. worker 委派的子 agent 不会继承原生 `kanban_*` 工具；任务生命周期只由直接认领
-   该任务的 worker 管理，子 agent 只返回结果，避免提前完成或阻塞父任务。
+1. controller 用 `kanban_create(assignee=...)` 派单，保存 task id，并检查
+   `subscribed`。true 只表示当前原会话已登记终态续接；false 时不得承诺自动回流，
+   必须保留后续 `kanban_show/list` 回查路径。
+2. dispatcher 负责认领和启动 worker；人工操作使用 `hermes kanban claim`。
+3. worker 在返回的 workspace 内执行；heartbeat 只表示存活并防止 stale reclaim，
+   不承担结果采集或 controller 通知。
+4. worker 用 `kanban_complete(summary=..., artifacts=[...])` 交付；阻塞则用
+   `kanban_block`。summary、metadata、comments、artifacts 是 controller 的权威交接面。
+5. 自动订阅必须保存 gateway owner 与原会话的 platform、chat type、chat/thread/user、
+   canonical session key/id。只有 owner gateway 能 claim 终态事件；owner 缺失的旧订阅
+   fail closed，不能由多个 gateway 抢占。
+6. owner gateway 收到 `completed/blocked/gave_up/crashed/timed_out` 后，校验 canonical
+   session key，唤醒创建任务的原会话。controller 随即用 `kanban_show(task_id)` 采集
+   真实交付；多任务全部进入终态后才归纳并回复用户。
+7. worker 的确定性执行结果/发现仍写进其负责域的 shared-state；不越界自领跨域任务。
+   worker 委派的子 agent 不继承原生 `kanban_*` 生命周期工具，只向直接 worker 返回结果。
 
 ## 已部署实现约束（审核必读）
 

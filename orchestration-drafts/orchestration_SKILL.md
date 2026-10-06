@@ -1,7 +1,7 @@
 ---
 name: orchestration
-description: "编排纪律。任何非简单任务动手前必读，替代已删除的 delegate-task-router / delegate-enforcer。判定 inline vs 派活；派活的默认机制是 kanban_create(assignee=ops/research/xp/companion)——把活真正交给独立 worker profile（用它自己的模型/权限/域技能）执行，完成后结果自动回流给我合成。delegate_task 是罕见例外、不跨 profile，绝不能当作派给 worker 的手段。默认在以下任一情况加载：请求需要 ≥3 步、跨 ≥2 个域、含执行类操作（跑命令/改配置/动服务/批量文件）、需跨源检索汇总、长耗时编码/重构/审计；或本轮已自己做了 3+ 步仍未完成。判断优先于关键词。仅当用户明确说 inline/别派/直接答/单步时不加载。"
-version: 2.0.0
+description: "编排纪律。任何非简单任务动手前必读。判定 inline vs 派活；用 kanban_create 把职责域任务交给独立 worker，并按 subscribed、终态事件、kanban_show、全任务收敛的闭环取回真实交付后合成。delegate_task 不跨 profile，不能当作 worker 派单。"
+version: 2.1.0
 author: lingjun
 license: MIT
 metadata:
@@ -28,7 +28,7 @@ metadata:
 
 ## 第二步：派活 = kanban_create（默认，几乎总是这条）
 
-**只要子任务落在任何 worker 的职责域内，就 `kanban_create(assignee=<profile>)`。** 这才是"拆给 ops/research 执行"——dispatcher 会 spawn 对应 worker，用**它自己的模型、权限、域内技能和记忆**干活，完成后通过看板把结果**自动回流**给我（我创建任务时已自动订阅完成通知），我再合成。
+**只要子任务落在任何 worker 的职责域内，就 `kanban_create(assignee=<profile>)`。** dispatcher 会 spawn 对应 worker，用**它自己的模型、权限、域内技能和记忆**干活。创建后必须保存 task id，并检查返回的 `subscribed`：true 表示当前原会话已登记终态续接，false 表示没有可靠的异步回流通道。
 
 域→assignee 映射（把每个子任务对号入座）：
 
@@ -49,7 +49,7 @@ kanban_create(
 )
 ```
 
-派完就等——不必空转轮询。worker 完成后结果会自动回流；需要时可 `kanban_list` / `kanban_show` 查状态。全部回来后合成。
+`subscribed=true` 时不空转轮询；gateway 收到终态事件后会唤醒创建任务的原会话。被唤醒后必须 `kanban_show(task_id)` 读取 run summary、metadata、comments 和 artifacts，再做归纳。`subscribed=false` 时不得说“会自动回流”，应明确说明并在后续轮次回查。
 
 ### 本 skill 的判定样例（务必照此办）
 用户："扫描 hermes 结构和缺陷 + 检索现在都用 hermes 干什么 + 按 mem0 画像和容器环境推荐场景"。正确拆法：
@@ -71,12 +71,17 @@ kanban_create(
 
 **只要犹豫 delegate_task 还是 kanban，一律选 kanban。** 凡是"扫描服务器/查容器/跑命令/多源检索"这类明显有域归属的活，永远 kanban，绝不 delegate_task。
 
-## 第四步：汇总与上报（硬规则）
+## 第四步：终态采集、汇总与上报（硬规则）
 
-任务跑完给用户一条状态行，例如：`[ops] <标题> → 完成/阻塞 | 交付：<逐字透传 worker 结论>`。
+heartbeat 只表示 worker 存活并防止 stale reclaim，不是结果采集。收到 `completed/blocked/gave_up/crashed/timed_out` 后：
+
+1. 对终态 task id 调 `kanban_show`；
+2. 并行任务逐一核对，未全部终态则只报告进度；
+3. 全部终态后，以看板保存的交付为唯一依据合成；
+4. 给用户状态行，例如：`[ops] <标题> → 完成/阻塞 | 交付：<worker 结论>`。
 
 **必须上报 blocker 和失败。** worker 任务被 block、或结果里有 blocker、或没交付物，就**不许**折叠成「已完成 / done」——用户把「缺失败说明」当成管道坏了（2026-07-19 实测反馈）。部分完成就透传部分结果 + 明确缺口。
 
 ## 设计注记
-- kanban 是异步的：派完不空转，worker 回写后自动回流；到齐再合成。
+- kanban 是异步的：订阅成功后由所属 gateway 独占消费终态事件，并按创建时保存的 canonical session 唤醒原会话；到齐后才合成。
 - cron / 无人在场会话不做强制派活；按各自 job 逻辑执行。

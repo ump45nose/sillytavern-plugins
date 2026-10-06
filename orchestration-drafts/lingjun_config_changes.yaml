@@ -1,7 +1,8 @@
-# lingjun config.yaml 改动草稿（供审，未落盘）
+# lingjun config.yaml 历史改动草稿（未部署，仅供追溯）
 # 目标文件：/home/hermes/.hermes/profiles/lingjun/config.yaml
-# 落盘前会先备份到 config.yaml.pre-orchestration.bak（现有 .bak 不覆盖）
-# 说明：下面是「改哪几块」的片段，不是整份文件。
+# 说明：下面记录的是旧方案，不是当前运行配置，也不得作为部署输入。
+# 当前事实以 /home/hermes/.hermes/CLUSTER.md 和实际 config.yaml 为准；
+# 当前 auto_decompose=true，本草稿中的方案 A 没有落地。
 
 # ── 1) plugins：删掉 delegate-enforcer 引用（插件目录另行 rm） ──
 plugins:
@@ -47,10 +48,10 @@ quick_commands:
     type: alias
     target: "/model pro"
 
-# ── 5) kanban：方案 A（已定）—— 关自动拆解，显式派 ──
-# lingjun 按新 orchestration skill 显式 kanban_create 并指定 assignee=ops/research/xp。
+# ── 5) kanban：历史方案 A（未落地）—— 关自动拆解，显式派 ──
+# 当前 lingjun 的派活规则常驻 SOUL，不依赖额外 orchestration skill。
 kanban:
-  auto_decompose: false             # 由 true 改为 false
+  auto_decompose: false             # 历史提案；当前实际为 true
   orchestrator_profile: "lingjun"
   auto_decompose_per_tick: 3        # 保留（auto_decompose 关了后不生效）
   default_assignee: ""              # 由 "lingjun" 清空：不再有"未路由子任务甩回自己"
@@ -58,7 +59,7 @@ kanban:
 # =====================================================================
 # NOTES — kanban 那块的决策
 # =====================================================================
-# 现状：auto_decompose=true 每 tick 自动把父任务拆成子任务；default_assignee
+# 当时现状：auto_decompose=true 每 tick 自动把父任务拆成子任务；default_assignee
 #      是"拆出来的子任务没指定 assignee 时的兜底"。现在兜底=lingjun，
 #      等于未路由的子任务默认甩回自己 → 自执行。这正是要修的点。
 #
