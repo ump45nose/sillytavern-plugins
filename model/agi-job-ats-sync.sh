@@ -22,6 +22,7 @@ fi
 export JOBFLOW_LLM_BASE_URL=http://127.0.0.1:4010/cpa/v1
 export JOBFLOW_LLM_MODEL="${CRON_ATS_MODEL:-grok-4.7}"
 export JOBFLOW_LLM_API_KEY="$provider_key"
+export PYTHONPATH="${project_dir}/src${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$tmp_dir"
 chmod 2770 "$tmp_dir"
 export TMPDIR="$tmp_dir"
@@ -32,7 +33,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-exec "${project_dir}/.venv/bin/ats-sync" \
+exec "${project_dir}/.venv/bin/python" "${project_dir}/.venv/bin/ats-sync" \
   --db "${project_dir}/data/jobflow.db" \
   --registry "${project_dir}/config/ats-sources.json" \
   --profile "${project_dir}/config/profile.local.json" \

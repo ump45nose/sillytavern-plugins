@@ -80,3 +80,10 @@ The applied scheduler heartbeat change is retained in
 heartbeat continue while a network delivery holds the per-job side-effect
 fence. Apply it to the existing Hermes checkout when restoring this deployment;
 the source migration installer does not automatically patch the framework.
+
+The existing recruitment app stays in `/home/yuwk/code/agi-job-automation`.
+ATS uses its Python interpreter explicitly because moved virtual environments
+can retain an obsolete executable shebang. Its private data directory is owned
+by the administrator with group `hermes` and mode 2770; `jobflow.db` and its WAL
+files use mode 0660. This preserves access for both identities on NAS trimacl
+storage, where named POSIX ACL entries alone did not provide database access.
