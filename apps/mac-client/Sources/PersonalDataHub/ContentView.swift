@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 
 struct ContentView: View {
     @ObservedObject var model: HubModel
@@ -258,6 +259,11 @@ struct SettingsView: View {
             Text("访问凭据保存在系统钥匙串。客户端只查看归档信息。")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("开机启动", isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) }))
+            if model.loginNeedsApproval {
+                Text("开机启动等待系统登录项批准。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("打开系统登录项设置") { SMAppService.openSystemSettingsLoginItems() }
+            }
             HStack {
                 Spacer()
                 Button("取消") { token = ""; dismiss() }

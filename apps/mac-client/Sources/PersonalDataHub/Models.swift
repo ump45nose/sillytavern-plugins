@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 let sourceNames: [String: String] = [
     "crm": "联系人与微信", "skysight-raw": "电脑活动", "skysight-summaries": "电脑活动摘要",
@@ -88,6 +89,16 @@ struct ArchiveAsset: Decodable, Identifiable {
     let name: String
     let media_type: String
     let size: Int64
+    func verifyFile(_ url: URL) throws {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hash = SHA256(); var bytes: Int64 = 0
+        while let block = try handle.read(upToCount: 1024 * 1024), !block.isEmpty {
+            hash.update(data: block); bytes += Int64(block.count)
+        }
+        let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
+        guard digest == id, bytes == size else { throw HubError.integrity }
+    }
 }
 struct DetailField: Identifiable {
     let id: String

@@ -104,8 +104,15 @@ enum Main {
                     let page: RecordPage = try await api.get("api/v1/browse", query: [URLQueryItem(name: "limit", value: "3")])
                     let kinds: [KindCount] = try await api.get("api/v1/kinds")
                     if let first = page.records.first { _ = try await api.record(first.id) }
+                    let summaries: RecordPage = try await api.get("api/v1/browse", query: [URLQueryItem(name: "source", value: "skysight-summaries"), URLQueryItem(name: "limit", value: "1")])
+                    guard let summary = summaries.records.first else { throw HubError.response }
+                    let detail = try await api.record(summary.id)
+                    guard let asset = detail.assets.first else { throw HubError.response }
+                    let file = try await api.download(asset)
+                    defer { try? FileManager.default.removeItem(at: file) }
+                    try asset.verifyFile(file)
                     let agents = await Task.detached { LocalAgents.inspect() }.value
-                    print("client_smoke_ok sources=\(sources.count) records=\(page.total) kinds=\(kinds.count) agents_loaded=\(agents.filter { $0.loaded }.count)")
+                    print("client_smoke_ok sources=\(sources.count) records=\(page.total) kinds=\(kinds.count) agents_loaded=\(agents.filter { $0.loaded }.count) asset_sha256=ok")
                     exit(0)
                 } catch { fputs("client_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
             }

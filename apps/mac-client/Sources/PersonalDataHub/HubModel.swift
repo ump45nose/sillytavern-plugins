@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import CryptoKit
 import ServiceManagement
 
 @MainActor
@@ -27,6 +26,7 @@ final class HubModel: ObservableObject {
     @Published var syncMessage: String?
     @Published var refreshedAt: Date?
     @Published var loginEnabled = SMAppService.mainApp.status == .enabled
+    @Published var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
     private var browseGeneration = 0
     private var detailGeneration = 0
     private var statusGeneration = 0
@@ -123,6 +123,7 @@ final class HubModel: ObservableObject {
             else { try SMAppService.mainApp.unregister() }
         } catch { self.error = "无法更新开机启动，请查看系统登录项设置。" }
         loginEnabled = SMAppService.mainApp.status == .enabled
+        loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
     }
 
     func download(_ asset: ArchiveAsset) async {
@@ -136,14 +137,7 @@ final class HubModel: ObservableObject {
             defer { try? FileManager.default.removeItem(at: temp) }
             // 文件流式校验，不把录音等大附件读入内存。
             try await Task.detached {
-                let handle = try FileHandle(forReadingFrom: temp)
-                defer { try? handle.close() }
-                var hash = SHA256(); var size: Int64 = 0
-                while let block = try handle.read(upToCount: 1024 * 1024), !block.isEmpty {
-                    hash.update(data: block); size += Int64(block.count)
-                }
-                let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
-                guard digest == asset.id, size == asset.size else { throw HubError.integrity }
+                try asset.verifyFile(temp)
                 let data = try Data(contentsOf: temp, options: .mappedIfSafe)
                 try data.write(to: destination, options: .atomic)
             }.value
