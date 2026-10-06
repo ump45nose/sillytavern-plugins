@@ -1,6 +1,6 @@
 [project]
 name = "mcp-platform"
-version = "0.1.5"
+version = "0.1.6"
 description = "Versioned FastMCP runtime and transactional NAS deployment tools"
 readme = "README.md"
 requires-python = ">=3.12"

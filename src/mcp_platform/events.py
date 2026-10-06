@@ -568,11 +568,63 @@ class EventService:
                     "pending": sum(j["status"] == "pending" for j in state["outbox"].values()),
                     "failed": sum(j["status"] == "failed" for j in state["outbox"].values())}
 
+    async def diagnostics(self, subject):
+        """Bounded owner-only metadata; never return callbacks, secrets or event payloads."""
+        self._check_subject(subject)
+        now = self.clock()
+
+        def instant(value):
+            return datetime.fromtimestamp(value, timezone.utc).isoformat() if value else None
+
+        async with self._state() as state:
+            subscriptions = [s for s in state["subscriptions"].values()
+                             if s["subject"] == subject]
+            subscription_ids = {s["id"] for s in subscriptions}
+            events = {key: value for key, value in state["events"].items()
+                      if value["subject"] == subject}
+            jobs = [j for j in state["outbox"].values()
+                    if j["subscription_id"] in subscription_ids and j["event_key"] in events]
+            counts = {status: sum(j["status"] == status for j in jobs)
+                      for status in ("pending", "accepted", "failed", "cancelled")}
+            recent = sorted(jobs, key=lambda j: j["updated_at"], reverse=True)[:10]
+            return {
+                "checked_at": instant(now),
+                "available_events": [e["name"] for e in self.list_events(subject)["events"]],
+                "subscriptions": [{
+                    "event": s["name"],
+                    "active": bool(s["active"] and s["expires_at"] > now),
+                    "expired": s["expires_at"] <= now,
+                    "verified": bool(s.get("verified_at")),
+                    "verified_at": instant(s.get("verified_at")),
+                    "expires_at": instant(s["expires_at"]),
+                } for s in sorted(subscriptions, key=lambda s: (s["name"], s["expires_at"]),
+                                  reverse=True)],
+                "retained_events": len(events),
+                "last_published_at": instant(max((e["created_at"] for e in events.values()),
+                                                  default=0)),
+                "outbox": counts,
+                "recent_deliveries": [{
+                    "event": events[j["event_key"]]["envelope"]["name"],
+                    "status": j["status"], "attempts": j["attempts"],
+                    "last_result": j.get("last_result"),
+                    "updated_at": instant(j["updated_at"]),
+                } for j in recent],
+                "note": "accepted 表示回调已接收，不能证明 ChatGPT 任务执行或通知已显示；新订阅不回放历史。",
+            }
+
     def attach(self, app, server):
         """Insert inside the existing RequireAuthMiddleware, never add a public route."""
         matches = [r for r in app.routes if getattr(r, "path", None) == "/mcp"]
         if len(matches) != 1:
             raise ValueError("Expected exactly one existing MCP route")
+        @server.tool(auth=authorize("read", self.config), annotations={
+            "readOnlyHint": True, "destructiveHint": False,
+            "idempotentHint": True, "openWorldHint": False,
+        })
+        async def get_mcp_event_status() -> dict:
+            """查询当前账户的事件声明、订阅有效期、回调验证及最近投递结果；不返回正文或凭据。"""
+            return await self.diagnostics(self.authenticated_subject())
+
         route = matches[0]
         if self.config.development_no_auth:
             route.app = _EventEndpoint(route.app, self, server)

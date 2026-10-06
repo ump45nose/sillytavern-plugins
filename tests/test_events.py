@@ -285,7 +285,11 @@ async def test_authenticated_mcp2_and_legacy_tools_keep_permissions(config, monk
             tools = response_json(listed)["result"]
             CACHEABLE_COMPLETE.validate(tools)
             assert tools["ttlMs"] == 0 and tools["cacheScope"] == "private"
-            assert [t["name"] for t in tools["tools"]] == ["read_subject"]
+            assert {t["name"] for t in tools["tools"]} == {"get_mcp_event_status", "read_subject"}
+            diagnostic = await client.post("/mcp", json=rpc("tools/call", {
+                "name": "get_mcp_event_status", "arguments": {},
+            }), headers=headers("tools/call", token="bob-token", name="get_mcp_event_status"))
+            assert response_json(diagnostic)["result"]["structuredContent"]["subscriptions"] == []
             called = await client.post("/mcp", json=rpc("tools/call", {"name": "read_subject", "arguments": {}}), headers=headers("tools/call", name="read_subject"))
             result = response_json(called)["result"]
             assert result["resultType"] == "complete" and result["content"][0]["text"] == "alice"
@@ -349,3 +353,40 @@ async def test_diagnostic_logs_are_metadata_only_and_include_legacy(config, monk
     assert records[6] == {"method": "initialize", "protocol": "2025-11-25", "status": 200, "event_count": None}
     for private in ("alice", "alice-token", SECRET, CALLBACK, "private-method-canary", "private-protocol-canary", "private-client-canary", "private-filter-canary"):
         assert private not in stream.getvalue()
+
+
+async def test_diagnostics_isolated_bounded_and_expiration_truthful(config):
+    clock = Clock()
+    events = service(config, clock=clock)
+    await events.subscribe('alice', params(ttlMs=60000))
+    await events.subscribe('bob', params(ttlMs=120000))
+    for i in range(12):
+        await events.publish('report.ready', {'kind': 'daily', 'report_id': str(i)},
+                             subject='alice', event_id=str(i))
+    await events.run_delivery_once(limit=20)
+    clock.now += 61
+    result = await events.diagnostics('alice')
+    assert result['subscriptions'][0]['active'] is False
+    assert result['subscriptions'][0]['expired'] is True
+    assert result['subscriptions'][0]['verified'] is True
+    assert result['outbox']['accepted'] == 12
+    assert len(result['recent_deliveries']) == 10
+    assert all(d['last_result'] == 'http_202' for d in result['recent_deliveries'])
+    serialized = json.dumps(result)
+    assert len(serialized) < 10000
+    assert SECRET not in serialized and CALLBACK not in serialized
+    assert 'report_id' not in serialized and 'subject' not in serialized
+    bob = await events.diagnostics('bob')
+    assert bob['subscriptions'][0]['active'] is True
+    assert bob['retained_events'] == 0 and bob['recent_deliveries'] == []
+    with pytest.raises(EventError):
+        await events.diagnostics('mallory')
+    # Reading status neither expires stored flags nor replays historical events.
+    async with events._state() as state:
+        assert all(s['active'] for s in state['subscriptions'].values())
+    reopened = service(config, clock=clock)
+    assert await reopened.diagnostics('alice') == result
+    await reopened.subscribe('alice', params(ttlMs=120000))
+    refreshed = await reopened.diagnostics('alice')
+    assert len(refreshed['subscriptions']) == 1 and refreshed['subscriptions'][0]['active']
+    assert refreshed['outbox']['pending'] == 0
