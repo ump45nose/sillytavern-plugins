@@ -26,7 +26,7 @@ HUB_IMAGE=local/personal-data-hub:0.1.0-stage1 ./deployment/build-image.sh
 sudo systemctl restart personal-data-hub-collectors.service health-webhook.service
 ```
 
-构建复用已锁定的公共 MCP 基础镜像，只安装自有 wheel 与 PostgreSQL 驱动。Docker 命令需当前操作账户已有的权限；若使用 sudo，需保留 `uv` 所在 PATH。既有部署模式复用当前镜像，因此首次切换镜像应先在原 Compose 项目更新 `crm` 服务，再由 `mcpctl` 记录和校验部署，保留其他服务。
+构建复用已锁定的公共 MCP 基础镜像，安装自有 wheel、PostgreSQL 驱动和独立用量库要求的锁定公共事件库。`uv sync` 先填充锁定 Git 缓存；也可通过 `HUB_EVENTS_SOURCE` 指定该事件库源码路径。构建必须通过 `uv pip check`。Docker 命令需当前操作账户已有的权限；若使用 sudo，需保留 `uv` 所在 PATH。既有部署模式复用当前镜像，因此首次切换镜像应先在原 Compose 项目更新 `crm` 服务，再由 `mcpctl` 记录和校验部署，保留其他服务。
 
 观察采集：`hub status`、`systemctl status personal-data-hub-collectors.service`。运行日志只记录来源、数量和错误类别，避免输出消息正文、邮件内容及凭据。`partial` 表示存在已归档的历史异常片段，不代表所有来源失败。
 
@@ -46,7 +46,7 @@ Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档�
 
 上游锁定在 `integrations/autoaccounting/upstream.lock.json` 指定提交，自有 `export/` 代码和 `hub-deletion-outbox.patch` 在本仓库管理。对该固定提交应用补丁后构建 APK。Android 导出器先持久化已尝试导出的账单 ID，再向 NAS 推送；只有本地成功读取为空才生成删除事件，NAS 成功回执后才清空 outbox。
 
-既有安装首次升级前导出的 ID 不在新增 outbox 内；这些账单需重新导出或回填已知 ID 后才能进行源端删除跟踪。未安装新 APK 前，旧账单推送兼容，但不会主动发出新的删除事件。
+首次升级会通过同一 Bearer 鉴权分页读取 NAS 已归档账单 ID，完整成功后才持久化初始清单，使旧账单也进入删除跟踪。未安装新 APK 前，旧账单推送兼容，但不会主动发出新的删除事件。
 
 ## 备份与回退
 

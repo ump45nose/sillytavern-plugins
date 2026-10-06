@@ -185,6 +185,14 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         if not isinstance(ids, list) or not ids or len(ids) > 1000 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in ids): raise HTTPException(422, "invalid_bill_ids")
         return {"ok": True, **store.ingest("finance", Batch(deletions=[str(x) for x in ids]))}
 
+    @api.get("/autoaccounting/v1/bills/ids")
+    def bill_ids(offset: int = 0, limit: int = 1000, authorization: str | None = Header(default=None)):
+        authenticate(authorization, "autoaccounting_webhook_token")
+        if offset < 0 or not 1 <= limit <= 1000: raise HTTPException(422, "invalid_pagination")
+        with store.engine.connect() as c:
+            ids = list(c.scalars(select(archive_records.c.external_id).where(archive_records.c.source == "finance", archive_records.c.kind == "bill").order_by(archive_records.c.external_id).offset(offset).limit(limit)))
+        return {"ok": True, "bill_ids": [int(x) for x in ids], "next_offset": offset + len(ids) if len(ids) == limit else None}
+
     # 既有 CRM 根挂载必须排在新增 API 后面。
     mount = app.router.routes.pop() if not webhook_only else None
     app.include_router(api)

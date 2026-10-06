@@ -40,6 +40,7 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
         data["ProgramArguments"] = [str(python), "-c", "from personal_crm.connector.cli import main; main()", "--watch"]
         data["WorkingDirectory"] = str(repo / "apps/crm")
         data.setdefault("EnvironmentVariables", {})["PYTHONPATH"] = str(repo / "apps/crm/src")
+        data["EnvironmentVariables"]["WECHAT_FACT_EXTRACTION"] = "false"
         # 旧凭据迁出旧仓库；checkpoint/client-id/白名单继续用原路径。
         old_env = Path(data["EnvironmentVariables"]["CRM_ENV_FILE"])
         new_env = home / "Library/Application Support/personal-crm/connector.env"

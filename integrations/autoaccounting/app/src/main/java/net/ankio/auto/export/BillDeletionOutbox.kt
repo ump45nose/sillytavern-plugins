@@ -10,6 +10,16 @@ object BillDeletionOutbox {
     private val pref get() = autoApp.getSharedPreferences("bill-export-deletions", Context.MODE_PRIVATE)
 
     @Synchronized
+    fun seeded(): Boolean = pref.getBoolean("seeded", false)
+
+    @Synchronized
+    fun seed(ids: Set<Long>) {
+        val known = pref.getStringSet("known", emptySet())!!.toMutableSet()
+        known.addAll(ids.map { it.toString() })
+        check(pref.edit().putStringSet("known", known).putBoolean("seeded", true).commit()) { "outbox_persist_failed" }
+    }
+
+    @Synchronized
     fun remember(id: Long) {
         val known = pref.getStringSet("known", emptySet())!!.toMutableSet()
         known.add(id.toString())
@@ -21,6 +31,7 @@ object BillDeletionOutbox {
         for (id in known) {
             // 网络失败抛异常，不把连接失败误认为源端删除。
             val result = LocalNetwork.get<BillInfoModel>("bill/get?id=$id").getOrThrow()
+            check(result.code == 200) { "local_result_${result.code}" }
             if (result.data == null) synchronized(this) {
                 val pending = pref.getStringSet("pending", emptySet())!!.toMutableSet()
                 pending.add(id)

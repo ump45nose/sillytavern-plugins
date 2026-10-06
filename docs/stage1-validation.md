@@ -20,6 +20,14 @@
 
 ## 设备验收
 
-Mac 当前同步 Agent 安装及提交回执验证：待更新。
-Android 新删除 outbox APK：补丁检查通过，构建和设备安装状态待更新；现有手机未连接 NAS ADB。
+Mac 当前同步 Agent 已安装到同一仓库检出并加载。使用既有官方摘要完成 Mac → NAS 文件交付、SHA 校验、数据库提交回执及检查点验证；临时检查点已清理。Mac 侧公网健康检查和 OAuth 元数据返回 200，未鉴权 MCP initialize 返回 401。
+Android 新删除 outbox APK：补丁检查通过；首次构建因 Gradle 插件缓存未命中未完成，正在复用既有缓存验证。手机未连接 NAS ADB，尚未安装新 APK。
 Mac 图形客户端和统一信息查看界面按既定计划留在第二阶段。
+
+当前部署镜像：`sha256:5bb2f01b48d9d7252a583348bf3f68a6ad96dc34a89bad8a163d714c58ded6ba`。
+
+结构化归档约 5.2 万条，具体计数快照见 `stage1-source-status.json`，后续推送会继续改变计数。PostgreSQL custom-format 初始备份已保存到私有数据目录，约 425 MB；原始文件目录需与数据库配套保留。
+
+迁移兼容修复：为一条切换期间缺少旧接口 ID 的 Health 记录分配 PostgreSQL 序号；已确认授权 `/health/recent` 返回整数 ID。清理了两条源 SQLite 已删除、仅兼容表仍保留的 CRM 行，并记录稳定事件身份墓碑。
+
+镜像依赖检查：统一服务、自有 CRM、用量库与锁定的公共依赖已全部打包，`uv pip check --system` 通过。独立用量 MCP 服务未替换镜像。

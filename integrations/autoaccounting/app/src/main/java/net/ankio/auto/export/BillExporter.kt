@@ -1,6 +1,7 @@
 package net.ankio.auto.export
 
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.ankio.auto.http.RequestsUtils
@@ -43,7 +44,7 @@ object BillExporter {
         var posted = 0
         runCatchingExceptCancel {
             check(PrefManager.billExportEnabled) { "disabled" }
-            val endpoint = PrefManager.billExportUrl.trim()
+            val endpoint = PrefManager.billExportUrl.trim().trimEnd('/')
             val token = PrefManager.billExportToken.trim()
             check(endpoint.startsWith("https://")) { "endpoint_must_be_https" }
             check(token.isNotEmpty()) { "token_missing" }
@@ -60,6 +61,7 @@ object BillExporter {
                 bills += stateBills
             }
 
+            if (!BillDeletionOutbox.seeded()) seedKnownBills(endpoint, token)
             val pending = BillDeletionOutbox.discover()
             for (chunk in pending.chunked(1000)) {
                 val deleteUrl = endpoint.substringBeforeLast("/bills") + "/deletions"
@@ -68,6 +70,8 @@ object BillExporter {
                     .post(gson.toJson(mapOf("bill_ids" to chunk)).toRequestBody("application/json; charset=utf-8".toMediaType())).build()
                 client.newCall(deletion).execute().use { response ->
                     check(response.isSuccessful) { "nas_http_${response.code}" }
+                    val ack = gson.fromJson(response.body?.string() ?: error("nas_empty_response"), JsonObject::class.java)
+                    check(ack.get("ok")?.asBoolean == true) { "nas_deletion_not_acknowledged" }
                 }
                 BillDeletionOutbox.acknowledge(chunk)
             }
@@ -82,6 +86,8 @@ object BillExporter {
                     .build()
                 client.newCall(request).execute().use { response ->
                     check(response.isSuccessful) { "nas_http_${response.code}" }
+                    val ack = gson.fromJson(response.body?.string() ?: error("nas_empty_response"), JsonObject::class.java)
+                    check(ack.get("ok")?.asBoolean == true && ack.get("bill_id")?.asLong == bill.id) { "nas_bill_not_acknowledged" }
                 }
                 posted++
             }
@@ -89,6 +95,28 @@ object BillExporter {
         }.recoverCatching { error ->
             throw BillExportFailure(shortError(error), counts.toMap(), posted, error)
         }
+    }
+
+    /** 首次升级从 NAS 完整读取已归档 ID，使历史账单也能跟踪删除。 */
+    private fun seedKnownBills(endpoint: String, token: String) {
+        val ids = mutableSetOf<Long>()
+        var offset = 0
+        for (page in 0 until 10000) {
+            val request = Request.Builder().url("$endpoint/ids?offset=$offset&limit=1000")
+                .header("Authorization", "Bearer $token").get().build()
+            val doc = client.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "nas_http_${response.code}" }
+                gson.fromJson(response.body?.string() ?: error("nas_empty_response"), JsonObject::class.java)
+            }
+            check(doc.get("ok")?.asBoolean == true) { "nas_inventory_not_acknowledged" }
+            for (value in doc.getAsJsonArray("bill_ids")) {
+                val id = value.asLong; check(id > 0) { "nas_inventory_invalid_id" }; ids.add(id)
+            }
+            val next = doc.get("next_offset")
+            if (next == null || next.isJsonNull) { BillDeletionOutbox.seed(ids); return }
+            check(next.asInt > offset) { "nas_inventory_stalled" }; offset = next.asInt
+        }
+        error("nas_inventory_incomplete")
     }
 
     private fun shortError(error: Throwable): String = when {
