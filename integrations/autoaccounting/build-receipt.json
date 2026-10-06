@@ -1,0 +1,11 @@
+{
+  "upstream_revision": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
+  "patch_sha256": "f1436bd48ce66d1fb92794f90a1a727542c8bd8f89f45bb748d30e987d29a379",
+  "apk_sha256": "3c6a91539d6cc53d271c732a9c084cc489a19095b35e2fb7563e158fda473f91",
+  "apk_bytes": 77901654,
+  "application_id": "net.ankio.auto",
+  "artifact": "/vol1/1000/personal-data-hub/releases/autoaccounting-stage1-debug.apk",
+  "task": ":app:assembleDebug",
+  "signature_verified": true,
+  "device_installation": "pending_no_adb_device"
+}
