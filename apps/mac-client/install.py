@@ -18,6 +18,7 @@ if destination.exists():
     destination.rename(backup)
 try:
     shutil.copytree(source, destination)
+    subprocess.run(["codesign", "--verify", "--strict", str(destination)], check=True)
 except BaseException:
     if destination.exists(): shutil.rmtree(destination)
     if backup.exists(): backup.rename(destination)

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import Security
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -209,6 +210,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum Main {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--keychain-smoke") {
+            // Fail immediately instead of displaying authorization dialogs during update checks.
+            SecKeychainSetUserInteractionAllowed(false)
+            do {
+                _ = try Connection.token()
+                guard let config = try JSONSerialization.jsonObject(with: GoogleKeychain.read("oauth")) as? [String: String],
+                      !(config["refresh_token"] ?? "").isEmpty else { throw GoogleError.unconfigured }
+                print("keychain_smoke_ok viewer=readable google=readable interaction=disabled"); exit(0)
+            } catch { fputs("keychain_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+        }
         if CommandLine.arguments.contains("--google-cleanup") {
             Task {
                 do { try await GoogleClient(diagnostics: true).cleanupAcceptance(); exit(0) }

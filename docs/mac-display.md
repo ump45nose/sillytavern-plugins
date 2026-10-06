@@ -30,4 +30,4 @@ Google 使用 Mac 官方 REST API 适配层，与 NAS 只读采集凭据隔离�
 - `--ui-smoke` 截取自己的窗口；可加 `--qa-dark`、`--qa-narrow`、`--qa-section trends|recent|social|finance` 或 `--qa-quick`。截图只存 Mac 私有目录。
 - `--google-smoke` 是会创建并清理真实验收数据的显式开发入口，不在后台或启动时运行。
 
-当前应用为本地临时签名。更新二进制后，macOS 可能再次弹出 Keychain 访问确认；在系统弹窗选择“始终允许”才能继续读取已经授权的 Google 凭据，不需要重复 Google 浏览器授权。公开发布的稳定 Developer ID 签名和公证仍不在本轮范围内。
+当前应用改用长期复用的本机代码签名证书，指定要求绑定证书与 Bundle ID，升级不再改变钥匙串中的应用身份。旧临时签名的访问许可只在迁移时做一次系统确认，Google 浏览器授权保留。签名密钥留在独立私有钥匙串，构建不需要登录密码，不允许临时签名回退。详见 [固定签名](mac-signing.md)。
