@@ -74,9 +74,13 @@ def build_gateway(config, *, backend_url, token_file, backend_host, legacy_usern
         return {"status": "ok", "tools": sorted(TOOL_PERMISSIONS)}
 
     transport = StreamableHttpTransport(
-        backend_url, headers={"Host": backend_host}, auth=BackendAuth(token_file),
+        backend_url,
+        headers={"Host": backend_host},
+        auth=BackendAuth(token_file),
     )
-    server = create_server(config, instructions="检索媒体信息、提交下载并查询进度。", healthcheck=healthcheck)
+    server = create_server(
+        config, instructions="检索媒体信息、提交下载并查询进度。", healthcheck=healthcheck
+    )
     server.add_middleware(ToolPermissions(config))
     server.mount(FastMCP.as_proxy(Client(transport, timeout=180)))
 
@@ -87,9 +91,15 @@ def build_gateway(config, *, backend_url, token_file, backend_host, legacy_usern
             if hmac.compare_digest(token.encode(), read_secret(token_file).encode()):
                 # 旧文件令牌原本已拥有业务写权限；只兼容显式指定的原账号。
                 return AccessToken(
-                    token=token, client_id="legacy-bearer", scopes=["openid", "profile", "offline_access"],
-                    resource=config.public_base_url, subject="legacy-bearer",
-                    claims={"sub": "legacy-bearer", "upstream_claims": {"preferred_username": legacy_username}},
+                    token=token,
+                    client_id="legacy-bearer",
+                    scopes=["openid", "profile", "offline_access"],
+                    resource=config.public_base_url,
+                    subject="legacy-bearer",
+                    claims={
+                        "sub": "legacy-bearer",
+                        "upstream_claims": {"preferred_username": legacy_username},
+                    },
                 )
             return await original_verify(token)
 
