@@ -1,5 +1,6 @@
 {
   "profile_scripts": {
+    "plaud-daily.sh": "model/plaud-daily.sh",
     "agi-job-ats-sync.sh": "model/agi-job-ats-sync.sh",
     "agi-job-social-daily.sh": "hermes/agi-job-social-daily.sh",
     "benefits_aliyun.py": "hermes/benefits_aliyun.py",
@@ -14,14 +15,14 @@
     "benefits_v2ex.py": "hermes/benefits_v2ex.py",
     "collect_containers.py": "hermes/collect_containers.py",
     "collect_environment.py": "hermes/collect_environment.py",
-    "container-schedule-mediatool-off.sh": "retired/container-schedule-mediatool-off.sh",
-    "container-schedule-mediatool-on.sh": "retired/container-schedule-mediatool-on.sh",
-    "container-schedule-morning-on.sh": "retired/container-schedule-morning-on.sh",
-    "container-schedule-night-off.sh": "retired/container-schedule-night-off.sh",
-    "container-schedule-quiet.sh": "retired/container-schedule-quiet.sh",
-    "container-schedule-useless-off.sh": "retired/container-schedule-useless-off.sh",
+    "container-schedule-mediatool-off.sh": "hermes/container-schedule-mediatool-off.sh",
+    "container-schedule-mediatool-on.sh": "hermes/container-schedule-mediatool-on.sh",
+    "container-schedule-morning-on.sh": "hermes/container-schedule-morning-on.sh",
+    "container-schedule-night-off.sh": "hermes/container-schedule-night-off.sh",
+    "container-schedule-quiet.sh": "hermes/container-schedule-quiet.sh",
+    "container-schedule-useless-off.sh": "hermes/container-schedule-useless-off.sh",
     "daily_health_summary.py": "hermes/daily_health_summary.py",
-    "enforce-disabled-containers.sh": "retired/enforce-disabled-containers.sh",
+    "enforce-disabled-containers.sh": "hermes/enforce-disabled-containers.sh",
     "episode-daily-local.sh": "model/episode-daily-local.sh",
     "etf_premium_alert.py": "hermes/etf_premium_alert.py",
     "favsync_daily_summary.py": "hermes/favsync_daily_summary.py",
@@ -63,5 +64,8 @@
     "daily_dry_run.py": "hermes/personal-review-daily-dry-run.py",
     "weekly_dry_run.py": "hermes/personal-review-weekly-dry-run.py",
     "work_google_daily_input.py": "hermes/personal-review-google-input.py"
+  },
+  "review_sources": {
+    "health.py": "hermes/personal-review-health-source.py"
   }
 }

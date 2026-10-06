@@ -60,6 +60,76 @@
     "source": "hermes/watchtower-monthly-update.sh"
   },
   {
+    "name": "container-maintenance-media-audit-0000",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 0 * * *",
+      "display": "0 0 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/container-schedule-mediatool-off.sh"
+  },
+  {
+    "name": "container-maintenance-plan-audit-0000",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 0 * * *",
+      "display": "0 0 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/container-schedule-useless-off.sh"
+  },
+  {
+    "name": "container-maintenance-night-audit-0100",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 1 * * *",
+      "display": "0 1 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/container-schedule-night-off.sh"
+  },
+  {
+    "name": "container-maintenance-morning-repair-0900",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 9 * * *",
+      "display": "0 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/container-schedule-morning-on.sh"
+  },
+  {
+    "name": "container-maintenance-media-repair-1400",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 14 * * *",
+      "display": "0 14 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/container-schedule-mediatool-on.sh"
+  },
+  {
+    "name": "container-maintenance-plan-audit-0430",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 4 * * *",
+      "display": "30 4 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/enforce-disabled-containers.sh"
+  },
+  {
+    "name": "ha-watchdog-capture",
+    "schedule": {
+      "kind": "cron",
+      "expr": "*/5 * * * *",
+      "display": "*/5 * * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/ha-watchdog.sh"
+  },
+  {
     "name": "china-social-referrals-exclude-campus-daily",
     "schedule": {
       "kind": "cron",
@@ -88,6 +158,26 @@
     },
     "no_agent": true,
     "source": "hermes/personal-review-email-input.sh"
+  },
+  {
+    "name": "personal-review-daily-dry-run-2120",
+    "schedule": {
+      "kind": "cron",
+      "expr": "20 21 * * *",
+      "display": "20 21 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-daily-dry-run.sh"
+  },
+  {
+    "name": "personal-review-weekly-dry-run-2140",
+    "schedule": {
+      "kind": "cron",
+      "expr": "40 21 * * 0",
+      "display": "40 21 * * 0"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-weekly-dry-run.sh"
   },
   {
     "name": "personal-review-attachments-worker",

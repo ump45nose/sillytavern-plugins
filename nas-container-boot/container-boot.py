@@ -58,6 +58,20 @@ def load_order():
     return entries
 
 
+def open_lock():
+    # flock works on a read descriptor. Avoid O_CREAT for existing /tmp files:
+    # Linux protected_regular can otherwise reject a different runtime owner.
+    try:
+        return open(LOCK, 'r')
+    except FileNotFoundError:
+        try:
+            fd = os.open(LOCK, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            return open(LOCK, 'r')
+        os.fchmod(fd, 0o644)
+        return os.fdopen(fd, 'r')
+
+
 def tailnet_ready():
     result = run('ip', '-o', '-4', 'addr', 'show', 'dev', 'tailscale0', timeout=5)
     return bool(result and result.returncode == 0 and
@@ -82,8 +96,11 @@ def ready(name):
         return tailnet_ready()
     if name == 'nginx-proxy-manager':
         try:
+            config_path = Path(os.environ.get('HERMES_CRON_CONFIG', '/home/yuwk/cron/env/hermes.local.json'))
+            config = json.loads(config_path.read_text()) if config_path.exists() else {}
+            url = os.environ.get('NAS_NPM_HEALTH_URL') or config.get('npm_health_url', 'http://127.0.0.1:28081/')
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open('http://127.0.0.1:28081/', timeout=3) as response:
+            with opener.open(url, timeout=3) as response:
                 return response.status < 500
         except (OSError, urllib.error.URLError):
             return False
@@ -169,7 +186,7 @@ def main():
     entries = load_order()
     if args.check:
         return check(entries)
-    with open(LOCK, 'w') as lock:
+    with open_lock() as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for attempt in range(60):
             result = run('docker', 'info', timeout=5)

@@ -15,8 +15,15 @@ Deployment copies executable files to `/home/yuwk/cron/scripts`, units to
 
 Hermes deterministic task code and report modules are deployed to
 `/home/yuwk/cron/hermes`. Tasks that call a model or schedule model work live in
-`/home/yuwk/cron/model`. `retired/` preserves disabled legacy container wrappers.
+`/home/yuwk/cron/model`. `retired/` preserves historical container wrappers.
 Hermes still owns task scheduling and delivery state.
+
+PLAUD three-source v3 uses `model/plaud-daily.sh`, forwarded by the Lingjun
+profile's trusted `scripts/plaud-daily.sh`. Its no-agent schedule is
+`*/30 0-7 * * *` (Asia/Taipei): synchronize and prepare all previous-day
+recordings, then at/after 07:30 send one complete, validated daily Markdown
+to CPA Grok. App settings, credentials and isolated business state remain in
+the PLAUD app; no keys or runtime job records belong in this repository.
 
 `/etc/systemd/system` contains symlinks only. Custom host scheduling uses
 systemd timers; user crontabs are intentionally kept empty unless an
@@ -66,10 +73,26 @@ Create `/home/yuwk/cron/env/hermes.local.json` from
 directory private and grant only the Hermes runtime account traversal of the
 directory and read access to this file. Do not commit the local file. Provider
 keys remain in the Hermes root `.env`; OAuth tokens remain in the profile's
-`mcp-tokens/` directory. Email cron uses the profile's `email` MCP OAuth cache;
-complete `hermes mcp login email` as the Hermes runtime account in the Lingjun
-profile once. Cron refreshes cached tokens and fails promptly when login is
-required. It never launches interactive authorization.
+`mcp-tokens/` directory. Email cron defaults to the profile's `email` MCP OAuth
+cache and never launches interactive authorization. On this host,
+`email_transport=hub-local-readonly` reuses Personal Data Hub's existing local
+read-only bridge and email container, without copying account credentials or
+OAuth caches. Both clients normalize MCP 1.x/2.x result fields.
+
+Health cron readers use `health_api_url` and an existing viewer token file when
+configured, including the Personal Review health source. They paginate bounded
+time windows and report failures rather than falling back to stale SQLite.
+Legacy SQLite remains supported on hosts without a configured hub. The token
+stays outside this repository; this NAS requires group `hermes`, mode 0640 for
+the existing viewer token because named ACL alone did not allow runtime reads.
+Set `ha_url` and `npm_health_url` to the actual listener addresses in private
+configuration. The probes bypass outbound proxies for these local services.
+
+The six former container stop/start schedules use `container-maintenance.py`:
+former stop/enforcement times audit the persistent boot plan; former start
+times start stopped entries in dependency order. They leave unlisted containers
+alone. Generic review prompt templates are in `model/review-prompts.json`;
+installing them into the private scheduler remains an explicit maintenance step.
 
 `hermes/schedules.json` and `model/schedules.json` contain a sanitized inventory,
 without prompts, chat IDs, credentials, execution history or generated one-shot

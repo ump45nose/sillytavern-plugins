@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Read-only health.db summary for the daily-review cron."""
+"""Read-only current health source summary for the daily-review cron."""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from health_data import health_rows
 
 DB_PATH = Path("/home/hermes/.local/share/health.db")
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
@@ -36,22 +37,15 @@ def main() -> int:
         print("hours 必须是整数", file=sys.stderr)
         return 2
 
-    if not DB_PATH.is_file():
-        print("健康数据不可用：数据库不存在")
-        return 1
-
     now = datetime.now(LOCAL_TZ)
     window_start = now - timedelta(hours=hours)
     fetch_start = window_start - timedelta(hours=6)
 
-    connection = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     try:
-        rows = connection.execute(
-            "SELECT id, received_at, payload_json "
-            "FROM health_payloads ORDER BY id ASC"
-        ).fetchall()
-    finally:
-        connection.close()
+        rows = health_rows(DB_PATH, start=fetch_start)
+    except Exception as exc:
+        print(f"健康数据不可用：{type(exc).__name__}", file=sys.stderr)
+        return 1
 
     payloads: list[tuple[int, datetime, dict]] = []
     invalid_payloads = 0

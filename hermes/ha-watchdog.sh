@@ -6,7 +6,14 @@
 set -u
 
 CONTAINER="${HA_CONTAINER:-homeassistant}"
-URL="${HA_URL:-http://127.0.0.1:8123/}"
+LOCAL_URL=$(/home/hermes/.hermes/hermes-agent/venv/bin/python3 - <<'PY'
+import json, os
+from pathlib import Path
+p = Path(os.environ.get('HERMES_CRON_CONFIG', '/home/yuwk/cron/env/hermes.local.json'))
+print(json.loads(p.read_text()).get('ha_url', '') if p.exists() else '')
+PY
+) || exit 1
+URL="${HA_URL:-${LOCAL_URL:-http://127.0.0.1:8123/}}"
 CURL_TIMEOUT="${HA_CURL_TIMEOUT:-4}"
 # 连续失败次数达到阈值才判定异常，避免重启瞬间误报
 FAIL_THRESHOLD="${HA_FAIL_THRESHOLD:-2}"
@@ -62,7 +69,7 @@ get_ha_pid() {
 }
 
 probe() {
-  HTTP_CODE=$(curl -sS -m "$CURL_TIMEOUT" -o /dev/null -w '%{http_code}' "$URL" 2>/dev/null || true)
+  HTTP_CODE=$(curl --noproxy '*' -sS -m "$CURL_TIMEOUT" -o /dev/null -w '%{http_code}' "$URL" 2>/dev/null || true)
   HTTP_CODE=$(printf '%s' "$HTTP_CODE" | tr -cd '0-9')
   case "$HTTP_CODE" in
     200|201|301|302|401|403) ;;

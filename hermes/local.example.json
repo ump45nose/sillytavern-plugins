@@ -2,5 +2,12 @@
   "companion_delivery": "telegram:CHAT_ID:THREAD_ID",
   "notice_bot_username": "YOUR_NOTICE_BOT",
   "container_proxy_url": "http://YOUR_LAN_PROXY:7890",
-  "github_login": "YOUR_GITHUB_LOGIN"
+  "github_login": "YOUR_GITHUB_LOGIN",
+  "email_transport": "oauth",
+  "hub_source": "/home/yuwk/code/personal-data-hub/src",
+  "email_container": "mcp-platform-email-mcp-1",
+  "health_api_url": "",
+  "health_token_file": "",
+  "npm_health_url": "http://127.0.0.1:28081/",
+  "ha_url": "http://127.0.0.1:8123/"
 }

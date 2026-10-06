@@ -58,7 +58,8 @@ def main():
             atomic_write(target, path.read_text(), 0o755 if path.suffix in {".py", ".sh"} else 0o644)
     for kind, base in (("profile_scripts", args.profile_home / "scripts"),
                        ("agent_scripts", args.agent_root / "scripts"),
-                       ("review_scripts", args.review_root / "scripts")):
+                       ("review_scripts", args.review_root / "scripts"),
+                       ("review_sources", args.review_root / "review/sources")):
         for name, relative in manifest.get(kind, {}).items():
             old = base / name
             if old.exists():
@@ -66,7 +67,13 @@ def main():
                 saved.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(old, saved)
                 saved.chmod(0o600)
-            atomic_write(old, wrapper(args.runtime / relative), 0o755)
+            content = wrapper(args.runtime / relative)
+            if kind == "review_sources":
+                content = ("from pathlib import Path\nimport runpy\nimport sys\n"
+                           f"target = Path({str(args.runtime / relative)!r})\n"
+                           "sys.path.insert(0, str(target.parent))\n"
+                           "globals().update(runpy.run_path(str(target), run_name=__name__))\n")
+            atomic_write(old, content, 0o755)
     print(f"Hermes cron source installed in {args.runtime}; entrypoint backups: {backup}")
 
 

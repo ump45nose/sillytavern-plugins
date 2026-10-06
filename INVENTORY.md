@@ -36,8 +36,10 @@ Hermes owns its scheduler database and `jobs.json` beneath
 Concrete code is sourced from `hermes/` and `model/` in this repository and
 deployed to the matching directories under `/home/yuwk/cron`. Trusted profile
 entrypoints call that code. See the sanitized schedule inventories in both
-directories. Six obsolete container start/stop/enforcement tasks are paused;
-persistent containers use the boot service and Docker restart policies.
+directories. The six legacy container schedules now audit the persistent boot
+plan at their former stop times and repair startup at their former start times.
+Their scheduler names describe the current behavior. All 48 recurring Hermes
+jobs were enabled on 2026-10-06; historical one-shot records are preserved.
 
 ### Containers
 Known container-native schedulers include:

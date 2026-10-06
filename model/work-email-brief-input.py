@@ -28,9 +28,9 @@ MAX_BODY_EMAILS = 12
 
 def _tool_payload(result: object) -> dict:
     """Return a JSON object from MCP 2.x structured or text tool output."""
-    if bool(getattr(result, "isError", False)):
+    if bool(getattr(result, "is_error", getattr(result, "isError", False))):
         raise RuntimeError("MCP tool returned an error")
-    structured = getattr(result, "structuredContent", None)
+    structured = getattr(result, "structured_content", getattr(result, "structuredContent", None))
     if isinstance(structured, dict):
         return structured
     for item in getattr(result, "content", ()):
