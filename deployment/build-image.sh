@@ -9,6 +9,28 @@ cd "$task_repo"
 uv build --wheel --out-dir "$task_stage/wheels"
 uv build --wheel --package personal-crm --out-dir "$task_stage/wheels"
 uv build --wheel --package usage-monitor-mcp --out-dir "$task_stage/wheels"
+task_runtime_source=${HUB_RUNTIME_SOURCE:-}
+if [[ -z "$task_runtime_source" ]]; then
+  task_runtime_source=$("$task_repo/.venv/bin/python" - <<'PY'
+import os, pwd, subprocess, tomllib
+from pathlib import Path
+owner_home = Path(pwd.getpwuid(Path('.venv').stat().st_uid).pw_dir)
+cache = Path(os.environ.get('UV_CACHE_DIR', str(owner_home / '.cache/uv')))
+revision = tomllib.loads(Path('pyproject.toml').read_text())['tool']['uv']['sources']['mcp-platform']['rev']
+for manifest in (cache / 'git-v0/checkouts').glob('*/*/pyproject.toml'):
+    if tomllib.loads(manifest.read_text()).get('project', {}).get('name') != 'mcp-platform':
+        continue
+    repo = manifest.parent
+    result = subprocess.run(['git', '-c', 'safe.directory=' + str(repo), '-C', str(repo), 'rev-parse', 'HEAD'], capture_output=True, text=True)
+    if result.returncode == 0 and result.stdout.strip() == revision:
+        print(repo)
+        break
+else:
+    raise SystemExit('先执行 uv sync，或设置 HUB_RUNTIME_SOURCE 指向锁定的公共运行时源码')
+PY
+)
+fi
+uv build --wheel "$task_runtime_source" --out-dir "$task_stage/wheels"
 task_events_source=${HUB_EVENTS_SOURCE:-}
 if [[ -z "$task_events_source" ]]; then
   task_events_source=$("$task_repo/.venv/bin/python" - <<'PY'

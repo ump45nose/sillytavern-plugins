@@ -6,10 +6,10 @@
   },
   "wheels": {
     "mcp-platform": {
-      "version": "0.1.5",
-      "sha256": "74b5f1399f4dd79c438edca5632ac5bce1e5706b58e1e9935eb4e5aca84c8be7",
+      "version": "0.1.6",
+      "sha256": "8d7919373c1f772f01d4a7ffb3db15f84de5e5b9cf7161fa55291694acfeab10",
       "repository": "https://github.com/ump45nose/mcp-platform.git",
-      "source_commit": "3084004d1011687f1b029003dcd073c078735b68"
+      "source_commit": "dea309a5d83b6365a57937bc6e11affe692bfcaf"
     },
     "dingtalk-events": {
       "version": "0.1.1",
@@ -19,11 +19,12 @@
       "subdirectory": "mmp-platform/events"
     },
     "usage-monitor-mcp": {
-      "version": "0.1.0",
-      "sha256": "c46e9028bb8713b17e1acf0300736ba0a87914adaccd527c4202afd9c3560c57",
+      "version": "0.1.1",
+      "sha256": "b3efebee23161a1f765e385c1e78cf28c06560bf1a83656d694123e0169f23af",
       "repository": "https://github.com/ump45nose/personal-data-hub.git",
-      "source_commit": "a0373131e81cbb73edaedc90753c0d2fcc27afb5",
-      "original_repository": "https://github.com/ump45nose/usage-monitor-mcp.git"
+      "source_commit": "19f1f9b43972e12396dc50e2fec2f9fc2cfd9756",
+      "original_repository": "https://github.com/ump45nose/usage-monitor-mcp.git",
+      "subdirectory": "apps/usage-monitor"
     }
   }
 }
