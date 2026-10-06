@@ -1,0 +1,22 @@
+{
+  "source_repository": "https://github.com/Javis603/token-monitor",
+  "source_file": "/vol2/1000/Docker/token-monitor/app/assets/icon.png",
+  "source_evidence": "package.json build.mac.icon = assets/icon.png",
+  "original_file": "token-monitor-original.png",
+  "original_dimensions": [
+    1024,
+    1024
+  ],
+  "original_bytes": 707382,
+  "original_sha256": "2c4a2e0bc9ad588ffa2efc64777a612f3fc879c6b6f9d9360ccae48d3d141edd",
+  "upload_file": "token-monitor-web.png",
+  "upload_dimensions": [
+    256,
+    256
+  ],
+  "upload_bytes": 7606,
+  "upload_sha256": "76acfd21ec0d64cb7e602d2cef5b33d2d920946798c7923a1b825230e77dfff1",
+  "conversion": "Original canvas/design preserved; Lanczos downscale to 256px, indexed PNG compression with 96 colors, transparent palette entry retained and RGB under fully transparent pixels set to black.",
+  "native_app_id": "asdk_app_6ac33f40ad208191a08fbcfe6894796d",
+  "native_ui_icon_update": "pending; source asset preparation does not prove UI update"
+}
