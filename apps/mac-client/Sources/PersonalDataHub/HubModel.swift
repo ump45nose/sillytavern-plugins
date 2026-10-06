@@ -75,9 +75,11 @@ final class HubModel: ObservableObject {
             let date = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
             params.append(URLQueryItem(name: "start", value: ISO8601DateFormatter().string(from: date)))
         }
+        let parameters = params
+        let kindParameters = source.isEmpty ? [] : [URLQueryItem(name: "source", value: source)]
         do {
-            async let page: RecordPage = client.get("api/v1/browse", query: params)
-            async let types: [KindCount] = client.get("api/v1/kinds", query: source.isEmpty ? [] : [URLQueryItem(name: "source", value: source)])
+            async let page: RecordPage = client.get("api/v1/browse", query: parameters)
+            async let types: [KindCount] = client.get("api/v1/kinds", query: kindParameters)
             let (result, values) = try await (page, types)
             guard generation == browseGeneration else { return }
             records = result.records; total = result.total; nextOffset = result.next_offset; kinds = values

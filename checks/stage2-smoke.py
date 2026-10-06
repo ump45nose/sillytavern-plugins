@@ -4,6 +4,8 @@ from fastapi.testclient import TestClient
 from personal_data_hub.server import create_app
 from personal_data_hub.contracts import Batch, Record, Asset, instant
 from personal_data_hub.bill_contract import validate_bill
+from personal_data_hub.storage import previews
+from sqlalchemy import delete, select
 with tempfile.TemporaryDirectory() as tmp:
     root=Path(tmp)
     for name,secret in [('writer','write-smoke'),('viewer','read-smoke'),('finance','finance-smoke')]: (root/name).write_text(secret)
@@ -26,9 +28,15 @@ with tempfile.TemporaryDirectory() as tmp:
     assert client.post('/api/v1/ingest',json={'batch_id':'test','source':'memos'},headers=read).status_code==401
     assert client.put('/api/v1/assets/'+aid,content=b'hello',headers=read).status_code==401
     assert client.post('/autoaccounting/v1/bills',json={},headers=read).status_code==401
+    with store.engine.begin() as c: c.execute(delete(previews).where(previews.c.record_id==full['id']))
+    assert store.backfill_previews()==1
+    store.ingest('memos',Batch(records=[Record('nul','memo',{'events':'AX\x00data'},{'content':'NUL\x00 preview'})]))
+    assert client.get('/api/v1/browse?query=NUL',headers=read).json()['records'][0]['preview']=='NUL preview'
+    store.ingest('memos',Batch(deletions=['nul']))
+    with store.engine.connect() as c: assert c.scalar(select(previews.c.record_id).where(previews.c.record_id==store.identity('memos','nul'))) is None
     bill={'id':12,'state':'Synced','type':'Expend','time':1791223200000,'money':12.5,'fee':0,'flag':0,'remark':'official schema smoke'}
     h={'Authorization':'Bearer finance-smoke'}
     r=client.post('/autoaccounting/v1/bills',json=bill,headers=h); assert r.status_code==200 and r.json()['ok'] and r.json()['changed']
     assert not client.post('/autoaccounting/v1/bills',json=bill,headers=h).json()['changed']
     assert client.get('/api/v1/browse',headers={'Authorization':'Bearer write-smoke'}).status_code==200
-    print('smoke_ok: official bill idempotency, viewer read-only boundary, bounded cards, literal search, time filters, paging, detail, attachment')
+    print('smoke_ok: official bill idempotency, viewer read-only boundary, bounded cards, literal search, time filters, paging, detail, attachment, NUL preview, backfill, deletion')
