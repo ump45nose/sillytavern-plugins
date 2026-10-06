@@ -31,7 +31,7 @@ flowchart LR
 | AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
 | Health | 兼容原 `/health/import` 与 `/health/recent` | 历史快照及后续推送；缺失字段不补零 | 源接口未提供删除信号 |
 | Hermes | 读取已有 cron 执行报告 | 历史完整导入；15 分钟归档新报告 | 显式删除；轮转不删除 |
-| Google Calendar / Tasks | 复用既有授权的官方 REST | primary 日历最近 30 天起及全部任务清单；每小时 | cancelled / deleted，完整任务清单对账 |
+| Google Calendar / Tasks | NAS 复用既有只读授权的官方 REST | 同账号自有日历最近 30 天起及全部任务清单；每小时；primary 身份不变 | cancelled / deleted，完整任务清单对账 |
 | 邮件 | 薄适配层调用现有邮件服务的只读函数 | 现有账户 INBOX、原筛选规则、最近 30 天起，正文和附件；每小时 | 当前只读接口不支持可靠删除对账 |
 | Git | 既有 GitHub MCP | 当前账号提交记录、最近 30 天起；每小时 | 搜索缺失不判断删除 |
 | Memos | SQLite backup 一致快照 | 当前用户全部状态、关系和附件；每小时 | 完整清单对账 |
@@ -47,7 +47,7 @@ flowchart LR
 - `src/personal_data_hub/`：公共基座、适配器、API、只读查询和迁移。
 - `apps/crm/`：迁入的 CRM，保留 Git 历史及迁移时的工作区改动。
 - `apps/usage-monitor/`：原独立用量 MCP，保留 Git 历史和原运行身份。
-- `apps/mac-client/`：菜单栏客户端、来源状态和只读信息查看。
+- `apps/mac-client/`：菜单栏个人信息中心、主题页、Google 官方编辑适配与快捷浮窗。
 - `agents/mac/`：Skysight 同步代码、launchd 安装器和原配置快照。
 - `agents/nas/`：ShellCrash 单一采集器及 Plaud 只同步入口。
 - `collectors/plaud/`：只用于下载和归档的自有代码，不运行 ASR。
@@ -82,8 +82,8 @@ API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`
 
 ## Mac 客户端
 
-`apps/mac-client` 提供菜单栏客户端、来源状态、信息筛选与分页、完整详情导出、附件保存及校验。现有微信和电脑活动 Agent 继续采集，客户端显示其状态及交付水位，也可请求立即同步。
+`apps/mac-client` 默认进入今日概览，展示日程、健康和最近交流，可定制模块与指标。顶部切换数据趋势和最近动态，左侧进入日程任务、健康、社交、内容档案、财务用量。正文按需读取，支持完整导出、附件校验和录音播放。现有微信和电脑活动 Agent 继续采集；状态和同步操作放在侧栏底部。
 
-查看端的独立凭据保存在 Mac Keychain，NAS 仅允许它读取信息。列表使用有界查看字段，不传输原始 AX 事件；完整数据按需读取。安装和连接见 [客户端说明](apps/mac-client/README.md)。
+归档查看凭据保存在 Mac Keychain，NAS 仅允许它读取信息。Google 编辑使用另一个 Keychain 项和独立浏览器授权，Mac 直连官方 API，NAS 按原周期归档，MCP 保持只读。全局 **⌃⌥Space** 呼出日程任务浮窗；任务日期不提供时刻或本地提醒。展示接口仅读取可重建的有界索引，不传输原始 AX 事件。安装和连接见 [客户端说明](apps/mac-client/README.md)，展示定义见 [Mac 信息展示](docs/mac-display.md)。
 
-部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md) 与 [列表和状态修正](docs/query-status-validation.md)。
+部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md)、[列表和状态修正](docs/query-status-validation.md) 与 [展示改造验收](docs/mac-display-validation.md)。

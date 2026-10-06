@@ -19,6 +19,7 @@ jtype = JSON()
 sources = Table("hub_sources", metadata, Column("id", String, primary_key=True), Column("account", String, nullable=False), Column("adapter", String, nullable=False), Column("deletion_support", String, nullable=False))
 records = Table("hub_records", metadata, Column("id", String(64), primary_key=True), Column("source", String, nullable=False, index=True), Column("external_id", Text, nullable=False), Column("kind", String, nullable=False, index=True), Column("occurred_at", DateTime(timezone=True), index=True), Column("updated_at", DateTime(timezone=True)), Column("observed_at", DateTime(timezone=True), nullable=False), Column("timezone", String, nullable=False), Column("hash", String(64), nullable=False), Column("raw", jtype, nullable=False), Column("normalized", jtype, nullable=False), Column("assets", jtype, nullable=False))
 previews = Table("hub_record_previews", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("title", Text, nullable=False), Column("preview", Text, nullable=False))
+display_index = Table("hub_display_index", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("source", String, nullable=False), Column("kind", String, nullable=False), Column("domain", String, nullable=False, index=True), Column("occurred_at", DateTime(timezone=True), index=True), Column("observed_at", DateTime(timezone=True), nullable=False), Column("title", String(160), nullable=False), Column("preview", String(500), nullable=False), Column("data", jtype, nullable=False))
 revisions = Table("hub_revisions", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("hash", String(64), primary_key=True), Column("observed_at", DateTime(timezone=True), nullable=False), Column("value", jtype, nullable=False))
 assets = Table("hub_assets", metadata, Column("id", String(64), primary_key=True), Column("size", Integer, nullable=False))
 asset_refs = Table("hub_asset_refs", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("asset_id", ForeignKey("hub_assets.id"), primary_key=True))
@@ -148,6 +149,7 @@ class Store:
                         for child_id in list(c.scalars(select(child.c.id).where(child.c.person_id == key))):
                             self._purge(c, source, child_name + ":" + child_id)
                 c.execute(delete(table).where(table.c.id == key))
+        c.execute(delete(display_index).where(display_index.c.record_id == rid))
         c.execute(delete(previews).where(previews.c.record_id == rid))
         c.execute(delete(asset_refs).where(asset_refs.c.record_id == rid))
         c.execute(delete(revisions).where(revisions.c.record_id == rid))
@@ -178,8 +180,8 @@ class Store:
                     old = c.execute(select(records).where(records.c.id == rid)).mappings().first()
                     now = utcnow()
                     if old and old["hash"] == key:
-                        self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
                         c.execute(update(records).where(records.c.id == rid).values(observed_at=now))
+                        self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
                         duplicate += 1
                         continue
                     values = dict(id=rid, source=source, external_id=str(item.external_id), hash=key, occurred_at=item.occurred_at, updated_at=item.updated_at, observed_at=now, kind=item.kind, timezone=item.timezone, raw=item.raw, normalized=item.normalized, assets=attachments)
@@ -288,6 +290,36 @@ class Store:
             connection.execute(update(previews).where(previews.c.record_id == rid).values(**values))
         else:
             connection.execute(insert(previews).values(record_id=rid, **values))
+        from .display import index_value
+        row = connection.execute(select(records.c.source, records.c.occurred_at, records.c.observed_at).where(records.c.id == rid)).mappings().one()
+        value = index_value(kind, external_id, raw, normalized)
+        indexed = dict(record_id=rid, source=row["source"], kind=kind, occurred_at=row["occurred_at"], observed_at=row["observed_at"], **value)
+        if connection.scalar(select(display_index.c.record_id).where(display_index.c.record_id == rid)):
+            connection.execute(update(display_index).where(display_index.c.record_id == rid).values(**indexed))
+        else:
+            connection.execute(insert(display_index).values(**indexed))
+
+    def backfill_display(self, rebuild=False, kind=None):
+        if rebuild:
+            with self.writer_lock(), self.engine.begin() as c:
+                statement = delete(display_index)
+                if kind: statement = statement.where(display_index.c.kind == kind)
+                c.execute(statement)
+        count = 0
+        while True:
+            with self.engine.connect() as c:
+                statement = select(records.c.id).outerjoin(display_index, records.c.id == display_index.c.record_id).where(display_index.c.record_id.is_(None))
+                if kind: statement = statement.where(records.c.kind == kind)
+                ids = list(c.scalars(statement.order_by(records.c.id).limit(100)))
+            if not ids: return count
+            with self.writer_lock(), self.engine.begin() as c:
+                from .display import index_value
+                values = []
+                for row in c.execute(select(records).outerjoin(display_index, records.c.id == display_index.c.record_id).where(records.c.id.in_(ids), display_index.c.record_id.is_(None))).mappings():
+                    value = index_value(row["kind"], row["external_id"], row["raw"], row["normalized"])
+                    values.append(dict(record_id=row["id"], source=row["source"], kind=row["kind"], occurred_at=row["occurred_at"], observed_at=row["observed_at"], **value))
+                if values: c.execute(insert(display_index), values)
+                count += len(values)
 
     def backfill_previews(self):
         """已有归档一次性补齐；小批次锁避免长期阻塞推送，不改变原始内容。"""

@@ -71,6 +71,10 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         app = crm_app(settings, repository, hub_store=store)
     app.state.hub_store = store
     api = APIRouter()
+    from .display import Display
+    from zoneinfo import ZoneInfoNotFoundError
+    from datetime import date
+    display = Display(store)
 
     def secret(name):
         if config.get(name + "_file"):
@@ -84,6 +88,25 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         if not tokens: raise HTTPException(503, "authentication_not_configured")
         valid = [hmac.compare_digest(authorization or "", "Bearer " + token) for token in tokens]
         if not any(valid): raise HTTPException(401, "unauthorized")
+
+    @api.get("/api/v1/dashboard")
+    def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "agenda,health,social", authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try: return display.overview(date, tz, modules)
+        except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
+
+    @api.get("/api/v1/trends")
+    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social,usage", days: int = 7, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try: return display.trends(date, tz, modules, days)
+        except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
+
+    @api.get("/api/v1/timeline")
+    def timeline(domains: str = "social,activity,recordings,reports,mail,git,notes", cursor: str | None = None, limit: int = 30, query: str = "", start: datetime | None = None, end: datetime | None = None, person: str | None = None, kind: str | None = None, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        if (start and not start.tzinfo) or (end and not end.tzinfo) or (start and end and start >= end): raise HTTPException(422, "invalid_time_range")
+        try: return display.timeline(domains, cursor, limit, query, start, end, person, kind)
+        except ValueError: raise HTTPException(422, "invalid_display_parameters") from None
 
     @api.get("/api/v1/sources")
     def data_sources(authorization: str | None = Header(default=None)):

@@ -96,15 +96,20 @@ class GoogleCollector:
                 if token in tokens: raise RuntimeError("google_pagination_stalled")
                 tokens.add(token)
             raise RuntimeError("google_pagination_incomplete")
-        calendar = self.settings.get("calendar", "primary")
-        for rows in pages("https://www.googleapis.com/calendar/v3/calendars/" + quote(calendar, safe="") + "/events", {"timeMin": start.isoformat(), "singleEvents": "true", "showDeleted": "true", "maxResults": 2500}):
-            batch = Batch()
-            for row in rows:
-                eid = "calendar:" + calendar + ":" + row["id"]
-                if row.get("status") == "cancelled": batch.deletions.append(eid); continue
-                event = row.get("start", {})
-                batch.records.append(Record(eid, "calendar_event", row, {"title": row.get("summary"), "status": row.get("status"), "calendar": calendar}, instant(event.get("dateTime", event.get("date"))), instant(row.get("updated"))))
-            yield batch
+        calendars = [self.settings.get("calendar", "primary")]
+        if self.settings.get("calendar_scope") == "owned":
+            calendars = []
+            for rows in pages("https://www.googleapis.com/calendar/v3/users/me/calendarList", {"maxResults": 250}):
+                calendars.extend("primary" if r.get("primary") else r["id"] for r in rows if r.get("accessRole") == "owner")
+        for calendar in calendars:
+            for rows in pages("https://www.googleapis.com/calendar/v3/calendars/" + quote(calendar, safe="") + "/events", {"timeMin": start.isoformat(), "singleEvents": "true", "showDeleted": "true", "maxResults": 2500}):
+                batch = Batch()
+                for row in rows:
+                    eid = "calendar:" + calendar + ":" + row["id"]
+                    if row.get("status") == "cancelled": batch.deletions.append(eid); continue
+                    event = row.get("start", {})
+                    batch.records.append(Record(eid, "calendar_event", row, {"title": row.get("summary"), "status": row.get("status"), "calendar": calendar}, instant(event.get("dateTime", event.get("date"))), instant(row.get("updated"))))
+                yield batch
         # tasklists 的完整清单同时用于任务删除对账；归档/已完成任务仍保存。
         task_ids = []
         for rows in pages("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {"maxResults": 100}):

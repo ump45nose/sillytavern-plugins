@@ -27,6 +27,31 @@ final class HubModel: ObservableObject {
     @Published var refreshedAt: Date?
     @Published var loginEnabled = SMAppService.mainApp.status == .enabled
     @Published var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
+    @Published var preferences = UIPreferences.load()
+    @Published var section = "overview"
+    @Published var overviewMode = "today"
+    @Published var displayDate = Date()
+    @Published var trendDays = 7
+    @Published var dashboard: Dashboard?
+    @Published var trends: TrendPage?
+    @Published var timeline: [DisplayCard] = []
+    @Published var timelineCursor: String?
+    @Published var timelineDomain = "social,activity,recordings,reports,mail,git,notes"
+    @Published var displayLoading = false
+    @Published var showingDetail = false
+    @Published var taskEditor = false
+    @Published var eventEditor = false
+    @Published var quickSnapshot: GoogleSnapshot?
+    @Published var googleSnapshot: GoogleSnapshot?
+    @Published var googleMessage: String?
+    @Published var googleBusy = false
+    @Published var calendarWeek = false
+    @Published var editingTask: GoogleTask?
+    @Published var editingEvent: GoogleEvent?
+    @Published var hotkeyError: String?
+    let google = GoogleClient()
+    var displayGeneration = 0
+    var timelineGeneration = 0
     private var browseGeneration = 0
     private var detailGeneration = 0
     private var statusGeneration = 0
@@ -36,9 +61,9 @@ final class HubModel: ObservableObject {
     var recordCount: Int { sources.reduce(0) { $0 + $1.count } }
 
     func start() {
-        Task { await refreshStatus(); await browse(reset: true) }
+        Task { await refreshStatus(); await loadDisplay(); await refreshGoogle(); await loadTimeline() }
         timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect().sink { [weak self] _ in
-            Task { await self?.refreshStatus() }
+            Task { await self?.refreshStatus(); await self?.loadDisplay(); await self?.refreshGoogle() }
         }
     }
 

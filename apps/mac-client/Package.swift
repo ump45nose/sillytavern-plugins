@@ -5,5 +5,5 @@ let package = Package(
     name: "PersonalDataHub",
     platforms: [.macOS(.v13)],
     products: [.executable(name: "PersonalDataHub", targets: ["PersonalDataHub"])],
-    targets: [.executableTarget(name: "PersonalDataHub")]
+    targets: [.executableTarget(name: "PersonalDataHub"), .testTarget(name: "PersonalDataHubTests", dependencies: ["PersonalDataHub"])]
 )

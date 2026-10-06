@@ -17,6 +17,7 @@ def main():
     for action in ("collect", "backfill", "reconcile", "import-legacy"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
     sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
+    p = sub.add_parser("backfill-display"); p.add_argument("--rebuild", action="store_true"); p.add_argument("--kind")
     p = sub.add_parser("import-crm"); p.add_argument("path")
     p = sub.add_parser("export-source"); p.add_argument("source", choices=["google"]); p.add_argument("--cursor-stdin", action="store_true")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
@@ -32,6 +33,8 @@ def main():
             print(canonical(asdict(batch)), flush=True)
         return
     store = store_from(config)
+    if args.action == "backfill-display":
+        print(canonical({"display_created": store.backfill_display(rebuild=args.rebuild, kind=args.kind)})); return
     if args.action == "backfill-previews":
         print(canonical({"previews_created": store.backfill_previews()})); return
     if args.action == "backup":

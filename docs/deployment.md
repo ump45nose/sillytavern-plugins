@@ -52,6 +52,12 @@ NAS 在私有配置中增加 `hub_viewer_token_file`。容器目录中的对应�
 
 2026-10-06 的列表与状态修正已更新至 `local/personal-data-hub:0.2.1-query`，当前候选清单为 `releases/personal-data-hub-0.2.1-query/compose.yaml`。Mac 客户端同步更新为 `0.2.1`；验证见 [列表与状态修正验收](query-status-validation.md)。
 
+展示改造已部署为 `local/personal-data-hub:0.3.0-display`，候选清单为 `releases/personal-data-hub-0.3.0-display/compose.yaml`；仍只替换原 `crm` 镜像。来源状态、旧列表/详情、OAuth、MCP 和既有推送入口保留。展示索引初次回填全部归档；健康业务日修正后只重建 `health_payloads` 索引。服务请求不扫描大型正文。
+
+私有宿主与容器配置中 `sources.google.calendar_scope` 设为 `owned`；只读 NAS 凭据保持原样，同账号 primary 身份仍使用原命名空间。修改前的两个配置分别备份为相邻的 `config.pre-display.json`。
+
+Mac 客户端 0.3.0 使用独立 Keychain 项保存 Google 桌面授权；本轮浏览器授权已完成，同账号自有日历及 Tasks 操作由 Mac 官方适配层执行。临时签名的更新可能触发系统 Keychain 访问确认。原 0.2.1 应用保存在 `/Users/yuwk/Applications/Personal Data Hub.pre-display.app`；回退时正常退出客户端后恢复此副本。NAS 回退使用原 0.2.1 Compose 候选清单，必要时恢复 `config.pre-display.json`，不用回滚数据库或删除派生索引；原始归档和已有采集进程继续保留。
+
 ## AutoAccounting 接入
 
 使用官方 AutoAccounting 的账单 Webhook 导出，无需修改或安装自建 APK。官方已在提交 `1210983f`（PR #1390）合入此功能，验收时核对的官方 master 为 `34b38f82`。手机端沿用原 HTTPS `/autoaccounting/v1/bills` 地址及 Bearer；聚合端保留 `BillInfoModel` JSON 请求和 HTTP 2xx 回执兼容。
