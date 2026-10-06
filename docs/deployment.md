@@ -40,13 +40,13 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 安装器复用 `com.yuwk.personal-review-skysight` 和 `com.personal-crm.wechat`。保留原 Python / ChatGPT Node 授权路径、设备身份、白名单和检查点；Skysight 间隔调整为 900 秒。执行副本继续放在原 Application Support 路径，来源和更新由本仓库管理。微信 `.env` 迁到 Application Support，保留原虚拟环境解释器，代码改为读取本仓库的 `apps/crm/src`。
 
-Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。第二阶段才开发统一客户端与信息查看界面。
+Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。客户端在 `apps/mac-client` 管理，复用这两个 Agent。
 
 ## AutoAccounting
 
-上游锁定在 `integrations/autoaccounting/upstream.lock.json` 指定提交，自有 `export/` 代码和 `hub-deletion-outbox.patch` 在本仓库管理。对该固定提交应用补丁后构建 APK。Android 导出器先持久化已尝试导出的账单 ID，再向 NAS 推送；只有本地成功读取为空才生成删除事件，NAS 成功回执后才清空 outbox。
+使用官方 AutoAccounting 的账单 Webhook 导出，无需修改或安装自建 APK。官方已在提交 `1210983f`（PR #1390）合入此功能，验收时核对的官方 master 为 `34b38f82`。手机端沿用原 HTTPS `/autoaccounting/v1/bills` 地址及 Bearer；聚合端保留 `BillInfoModel` JSON 请求和 HTTP 2xx 回执兼容。
 
-首次升级会通过同一 Bearer 鉴权分页读取 NAS 已归档账单 ID，完整成功后才持久化初始清单，使旧账单也进入删除跟踪。未安装新 APK 前，旧账单推送兼容，但不会主动发出新的删除事件。
+官方导出读取 Synced、Edited、Wait2Edit 三种状态，不主动发出删除事件。缺失账单不能推断为删除。`hub-deletion-outbox.patch` 和构建回执仅保留为可选扩展资料，未启用，不属于验收或客户端安装前提。服务端显式删除接口继续保留。
 
 ## 备份与回退
 

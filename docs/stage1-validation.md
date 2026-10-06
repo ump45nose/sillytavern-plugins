@@ -21,7 +21,7 @@
 ## 设备验收
 
 Mac 当前同步 Agent 已安装到同一仓库检出并加载。使用既有官方摘要完成 Mac → NAS 文件交付、SHA 校验、数据库提交回执及检查点验证；临时检查点已清理。Mac 侧公网健康检查和 OAuth 元数据返回 200，未鉴权 MCP initialize 返回 401。
-Android 新删除 outbox APK：锁定上游提交及本仓库补丁的 `:app:assembleDebug` 已通过，APK 签名验证通过；产物在 `/vol1/1000/personal-data-hub/releases/autoaccounting-stage1-debug.apk`，哈希和版本信息见 `integrations/autoaccounting/build-receipt.json`。手机未连接 NAS ADB，尚未安装新 APK。
+AutoAccounting：官方 PR #1390 已合入，核对当前官方 master `34b38f82` 的导出协议与 NAS 兼容，继续使用官方应用，无需自建 APK。79 个已归档账单的只读清单验证通过。可选删除 outbox 的源码与构建回执保留；它不是当前接入的前提，也未声称完成手机删除端到端验收。
 Mac 图形客户端和统一信息查看界面按既定计划留在第二阶段。
 
 当前部署镜像：`sha256:4b96b90b8a77487fbcf0300b603b9c4f3bab789a3084a07e4b4db14ef5ea87bd`。
@@ -32,4 +32,4 @@ Mac 图形客户端和统一信息查看界面按既定计划留在第二阶段�
 
 镜像依赖检查：统一服务、自有 CRM、用量库与锁定的公共依赖已全部打包，`uv pip check --system` 通过。独立用量 MCP 服务未替换镜像。
 
-财务删除升级验证：Bearer 保护的账单 ID 清单完成分页读取，共 79 个历史 ID；初始清单只有完整成功后才持久化，应用层错误不会产生删除，NAS 明确回执后才清空 outbox。手机端删除端到端验证待安装 APK 后进行。
+第一阶段结论：采集、聚合、兼容推送与只读 MCP 验收通过，可进入第二阶段。官方财务导出无删除信号及 24 个历史 Skysight 异常已作为来源限制记录；不要求替换官方 APK。

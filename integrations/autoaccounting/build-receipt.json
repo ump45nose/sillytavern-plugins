@@ -7,5 +7,6 @@
   "artifact": "/vol1/1000/personal-data-hub/releases/autoaccounting-stage1-debug.apk",
   "task": ":app:assembleDebug",
   "signature_verified": true,
-  "device_installation": "pending_no_adb_device"
+  "device_installation": "not_required_for_official_webhook",
+  "scope": "optional_deletion_extension_not_active"
 }

@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -76,31 +77,46 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
             return Path(config[name + "_file"]).read_text().strip()
         return os.environ.get(name.upper(), "")
 
-    def authenticate(authorization, name="hub_api_token"):
-        token = secret(name)
-        if not token: raise HTTPException(503, "authentication_not_configured")
-        if not authorization or not hmac.compare_digest(authorization, "Bearer " + token): raise HTTPException(401, "unauthorized")
+    def authenticate(authorization, name="hub_api_token", readonly=False):
+        tokens = [secret(name)]
+        if readonly: tokens.append(secret("hub_viewer_token"))
+        tokens = [token for token in tokens if token]
+        if not tokens: raise HTTPException(503, "authentication_not_configured")
+        valid = [hmac.compare_digest(authorization or "", "Bearer " + token) for token in tokens]
+        if not any(valid): raise HTTPException(401, "unauthorized")
 
     @api.get("/api/v1/sources")
     def data_sources(authorization: str | None = Header(default=None)):
-        authenticate(authorization); return store.status()
+        authenticate(authorization, readonly=True); return store.status()
 
     @api.get("/api/v1/records")
     def data_records(source: str | None = None, kind: str | None = None, offset: int = 0, limit: int = 100, authorization: str | None = Header(default=None)):
-        authenticate(authorization)
+        authenticate(authorization, readonly=True)
         try: return {"records": store.list_records(source, kind, offset, limit)}
         except ValueError: raise HTTPException(422, "invalid_pagination") from None
 
+    @api.get("/api/v1/browse")
+    def browse(source: str | None = None, kind: str | None = None, query: str = "", offset: int = 0, limit: int = 50, start: datetime | None = None, end: datetime | None = None, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        if any(value and value.tzinfo is None for value in (start, end)) or (start and end and start >= end):
+            raise HTTPException(422, "invalid_time_range")
+        try: return store.browse(source, kind, query, offset, limit, start, end)
+        except ValueError: raise HTTPException(422, "invalid_browse_parameters") from None
+
+    @api.get("/api/v1/kinds")
+    def kinds(source: str | None = None, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True); return store.kinds(source)
+
     @api.get("/api/v1/records/{record_id}")
     def data_record(record_id: str, authorization: str | None = Header(default=None)):
-        authenticate(authorization)
+        authenticate(authorization, readonly=True)
         result = store.get_record(record_id)
         if result is None: raise HTTPException(404, "record_not_found")
         return result
 
     @api.get("/api/v1/assets/{asset_id}")
     def download(asset_id: str, authorization: str | None = Header(default=None)):
-        authenticate(authorization)
+        authenticate(authorization, readonly=True)
         path = store.asset_path(asset_id)
         if path is None: raise HTTPException(404, "asset_not_found")
         return FileResponse(path, media_type="application/octet-stream")

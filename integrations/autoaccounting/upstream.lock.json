@@ -1,7 +1,20 @@
 {
-  "repository": "https://github.com/ump45nose/AutoAccounting.git",
-  "revision": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
-  "official_upstream": "https://github.com/AutoAccountingOrg/AutoAccounting.git",
-  "patch": "hub-deletion-outbox.patch",
-  "installation_status": "debug_apk_built_requires_device_install"
+  "repository": "https://github.com/AutoAccountingOrg/AutoAccounting.git",
+  "revision": "34b38f82ca9ad6d7905c715c66891977f8809c88",
+  "webhook_merge_revision": "1210983f10c4bb90d20b6d28862a0253009b624e",
+  "installation_status": "official_webhook_no_custom_apk_required",
+  "contract": {
+    "method": "POST",
+    "path": "/autoaccounting/v1/bills",
+    "authorization": "Bearer",
+    "body": "BillInfoModel JSON",
+    "ack": "HTTP 2xx"
+  },
+  "optional_deletion_extension": {
+    "repository": "https://github.com/ump45nose/AutoAccounting.git",
+    "revision": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
+    "patch": "hub-deletion-outbox.patch",
+    "required": false,
+    "device_verified": false
+  }
 }

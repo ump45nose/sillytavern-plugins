@@ -16,7 +16,7 @@ def main():
     sub = parser.add_subparsers(dest="action", required=True)
     for action in ("collect", "backfill", "reconcile", "import-legacy"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
-    sub.add_parser("status"); sub.add_parser("serve-collectors")
+    sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
     p = sub.add_parser("import-crm"); p.add_argument("path")
     p = sub.add_parser("export-source"); p.add_argument("source", choices=["google"]); p.add_argument("--cursor-stdin", action="store_true")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
@@ -32,6 +32,8 @@ def main():
             print(canonical(asdict(batch)), flush=True)
         return
     store = store_from(config)
+    if args.action == "backfill-previews":
+        print(canonical({"previews_created": store.backfill_previews()})); return
     if args.action == "backup":
         from .migration import backup
         print(canonical(backup(store, args.destination))); return

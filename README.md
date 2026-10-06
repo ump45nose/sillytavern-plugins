@@ -1,6 +1,6 @@
 # Personal Data Hub
 
-个人信息采集与聚合的统一仓库。第一阶段已实现公共采集基座、来源适配、统一归档和只读 MCP，并接管 NAS 上的运行入口。Mac 同步 Agent 在 `agents/mac` 管理；带信息查看界面的 Mac 客户端属于第二阶段。
+个人信息采集与聚合的统一仓库。第一阶段已实现公共采集基座、来源适配、统一归档和只读 MCP，并接管 NAS 上的运行入口。Mac 同步 Agent 在 `agents/mac` 管理；带信息查看界面的 Mac 客户端在 `apps/mac-client` 管理。
 
 系统只采集、归档、聚合和查询。既有提醒、自动事实、复盘、投影、ASR 和模型任务已退出当前运行链路，源码保存在 `legacy/`。
 
@@ -28,7 +28,7 @@ flowchart LR
 | CRM / 微信 | 保留现有 webhook，归档和 CRM 表同事务提交 | 原白名单、身份和水位；推送即入库，15 分钟对账 | 显式删除及完整来源清单 |
 | Computer History / Skysight | 现有授权 Node 读取应用组，SSH/rsync 交付并取得数据库提交回执 | 已闭合原始片段、官方 10min / 6h 摘要；15 分钟 | 显式删除；缓存过期不删除 |
 | Plaud | 官方 MCP 下载的薄适配层，独立 SDK 环境 | 现有录音历史及既有产物；每小时同步最近 30 天，保留原始音频 | 源接口未提供可靠删除信号 |
-| AutoAccounting | 保留 HTTPS 推送协议；自有 Android 导出器和删除 outbox 补丁 | 历史账单已导入；新账单推送即入库 | 新 APK 的删除 outbox，待安装验证 |
+| AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
 | Health | 兼容原 `/health/import` 与 `/health/recent` | 历史快照及后续推送；缺失字段不补零 | 源接口未提供删除信号 |
 | Hermes | 读取已有 cron 执行报告 | 历史完整导入；15 分钟归档新报告 | 显式删除；轮转不删除 |
 | Google Calendar / Tasks | 复用既有授权的官方 REST | primary 日历最近 30 天起及全部任务清单；每小时 | cancelled / deleted，完整任务清单对账 |
@@ -47,10 +47,11 @@ flowchart LR
 - `src/personal_data_hub/`：公共基座、适配器、API、只读查询和迁移。
 - `apps/crm/`：迁入的 CRM，保留 Git 历史及迁移时的工作区改动。
 - `apps/usage-monitor/`：原独立用量 MCP，保留 Git 历史和原运行身份。
+- `apps/mac-client/`：菜单栏客户端、来源状态和只读信息查看。
 - `agents/mac/`：Skysight 同步代码、launchd 安装器和原配置快照。
 - `agents/nas/`：ShellCrash 单一采集器及 Plaud 只同步入口。
 - `collectors/plaud/`：只用于下载和归档的自有代码，不运行 ASR。
-- `integrations/autoaccounting/`：锁定上游版本、自有导出器及可复现补丁。
+- `integrations/autoaccounting/`：官方协议版本及可选删除扩展。
 - `legacy/`：旧处理业务源码，不自动运行。
 - `deployment/`：镜像构建和 systemd 入口。
 
@@ -75,4 +76,10 @@ API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`
 
 显式删除会清理当前记录、历史版本和无其他引用的附件，并保留仅含哈希、来源和时间的墓碑。墓碑拦截旧备份重放；CRM 同时清理兼容查询表并阻止已删除微信事件重放。失败、分页不完整、缓存轮转及时间窗口缩短不会被当作删除。
 
-部署、回退和验证记录见 [部署说明](docs/deployment.md) 与 [第一阶段验收记录](docs/stage1-validation.md)。
+## Mac 客户端
+
+`apps/mac-client` 提供菜单栏客户端、来源状态、信息筛选与分页、完整详情导出、附件保存及校验。现有微信和电脑活动 Agent 继续采集，客户端显示其状态及交付水位，也可请求立即同步。
+
+查看端的独立凭据保存在 Mac Keychain，NAS 仅允许它读取信息。列表使用有界查看字段，不传输原始 AX 事件；完整数据按需读取。安装和连接见 [客户端说明](apps/mac-client/README.md)。
+
+部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md) 与 [第二阶段验证](docs/stage2-validation.md)。

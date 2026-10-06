@@ -18,6 +18,7 @@ metadata = MetaData()
 jtype = JSON()
 sources = Table("hub_sources", metadata, Column("id", String, primary_key=True), Column("account", String, nullable=False), Column("adapter", String, nullable=False), Column("deletion_support", String, nullable=False))
 records = Table("hub_records", metadata, Column("id", String(64), primary_key=True), Column("source", String, nullable=False, index=True), Column("external_id", Text, nullable=False), Column("kind", String, nullable=False, index=True), Column("occurred_at", DateTime(timezone=True), index=True), Column("updated_at", DateTime(timezone=True)), Column("observed_at", DateTime(timezone=True), nullable=False), Column("timezone", String, nullable=False), Column("hash", String(64), nullable=False), Column("raw", jtype, nullable=False), Column("normalized", jtype, nullable=False), Column("assets", jtype, nullable=False))
+previews = Table("hub_record_previews", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("title", Text, nullable=False), Column("preview", Text, nullable=False))
 revisions = Table("hub_revisions", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("hash", String(64), primary_key=True), Column("observed_at", DateTime(timezone=True), nullable=False), Column("value", jtype, nullable=False))
 assets = Table("hub_assets", metadata, Column("id", String(64), primary_key=True), Column("size", Integer, nullable=False))
 asset_refs = Table("hub_asset_refs", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("asset_id", ForeignKey("hub_assets.id"), primary_key=True))
@@ -147,6 +148,7 @@ class Store:
                         for child_id in list(c.scalars(select(child.c.id).where(child.c.person_id == key))):
                             self._purge(c, source, child_name + ":" + child_id)
                 c.execute(delete(table).where(table.c.id == key))
+        c.execute(delete(previews).where(previews.c.record_id == rid))
         c.execute(delete(asset_refs).where(asset_refs.c.record_id == rid))
         c.execute(delete(revisions).where(revisions.c.record_id == rid))
         c.execute(delete(records).where(records.c.id == rid))
@@ -176,6 +178,7 @@ class Store:
                     old = c.execute(select(records).where(records.c.id == rid)).mappings().first()
                     now = utcnow()
                     if old and old["hash"] == key:
+                        self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
                         c.execute(update(records).where(records.c.id == rid).values(observed_at=now))
                         duplicate += 1
                         continue
@@ -184,6 +187,7 @@ class Store:
                         c.execute(update(records).where(records.c.id == rid).values(**values))
                     else:
                         c.execute(insert(records).values(**values))
+                    self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
                     if not c.scalar(select(revisions.c.hash).where(revisions.c.record_id == rid, revisions.c.hash == key)):
                         c.execute(insert(revisions).values(record_id=rid, hash=key, observed_at=now, value=body))
                     for a in attachments:
@@ -231,6 +235,69 @@ class Store:
         with self.engine.connect() as c:
             row = c.execute(select(records).where(records.c.id == record_id)).mappings().first()
             return dict(row) if row else None
+
+    def browse(self, source=None, kind=None, query="", offset=0, limit=50, start=None, end=None):
+        """只投影可读字段，列表不传输原始 AX 事件和长正文。"""
+        if offset < 0 or not 1 <= limit <= 100 or len(query) > 200:
+            raise ValueError("invalid_browse_parameters")
+        # 不在 SQL 中解析原始 JSON：PG JSON 的 ->> 也会拒绝 AX 中的 NUL。
+        title = func.coalesce(previews.c.title, records.c.kind)
+        preview = func.coalesce(previews.c.preview, records.c.external_id)
+        joined = records.outerjoin(previews, records.c.id == previews.c.record_id)
+        conditions = []
+        if source: conditions.append(records.c.source == source)
+        if kind: conditions.append(records.c.kind == kind)
+        if start: conditions.append(records.c.occurred_at >= start)
+        if end: conditions.append(records.c.occurred_at < end)
+        if query:
+            conditions.append((title + " " + preview).icontains(query, autoescape=True))
+        columns = [records.c.id, records.c.source, records.c.kind, records.c.occurred_at,
+                   records.c.observed_at, records.c.timezone,
+                   func.substr(title, 1, 160).label("title"), func.substr(preview, 1, 500).label("preview")]
+        statement = select(*columns).select_from(joined).where(*conditions).order_by(records.c.occurred_at.desc().nulls_last(), records.c.id).offset(offset).limit(limit + 1)
+        with self.engine.connect() as c:
+            rows = [dict(r) for r in c.execute(statement).mappings()]
+            total = c.scalar(select(func.count()).select_from(joined).where(*conditions))
+        return {"records": rows[:limit], "total": total, "next_offset": offset + limit if len(rows) > limit else None}
+
+    @staticmethod
+    def preview_fields(kind, external_id, raw, normalized):
+        def first(*values):
+            return next((value for value in values if isinstance(value, str) and value.strip()), "")
+        bill = raw.get("bill", {}) if isinstance(raw.get("bill"), dict) else {}
+        amount = str(normalized.get("amount", ""))
+        title = first(normalized.get("title"), normalized.get("subject"), raw.get("title"), raw.get("display_name"), raw.get("name"), kind)
+        preview = first(normalized.get("content"), normalized.get("message"), raw.get("summary"), raw.get("content"), normalized.get("body"), bill.get("remark"), raw.get("path"), str(external_id))
+        if kind == "bill": preview = " ".join(x for x in [str(normalized.get("type", bill.get("type", ""))), amount, str(normalized.get("currency") or ""), preview] if x)
+        return {"title": title[:160].replace("\x00", ""), "preview": preview[:500].replace("\x00", "")}
+
+    def _put_preview(self, connection, rid, kind, external_id, raw, normalized):
+        values = self.preview_fields(kind, external_id, raw, normalized)
+        if connection.scalar(select(previews.c.record_id).where(previews.c.record_id == rid)):
+            connection.execute(update(previews).where(previews.c.record_id == rid).values(**values))
+        else:
+            connection.execute(insert(previews).values(record_id=rid, **values))
+
+    def backfill_previews(self):
+        """已有归档一次性补齐；小批次锁避免长期阻塞推送，不改变原始内容。"""
+        count = 0
+        while True:
+            with self.engine.connect() as c:
+                rows = list(c.execute(select(records).outerjoin(previews, records.c.id == previews.c.record_id).where(previews.c.record_id.is_(None)).order_by(records.c.id).limit(20)).mappings())
+            if not rows: return count
+            with self.writer_lock():
+                with self.engine.begin() as c:
+                    for row in rows:
+                        current = c.scalar(select(records.c.hash).where(records.c.id == row["id"]))
+                        if current == row["hash"] and not c.scalar(select(previews.c.record_id).where(previews.c.record_id == row["id"])):
+                            self._put_preview(c, row["id"], row["kind"], row["external_id"], row["raw"], row["normalized"])
+                            count += 1
+
+    def kinds(self, source=None):
+        statement = select(records.c.kind, func.count().label("count")).group_by(records.c.kind).order_by(records.c.kind)
+        if source: statement = statement.where(records.c.source == source)
+        with self.engine.connect() as c:
+            return [dict(row) for row in c.execute(statement).mappings()]
 
     def asset_path(self, asset_id: str):
         if len(asset_id) != 64 or any(x not in "0123456789abcdef" for x in asset_id):
