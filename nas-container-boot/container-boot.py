@@ -14,7 +14,6 @@ import urllib.error
 import urllib.request
 
 ORDER = Path('/home/yuwk/cron/scripts/container-boot-order.txt')
-TAILNET_IP = '100.102.63.126'
 LOCK = '/tmp/container-boot.lock'
 
 
@@ -62,7 +61,7 @@ def load_order():
 def tailnet_ready():
     result = run('ip', '-o', '-4', 'addr', 'show', 'dev', 'tailscale0', timeout=5)
     return bool(result and result.returncode == 0 and
-                any(f' {TAILNET_IP}/' in line for line in result.stdout.splitlines()))
+                any(' inet ' in line for line in result.stdout.splitlines()))
 
 
 def ready(name):

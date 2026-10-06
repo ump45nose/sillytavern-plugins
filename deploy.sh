@@ -9,7 +9,6 @@ install -d -m 0700 "$runtime/env"
 install -m 0644 "$repo_dir/README.md" "$runtime/README.md"
 install -m 0644 "$repo_dir/INVENTORY.md" "$runtime/INVENTORY.md"
 
-install -m 0755 "$repo_dir/apisix-auto-stop/apisix-auto-stop"   "$runtime/scripts/apisix-auto-stop"
 install -m 0755 "$repo_dir/hermes-env-audit/audit_env_base.py"   "$runtime/scripts/hermes-env-audit.py"
 install -m 0755 "$repo_dir/hermes-telegram-recovery/hermes-telegram-recovery-check"   "$runtime/scripts/hermes-telegram-recovery-check"
 install -m 0755 "$repo_dir/nas-container-boot/compose-autostart.sh"   "$runtime/scripts/compose-autostart.sh"
@@ -25,18 +24,23 @@ install -m 0755 "$repo_dir/shellcrash-traffic/shellcrash-subboost-refresh.sh"   
 
 find "$repo_dir" -mindepth 3 -maxdepth 3 -path '*/systemd/*' -type f -print0 |
   while IFS= read -r -d '' unit; do
+    [[ $(basename "$unit") == apisix-auto-stop.* ]] && continue
     install -m 0644 "$unit" "$runtime/systemd/$(basename "$unit")"
   done
 
 for unit in "$runtime/systemd/"*.service "$runtime/systemd/"*.timer; do
+  [[ $(basename "$unit") == apisix-auto-stop.* ]] && continue
   sudo -n ln -sfn "$unit" "/etc/systemd/system/$(basename "$unit")"
 done
 
+sudo -n systemctl disable --now apisix-auto-stop.timer 2>/dev/null || true
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable nas-container-boot.service shellcrash-traffic-collector.service >/dev/null
 
-sudo -n systemctl enable --now   apisix-auto-stop.timer   hermes-env-audit.timer   hermes-telegram-recovery.timer   qbittorrent-portmap-renew.timer   rsyslog-logrotate.timer   shellcrash-subboost-refresh.timer   shellcrash-traffic-ai-export.timer   shellcrash-traffic-report.timer   subboost-update-rule-index.timer   subboost-update-subscriptions.timer   taglab-delete-worker.timer >/dev/null
+sudo -n systemctl enable --now    hermes-env-audit.timer   hermes-telegram-recovery.timer   qbittorrent-portmap-renew.timer   rsyslog-logrotate.timer   shellcrash-subboost-refresh.timer   shellcrash-traffic-ai-export.timer   shellcrash-traffic-report.timer   subboost-update-rule-index.timer   subboost-update-subscriptions.timer   taglab-delete-worker.timer >/dev/null
 
 sudo -n systemctl restart shellcrash-traffic-collector.service
+
+python3 "$repo_dir/deploy-hermes.py"
 
 echo "Deployed host-native scheduled jobs from $repo_dir"

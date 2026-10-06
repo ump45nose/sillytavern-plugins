@@ -1,5 +1,5 @@
 # Current persistent containers after 2026-10-04 cleanup.
-# APISIX is intentionally excluded: manual/on-demand only.
+# APISIX is a persistent dependency of Hermes model cron jobs.
 # Format: stage container [required-container ...]
 
 10 dockge
@@ -17,13 +17,14 @@
 30 navidrome
 30 memos
 30 new-api postgresql
+30 apisix cli-proxy-api new-api
 30 cpa-manager-plus cli-proxy-api
 30 subboost-app-1 postgresql
 30 personal-crm-crm-1
 30 vaultwarden
 30 clouddrive2
 30 duplicati
-30 email-mcp
+30 mcp-platform-email-mcp-1
 30 homeassistant
 30 embyserver
 30 mdc

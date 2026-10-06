@@ -1,0 +1,242 @@
+[
+  {
+    "name": "定时重启服务（凌晨4点）",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 4 * * *",
+      "display": "0 4 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/restart-services.sh"
+  },
+  {
+    "name": "shared-state-container-inventory",
+    "schedule": {
+      "kind": "cron",
+      "expr": "*/15 * * * *",
+      "display": "*/15 * * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/collect_containers.py"
+  },
+  {
+    "name": "shared-state-host-environment",
+    "schedule": {
+      "kind": "cron",
+      "expr": "7 * * * *",
+      "display": "7 * * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/collect_environment.py"
+  },
+  {
+    "name": "gold-alert-etf-premium",
+    "schedule": {
+      "kind": "cron",
+      "expr": "40-44,46 14 * * 1-5",
+      "display": "40-44,46 14 * * 1-5"
+    },
+    "no_agent": true,
+    "source": "hermes/etf_premium_alert.py"
+  },
+  {
+    "name": "welfare-daily-monitor",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 8 * * *",
+      "display": "30 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/welfare_monitor.py"
+  },
+  {
+    "name": "watchtower-monthly-update",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 5 1 * *",
+      "display": "0 5 1 * *"
+    },
+    "no_agent": true,
+    "source": "hermes/watchtower-monthly-update.sh"
+  },
+  {
+    "name": "china-social-referrals-exclude-campus-daily",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 18 * * *",
+      "display": "0 18 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/agi-job-social-daily.sh"
+  },
+  {
+    "name": "health-data-freshness-hourly",
+    "schedule": {
+      "kind": "cron",
+      "expr": "15 8-23 * * *",
+      "display": "15 8-23 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/health-data-freshness.py"
+  },
+  {
+    "name": "personal-review-email-2100",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 21 * * *",
+      "display": "0 21 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-email-input.sh"
+  },
+  {
+    "name": "personal-review-attachments-worker",
+    "schedule": {
+      "kind": "cron",
+      "expr": "*/30 * * * *",
+      "display": "*/30 * * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-attachments-worker.sh"
+  },
+  {
+    "name": "personal-review-retention",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 3 * * *",
+      "display": "30 3 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-retention.sh"
+  },
+  {
+    "name": "personal-review-daily-ack-2135",
+    "schedule": {
+      "kind": "cron",
+      "expr": "35 21 * * *",
+      "display": "35 21 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-daily-ack.sh"
+  },
+  {
+    "name": "personal-review-google-2110",
+    "schedule": {
+      "kind": "cron",
+      "expr": "10 21 * * *",
+      "display": "10 21 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-google-input.sh"
+  },
+  {
+    "name": "mcp-member-discover-two-rounds-0220",
+    "schedule": {
+      "kind": "cron",
+      "expr": "20 2 * * *",
+      "display": "20 2 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/mcp-member-discover-two-rounds.sh"
+  },
+  {
+    "name": "personal-review-crm-2118",
+    "schedule": {
+      "kind": "cron",
+      "expr": "18 21 * * *",
+      "display": "18 21 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/personal-review-crm-input.sh"
+  },
+  {
+    "name": "benefits-daily-summary",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 12 * * *",
+      "display": "0 12 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_automation_notice_daily.py"
+  },
+  {
+    "name": "favsync-daily-summary",
+    "schedule": {
+      "kind": "cron",
+      "expr": "10 9 * * *",
+      "display": "10 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/favsync_notice_daily.py"
+  },
+  {
+    "name": "benefits-smzdm",
+    "schedule": {
+      "kind": "cron",
+      "expr": "12 8 * * *",
+      "display": "12 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_smzdm.py"
+  },
+  {
+    "name": "benefits-v2ex",
+    "schedule": {
+      "kind": "cron",
+      "expr": "12 8 * * *",
+      "display": "12 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_v2ex.py"
+  },
+  {
+    "name": "benefits-aliyun",
+    "schedule": {
+      "kind": "cron",
+      "expr": "22 8 * * *",
+      "display": "22 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_aliyun.py"
+  },
+  {
+    "name": "benefits-laowang",
+    "schedule": {
+      "kind": "cron",
+      "expr": "17 8 * * *",
+      "display": "17 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_laowang.py"
+  },
+  {
+    "name": "benefits-epic",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 9 * * *",
+      "display": "0 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_epic.py"
+  },
+  {
+    "name": "benefits-rewards",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 9 * * *",
+      "display": "30 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_rewards.py"
+  },
+  {
+    "name": "media-automation-daily-report",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 9 * * *",
+      "display": "30 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/media_automation_notice_daily.py"
+  }
+]

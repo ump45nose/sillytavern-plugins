@@ -4,7 +4,7 @@
 
 | Job | Scheduler | Schedule |
 | --- | --- | --- |
-| APISIX auto-stop | systemd timer | every 10 minutes |
+| APISIX auto-stop | retired, disabled | formerly every 10 minutes |
 | Hermes env audit | systemd timer | daily 06:17 |
 | Hermes Telegram recovery | systemd timer | every 2 minutes |
 | qBittorrent port mapping | systemd timer | hourly |
@@ -33,6 +33,11 @@ Do not copy these into this repository. ShellCrash may rewrite them.
 ### Hermes
 Hermes owns its scheduler database and `jobs.json` beneath
 `/home/hermes/.hermes/profiles/*/cron`. It must remain application-managed.
+Concrete code is sourced from `hermes/` and `model/` in this repository and
+deployed to the matching directories under `/home/yuwk/cron`. Trusted profile
+entrypoints call that code. See the sanitized schedule inventories in both
+directories. Six obsolete container start/stop/enforcement tasks are paused;
+persistent containers use the boot service and Docker restart policies.
 
 ### Containers
 Known container-native schedulers include:

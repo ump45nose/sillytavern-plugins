@@ -1,0 +1,118 @@
+[
+  {
+    "name": "hermes-mem0-daily-sync-2200",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 22 * * *",
+      "display": "0 22 * * *"
+    },
+    "no_agent": false,
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "hermes-episode-daily-sync-2300",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 23 * * *",
+      "display": "0 23 * * *"
+    },
+    "no_agent": true,
+    "source": "model/episode-daily-local.sh",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "episode-learning-candidates-3d",
+    "schedule": {
+      "kind": "interval",
+      "minutes": 4320,
+      "display": "every 4320m"
+    },
+    "no_agent": true,
+    "source": "model/learning-candidates-local.sh",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "hangzhou-ats-sync-wed-sat",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 10 * * 3,6",
+      "display": "0 10 * * 3,6"
+    },
+    "no_agent": true,
+    "source": "model/agi-job-ats-sync.sh",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "hermes-mem0-retry-gate-2230",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 22 * * *",
+      "display": "30 22 * * *"
+    },
+    "no_agent": true,
+    "source": "model/mem0-retry-gate.sh",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "lingjun-companion-generator-2330",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 23 * * *",
+      "display": "30 23 * * *"
+    },
+    "no_agent": true,
+    "source": "model/lingjun-companion-generator.py",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "work-email-brief-weekdays-0850",
+    "schedule": {
+      "kind": "cron",
+      "expr": "50 8 * * 1-5",
+      "display": "50 8 * * 1-5"
+    },
+    "no_agent": false,
+    "source": "model/work-email-brief-input.py",
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "personal-review-daily-2130",
+    "schedule": {
+      "kind": "cron",
+      "expr": "30 21 * * *",
+      "display": "30 21 * * *"
+    },
+    "no_agent": false,
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "personal-review-weekly-2150",
+    "schedule": {
+      "kind": "cron",
+      "expr": "50 21 * * 0",
+      "display": "50 21 * * 0"
+    },
+    "no_agent": false,
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  },
+  {
+    "name": "personal-review-git-2115",
+    "schedule": {
+      "kind": "cron",
+      "expr": "15 21 * * *",
+      "display": "15 21 * * *"
+    },
+    "no_agent": false,
+    "provider": "custom:cpa-local",
+    "model": "grok-4.7"
+  }
+]

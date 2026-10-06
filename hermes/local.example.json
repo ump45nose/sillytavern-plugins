@@ -1,0 +1,6 @@
+{
+  "companion_delivery": "telegram:CHAT_ID:THREAD_ID",
+  "notice_bot_username": "YOUR_NOTICE_BOT",
+  "container_proxy_url": "http://YOUR_LAN_PROXY:7890",
+  "github_login": "YOUR_GITHUB_LOGIN"
+}
