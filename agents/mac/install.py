@@ -6,6 +6,7 @@ import os
 import plistlib
 import shutil
 import subprocess
+import time
 
 repo = Path(__file__).resolve().parents[2]
 home = Path.home()
@@ -24,7 +25,12 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
     path = agents / (name + ".plist")
     if not (backup / path.name).exists(): shutil.copy2(path, backup / path.name)
     data = plistlib.loads(path.read_bytes())
-    subprocess.run(["launchctl", "bootout", "gui/" + uid + "/" + name], check=False, capture_output=True)
+    target = "gui/" + uid + "/" + name
+    previous_plist = path.read_bytes()
+    subprocess.run(["launchctl", "bootout", target], check=False, capture_output=True)
+    for attempt in range(25):
+        if subprocess.run(["launchctl", "print", target], capture_output=True).returncode: break
+        time.sleep(0.2)
     if "skysight" in name:
         data["StartInterval"] = 900
         data.pop("StartCalendarInterval", None)
@@ -40,7 +46,15 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
         if not new_env.exists(): shutil.copy2(old_env, new_env); new_env.chmod(0o600)
         data["EnvironmentVariables"]["CRM_ENV_FILE"] = str(new_env)
     path.write_bytes(plistlib.dumps(data))
-    subprocess.run(["launchctl", "bootstrap", "gui/" + uid, str(path)], check=True)
+    path.chmod(0o600)
+    for attempt in range(5):
+        loaded = subprocess.run(["launchctl", "bootstrap", "gui/" + uid, str(path)], capture_output=True)
+        if loaded.returncode == 0: break
+        time.sleep(0.5)
+    if loaded.returncode:
+        path.write_bytes(previous_plist)
+        subprocess.run(["launchctl", "bootstrap", "gui/" + uid, str(path)], check=False, capture_output=True)
+        raise RuntimeError("agent_bootstrap_failed:" + name)
 receipt = {"repository": str(repo), "files": {name: hashlib.sha256((support / name).read_bytes()).hexdigest() for name in ["run-skysight.py", "sync-skysight.mjs"]}, "checkpoint_preserved": True}
 (support / "hub-deployment.json").write_text(json.dumps(receipt, indent=2))
 print("Mac collection agents installed; existing identities and checkpoints preserved")
