@@ -843,8 +843,8 @@ wheels = [
 
 [[package]]
 name = "mcp-platform"
-version = "0.1.5"
-source = { git = "https://github.com/ump45nose/mcp-platform.git?rev=3084004d1011687f1b029003dcd073c078735b68#3084004d1011687f1b029003dcd073c078735b68" }
+version = "0.1.6"
+source = { git = "https://github.com/ump45nose/mcp-platform.git?rev=dea309a5d83b6365a57937bc6e11affe692bfcaf#dea309a5d83b6365a57937bc6e11affe692bfcaf" }
 dependencies = [
     { name = "authlib" },
     { name = "fastmcp" },
@@ -932,7 +932,7 @@ wheels = [
 
 [[package]]
 name = "personal-crm"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -957,7 +957,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13,<2" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=3084004d1011687f1b029003dcd073c078735b68" },
+    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=dea309a5d83b6365a57937bc6e11affe692bfcaf" },
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3,<9" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24,<1" },

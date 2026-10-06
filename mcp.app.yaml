@@ -28,7 +28,7 @@ environment:
   DAILY_REVIEW_EVENTS_ENABLED: 'false'
   HUB_CONFIG: /run/hub/config.json
   REMINDER_SCHEDULER_ENABLED: 'false'
-  CHAT_EVENTS_ENABLED: 'false'
+  CHAT_EVENTS_ENABLED: 'true'
 required_env:
 - DATABASE_URL
 - WECHAT_WEBHOOK_SECRET

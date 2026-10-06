@@ -65,7 +65,7 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         # URL 对象的 str 默认隐藏密码，原始连接值必须来自配置。
         settings.database_url = config.get("database_url") or os.environ["HUB_DATABASE_URL"]
         settings.reminder_scheduler_enabled = False
-        settings.chat_events_enabled = False
+        # 既有聊天订阅继续由显式部署配置控制，迁移不能关闭事件发现和续订。
         settings.daily_review_events_enabled = False
         repository = CrmRepository(settings.database_url, hub_store=store)
         app = crm_app(settings, repository, hub_store=store)
