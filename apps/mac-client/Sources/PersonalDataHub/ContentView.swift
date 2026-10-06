@@ -232,15 +232,16 @@ struct ContentView: View {
                     let allowed = model.preferences.modules.first { $0.id == module.id }?.metrics ?? []
                     let metrics = module.metrics.filter { allowed.contains($0.id.components(separatedBy: ":")[0]) }
                     ForEach(metrics) { metric in
+                        let heading = model.trends?.days.last?.modules.first(where: { $0.id == module.id })?.metrics.first(where: { $0.id == metric.id })?.label ?? metric.label
                         let points = model.trends?.days.compactMap { d -> TrendPoint? in
                             guard let v = d.modules.first(where: { $0.id == module.id })?.metrics.first(where: { $0.id == metric.id })?.number else { return nil }
                             return TrendPoint(day: d.date, value: v)
                         } ?? []
-                        HStack { Text(metric.label); Spacer(); Text(metric.unit).foregroundStyle(.secondary) }
+                        HStack { Text(heading); Spacer(); Text(metric.unit).foregroundStyle(.secondary) }
                         if points.isEmpty { Text("这段时间暂无数据").font(.caption).foregroundStyle(.secondary) }
                         else {
                             Chart(points) { p in
-                                BarMark(x: .value("日期", p.date), y: .value(metric.label, p.value)).foregroundStyle(.indigo.opacity(0.75))
+                                BarMark(x: .value("日期", p.date, unit: .day), y: .value(heading, p.value)).foregroundStyle(.indigo.opacity(0.75))
                             }.frame(height: 150).accessibilityLabel(metric.label + "每日趋势")
                             DisclosureGroup("每日明细") {
                                 ForEach(points) { p in HStack { Text(p.day); Spacer(); Text(p.value.formatted(.number.precision(.fractionLength(0...2)))) }.font(.caption).padding(.vertical, 3) }

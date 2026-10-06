@@ -83,18 +83,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 detailView.frame = NSRect(x: 0, y: 0, width: 740, height: 700)
                 let detailWindow = NSWindow(contentRect: detailView.frame, styleMask: [.titled], backing: .buffered, defer: false)
                 detailWindow.contentView = detailView; detailWindow.orderFront(nil)
+                window?.addChildWindow(detailWindow, ordered: .above)
                 if CommandLine.arguments.contains("--qa-dark") { detailWindow.appearance = NSAppearance(named: .darkAqua) }
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 captureView = detailView
             } else { fputs("client_qa_detail_missing\n", stderr); exit(1) }
         }
         if CommandLine.arguments.contains("--qa-quick") {
-            toggleQuick(); try? await Task.sleep(nanoseconds: 400_000_000)
+            toggleQuick(refresh: false); await model.refreshQuickGoogle()
+            try? await Task.sleep(nanoseconds: 400_000_000)
             quick?.appearance = window?.appearance
             guard let panelView = quick?.contentView else { exit(1) }; captureView = panelView
             quick?.cancelOperation(nil)
             guard quick?.isVisible == false else { fputs("quick_escape_failed\\n", stderr); exit(1) }
-            toggleQuick()
+            toggleQuick(refresh: false)
             try? await Task.sleep(nanoseconds: 400_000_000)
         }
         captureView.layoutSubtreeIfNeeded()
@@ -178,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func newEvent() { showWindow(); model.editingEvent = nil; model.eventEditor = true }
     @objc func search() { showWindow(); NotificationCenter.default.post(name: .hubSearch, object: nil) }
     @objc func switchOverview(_ item: NSMenuItem) { showWindow(); model.section = "overview"; model.overviewMode = ["today", "trends", "recent"][item.tag-1] }
-    func toggleQuick() {
+    func toggleQuick(refresh: Bool = true) {
         if quick?.isVisible == true { closeQuick(); return }
         previousApp = NSWorkspace.shared.frontmostApplication
         if quick == nil {
@@ -192,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         quick?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        Task { await model.refreshQuickGoogle() }
+        if refresh { Task { await model.refreshQuickGoogle() } }
     }
     func closeQuick() { quick?.orderOut(nil); if previousApp?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp?.activate(options: [.activateIgnoringOtherApps]) } }
     @objc func refresh() { Task { await model.refreshStatus() } }

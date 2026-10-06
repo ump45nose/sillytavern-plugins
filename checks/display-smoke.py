@@ -62,6 +62,7 @@ with TemporaryDirectory() as temp:
     assert client.get("/api/v1/timeline",params={"cursor":"bad"},headers=headers).status_code == 422
     t=client.get("/api/v1/trends",params=params|{"days":7},headers=headers).json()
     assert len(t["days"])==7 and t["days"][-2]["modules"][1]["metrics"][0]["value"] is None
+    assert t["days"][-1]["modules"][0]["metrics"][0]["value"] == 0 # Undated current tasks are not fabricated as historical daily counts.
     store.ingest("health", Batch(deletions=["three"]))
     assert metrics("health")["steps"]==120 # response remains immutable
     assert Display(store).overview("2026-10-06","Asia/Shanghai","health")["modules"][0]["metrics"][0]["value"]==100
@@ -76,7 +77,9 @@ with TemporaryDirectory() as temp:
         def __init__(self,*args): pass
         def get(self,url,params):
             if url.endswith("calendarList"): return {"items":[{"id":"email","primary":True,"accessRole":"owner"},{"id":"secondary","accessRole":"owner"},{"id":"shared","accessRole":"reader"}]}
-            if "/events" in url: return {"items":[{"id":"event","start":{"dateTime":"2026-10-06T12:00:00+08:00"}}]}
+            if "/events" in url:
+                assert params["timeMax"] > params["timeMin"]
+                return {"items":[{"id":"event","start":{"dateTime":"2026-10-06T12:00:00+08:00"}}]}
             return {"items":[]}
     with patch("personal_data_hub.remote.GoogleReadClient",FakeGoogle):
         batches=list(GoogleCollector({"credential_file":"unused","calendar_scope":"owned"}).collect({}))

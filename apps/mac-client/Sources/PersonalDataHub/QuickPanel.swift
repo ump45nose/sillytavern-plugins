@@ -60,7 +60,7 @@ struct QuickPanelView: View {
             if let next = model.quickSnapshot?.events.first(where: { ($0.endDate ?? .distantPast) > Date() }) {
                 HStack(spacing: 12) {
                     Image(systemName: "calendar").foregroundStyle(.indigo)
-                    VStack(alignment: .leading, spacing: 5) { Text(next.title).lineLimit(1); Text(next.allDay ? "全天" : displayDate(next.start)).font(.caption).foregroundStyle(.secondary) }
+                    VStack(alignment: .leading, spacing: 5) { Text(next.title).lineLimit(1); Text(next.allDay ? (next.startDate?.formatted(date: .abbreviated, time: .omitted) ?? "") + " · 全天" : displayDate(next.start)).font(.caption).foregroundStyle(.secondary) }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(Color.indigo.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
             }
             ScrollView {

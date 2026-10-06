@@ -226,6 +226,9 @@ class Display:
             for module in value["modules"]:
                 module["items"] = []
                 for metric in module["metrics"]:
+                    if module["id"] == "agenda" and metric["id"] == "tasks":
+                        metric["label"] = "到期待办（当前未完成）"
+                        metric["value"] = sum(r["kind"] == "google_task" and r["data"].get("status") != "completed" and (r["data"].get("due") or "")[:10] == value["date"] for r in rows)
                     metric["record_ids"] = []
                     if metric["date"] != value["date"]: metric["value"] = None
             values.append(value)

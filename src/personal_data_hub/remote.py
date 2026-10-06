@@ -85,6 +85,7 @@ class GoogleCollector:
         if self.settings.get("proxy_env"): _load_proxy_environment(Path(self.settings["proxy_env"]))
         client = GoogleReadClient(Path(self.settings["credential_file"]))
         start = since or instant(cursor.get("window_start")) or utcnow() - timedelta(days=30)
+        end = utcnow() + timedelta(days=max(1, min(3660, int(self.settings.get("calendar_future_days", 365)))))
         # 所有已授权账号范围内：primary Calendar、既有全部 tasklists。
         def pages(url, params):
             token = ""; tokens = set()
@@ -102,7 +103,7 @@ class GoogleCollector:
             for rows in pages("https://www.googleapis.com/calendar/v3/users/me/calendarList", {"maxResults": 250}):
                 calendars.extend("primary" if r.get("primary") else r["id"] for r in rows if r.get("accessRole") == "owner")
         for calendar in calendars:
-            for rows in pages("https://www.googleapis.com/calendar/v3/calendars/" + quote(calendar, safe="") + "/events", {"timeMin": start.isoformat(), "singleEvents": "true", "showDeleted": "true", "maxResults": 2500}):
+            for rows in pages("https://www.googleapis.com/calendar/v3/calendars/" + quote(calendar, safe="") + "/events", {"timeMin": start.isoformat(), "timeMax": end.isoformat(), "singleEvents": "true", "showDeleted": "true", "maxResults": 2500}):
                 batch = Batch()
                 for row in rows:
                     eid = "calendar:" + calendar + ":" + row["id"]

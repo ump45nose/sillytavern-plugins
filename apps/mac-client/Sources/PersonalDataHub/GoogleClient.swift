@@ -83,10 +83,12 @@ struct GoogleSnapshot: Codable {
     var lists: [GoogleList]; var calendars: [GoogleCalendar]; var tasks: [GoogleTask]; var events: [GoogleEvent]; var fetchedAt: Date
     var queryDate: String?; var rangeDays: Int?
     static let cache = Connection.directory.appendingPathComponent("google-cache.json")
-    static func load() -> GoogleSnapshot? { (try? Data(contentsOf: cache)).flatMap { try? JSONDecoder().decode(Self.self, from: $0) } }
-    func save() {
-        try? JSONEncoder().encode(self).write(to: Self.cache, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: Self.cache.path)
+    static let quickCache = Connection.directory.appendingPathComponent("google-quick-cache.json")
+    static func load(quick: Bool = false) -> GoogleSnapshot? { (try? Data(contentsOf: quick ? quickCache : cache)).flatMap { try? JSONDecoder().decode(Self.self, from: $0) } }
+    func save(quick: Bool = false) {
+        let path = quick ? Self.quickCache : Self.cache
+        try? JSONEncoder().encode(self).write(to: path, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
     }
 }
 final class OAuthCallback: @unchecked Sendable {
@@ -250,6 +252,19 @@ actor GoogleClient {
         }
         let value = GoogleSnapshot(lists: lists, calendars: calendars, tasks: tasks.sorted { $0.position < $1.position }, events: events.sorted { $0.start < $1.start }, fetchedAt: Date(), queryDate: dayKey(date), rangeDays: days)
         value.save(); return value
+    }
+    func nextEvent(calendars: [GoogleCalendar]) async throws -> GoogleEvent? {
+        var upcoming: [GoogleEvent] = []
+        for cal in calendars where cal.owned {
+            let response = try await request("https://www.googleapis.com/calendar/v3/calendars/\(part(cal.id))/events", query: ["timeMin": ISO8601DateFormatter().string(from: Date()), "singleEvents": "true", "orderBy": "startTime", "maxResults": "1"])
+            if let row = (response["items"] as? [[String: Any]])?.first { upcoming.append(GoogleEvent(row, calendar: cal.id)) }
+        }
+        return upcoming.min { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }
+    }
+    func quickSnapshot() async throws -> GoogleSnapshot {
+        var value = try await snapshot(date: Date(), days: 1)
+        value.events = try await nextEvent(calendars: value.calendars).map { [$0] } ?? []
+        value.save(quick: true); return value
     }
     func saveTask(_ task: GoogleTask?, list: String, title: String, notes: String, due: String, parent: String = "") async throws {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.count <= 1024, notes.count <= 8192, !list.isEmpty else { throw GoogleError.invalid }

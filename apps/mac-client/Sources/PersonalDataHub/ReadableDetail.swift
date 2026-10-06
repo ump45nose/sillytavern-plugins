@@ -36,7 +36,8 @@ struct ReadableDetailView: View {
                 else if let record = model.detail {
                     let object = (try? JSONSerialization.jsonObject(with: Data(record.rawJSON.utf8))) as? [String: Any] ?? [:]
                     let raw = object["raw"] as? [String: Any] ?? [:], normal = object["normalized"] as? [String: Any] ?? [:]
-                    let name = record.fields.first { ["title", "subject", "display_name", "name"].contains($0.id) }?.value ?? kindName(record.kind)
+                    let content = record.fields.first { ["content", "body", "summary", "message"].contains($0.id) }?.value ?? ""
+                    let name = frontTitle(content) ?? record.fields.first { ["title", "subject", "display_name", "name"].contains($0.id) }?.value ?? kindName(record.kind)
                     VStack(alignment: .leading, spacing: 24) {
                         HStack(alignment: .top, spacing: 16) {
                             Image(systemName: moduleIcons[domain(record.kind)] ?? "doc.text").font(.title).foregroundStyle(.indigo).frame(width: 54, height: 54).background(Color.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
@@ -57,8 +58,8 @@ struct ReadableDetailView: View {
                             }
                         } else if record.kind == "people" {
                             ForEach(["relationship_to_me", "organizations", "tags", "profile_notes"], id: \.self) { key in
-                                if let v = raw[key], String(describing: v) != "[]" {
-                                    VStack(alignment: .leading, spacing: 5) { Text(["relationship_to_me": "关系", "organizations": "组织", "tags": "标签", "profile_notes": "个人资料"][key]!).font(.caption).foregroundStyle(.secondary); Text(String(describing: v)).textSelection(.enabled) }
+                                if let text = profileText(raw[key]) {
+                                    VStack(alignment: .leading, spacing: 5) { Text(["relationship_to_me": "关系", "organizations": "组织", "tags": "标签", "profile_notes": "个人资料"][key]!).font(.caption).foregroundStyle(.secondary); Text(text).textSelection(.enabled) }
                                 }
                             }
                             Text("交流时间线").font(.headline)
@@ -84,7 +85,8 @@ struct ReadableDetailView: View {
                                         ForEach(Array(samples.prefix(8).enumerated()), id: \.offset) { _, sample in
                                             let value = sample["count"] ?? sample["duration_seconds"] ?? sample["bpm"] ?? sample["calories"] ?? sample["percentage"] ?? sample["watts"]
                                             let time = sample["end_time"] ?? sample["session_end_time"] ?? sample["time"]
-                                            HStack { Text(String(describing: value ?? "—")).font(.title3.weight(.semibold)); Spacer(); Text(displayDate(time as? String)).font(.caption).foregroundStyle(.secondary) }
+                                            let point = healthPoints([sample], field: field.id).first
+                                            HStack { Text(point.map { $0.value.formatted(.number.precision(.fractionLength(0...2))) + " " + $0.unit } ?? String(describing: value ?? "—")).font(.title3.weight(.semibold)); Spacer(); Text(displayDate(time as? String)).font(.caption).foregroundStyle(.secondary) }
                                         }
                                     }
                                 }
@@ -92,9 +94,8 @@ struct ReadableDetailView: View {
                         } else {
                             let body = record.fields.first { ["content", "body", "summary", "message"].contains($0.id) }?.value
                             if let body = body, !body.isEmpty {
-                                let preview = String(body.prefix(50000)).replacingOccurrences(of: "\u{0000}", with: "")
-                                Text((try? AttributedString(markdown: preview, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(preview))
-                                    .font(.system(size: 15)).lineSpacing(6).textSelection(.enabled)
+                                let preview = readingBody(String(body.prefix(50000))).replacingOccurrences(of: "\u{0000}", with: "")
+                                MarkdownReadingView(text: preview)
                                 if body.count > 50000 { Text("此处显示部分正文，导出可获取完整内容。").font(.caption).foregroundStyle(.secondary) }
                             } else if record.kind == "recording" {
                                 let duration = (normal["duration_ms"] as? Double ?? 0) / 60000
@@ -156,6 +157,36 @@ struct ReadableDetailView: View {
         }
     }
     private func domain(_ kind: String) -> String { ["people": "social", "interactions": "social", "bill": "finance", "health_payloads": "health", "recording": "recordings", "computer_summary": "activity"][kind] ?? "notes" }
+}
+private func profileText(_ value: Any?) -> String? {
+    if let text = value as? String { return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text }
+    if let array = value as? [Any] { let texts = array.compactMap(profileText); return texts.isEmpty ? nil : texts.joined(separator: "、") }
+    if let object = value as? [String: Any] { return ["name", "title", "label"].compactMap { profileText(object[$0]) }.first }
+    return nil
+}
+private func frontTitle(_ text: String) -> String? {
+    guard text.hasPrefix("---\n") else { return nil }
+    return text.components(separatedBy: "\n").prefix(30).first { $0.hasPrefix("title:") }.map { String($0.dropFirst(6)).trimmingCharacters(in: CharacterSet(charactersIn: " \"'")) }
+}
+private func readingBody(_ text: String) -> String {
+    if text.hasPrefix("---\n"), let end = text.range(of: "\n---", range: text.index(text.startIndex, offsetBy: 4)..<text.endIndex) {
+        return String(text[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    return text
+}
+private struct MarkdownReadingView: View {
+    let text: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                if line.hasPrefix("# ") { Text(String(line.dropFirst(2))).font(.title2.bold()).padding(.top, 10) }
+                else if line.hasPrefix("## ") { Text(String(line.dropFirst(3))).font(.title3.bold()).padding(.top, 8) }
+                else if line.hasPrefix("### ") { Text(String(line.dropFirst(4))).font(.headline).padding(.top, 6) }
+                else if line.isEmpty { Spacer().frame(height: 4) }
+                else { Text((try? AttributedString(markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(line)).font(.system(size: 15)).lineSpacing(6) }
+            }
+        }.textSelection(.enabled)
+    }
 }
 private struct HealthDetailPoint: Identifiable {
     let id: Int; let time: Date; let value: Double; let unit: String

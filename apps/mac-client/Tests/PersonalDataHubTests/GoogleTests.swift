@@ -88,4 +88,16 @@ final class GoogleTests: XCTestCase {
         } catch GoogleError.conflict {}
         XCTAssertEqual(count,1)
     }
+    func testNextEventDoesNotStopAtMidnight() async throws {
+        let c = client(); var count = 0
+        MockGoogleProtocol.handler = { request in
+            count += 1
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            XCTAssertNil(query.first { $0.name == "timeMax" })
+            XCTAssertEqual(query.first { $0.name == "maxResults" }?.value, "1")
+            return (200, ["items": [["id": "future", "start": ["date": "2030-01-01"], "end": ["date": "2030-01-02"]]]])
+        }
+        let next = try await c.nextEvent(calendars: [GoogleCalendar(id:"owned",title:"personal",owned:true,primary:true),GoogleCalendar(id:"shared",title:"shared",owned:false,primary:false)])
+        XCTAssertEqual(next?.eventID,"future"); XCTAssertEqual(count,1)
+    }
 }

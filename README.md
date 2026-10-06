@@ -31,7 +31,7 @@ flowchart LR
 | AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
 | Health | 兼容原 `/health/import` 与 `/health/recent` | 历史快照及后续推送；缺失字段不补零 | 源接口未提供删除信号 |
 | Hermes | 读取已有 cron 执行报告 | 历史完整导入；15 分钟归档新报告 | 显式删除；轮转不删除 |
-| Google Calendar / Tasks | NAS 复用既有只读授权的官方 REST | 同账号自有日历最近 30 天起及全部任务清单；每小时；primary 身份不变 | cancelled / deleted，完整任务清单对账 |
+| Google Calendar / Tasks | NAS 复用既有只读授权的官方 REST | 同账号自有日历最近 30 天起、未来默认 365 天，全部任务清单；每小时；primary 身份不变 | cancelled / deleted，完整任务清单对账 |
 | 邮件 | 薄适配层调用现有邮件服务的只读函数 | 现有账户 INBOX、原筛选规则、最近 30 天起，正文和附件；每小时 | 当前只读接口不支持可靠删除对账 |
 | Git | 既有 GitHub MCP | 当前账号提交记录、最近 30 天起；每小时 | 搜索缺失不判断删除 |
 | Memos | SQLite backup 一致快照 | 当前用户全部状态、关系和附件；每小时 | 完整清单对账 |

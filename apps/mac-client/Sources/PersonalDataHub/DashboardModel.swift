@@ -57,15 +57,15 @@ extension HubModel {
         do {
             let snapshot = try await google.snapshot(date: displayDate, days: calendarWeek ? 7 : 1)
             googleSnapshot = snapshot; googleMessage = nil
-            if dayKey(displayDate) == dayKey(Date()) && !calendarWeek { quickSnapshot = snapshot }
+            if quickSnapshot == nil && dayKey(displayDate) == dayKey(Date()) && !calendarWeek { quickSnapshot = snapshot }
         } catch {
             googleMessage = error.localizedDescription
             if googleSnapshot == nil { googleSnapshot = GoogleSnapshot.load() }
         }
     }
     func refreshQuickGoogle() async {
-        do { quickSnapshot = try await google.snapshot(date: Date(), days: 1) }
-        catch { googleMessage = error.localizedDescription; if quickSnapshot == nil { quickSnapshot = GoogleSnapshot.load() } }
+        do { quickSnapshot = try await google.quickSnapshot(); googleMessage = nil }
+        catch { googleMessage = error.localizedDescription; if quickSnapshot == nil { quickSnapshot = GoogleSnapshot.load(quick: true) } }
     }
     func googleOperation(_ action: @escaping () async throws -> Void) {
         guard !googleBusy else { return }
@@ -73,7 +73,7 @@ extension HubModel {
         Task {
             do {
                 try await action(); googleMessage = nil; await refreshGoogle()
-                if dayKey(displayDate) != dayKey(Date()) || calendarWeek { await refreshQuickGoogle() }
+                if quickSnapshot != nil { await refreshQuickGoogle() }
             }
             catch { googleMessage = error.localizedDescription }
             googleBusy = false
