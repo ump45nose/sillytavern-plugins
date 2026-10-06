@@ -42,7 +42,15 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。客户端在 `apps/mac-client` 管理，复用这两个 Agent。
 
-## AutoAccounting
+## Mac 客户端
+
+`python3 apps/mac-client/install.py` 在 Mac 构建并安装到 `~/Applications/Personal Data Hub.app`，保留前一版本。客户端的 Keychain 凭据和 Application Support 连接设置位于仓库外；打开应用后可从菜单栏查看归档与请求同步，现有 Agent 的安装和更新仍由 `agents/mac/install.py` 管理。
+
+NAS 在私有配置中增加 `hub_viewer_token_file`。容器目录中的对应文件只读挂载到 `/run/hub`；不替换原 `hub_api_token_file`、Health / 财务 token 或 OAuth。升级服务后执行 `hub backfill-previews` 补齐历史查看字段，新采集自动维护。客户端连接原 HTTPS 公网入口，无新域名或端口。
+
+第二阶段镜像为 `local/personal-data-hub:0.2.0-mac`，原 `personal-crm` Compose 项目只替换 `crm` 服务镜像；新候选清单位于 NAS 私有运行目录的 `releases/personal-data-hub-stage2/compose.yaml`。
+
+## AutoAccounting 接入
 
 使用官方 AutoAccounting 的账单 Webhook 导出，无需修改或安装自建 APK。官方已在提交 `1210983f`（PR #1390）合入此功能，验收时核对的官方 master 为 `34b38f82`。手机端沿用原 HTTPS `/autoaccounting/v1/bills` 地址及 Bearer；聚合端保留 `BillInfoModel` JSON 请求和 HTTP 2xx 回执兼容。
 

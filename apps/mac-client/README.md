@@ -27,6 +27,6 @@ open "$HOME/Applications/Personal Data Hub.app" --args --show
 
 NAS 私有配置的 `hub_viewer_token_file` 指向单独凭据，允许来源、类型、记录和附件的 GET，不能上传、采集写入或删除。原 API Bearer 和 CRM OAuth 保持兼容。服务跳转不自动跟随，避免把凭据发送到其他地址。
 
-部署也可将 `{ "endpoint": "https://...", "token": "..." }` 经 stdin 交给应用的 `--provision` 入口；不得在 shell 参数或仓库文件中保存这个 JSON。`--smoke` 从 Keychain 读取凭据，检查真实来源、分页、详情和本机 Agent，只输出条数。
+部署也可将 `{ "endpoint": "https://...", "token": "..." }` 经 stdin 交给应用的 `--provision` 入口；不得在 shell 参数或仓库文件中保存这个 JSON。`--smoke` 从 Keychain 读取凭据，检查真实来源、分页、详情、附件校验和本机 Agent，只输出条数。`--sync` 请求既有 Agent 同步；`--ui-smoke` 实际加载摘要与详情，并将窗口验收图存入 Mac 私有 Application Support。
 
 列表不传输原始 AX 事件、长正文或附件。长内容和原始数据界面预览最多 50,000 字符，导出保留完整数据。事件时间缺失显示“时间未提供”，不会用归档时间冒充发生时间。
