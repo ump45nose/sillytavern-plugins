@@ -12,6 +12,7 @@ mcp_path: /mcp
 expected_tools:
 - search_resources
 - download_media
+- check_media
 - get_download_status
 auth:
   client_id: media-download-mcp
@@ -35,11 +36,11 @@ environment:
 plugin:
   name: media-download-mcp
   version: 0.1.0
-  description: 通过 MoviePilot 搜索电影和电视剧资源，按片名、TMDB 或 IMDb 标识定位作品，支持单集、整季和已完结整剧。可按画质、字幕或均衡偏好选择资源，提交下载并查询任务状态，也可下载搜索结果中的指定候选。
-  display_name: Media Download
+  description: 检索媒体信息、提交下载并查询进度。
+  display_name: Media Tool
   app_binding: dev-6ac288ae39908191a239ef999f71fa54
   app_id: asdk_app_6ac288ae39908191a239ef999f71fa54
-  short_description: 搜索影视资源、提交下载并查看任务状态
+  short_description: 检索媒体信息、提交下载并查询进度。
   logo: assets/plugin/moviepilot.png
   keywords:
   - MoviePilot

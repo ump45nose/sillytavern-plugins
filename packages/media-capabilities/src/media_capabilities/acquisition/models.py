@@ -17,7 +17,9 @@ class AcquisitionRequest:
     scope: Literal["season", "episode", "series"] = "season"
     season: int | None = None
     episode: int | None = None
-    policy: Literal["quality", "subtitle", "balanced"] = "quality"
+    policy: Literal["quality", "subtitle", "balanced"] = field(default="quality", metadata={
+        "description": "默认使用 quality（质量优先）。未指定偏好时省略此参数或使用 quality；"
+                       "仅当用户明确要求均衡／控制体积时使用 balanced，明确要求中文字幕时使用 subtitle。"})
     request_id: str | None = None
 
     def __post_init__(self):

@@ -12,7 +12,7 @@ Build with `python3 -m pip wheel --no-deps ./packages/media-capabilities` from t
 MoviePilot adapters require the host's packages; no MoviePilot dependency is installed by this wheel.
 See `docs/media-archive-and-remux.md` in the maintenance repository for installation and contracts.
 
-Version 0.3.2 provides the optional `acquisition` extra: shared Mini4K/M-Team boundaries,
+Version 0.3.3 provides the optional `acquisition` extra: shared Mini4K/M-Team boundaries,
 BT evidence, media targets, selection profiles, durable submission registry and HTTP client.
 FilmWatchlist's old module paths are compatibility imports of this package. New web/MCP
 entrypoints import host-neutral DTOs and the HTTP client; MoviePilot host imports remain
@@ -24,3 +24,8 @@ imports and shared process locks across host reloads. See `docs/media-acquisitio
 Resource search falls back to the supplied title and optional year when metadata is
 missing or unavailable. Responses mark the identity as unverified; download requests
 still require confirmed identity and episode coverage.
+
+Mini4K uses only the NAS persistent browser. Run the interactive `mini4k-login`
+command in the MoviePilot container to establish or renew its login, without saving
+passwords. The command and API share a profile file lock. Resource access is verified
+with real torrent/magnet links after reopening the saved profile.

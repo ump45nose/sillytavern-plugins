@@ -24,8 +24,8 @@ MoviePilot 的 `app.*`，也不另存站点、115 或下载器密码。
 
 ## 安装与迁移
 
-网页/MCP 部署只要求 MoviePilot 安装 **media-capabilities[acquisition] 0.3.2** 和
-**MediaCapabilities 0.1.1**。使用片单时另将 FilmWatchlist 更新到 **1.4.3**。
+网页/MCP 部署只要求 MoviePilot 安装 **media-capabilities[acquisition] 0.3.3** 和
+**MediaCapabilities 0.1.2**。使用片单时另将 FilmWatchlist 更新到 **1.4.3**。
 MoviePilot 安装插件只复制插件目录，共享包必须先安装在宿主 Python 环境中。
 
 当前 NAS 的实际入口、持久安装方式、备份及验证限制见
@@ -34,7 +34,7 @@ MoviePilot 安装插件只复制插件目录，共享包必须先安装在宿主
 ```sh
 # 在仓库根目录构建，复制 wheel 到 MoviePilot 的 Python 环境：
 python3 -m pip wheel --no-deps --wheel-dir .build/wheels ./packages/media-capabilities
-python3 -m pip install '/path/to/media_capabilities-0.3.2-py3-none-any.whl[acquisition]'
+python3 -m pip install '/path/to/media_capabilities-0.3.3-py3-none-any.whl[acquisition]'
 ```
 
 已有实例的迁移顺序：
@@ -55,17 +55,26 @@ FilmWatchlist 的 `records`、插件 ID、业务配置键、旧候选 ID 和恢�
 原有 `public_*` API 保留兼容委托；其新增的 `acquisition_*` API 已迁至公共宿主。
 FilmWatchlist 通过 MoviePilot 插件管理器取得同一个运行时，不使用 HTTP 回环。
 
-公共配置统一维护站点 ID、Mini4K/Relay、115 路由和目录、分享开关及质量参数。
+公共配置统一维护站点 ID、Mini4K、115 路由和目录、分享开关及质量参数。
 片单仍维护扫描、预览、Favsync、调度、身份提示和 `public_selection_enabled`。
 原片单中旧公共配置键作为迁移输入保留，后续不再作为运行时配置来源。
-浏览器会话与 Relay 文件默认继续使用历史的 `/config/filmwatchlist-*` 路径，名称
-不表示运行依赖；可在公共宿主设置中指定路径，不复制或搬迁 Cookie。
+浏览器会话默认继续使用 `/config/filmwatchlist-mini4k-cloak-browser`，名称
+不表示片单运行依赖；可在公共宿主设置中指定路径，不复制或搬迁 Cookie。
 磁力预检继续使用原 `/config/filmwatchlist-deps` 中的 libtorrent 环境。
 
-Browser Relay 使用受保护的 Device ID 文件连接 Chrome，并复用已有的 Mini4K 标签。
-远端没有 `/api/tabs/create` 接口；首次接入或更换设备后，需要在该 Chrome 打开并
-保留一个已登录的 Mini4K 标签。不会自动导航其他网站的标签；已保存的标签关闭后，
-仅重新选择 Mini4K 标签。设备离线或缺少标签时返回明确原因，不当作空搜索结果。
+Mini4K 的检索与资源获取由 NAS 持久浏览器完成。首次登录或会话失效后，在 NAS
+终端运行以下一次性命令；账号由终端输入，密码隐藏输入且不保存：
+
+```sh
+docker exec -it moviepilot /opt/venv/bin/python -m media_capabilities.acquisition.mini4k_login
+```
+
+登录使用主站 `/user/login`，搜索仍使用配置的镜像域名；不会跨域复制 Cookie。
+命令和业务请求共用会话文件锁，避免两个进程同时使用同一浏览器目录。
+命令关闭浏览器后重新解析真实种子／磁力以验证保存的会话；追加 `--verify-only`
+可只检查现有会话。自定义会话目录时使用 `--profile-dir` 指向同一目录。
+登录失效保留 `AUTH_REQUIRED`，Cloudflare 未完成保留 `CF_CHALLENGE` 和具体原因，
+不当作空结果。Mini4K 的 Relay 实现、配置和回退路径已删除。
 
 公共宿主默认关闭；`enabled` 控制新请求。公网 BT 默认走 115，
 `p115_route_enabled` 默认开启，可用于暂停该路由；`share_115_enabled` 独立控制分享，默认关闭。

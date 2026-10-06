@@ -22,9 +22,9 @@ The Film plugin never imports the Theme worker or its audio dependencies. The Th
 ## Media Search and Download MCP
 
 `apps/media-search` adds an independent Vue/Python query page; `apps/media-download-mcp`
-adds a generic three-tool MCP service (stdio and Streamable HTTP). They reuse the
+adds a generic four-tool MCP service (stdio and Streamable HTTP). They reuse the
 `media-capabilities` acquisition package through the independently installed **MediaCapabilities
-0.1.1** MoviePilot host plugin, requiring the shared **0.3.2 acquisition wheel**.
+0.1.2** MoviePilot host plugin, requiring the shared **0.3.3 acquisition wheel**.
 Neither service requires FilmWatchlist to be installed. FilmWatchlist 1.4.3 connects to the
 same runtime and registry through MoviePilot's plugin manager; its scans and preview flag
 remain business settings. The public host starts disabled and owns download permissions.

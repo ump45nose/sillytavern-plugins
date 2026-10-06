@@ -415,7 +415,7 @@ def test_library_only_completion_reopened_clears_old_fact_before_new_submit(env)
 
 
 @pytest.mark.parametrize('script', ['smoke_selection.py', 'smoke_public_index.py',
-    'smoke_quality_115.py', 'smoke_browser_relay.py', 'smoke_identify_retry.py',
+    'smoke_quality_115.py', 'smoke_identify_retry.py',
     'smoke_unified_workflow.py', 'smoke_workflow.py'])
 def test_existing_offline_smokes(script):
     runpy.run_path(str(Path(__file__).with_name(script)), run_name='__main__')

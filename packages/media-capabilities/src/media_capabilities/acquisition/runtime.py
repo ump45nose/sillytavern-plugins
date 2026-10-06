@@ -4,7 +4,6 @@ import math
 from threading import Lock, RLock
 
 from ..store import PluginTaskStore
-from .browser_relay import BrowserRelayTransport
 from .media_types import normalize_media_type
 from .moviepilot_host import MTeamAdapter, Mini4KAdapter, MoviePilotDownloadAdapter, MoviePilotIdentity
 from .p115_task_adapter import P115TaskAdapter
@@ -34,9 +33,6 @@ class AcquisitionSettings:
     local_strm_root: str = '/Media/115_strm'
     # Keep existing login/session files; names are historical, not plugin dependencies.
     browser_profile_dir: str = '/config/filmwatchlist-mini4k-cloak-browser'
-    relay_device_id_path: str = '/config/filmwatchlist-browser-relay.device-id'
-    relay_tab_id_path: str = '/config/filmwatchlist-browser-relay.tab-id'
-    relay_origin_path: str = '/config/filmwatchlist-browser-relay.download-origin'
 
     @classmethod
     def parse(cls, data):
@@ -98,19 +94,14 @@ class AcquisitionRuntime:
             raise HostUnavailable('公共获取宿主未启用或正在重载，暂停新提交')
 
     def indexer(self):
-        from pathlib import Path
         with self.lock:
             if self.closed:
                 raise HostUnavailable('公共获取宿主正在重载')
-            device_available = Path(self.settings.relay_device_id_path).is_file()
-            if self._indexer is None or (device_available and self._indexer.fallback_browser is None):
+            if self._indexer is None:
                 browser = LinuxBrowserTransport(self.settings.browser_profile_dir,
                                                 navigation_lock=self.navigation_lock)
-                relay = BrowserRelayTransport(self.settings.relay_device_id_path,
-                    tab_id_path=self.settings.relay_tab_id_path, origin_path=self.settings.relay_origin_path,
-                    navigation_lock=self.navigation_lock) if device_available else None
                 self._indexer = Mini4KIndexer(base_url=self.settings.mini4k_base_url,
-                                              browser=browser, fallback_browser=relay)
+                                              browser=browser)
             return self._indexer
 
     def p115(self, record=None, registered=True):

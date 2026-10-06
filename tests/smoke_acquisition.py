@@ -215,8 +215,14 @@ def main():
         async def mcp_smoke():
             async with Client(server) as client:
                 result = await client.list_tools()
-                assert {t.name for t in result.tools} == {'search_resources','download_media','get_download_status'}
+                tools = {t.name: t for t in result.tools}
+                assert set(tools) == {'search_resources','download_media','check_media','get_download_status'}
+                assert {k: v for k, v in tools['check_media'].input_schema.items() if k != 'title'} == {
+                    k: v for k, v in tools['download_media'].input_schema.items() if k != 'title'}
+                assert tools['check_media'].annotations == tools['download_media'].annotations
                 result = await client.call_tool('download_media', {'request': {'title':'Movie'}})
+                assert result.structured_content['status'] == 'submitted', result
+                result = await client.call_tool('check_media', {'request': {'candidate_id':'candidate'}})
                 assert result.structured_content['status'] == 'submitted', result
                 result = await client.call_tool('get_download_status', {'task_id':'t'})
                 assert result.structured_content['task_id'] == 't'
@@ -228,7 +234,7 @@ def main():
                 'params':{}, '_meta':{'io.modelcontextprotocol/protocolVersion':'2026-07-28'}},
                 headers={'Authorization':'Bearer smoke-token', 'Accept':'application/json, text/event-stream'})
             assert reply.status_code == 200, reply.text
-            assert all(name in reply.text for name in ('search_resources','download_media','get_download_status')), reply.text
+            assert all(name in reply.text for name in ('search_resources','download_media','check_media','get_download_status')), reply.text
     print('acquisition smoke: scopes, profiles, lazy search, deduplication, uncertain receipt, web and MCP OK')
 
 

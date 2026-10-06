@@ -71,7 +71,6 @@ other_candidate = next(item for item in result.candidates if item.link_hint == "
 other = indexer.resolve(other_candidate.candidate_id)
 assert other.status == IndexStatus.OK and [link.kind for link in other.links] == ["other_cloud_share"]
 
-resource_html = pages[base + "/torrents/123"]
 pages[base + "/torrents/123"] = '<a href="/user/login">点击使用磁力下载</a>'
 assert indexer.resolve(torrent_candidate.candidate_id).status == IndexStatus.AUTH_REQUIRED
 pages[base] = '<title>Mini4K</title>'
@@ -81,9 +80,7 @@ assert health.resolve_status == IndexStatus.AUTH_REQUIRED
 pages[base + '/torrents/123'] += '<a href="magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567">磁力</a>'
 assert indexer.resolve(torrent_candidate.candidate_id).status == IndexStatus.OK
 pages[base + '/torrents/123'] = '<a href="/user/login">点击使用磁力下载</a>'
-relay = FakeBrowser({base + "/torrents/123": resource_html}, torrent)
-fallback = Mini4KIndexer(browser, base_url=base, fallback_browser=relay)
-assert fallback.resolve(torrent_candidate.candidate_id).status == IndexStatus.OK
+assert 'mini4k-login' in indexer.resolve(torrent_candidate.candidate_id).reason
 
 share_candidate = next(item for item in result.candidates if item.link_hint == "115_share")
 share = Mini4KIndexer(browser, base_url=base).resolve(share_candidate.candidate_id)

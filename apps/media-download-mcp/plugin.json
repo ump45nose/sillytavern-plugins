@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "media-download-mcp",
   "version": "0.1.0",
-  "description": "通过 MoviePilot 搜索电影和电视剧资源，按片名、TMDB 或 IMDb 标识定位作品，支持单集、整季和已完结整剧。可按画质、字幕或均衡偏好选择资源，提交下载并查询任务状态，也可下载搜索结果中的指定候选。",
+  "description": "检索媒体信息、提交下载并查询进度。",
   "author": {
     "name": "yuwk"
   },
@@ -14,9 +14,9 @@
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "Media Download",
-        "shortDescription": "搜索影视资源、提交下载并查看任务状态",
-        "longDescription": "通过 MoviePilot 搜索电影和电视剧资源，按片名、TMDB 或 IMDb 标识定位作品，支持单集、整季和已完结整剧。可按画质、字幕或均衡偏好选择资源，提交下载并查询任务状态，也可下载搜索结果中的指定候选。",
+        "displayName": "Media Tool",
+        "shortDescription": "检索媒体信息、提交下载并查询进度。",
+        "longDescription": "检索媒体信息、提交下载并查询进度。",
         "developerName": "yuwk",
         "category": "Productivity",
         "capabilities": [

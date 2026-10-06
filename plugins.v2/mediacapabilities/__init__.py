@@ -9,7 +9,7 @@ class MediaCapabilities(_PluginBase):
     plugin_name = '公共媒体获取能力'
     plugin_desc = '为片单、独立查询网页和下载 MCP 提供共享的搜索、核验与下载宿主'
     plugin_icon = 'Moviepilot_A.png'
-    plugin_version = '0.1.1'
+    plugin_version = '0.1.2'
     plugin_author = 'yuwk'
     author_url = ''
     plugin_config_prefix = 'mediacapabilities_'
@@ -56,7 +56,7 @@ class MediaCapabilities(_PluginBase):
             if self.runtime:
                 self.runtime.close()
             self.runtime = None
-            self.error = '请安装 media-capabilities[acquisition] 0.3.1' if isinstance(exc, ModuleNotFoundError) \
+            self.error = '请安装 media-capabilities[acquisition] 0.3.3' if isinstance(exc, ModuleNotFoundError) \
                 else str(exc) if isinstance(exc, ValueError) else '公共获取宿主初始化失败，请检查配置和持久化存储'
             logger.warning(self.error)
 
@@ -133,9 +133,6 @@ class MediaCapabilities(_PluginBase):
             ('VTextField', 'p115_tv_path', '115 剧集目录'),
             ('VTextField', 'local_strm_root', '旧片单恢复使用的 STRM 根目录'),
             ('VTextField', 'browser_profile_dir', 'Mini4K 浏览器会话目录'),
-            ('VTextField', 'relay_device_id_path', 'Browser Relay Device ID 文件'),
-            ('VTextField', 'relay_tab_id_path', 'Browser Relay Tab ID 文件'),
-            ('VTextField', 'relay_origin_path', 'Browser Relay 已登录域名文件'),
         ]
         content = [{'component': 'VRow', 'content': [{'component': 'VCol', 'props': {'cols': 12, 'md': 6},
             'content': [{'component': component, 'props': {'model': key, 'label': label}}]}]}

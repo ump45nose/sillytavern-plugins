@@ -179,7 +179,8 @@ class Mini4KAdapter:
             raise ValueError("115 公网下载路由未启用")
         resolved = self.indexer_factory().resolve(candidate.candidate_id)
         if resolved.status.value != "OK":
-            raise ValueError("Mini4K 解析状态：" + resolved.status.value)
+            raise ValueError("Mini4K 解析状态：" + resolved.status.value +
+                             ("；" + resolved.reason if resolved.reason else ""))
         results, seen_hashes = [], set()
         for link in sorted(resolved.links, key=lambda item: item.kind != 'torrent'):
             if link.kind in ("torrent", "magnet"):

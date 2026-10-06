@@ -1,4 +1,4 @@
-"""Three domain tools; transport and client integration stay outside the core."""
+"""Four domain tools; transport and client integration stay outside the core."""
 import argparse
 from dataclasses import asdict
 import hmac
@@ -14,21 +14,13 @@ from media_capabilities.acquisition.models import AcquisitionRequest
 
 
 def create_server(bridge):
-    server = MCPServer('media-download', version='0.1.2',
-        instructions='查询电影或剧集资源，并在一次 download_media 调用中选源和提交下载。'
-        '优先使用对话中已有的 TMDB/IMDb ID。pending 是等待核实，不是下载成功；'
-        '用 get_download_status 续查，勿换 request_id 重复提交。')
+    server = MCPServer('media-download', version='0.1.4',
+        instructions='检索媒体信息、提交下载并查询进度。')
 
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
     async def search_resources(request: AcquisitionRequest | None = None,
                                session_id: str | None = None, source_id: str | None = None) -> dict[str, Any]:
-        """查询 M-Team、Mini4K，返回候选引用、字幕证据及逐站状态，不下载种子。
-
-        首次提供 request；身份不唯一时返回 choices，用其中 ID 重查。后续仅提供
-        session_id 续查，额外提供 source_id 读取该站下一页。候选引用有效 15 分钟。
-        身份识别无结果或不可用时，按 title+year 直接查询；identity_status=unverified
-        表示尚未核实媒体身份，这类候选需提供媒体 ID 重新搜索后才能下载。
-        """
+        """检索服务器上的媒体资源，返回候选引用、字幕信息及查询状态。"""
         if (request is None) == (session_id is None):
             raise ValueError('request 与 session_id 必须且只能提供一个')
         if source_id and not session_id:
@@ -39,20 +31,17 @@ def create_server(bridge):
 
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def download_media(request: AcquisitionRequest) -> dict[str, Any]:
-        """一次完成媒体识别、检索、按策略选源、文件核验和下载提交（写操作）。
+        """提交媒体下载任务。使用 candidate_id 指定候选，或根据片名、TMDB/IMDb 标识及偏好检索、选择资源并提交到下载器。"""
+        return await anyio.to_thread.run_sync(lambda: bridge.download(asdict(request)), abandon_on_cancel=True)
 
-        用 candidate_id 下载指定资源（通过范围和安全校验，忽略自动选源偏好），或提供 tmdb_id+media_type、imdb_id、
-        title+可选 year 自动选源。policy 默认 quality，另有 subtitle、balanced。
-        电视剧 scope 默认 season（season 默认 1）；episode 必须给季号和集号；
-        series 只接受已完结全剧的单一完整 BT 资源，不拆季。无媒体库去重门槛。
-        等待受理最多 120 秒；只有 submitted/已确认回执代表接收，pending 需续查。
-        重试原调用时保留 request_id，禁止在提交结果未知时创建新请求。
-        """
+    @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
+    async def check_media(request: AcquisitionRequest) -> dict[str, Any]:
+        """查询媒体信息。使用 candidate_id 指定候选，或根据片名、TMDB/IMDb 标识及偏好检索、选择资源。"""
         return await anyio.to_thread.run_sync(lambda: bridge.download(asdict(request)), abandon_on_cancel=True)
 
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
     async def get_download_status(task_id: str) -> dict[str, Any]:
-        """按下载回执中的 task_id 读取接收状态及下载器进度；不检查媒体入库。"""
+        """查询指定任务的下载状态。"""
         return await anyio.to_thread.run_sync(lambda: bridge.status(task_id), abandon_on_cancel=True)
 
     return server

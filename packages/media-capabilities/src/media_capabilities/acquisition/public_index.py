@@ -7,12 +7,14 @@ Nothing in this module starts a download or writes MoviePilot history.
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager, ExitStack
+import fcntl
 import hashlib
 import json
 import os
 import re
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from threading import Lock
@@ -23,7 +25,6 @@ from bs4 import BeautifulSoup
 
 from .selection import normalize_title
 from .access import download_requires_login, page_access_status
-from .browser_relay import RelayUnavailable
 from .evidence import magnet_hash, normalize_magnet
 from .torrent_metadata import parse_metadata
 
@@ -39,9 +40,14 @@ class IndexStatus(str, Enum):
 
 
 class IndexFailure(Exception):
-    def __init__(self, status: IndexStatus):
-        super().__init__(status.value)
+    def __init__(self, status: IndexStatus, reason: str = ""):
         self.status = status
+        self.reason = reason or {
+            IndexStatus.AUTH_REQUIRED: "Mini4K 服务端登录会话缺失或已失效，请在 NAS 终端运行 mini4k-login",
+            IndexStatus.CF_CHALLENGE: "Mini4K Cloudflare 验证尚未完成",
+            IndexStatus.UNAVAILABLE: "Mini4K 服务端浏览器访问失败",
+        }.get(status, "")
+        super().__init__(status.value + ("：" + self.reason if self.reason else ""))
 
 
 @dataclass(frozen=True)
@@ -173,97 +179,120 @@ class LinuxBrowserTransport:
                         pass
         return False
 
+    @contextmanager
+    def profile_lock(self, timeout: float = 10):
+        """Coordinate API workers and the one-off login process on this profile."""
+        self.profile_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.profile_dir.chmod(0o700)
+        fd = os.open(self.profile_dir / '.mini4k-session.lock',
+                     os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise IndexFailure(IndexStatus.UNAVAILABLE,
+                            'Mini4K 服务端浏览器正在使用中，请稍后重试') from None
+                    time.sleep(0.1)
+            yield
+        finally:
+            os.close(fd)
+
+    @contextmanager
+    def open_context(self):
+        from playwright.sync_api import sync_playwright
+
+        with self._lock, self.profile_lock(), ExitStack() as stack:
+            if self.executable_path:
+                playwright = stack.enter_context(sync_playwright())
+                context = playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(self.profile_dir), executable_path=self.executable_path,
+                    headless=not bool(os.environ.get('DISPLAY')), accept_downloads=True,
+                    viewport={'width': 1280, 'height': 900}, timeout=30000,
+                )
+            else:
+                from cloakbrowser import launch_persistent_context
+                context = launch_persistent_context(
+                    str(self.profile_dir), headless=not bool(os.environ.get('DISPLAY')),
+                    humanize=True, viewport={'width': 1280, 'height': 900},
+                    accept_downloads=True, timeout=30000,
+                )
+            try:
+                yield context
+            finally:
+                context.close()
+
+    def navigate(self, context, page, url: str, *, allow_login: bool = False) -> str:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        try:
+            parsed = urlparse(url)
+            if parsed.hostname == 'mini4k.io' and parsed.path.startswith('/torrents/'):
+                # Search uses the mirror; authenticated downloads use the main site.
+                url = urlunparse(parsed._replace(netloc='www.mini4k.com'))
+            response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            deadline = time.monotonic() + 45
+            clicks = 0
+            challenged = page_access_status(page.content()) == 'CF_CHALLENGE'
+            while True:
+                html = page.content()
+                if page_access_status(html) != 'CF_CHALLENGE' or time.monotonic() >= deadline:
+                    break
+                if clicks < 2 and self._challenge_click(context, page):
+                    clicks += 1
+                page.wait_for_timeout(1500)
+            status = page_access_status(html)
+            if status and not (allow_login and status == 'AUTH_REQUIRED'):
+                raise IndexFailure(IndexStatus(status))
+            # Judge a completed challenge by its final page, not the initial 403.
+            if challenged or (response and response.url != page.url):
+                response = None
+            if response and response.status == 401:
+                raise IndexFailure(IndexStatus.AUTH_REQUIRED)
+            if response and response.status == 403:
+                raise IndexFailure(IndexStatus.CF_CHALLENGE
+                    if response.headers.get('cf-mitigated') == 'challenge' else IndexStatus.UNAVAILABLE)
+            return html
+        except PlaywrightTimeout as exc:
+            raise IndexFailure(IndexStatus.UNAVAILABLE, 'Mini4K 服务端页面访问超时') from exc
+
+    @contextmanager
     def open(self):
-        from contextlib import contextmanager, ExitStack
-        from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-        @contextmanager
-        def session():
-            with self._lock:
-                self.profile_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-                self.profile_dir.chmod(0o700)
-                with ExitStack() as stack:
-                    if self.executable_path:
-                        playwright = stack.enter_context(sync_playwright())
-                        context = playwright.chromium.launch_persistent_context(
-                            user_data_dir=str(self.profile_dir), executable_path=self.executable_path,
-                            headless=not bool(os.environ.get('DISPLAY')), accept_downloads=True,
-                            timeout=30000,
-                        )
-                    else:
-                        from cloakbrowser import launch_persistent_context
-                        context = launch_persistent_context(
-                            str(self.profile_dir), headless=not bool(os.environ.get('DISPLAY')),
-                            humanize=True, viewport={'width': 1280, 'height': 900},
-                            accept_downloads=True, timeout=30000,
-                        )
-                    page = context.pages[0] if context.pages else context.new_page()
-                    transport = self
+        with self.open_context() as context:
+            page = context.pages[0] if context.pages else context.new_page()
+            transport = self
 
-                    class Session:
-                        def goto(self, url: str) -> str:
-                            try:
-                                parsed = urlparse(url)
-                                if parsed.hostname == 'mini4k.io' \
-                                        and parsed.path.startswith('/torrents/'):
-                                    # Resource IDs were verified on both origins. Search stays
-                                    # on the mirror; authenticated downloads use the main site.
-                                    url = urlunparse(parsed._replace(netloc='www.mini4k.com'))
-                                response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                                deadline = time.monotonic() + 45
-                                clicks = 0
-                                challenged = page_access_status(page.content()) == 'CF_CHALLENGE'
-                                while True:
-                                    html = page.content()
-                                    if page_access_status(html) != 'CF_CHALLENGE' \
-                                            or time.monotonic() >= deadline:
-                                        break
-                                    if clicks < 2 and transport._challenge_click(context, page):
-                                        clicks += 1
-                                    page.wait_for_timeout(1500)
-                                status = page_access_status(html)
-                                if status:
-                                    raise IndexFailure(IndexStatus(status))
-                                # Initial 403 belongs to the challenge page; after a verified
-                                # navigation the final page determines access, not that response.
-                                if challenged or (response and response.url != page.url):
-                                    response = None
-                                if response and response.status == 401:
-                                    raise IndexFailure(IndexStatus.AUTH_REQUIRED)
-                                if response and response.status == 403:
-                                    raise IndexFailure(IndexStatus.CF_CHALLENGE
-                                                       if response.headers.get('cf-mitigated') == 'challenge'
-                                                       else IndexStatus.UNAVAILABLE)
-                                return html
-                            except PlaywrightTimeout as exc:
-                                raise IndexFailure(IndexStatus.UNAVAILABLE) from exc
+            class Session:
+                def goto(self, url: str) -> str:
+                    return transport.navigate(context, page, url)
 
-                        def download(self, page_url: str, href: str) -> bytes:
-                            try:
-                                if urlparse(page.url).path != urlparse(page_url).path:
-                                    self.goto(page_url)
-                                link = next((item for item in page.locator("a[href]").all()
-                                             if item.get_attribute("href") == href), None)
-                                if link is None:
-                                    raise IndexFailure(IndexStatus.LINK_INVALID)
-                                with page.expect_download(timeout=20000) as event:
-                                    link.click()
-                                path = event.value.path()
-                                if not path or Path(path).stat().st_size > 10 * 1024 * 1024:
-                                    raise IndexFailure(IndexStatus.LINK_INVALID)
-                                return Path(path).read_bytes()
-                            except PlaywrightTimeout as exc:
-                                status = page_access_status(page.content())
-                                if status:
-                                    raise IndexFailure(IndexStatus(status)) from exc
-                                raise IndexFailure(IndexStatus.LINK_INVALID) from exc
-
+                def download(self, page_url: str, href: str) -> bytes:
                     try:
-                        yield Session()
-                    finally:
-                        context.close()
+                        if urlparse(page.url).path != urlparse(page_url).path:
+                            self.goto(page_url)
+                        link = next((item for item in page.locator("a[href]").all()
+                                     if item.get_attribute("href") == href), None)
+                        if link is None:
+                            raise IndexFailure(IndexStatus.LINK_INVALID)
+                        with page.expect_download(timeout=20000) as event:
+                            link.click()
+                        path = event.value.path()
+                        if not path or Path(path).stat().st_size > 10 * 1024 * 1024:
+                            raise IndexFailure(IndexStatus.LINK_INVALID)
+                        return Path(path).read_bytes()
+                    except PlaywrightTimeout as exc:
+                        status = page_access_status(page.content())
+                        if status:
+                            raise IndexFailure(IndexStatus(status)) from exc
+                        raise IndexFailure(IndexStatus.LINK_INVALID) from exc
 
-        return session()
+            yield Session()
 
 
 SIZE_RE = re.compile(r"(?i)(\d+(?:\.\d+)?)\s*(TB|GB|MB)")
@@ -299,16 +328,15 @@ class Mini4KIndexer:
     default_base_url = "https://mini4k.io"
 
     def __init__(self, browser: BrowserTransport | None = None,
-                 base_url: str = default_base_url,
-                 fallback_browser: BrowserTransport | None = None):
+                 base_url: str = default_base_url):
         parsed = urlparse(base_url.rstrip("/"))
         if parsed.scheme != "https" or parsed.hostname not in ("www.mini4k.com", "mini4k.com", "mini4k.io") \
                 or parsed.path or parsed.query or parsed.fragment or parsed.port:
             raise ValueError("Mini4K 域名不在允许列表中")
         self.base_url = base_url.rstrip("/")
         self.browser = browser or LinuxBrowserTransport()
-        self.fallback_browser = fallback_browser
         self._last_resolve_status = None
+        self._last_resolve_reason = ""
         self._detail_cache = {}
         self._detail_lock = Lock()
 
@@ -445,10 +473,7 @@ class Mini4KIndexer:
         return True, f"标题、年份、类型、国家已按可用字段核对：{heading_text}"
 
     def search(self, query: MediaQuery, cursor: str | None = None) -> SearchPage:
-        page = self._search_impl(query, cursor, self.browser)
-        if page.status in (IndexStatus.CF_CHALLENGE, IndexStatus.UNAVAILABLE) and self.fallback_browser:
-            return self._search_impl(query, cursor, self.fallback_browser)
-        return page
+        return self._search_impl(query, cursor, self.browser)
 
     def _search_impl(self, query: MediaQuery, cursor: str | None,
                      browser: BrowserTransport) -> SearchPage:
@@ -549,7 +574,7 @@ class Mini4KIndexer:
                         )
                         candidates.append(item)
         except IndexFailure as exc:
-            return SearchPage(exc.status)
+            return SearchPage(exc.status, reason=exc.reason)
         except Exception:
             return SearchPage(IndexStatus.UNAVAILABLE, reason="浏览器访问失败")
         if not candidates and unrecognized_rows:
@@ -562,15 +587,8 @@ class Mini4KIndexer:
 
     def resolve(self, candidate_id: str) -> ResolvedCandidate:
         result = self._resolve_impl(candidate_id, self.browser)
-        if result.status in (IndexStatus.AUTH_REQUIRED, IndexStatus.CF_CHALLENGE,
-                             IndexStatus.UNAVAILABLE) and self.fallback_browser:
-            primary_status = result.status
-            result = self._resolve_impl(candidate_id, self.fallback_browser)
-            if result.status != IndexStatus.OK:
-                result = replace(result, reason=f'Linux: {primary_status.value}; '
-                                 f'Browser Relay: {result.status.value}' +
-                                 (f'（{result.reason}）' if result.reason else ''))
         self._last_resolve_status = result.status
+        self._last_resolve_reason = result.reason
         return result
 
     def _resolve_impl(self, candidate_id: str,
@@ -587,7 +605,7 @@ class Mini4KIndexer:
                 html = page.goto(resource_url)
                 status = self._page_status(html)
                 if status:
-                    return ResolvedCandidate(status, candidate_id)
+                    return ResolvedCandidate(status, candidate_id, reason=IndexFailure(status).reason)
                 soup = BeautifulSoup(html, "html.parser")
                 login_download = download_requires_login(html)
                 if direct_link and direct_link.startswith('sha256:'):
@@ -660,16 +678,14 @@ class Mini4KIndexer:
                     if kind:
                         links.append(DownloadLink(kind, value=href))
         except IndexFailure as exc:
-            return ResolvedCandidate(exc.status, candidate_id)
-        except RelayUnavailable as exc:
-            return ResolvedCandidate(IndexStatus.UNAVAILABLE, candidate_id, reason=str(exc))
+            return ResolvedCandidate(exc.status, candidate_id, reason=exc.reason)
         except Exception:
             return ResolvedCandidate(IndexStatus.UNAVAILABLE, candidate_id, reason="资源页访问失败")
         unique = tuple({(link.kind, link.info_hash or link.value): link for link in links}.values())
         if not unique and (download_failure or login_download):
             return ResolvedCandidate(download_failure or IndexStatus.AUTH_REQUIRED, candidate_id,
                                      reason="下载会话被拦截" if download_failure else
-                                     "资源下载按钮要求登录 Mini4K")
+                                     IndexFailure(IndexStatus.AUTH_REQUIRED).reason)
         return ResolvedCandidate(IndexStatus.OK if unique else IndexStatus.LINK_INVALID,
                                  candidate_id, unique,
                                  "" if unique else "没有取得真实磁力、种子文件或网盘分享链接")
@@ -682,22 +698,16 @@ class Mini4KIndexer:
                 status = self._page_status(html) or IndexStatus.OK
         except IndexFailure as exc:
             status = exc.status
+            reason = exc.reason
         except Exception:
             status = IndexStatus.UNAVAILABLE
             reason = '浏览器访问失败'
-        if status in (IndexStatus.CF_CHALLENGE, IndexStatus.UNAVAILABLE) and self.fallback_browser:
-            try:
-                with self.fallback_browser.open() as page:
-                    status = self._page_status(page.goto(self.base_url)) or IndexStatus.OK
-                reason = '页面使用 Browser Relay 后备会话'
-            except IndexFailure as exc:
-                status = exc.status
-            except Exception:
-                status = IndexStatus.UNAVAILABLE
         last = self._last_resolve_status
         overall = status
         if status == IndexStatus.OK and last is not None:
             reason = f'页面访问正常；最近一次资源解析：{last.value}'
+            if self._last_resolve_reason:
+                reason += '；' + self._last_resolve_reason
             if last in (IndexStatus.AUTH_REQUIRED, IndexStatus.CF_CHALLENGE, IndexStatus.UNAVAILABLE):
                 overall = last
         return SourceHealth(overall, reason, page_status=status, resolve_status=last)
