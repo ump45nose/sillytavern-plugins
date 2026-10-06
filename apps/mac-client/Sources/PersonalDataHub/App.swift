@@ -21,6 +21,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         model.start()
         if CommandLine.arguments.contains("--show") { showWindow() }
+        if CommandLine.arguments.contains("--ui-smoke") {
+            Task { await checkWindow() }
+        }
+    }
+
+    func checkWindow() async {
+        showWindow()
+        await model.refreshStatus()
+        model.source = "skysight-summaries"
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        await model.browse(reset: true)
+        guard model.sources.count > 0, let first = model.records.first else {
+            fputs("client_ui_load_failed\n", stderr); exit(1)
+        }
+        model.selectedID = first.id
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        await model.select(first.id)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard model.detail != nil, let view = window?.contentView else {
+            fputs("client_ui_detail_failed\n", stderr); exit(1)
+        }
+        view.layoutSubtreeIfNeeded()
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            fputs("client_ui_render_failed\n", stderr); exit(1)
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        do {
+            guard let data = bitmap.representation(using: .png, properties: [:]) else { throw HubError.response }
+            let path = Connection.directory.appendingPathComponent("client-qa.png")
+            try data.write(to: path, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+            print("client_ui_smoke_ok sources=\(model.sources.count) page=\(model.records.count) detail=loaded window=\(Int(view.bounds.width))x\(Int(view.bounds.height))")
+            exit(0)
+        } catch { fputs("client_ui_capture_failed\n", stderr); exit(1) }
     }
 
     @objc func showWindow() {
@@ -77,6 +111,10 @@ enum Main {
             }
             RunLoop.main.run()
             return
+        }
+        if CommandLine.arguments.contains("--sync") {
+            do { try LocalAgents.synchronize(); print("sync_requested_existing_agent"); exit(0) }
+            catch { fputs("sync_request_failed\n", stderr); exit(1) }
         }
         if let identifier = Bundle.main.bundleIdentifier,
            let existing = NSRunningApplication.runningApplications(withBundleIdentifier: identifier)

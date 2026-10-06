@@ -232,7 +232,9 @@ func fieldName(_ key: String) -> String {
      "summary": "摘要", "name": "名称", "display_name": "姓名", "body": "正文", "amount": "金额",
      "currency": "币种", "type": "类型", "remark": "备注", "duration_ms": "时长（毫秒）", "repo": "仓库", "date": "日期",
      "state": "状态", "status": "状态", "upload_bytes": "上传字节", "download_bytes": "下载字节",
-     "download_state": "录音下载状态", "validation_error": "来源验证记录"][key] ?? key
+     "download_state": "录音下载状态", "validation_error": "来源验证记录", "device": "设备",
+     "tokens": "Token 用量", "estimated_cost_usd": "估算费用（美元）", "cache_read_tokens": "缓存读取 Token",
+     "cache_write_tokens": "缓存写入 Token", "output_tokens": "输出 Token"][key] ?? key
 }
 
 struct SettingsView: View {

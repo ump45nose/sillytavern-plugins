@@ -14,7 +14,9 @@ let kindNames: [String: String] = [
     "calendar_event": "日历事件", "google_task": "任务", "email": "邮件", "git_commit": "提交",
     "memo": "笔记", "memory": "记忆", "token_day": "每日用量", "token_device": "用量设备",
     "subscription_config": "订阅配置", "traffic_hourly": "小时流量", "collector_gaps": "采集缺口",
-    "collector_meta": "流量采集状态", "source_artifact": "归档文件", "execution_report": "执行报告"
+    "collector_meta": "流量采集状态", "source_artifact": "归档文件", "execution_report": "执行报告",
+    "hermes_execution_report": "执行日报", "recording_artifact": "录音历史资料",
+    "legacy_review_report": "历史复盘", "legacy_source_evidence": "历史资料"
 ]
 func sourceName(_ id: String) -> String { sourceNames[id] ?? id }
 func kindName(_ id: String) -> String { kindNames[id] ?? id }
@@ -106,7 +108,7 @@ struct RecordDetail {
         var raw = object["raw"] as? [String: Any] ?? [:]
         if let bill = raw["bill"] as? [String: Any] { raw.merge(bill) { current, _ in current } }
         let normalized = object["normalized"] as? [String: Any] ?? [:]
-        let readable = ["title", "subject", "sender", "content", "message", "summary", "name", "display_name", "body", "amount", "currency", "type", "remark", "duration_ms", "repo", "date", "state", "status", "upload_bytes", "download_bytes", "download_state", "validation_error"]
+        let readable = ["title", "subject", "sender", "content", "message", "summary", "name", "display_name", "body", "amount", "currency", "type", "remark", "duration_ms", "repo", "date", "state", "status", "upload_bytes", "download_bytes", "download_state", "validation_error", "device", "tokens", "estimated_cost_usd", "cache_read_tokens", "cache_write_tokens", "output_tokens"]
         fields = readable.compactMap { key in
             guard let value = normalized[key] ?? raw[key], !(value is NSNull) else { return nil }
             if let text = value as? String, !text.isEmpty { return DetailField(id: key, value: text) }
