@@ -37,6 +37,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 1000, minHeight: 680)
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $settings) { SettingsView(model: model) }
         .onChange(of: model.source) { _ in
             model.kind = ""
@@ -129,7 +130,7 @@ struct ContentView: View {
                     ForEach(model.records) { record in
                         VStack(alignment: .leading, spacing: 7) {
                             Text(record.displayTitle).font(.headline).lineLimit(2)
-                            Text(record.preview.replacingOccurrences(of: "\u{0000}", with: ""))
+                            Text(record.displayPreview.replacingOccurrences(of: "\u{0000}", with: ""))
                                 .font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                             HStack {
                                 Text(sourceName(record.source))
@@ -188,6 +189,10 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(fieldName(field.id)).font(.caption.bold()).foregroundStyle(.secondary)
                             Text(String(field.value.prefix(50000))).textSelection(.enabled)
+                            if field.value.count > 50000 {
+                                Text("内容较长，此处为预览；导出可查看完整数据。")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                     if !record.assets.isEmpty {
@@ -234,7 +239,10 @@ func fieldName(_ key: String) -> String {
      "state": "状态", "status": "状态", "upload_bytes": "上传字节", "download_bytes": "下载字节",
      "download_state": "录音下载状态", "validation_error": "来源验证记录", "device": "设备",
      "tokens": "Token 用量", "estimated_cost_usd": "估算费用（美元）", "cache_read_tokens": "缓存读取 Token",
-     "cache_write_tokens": "缓存写入 Token", "output_tokens": "输出 Token"][key] ?? key
+     "cache_write_tokens": "缓存写入 Token", "output_tokens": "输出 Token", "health_steps": "步数",
+     "health_sleep": "睡眠", "health_heart_rate": "心率", "health_active_calories": "活动热量",
+     "health_oxygen_saturation": "血氧", "health_resting_heart_rate": "静息心率",
+     "health_basal_metabolic_rate": "基础代谢"][key] ?? key
 }
 
 struct SettingsView: View {

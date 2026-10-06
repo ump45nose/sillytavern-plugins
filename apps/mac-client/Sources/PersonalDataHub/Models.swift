@@ -65,7 +65,13 @@ struct RecordCard: Decodable, Identifiable {
     let timezone: String
     let title: String
     let preview: String
-    var displayTitle: String { title == kind ? kindName(kind) : title }
+    func summaryField(_ name: String) -> String? {
+        guard kind == "computer_summary" else { return nil }
+        return preview.components(separatedBy: .newlines).first(where: { $0.hasPrefix(name + ":") })
+            .map { String($0.dropFirst(name.count + 1)).trimmingCharacters(in: .whitespaces) }
+    }
+    var displayTitle: String { summaryField("title") ?? (title == kind ? kindName(kind) : title) }
+    var displayPreview: String { summaryField("description") ?? preview }
 }
 struct RecordPage: Decodable {
     let records: [RecordCard]
@@ -109,12 +115,20 @@ struct RecordDetail {
         if let bill = raw["bill"] as? [String: Any] { raw.merge(bill) { current, _ in current } }
         let normalized = object["normalized"] as? [String: Any] ?? [:]
         let readable = ["title", "subject", "sender", "content", "message", "summary", "name", "display_name", "body", "amount", "currency", "type", "remark", "duration_ms", "repo", "date", "state", "status", "upload_bytes", "download_bytes", "download_state", "validation_error", "device", "tokens", "estimated_cost_usd", "cache_read_tokens", "cache_write_tokens", "output_tokens"]
-        fields = readable.compactMap { key in
+        var items: [DetailField] = readable.compactMap { key in
             guard let value = normalized[key] ?? raw[key], !(value is NSNull) else { return nil }
             if let text = value as? String, !text.isEmpty { return DetailField(id: key, value: text) }
             if let number = value as? NSNumber { return DetailField(id: key, value: number.stringValue) }
             return nil
         }
+        if kind == "health_payloads", let payload = normalized["payload"] as? [String: Any] {
+            for key in ["steps", "sleep", "heart_rate", "active_calories", "oxygen_saturation", "resting_heart_rate", "basal_metabolic_rate"] {
+                guard let samples = payload[key] as? [Any], !samples.isEmpty else { continue }
+                let json = try JSONSerialization.data(withJSONObject: samples, options: [.prettyPrinted, .sortedKeys])
+                items.append(DetailField(id: "health_" + key, value: String(data: json, encoding: .utf8) ?? ""))
+            }
+        }
+        fields = items
         let assetsData = try JSONSerialization.data(withJSONObject: object["assets"] ?? [])
         assets = try JSONDecoder().decode([ArchiveAsset].self, from: assetsData)
         rawJSON = String(data: try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]), encoding: .utf8) ?? ""
