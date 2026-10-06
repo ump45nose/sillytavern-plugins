@@ -50,6 +50,8 @@ NAS 在私有配置中增加 `hub_viewer_token_file`。容器目录中的对应�
 
 第二阶段镜像为 `local/personal-data-hub:0.2.0-mac`，原 `personal-crm` Compose 项目只替换 `crm` 服务镜像；新候选清单位于 NAS 私有运行目录的 `releases/personal-data-hub-stage2/compose.yaml`。
 
+2026-10-06 的列表与状态修正已更新至 `local/personal-data-hub:0.2.1-query`，当前候选清单为 `releases/personal-data-hub-0.2.1-query/compose.yaml`。Mac 客户端同步更新为 `0.2.1`；验证见 [列表与状态修正验收](query-status-validation.md)。
+
 ## AutoAccounting 接入
 
 使用官方 AutoAccounting 的账单 Webhook 导出，无需修改或安装自建 APK。官方已在提交 `1210983f`（PR #1390）合入此功能，验收时核对的官方 master 为 `34b38f82`。手机端沿用原 HTTPS `/autoaccounting/v1/bills` 地址及 Bearer；聚合端保留 `BillInfoModel` JSON 请求和 HTTP 2xx 回执兼容。

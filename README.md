@@ -86,4 +86,4 @@ API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`
 
 查看端的独立凭据保存在 Mac Keychain，NAS 仅允许它读取信息。列表使用有界查看字段，不传输原始 AX 事件；完整数据按需读取。安装和连接见 [客户端说明](apps/mac-client/README.md)。
 
-部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md) 与 [第二阶段验证](docs/stage2-validation.md)。
+部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md) 与 [列表和状态修正](docs/query-status-validation.md)。
