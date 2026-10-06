@@ -11,10 +11,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sqlite3
 import tempfile
 from datetime import datetime
 from pathlib import Path
+
+from health_data import health_rows
 
 
 def _parse_time(value: str) -> datetime:
@@ -54,14 +55,10 @@ def _save_state(path: Path, value: dict) -> None:
 
 def inspect(db_path: Path, now: datetime, max_age_hours: float) -> tuple[str, str, str]:
     try:
-        uri = f"file:{db_path}?mode=ro"
-        with sqlite3.connect(uri, uri=True, timeout=3) as db:
-            row = db.execute(
-                "SELECT received_at, payload_json FROM health_payloads "
-                "ORDER BY id DESC LIMIT 1"
-            ).fetchone()
+        rows = health_rows(db_path, latest=True)
+        row = rows[-1][1:] if rows else None
     except Exception as exc:
-        return "unhealthy", "database_unreadable", type(exc).__name__
+        return "unhealthy", "source_unreadable", type(exc).__name__
     if row is None:
         return "unhealthy", "no_payload", "health_payloads is empty"
     received_at, payload_json = row

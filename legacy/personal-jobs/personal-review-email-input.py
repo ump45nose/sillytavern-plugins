@@ -12,7 +12,7 @@ import sys
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from email_mcp_auth import email_session
+from email_mcp_auth import email_session, email_payload
 
 
 APP_ROOT = Path(os.environ.get("REVIEW_APP_ROOT", "/vol2/1000/Docker/personal-review"))
@@ -69,9 +69,7 @@ async def collect() -> dict[str, Any]:
                         "mailbox": "INBOX",
                     },
                 )
-                if response.isError:
-                    raise RuntimeError("metadata MCP error")
-                messages = list((response.structuredContent or {}).get("emails") or [])
+                messages = list(email_payload(response).get("emails") or [])
                 # 附件和宽泛“通知”不再构成准入；必须先命中可用主题白名单。
                 selected = [
                     message
@@ -98,11 +96,9 @@ async def collect() -> dict[str, Any]:
                             "max_body_length": 3000,
                         },
                     )
-                    if content.isError:
-                        raise RuntimeError("content MCP error")
                     bodies = {
                         str(item.get("email_id")): str(item.get("body") or "")
-                        for item in (content.structuredContent or {}).get("emails", [])
+                        for item in email_payload(content).get("emails", [])
                     }
                 for message in selected:
                     email_id = str(message.get("email_id", ""))
@@ -148,8 +144,8 @@ def main() -> int:
     temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.chmod(0o600)
     temporary.replace(output)
-    print(json.dumps({"status": "ok", "date": report["date"], "evidence_count": len(report["evidence"]), "error_count": len(report["errors"])}, ensure_ascii=False))
-    return 0
+    print(json.dumps({"status": "partial" if report["errors"] else "ok", "date": report["date"], "evidence_count": len(report["evidence"]), "error_count": len(report["errors"])}, ensure_ascii=False))
+    return 2 if report["errors"] else 0
 
 
 if __name__ == "__main__":

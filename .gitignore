@@ -21,3 +21,9 @@ backups/
 .build/
 .swiftpm/
 *.app/
+connector.env
+# Compatibility links to private runtimes are files, not directories.
+.venv
+dist
+legacy/plaud/config.yaml
+legacy/plaud/daily-v3.yaml

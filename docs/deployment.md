@@ -68,6 +68,6 @@ Mac 客户端 0.3.0 使用独立 Keychain 项保存 Google 桌面授权；本轮
 
 `hub backup --destination PATH` 生成包含归档表、版本、墓碑、水位和 CRM 兼容表的事务一致 JSONL；文件目录另行备份。生产 PostgreSQL 同时沿用现有运维备份，不以 SQLite 替代。
 
-迁移前的原 Compose、环境文件、镜像信息、旧 ShellCrash 入口以及已暂停 Hermes 作业清单保存在私有 `rollback/`。旧数据卷和源码目录未删除。回退恢复原服务时应先停止统一采集和新推送入口；切换后产生的 PostgreSQL 数据需另行处理，旧 SQLite 不是新数据的同步副本。不可丢弃墓碑后直接重放旧备份。
+迁移前的原 Compose、环境文件、镜像信息、旧 ShellCrash 入口以及已暂停 Hermes 作业清单保存在私有 `rollback/`。旧数据卷保留；2026-10-07 源码整理后，旧 CRM、用量和 Plaud 项目目录移除，运行入口直接使用本仓库；私有环境和旧文件快照保留在仓库外的 `source-backups/20261007-consolidation`，见 [源码管理](source-management.md)。回退恢复原服务时应先停止统一采集和新推送入口；切换后产生的 PostgreSQL 数据需另行处理，旧 SQLite 不是新数据的同步副本。不可丢弃墓碑后直接重放旧备份。
 
 12 个旧个人复盘、邮件处理及 Plaud 转录作业已通过 Hermes 官方 CLI 暂停；其他作业保留。`legacy/` 不注册自动任务，避免迁移后出现两个生产者。

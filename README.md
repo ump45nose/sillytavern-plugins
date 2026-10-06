@@ -55,7 +55,7 @@ flowchart LR
 - `legacy/`：旧处理业务源码，不自动运行。
 - `deployment/`：镜像构建和 systemd 入口。
 
-原项目目录和数据卷保留为迁移回退材料，新的开发和部署以本仓库为准。来源版本见 `integrations/source-origins.json`；Android 上游见 `integrations/autoaccounting/upstream.lock.json`。
+自有源码集中在本仓库维护。NAS / Mac 的旧 CRM、NAS 用量 MCP 和 Plaud 项目目录已移除，运行入口直接使用本仓库。Hermes 报告保留旧远端。NAS 运维仓库仅迁入个人信息相关脚本，其他运维代码继续独立管理；原运行数据和私有环境留在仓库外。来源版本和维护位置见 `integrations/source-origins.json`；迁移、运行文件和回退见 [源码管理](docs/source-management.md)。Android 上游见 `integrations/autoaccounting/upstream.lock.json`。
 
 ## 使用
 

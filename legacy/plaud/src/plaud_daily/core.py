@@ -62,7 +62,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def load_config(path: str | None = None) -> dict[str, Any]:
-    source = Path(path or os.environ.get("RR_CONFIG", "/home/yuwk/code/plaud-daily/config.yaml"))
+    source = Path(path or os.environ.get("RR_CONFIG", str(Path(__file__).resolve().parents[2] / "config.yaml")))
     if not source.is_file():
         raise RRException("config_missing", f"Config not found: {source}")
     config = yaml.safe_load(source.read_text())

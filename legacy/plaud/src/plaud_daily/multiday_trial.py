@@ -58,7 +58,23 @@ def configured_key(name: str) -> str:
         path = Path(os.environ.get("GROQ_API_KEY_FILE", "/home/yuwk/.config/plaud-daily/groq.key"))
         if path.is_file():
             if path.stat().st_mode & 0o077:
-                raise RuntimeError("Groq credential file must have mode 600")
+                # Host-managed Hermes ACLs expose the ACL mask as mode 660
+                # even when the owning group has no rights. Permit only the
+                # runtime user and workspace administrator, never group or
+                # world access. A plain group-readable 660 file still fails.
+                check = subprocess.run(["getfacl", "-cp", str(path)], capture_output=True, text=True)
+                entries = [line for line in check.stdout.splitlines() if line and not line.startswith("#")]
+                private = check.returncode == 0 and "group::---" in entries and "other::---" in entries
+                for entry in entries:
+                    fields = entry.split(":")
+                    if fields[0] == "group" and fields[2].split()[0] != "---":
+                        private = False
+                    if fields[0] == "user" and fields[1] and fields[1] not in {"hermes", "yuwk"}:
+                        private = False
+                    if fields[0] not in {"user", "group", "mask", "other"}:
+                        private = False
+                if not private:
+                    raise RuntimeError("Groq credential must be mode 600 or owner/admin-only ACL")
             return path.read_text().strip()
         return ""
     path = Path("/home/hermes/.hermes/.env")

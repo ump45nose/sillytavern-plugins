@@ -1,15 +1,17 @@
 schema_version: 1
 timezone: Asia/Taipei
-data_root: /vol1/1000/plaud-daily
+data_root: /path/to/private/plaud-daily
 sync_provider: plaud_mcp
 local_dir: null
 plaud_mcp:
   command: npx
-  args: ["-y", "@plaud-ai/mcp@0.3.13"]
+  args:
+  - -y
+  - '@plaud-ai/mcp@0.3.13'
   page_size: 100
   max_pages: 100
   lookback_days: 2
-  token_file: /home/yuwk/.plaud/tokens-mcp.json
+  token_file: /path/to/private/tokens-mcp.json
 audio:
   threads: 3
   retention_days: 14
@@ -17,13 +19,13 @@ audio:
   opus_frame_bytes: 80
   opus_frame_ms: 20
 vad:
-  model: /vol1/1000/plaud-daily/models/silero_vad.onnx
+  model: /path/to/private/silero_vad.onnx
   threshold: 0.5
   min_silence_seconds: 0.5
   min_speech_seconds: 0.25
   max_speech_seconds: 20
 speaker:
-  model: /vol1/1000/plaud-daily/models/campplus_zh.onnx
+  model: /path/to/private/campplus_zh.onnx
   me_threshold: 0.65
   other_threshold: 0.48
   min_embedding_seconds: 1.5
@@ -31,9 +33,10 @@ speaker:
 context:
   me_window_minutes: 15
 asr:
-  model: /vol1/1000/plaud-daily/models/sensevoice-int8-2024-07-17/model.int8.onnx
-  tokens: /vol1/1000/plaud-daily/models/sensevoice-int8-2024-07-17/tokens.txt
+  model: /path/to/private/model.int8.onnx
+  tokens: /path/to/private/tokens.txt
   language: zh
-  allowed_languages: [zh]
+  allowed_languages:
+  - zh
   use_itn: true
   max_chunk_seconds: 60

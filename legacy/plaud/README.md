@@ -1,5 +1,7 @@
 # PLAUD 每日录音同步
 
+此目录是原 Plaud 项目的源码保留区，由 Personal Data Hub 统一管理。聚合系统的下载与归档入口位于 `collectors/plaud` 和 `agents/nas/plaud-sync.py`。本次迁移不注册或恢复 ASR、融合及其他旧任务；下文保留原项目的历史说明，其中旧项目路径已移除。设备配置和 Python 环境在仓库外，当前入口直接使用本仓库。新检出可参考 `config.example.yaml`、`daily-v3.example.yaml`，通过 `RR_CONFIG` 或 `--config` 指定私有配置。
+
 ## 当前自动运行入口：三源 v3
 
 Hermes Lingjun 的 `plaud-daily-three-source-v3`（ID `58d4a4c46d49`）由

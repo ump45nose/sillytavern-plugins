@@ -27,6 +27,19 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def source_changes(baseline, revision):
+    """Compare the original package tree with its current monorepo location."""
+    prefix = command("git", "rev-parse", "--show-prefix")
+    paths = ("src/usage_monitor_mcp", "pyproject.toml", "uv.lock")
+    old_prefix = prefix if subprocess.run(
+        ["git", "cat-file", "-e", baseline + ":" + prefix + "pyproject.toml"],
+        cwd=ROOT, capture_output=True,
+    ).returncode == 0 else ""
+    return [path for path in paths if command(
+        "git", "rev-parse", baseline + ":" + old_prefix + path
+    ) != command("git", "rev-parse", revision + ":" + prefix + path)]
+
+
 def verify_wheel(path, name, record):
     path = path.resolve(strict=True)
     require(path.suffix == ".whl", "必须提供 wheel 文件")
@@ -64,8 +77,7 @@ def prepare(args):
     own_project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     require(own_project["version"] == own["version"], "业务 wheel 版本过期")
     # 发布流程与文档可在旧 wheel 后更新；Python 源码或依赖改变必须重建 wheel。
-    changed = command("git", "diff", "--name-only", own["source_commit"], revision, "--",
-                      "src/usage_monitor_mcp", "pyproject.toml", "uv.lock")
+    changed = source_changes(own["source_commit"], revision)
     require(not changed, "业务 wheel 之后源码或依赖已改变；请重建并更新 wheel 记录")
     paths = {"mcp-platform": args.platform_wheel, "dingtalk-events": args.dingtalk_wheel,
              "usage-monitor-mcp": args.usage_wheel}
@@ -85,6 +97,7 @@ def prepare(args):
         require(not (ROOT / name).is_symlink(), "构建源码不得包含符号链接")
     record = {
         "schema_version": 1, "source_repository": own["repository"], "source_commit": revision,
+        "source_subdirectory": command("git", "rev-parse", "--show-prefix").rstrip("/"),
         "source_clean": True, "base_image": base, "image_tag": args.image_tag,
         "build_directory": str(destination), "wheels": wheels,
         "source_files": {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in files},

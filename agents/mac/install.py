@@ -36,7 +36,8 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
         data.pop("StartCalendarInterval", None)
     else:
         previous = Path(data["ProgramArguments"][0])
-        python = previous.parent / "python"
+        managed_python = repo / "apps/crm/.venv/bin/python"
+        python = managed_python if managed_python.exists() else previous.parent / "python"
         data["ProgramArguments"] = [str(python), "-c", "from personal_crm.connector.cli import main; main()", "--watch"]
         data["WorkingDirectory"] = str(repo / "apps/crm")
         data.setdefault("EnvironmentVariables", {})["PYTHONPATH"] = str(repo / "apps/crm/src")

@@ -29,7 +29,7 @@ from . import multiday_trial as trial
 from .core import RRException, State, atomic_bytes, hash_json, load_config, now_iso
 from .sync import parse_utc, sync_local_dir, sync_plaud
 
-DEFAULT_CONFIG = "/vol1/1000/Code/plaud-daily/daily-v3.yaml"
+DEFAULT_CONFIG = str(Path(__file__).resolve().parents[2] / "daily-v3.yaml")
 
 
 def settings(path: str) -> tuple[dict, dict]:
