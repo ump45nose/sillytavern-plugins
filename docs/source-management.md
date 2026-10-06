@@ -38,6 +38,16 @@ NAS 私有环境、旧文件快照和迁移回执位于 `/vol1/1000/personal-dat
 
 ## 检查与回退
 
-执行 `python3 checks/source-management-smoke.py --deployed-nas` 验证维护位置、旧入口及私有运行文件边界；执行 `python3 checks/publication-audit.py` 检查 Git 当前索引和所有引用历史中的凭据候选及不应提交的文件。
+使用项目 Python 3.12+ 执行 `checks/source-management-smoke.py --deployed-nas` 验证维护位置、旧入口及私有运行文件边界；执行 `checks/publication-audit.py` 检查 Git 当前索引和所有引用历史中的凭据候选及不应提交的文件。NAS 可使用 `.venv/bin/python`；Mac 可使用 `apps/crm/.venv/bin/python`，省略 `--deployed-nas`。
 
 源码回退使用统一仓库的历史提交或私有文件快照；已删除的旧项目入口无需恢复。私有运行文件、凭据和归档不需要回滚。不要删除备份里的 Python 环境或 Plaud 配置，当前运行入口仍使用它们。服务版本回退依照 [部署说明](deployment.md)。
+
+## 验收记录：2026-10-07
+
+- 私有 GitHub 主分支已推送并核对；三个原始分支标签和 `v0.3.0` 一并推送。未发现凭据候选或被提交的私有运行文件。
+- GitHub `personal-crm`、`usage-monitor-mcp` 已删除，API 返回 404；`hermes-cron-reports` 保留。NAS / Mac 旧 CRM、NAS 用量和 Plaud 项目目录及旧独立 `.git` 已移除。
+- NAS 37 个管理入口检查通过，统一采集、Health 接收器及 ShellCrash 三个服务运行正常，来源状态仍为 16 项。CRM HTTPS 健康检查和用量容器私网健康检查为 HTTP 200，用量容器状态为 healthy。
+- 用量 11 项测试通过；构建校验验证旧项目树及子目录树两种基准，并拒绝源码变化后复用旧 wheel。HTTP / MCP 有界列表检查通过。
+- Plaud 使用原 runtime 账号执行离线冒烟，验证 1,225 秒覆盖、25 秒尾块、缓存与单次请求门禁；未调用网络或真实 ASR。旧健康模块通过仓库内读取桥接检查。
+- Mac 源码更新、旧目录与 `.git` 清理完成；微信 Agent 运行，Skysight 最近退出码为 0。客户端读取 16 个来源、53,224 条记录，并通过附件哈希验证。固定凭据助手的二进制哈希保持不变。
+- MCP Platform 的 CRM 和用量应用目录已改为本仓库及清单所在子目录，锁定源码提交 `2f556b63fc9640f5bf557ba8487fc67344f24a33`，目录更新提交为 `5435b66`。NAS 的既有 source_roots 已指向本仓库。

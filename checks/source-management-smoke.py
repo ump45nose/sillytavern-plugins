@@ -63,6 +63,9 @@ def main():
     if args.deployed_nas:
         backup = Path("/vol1/1000/personal-data-hub/source-backups/20261007-consolidation")
         receipt = json.loads((backup / "receipt.json").read_text())
+        if receipt.get("old_independent_git_removed"):
+            assert not (backup / "personal-crm/.git").exists()
+            assert not (backup / "mcp/usage-monitor-mcp/.git").exists()
         for entry in receipt["entries"]:
             path, target = Path(entry["source"]), Path(entry["managed_at"])
             if entry.get("old_source_entry_removed"):

@@ -10,7 +10,7 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/ump45nose/personal-crm",
+    "websiteURL": "https://github.com/ump45nose/personal-data-hub",
     "defaultPrompt": [
       "最近有哪些联系人需要跟进？",
       "查找某位联系人的近期互动摘要和重要事实。",
@@ -36,5 +36,5 @@
     "跟进",
     "提醒"
   ],
-  "repository": "https://github.com/ump45nose/personal-crm"
+  "repository": "https://github.com/ump45nose/personal-data-hub"
 }
