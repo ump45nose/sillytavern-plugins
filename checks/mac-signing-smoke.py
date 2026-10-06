@@ -5,6 +5,8 @@ Reads existing credentials through the signed app, never prints or exports them.
 The installed app is untouched; the update candidate lives in a private temp dir.
 """
 import pathlib
+import hashlib
+import json
 import plistlib
 import re
 import shutil
@@ -13,6 +15,7 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 APP = pathlib.Path.home() / "Applications/Personal Data Hub.app"
+READER = pathlib.Path.home() / "Library/Application Support/PersonalDataHub/Personal Data Hub Credentials.app/Contents/MacOS/PersonalDataHubCredentialReader"
 
 
 def signature(app):
@@ -31,6 +34,7 @@ def read_without_dialog(app):
 
 
 first = signature(APP)
+reader_hash = hashlib.sha256(READER.read_bytes()).hexdigest()
 read_without_dialog(APP)
 with tempfile.TemporaryDirectory(prefix="pdh-signing-smoke-") as directory:
     candidate = pathlib.Path(directory) / APP.name
@@ -46,4 +50,9 @@ with tempfile.TemporaryDirectory(prefix="pdh-signing-smoke-") as directory:
     assert first[0] == second[0], "Signing identity changed"
     assert first[1] != second[1], "Update did not change the CodeDirectory hash"
     read_without_dialog(candidate)
+assert hashlib.sha256(READER.read_bytes()).hexdigest() == reader_hash, "Credential reader changed"
+rejected = subprocess.run([str(READER), "read", "viewer", "deny"], capture_output=True, check=False, timeout=15)
+reply = json.loads(rejected.stdout)
+assert rejected.returncode != 0 and reply["status"] != 0 and not reply.get("data"), "Untrusted caller obtained credentials"
+print("credential_reader_smoke_ok binary=unchanged untrusted_caller=denied no_data=true")
 print("signing_smoke_ok changed_cdhash=true stable_requirement=true viewer=readable google=readable dialogs=disabled")

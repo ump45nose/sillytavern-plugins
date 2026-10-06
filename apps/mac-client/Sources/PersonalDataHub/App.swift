@@ -210,6 +210,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum Main {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--keychain-roundtrip-smoke") {
+            SecKeychainSetUserInteractionAllowed(false)
+            do {
+                // Write the exact original bytes; never export or rotate live credentials.
+                let viewer = try CredentialStore.read("viewer"), google = try CredentialStore.read("google")
+                try CredentialStore.write("viewer", viewer); try CredentialStore.write("google", google)
+                guard try CredentialStore.read("viewer") == viewer, try CredentialStore.read("google") == google else { throw HubError.integrity }
+                print("keychain_roundtrip_smoke_ok viewer=unchanged google=unchanged interaction=disabled"); exit(0)
+            } catch { fputs("keychain_roundtrip_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+        }
+        if CommandLine.arguments.contains("--google-read-smoke") {
+            SecKeychainSetUserInteractionAllowed(false)
+            Task {
+                do {
+                    let client = GoogleClient()
+                    let snapshot = try await client.snapshot(date: Date(), days: 1)
+                    let quick = try await client.quickSnapshot()
+                    print("google_read_smoke_ok lists=\(snapshot.lists.count) owned_calendars=\(snapshot.calendars.count) tasks=\(snapshot.tasks.count) events=\(snapshot.events.count) next_events=\(quick.events.count) interaction=disabled")
+                    exit(0)
+                } catch { fputs("google_read_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+            }
+            RunLoop.main.run(); return
+        }
+        if CommandLine.arguments.contains("--keychain-prepare") {
+            do {
+                _ = try Connection.token(); _ = try GoogleKeychain.read("oauth")
+                print("credential_reader_ready viewer=readable google=readable"); exit(0)
+            } catch { fputs("credential_reader_prepare_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+        }
         if CommandLine.arguments.contains("--keychain-smoke") {
             // Fail immediately instead of displaying authorization dialogs during update checks.
             SecKeychainSetUserInteractionAllowed(false)

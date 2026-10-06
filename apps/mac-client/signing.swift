@@ -29,7 +29,7 @@ let keychainPath = folder.appendingPathComponent("identity.keychain-db")
 let passwordPath = folder.appendingPathComponent("keychain-password")
 let certificatePath = folder.appendingPathComponent("certificate.pem")
 let manifestPath = folder.appendingPathComponent("identity.json")
-let identifier = "com.yuwk.personal-data-hub"
+var identifier = "com.yuwk.personal-data-hub"
 
 struct Identity: Codable {
     let certificateSHA1: String
@@ -127,6 +127,13 @@ do {
     guard CommandLine.arguments.count == 2, CommandLine.arguments[1].hasSuffix(".app") else {
         throw SigningFailure(description: "Usage: swift signing.swift /absolute/App.app")
     }
+    let infoPath = URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent("Contents/Info.plist")
+    let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: infoPath), format: nil) as? [String: Any]
+    guard let bundleID = info?["CFBundleIdentifier"] as? String,
+          ["com.yuwk.personal-data-hub", "com.yuwk.personal-data-hub.credential-reader"].contains(bundleID) else {
+        throw SigningFailure(description: "Unexpected signing identifier")
+    }
+    identifier = bundleID
     // Setup/signing uses only the dedicated keychain; never asks for a login password.
     try check(SecKeychainSetUserInteractionAllowed(false), "Disable signing prompts")
     let identity: Identity
@@ -140,7 +147,7 @@ do {
     defer { _ = SecKeychainLock(keychain) }
     let app = CommandLine.arguments[1]
     try run("/usr/bin/codesign", ["--force", "--sign", identity.certificateSHA1, "--keychain", keychainPath.path,
-                                  "--identifier", identifier, "--timestamp=none", "--requirements", "=designated => " + identity.requirement, app])
+                                  "--identifier", identifier, "--options", "runtime", "--timestamp=none", "--requirements", "=designated => " + identity.requirement, app])
     try run("/usr/bin/codesign", ["--verify", "--strict", "--test-requirement", "=" + identity.requirement, app])
     print("Signed with persistent certificate \(identity.certificateSHA1)")
 } catch {

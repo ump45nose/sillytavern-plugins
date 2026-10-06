@@ -26,13 +26,8 @@ struct Connection: Codable {
     }
 
     static func token() throws -> String {
-        var query = keyQuery()
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data,
-              let value = String(data: data, encoding: .utf8), !value.isEmpty else {
+        let data = try CredentialStore.read("viewer")
+        guard let value = String(data: data, encoding: .utf8), !value.isEmpty else {
             throw HubError.credentials
         }
         return value
@@ -42,14 +37,7 @@ struct Connection: Codable {
         _ = try baseURL()
         // 先保存凭据，失败时不覆盖连接配置。空输入保留原 Keychain 项。
         if let token = token, !token.isEmpty {
-            let attrs: [String: Any] = [kSecValueData as String: Data(token.utf8)]
-            let status = SecItemUpdate(Self.keyQuery() as CFDictionary, attrs as CFDictionary)
-            if status == errSecItemNotFound {
-                var query = Self.keyQuery()
-                query.merge(attrs) { _, new in new }
-                query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-                guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { throw HubError.keychain }
-            } else if status != errSecSuccess { throw HubError.keychain }
+            try CredentialStore.write("viewer", Data(token.utf8))
         }
         try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])

@@ -5,9 +5,10 @@ import Network
 import Security
 
 enum GoogleError: LocalizedError {
-    case unconfigured, unauthorized, request(Int), conflict, invalid, callback, timeout, wrongAccount
+    case unconfigured, unauthorized, request(Int), conflict, invalid, callback, timeout, wrongAccount, keychain(OSStatus)
     var errorDescription: String? {
         switch self {
+        case .keychain(let status): return "系统钥匙串暂不能读取 Google 凭据（\(status)）。请解锁钥匙串并允许凭据助手访问。无需重新进行浏览器授权。"
         case .wrongAccount: return "请选择与 NAS 采集相同的 Google 账号。"
         case .unconfigured: return "Google 尚未连接。请在设置中连接 Google。"
         case .unauthorized: return "Google 授权已失效，请重新连接。"
@@ -22,19 +23,16 @@ enum GoogleError: LocalizedError {
 enum GoogleKeychain {
     static let service = "com.yuwk.personal-data-hub.google"
     static func read(_ account: String) throws -> Data {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                   kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { throw GoogleError.unconfigured }
-        return data
+        guard account == "oauth" else { throw GoogleError.invalid }
+        do { return try CredentialStore.read("google") }
+        catch let error as CredentialStore.Failure {
+            if error.status == errSecItemNotFound { throw GoogleError.unconfigured }
+            throw GoogleError.keychain(error.status)
+        }
     }
     static func write(_ account: String, _ data: Data) throws {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-        let attrs: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        let status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
-        if status == errSecItemNotFound {
-            guard SecItemAdd(query.merging(attrs) { _, b in b } as CFDictionary, nil) == errSecSuccess else { throw HubError.credentials }
-        } else if status != errSecSuccess { throw HubError.credentials }
+        guard account == "oauth" else { throw GoogleError.invalid }
+        try CredentialStore.write("google", data)
     }
 }
 struct GoogleList: Codable, Identifiable {

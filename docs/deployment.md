@@ -56,7 +56,7 @@ NAS 在私有配置中增加 `hub_viewer_token_file`。容器目录中的对应�
 
 私有宿主与容器配置中 `sources.google.calendar_scope` 设为 `owned`；只读 NAS 凭据保持原样，同账号 primary 身份仍使用原命名空间。修改前的两个配置分别备份为相邻的 `config.pre-display.json`。
 
-Mac 客户端 0.3.0 使用独立 Keychain 项保存 Google 桌面授权；本轮浏览器授权已完成，同账号自有日历及 Tasks 操作由 Mac 官方适配层执行。客户端改用固定本机证书签名；构建自动解锁独立签名钥匙串，更新沿用同一应用身份，旧临时签名首次迁移需一次系统访问确认，见 [固定签名](mac-signing.md)。原 0.2.1 应用保存在 `/Users/yuwk/Applications/Personal Data Hub.pre-display.app`；回退时正常退出客户端后恢复此副本。NAS 回退使用原 0.2.1 Compose 候选清单，必要时恢复 `config.pre-display.json`，不用回滚数据库或删除派生索引；原始归档和已有采集进程继续保留。
+Mac 客户端 0.3.0 使用独立 Keychain 项保存 Google 桌面授权；本轮浏览器授权已完成，同账号自有日历及 Tasks 操作由 Mac 官方适配层执行。当前 build 6 使用固定本机证书签名及固定钥匙串访问助手；构建自动解锁独立签名钥匙串，更新界面不重编译助手。助手首次访问的系统许可已完成，真实凭据跨版本无弹窗验收通过，见 [固定签名](mac-signing.md)。原 0.2.1 应用保存在 `/Users/yuwk/Applications/Personal Data Hub.pre-display.app`；回退时正常退出客户端后恢复此副本。NAS 回退使用原 0.2.1 Compose 候选清单，必要时恢复 `config.pre-display.json`，不用回滚数据库或删除派生索引；原始归档和已有采集进程继续保留。
 
 ## AutoAccounting 接入
 

@@ -19,7 +19,7 @@ python3 apps/mac-client/install.py
 open "$HOME/Applications/Personal Data Hub.app" --args --show
 ```
 
-构建使用本机 Xcode 的 `swift build -c release`，使用长期复用的本机证书签名 `.app`，安装到 `~/Applications`。签名身份保存在仓库外的私有 Signing 目录，构建自动解锁独立签名钥匙串，无需登录密码。更新保留上一份应用以便回退，签名失败时停止，不退回临时签名。旧临时签名首次迁移需系统“始终允许”；后续更新复用证书与钥匙串访问许可。详见 [固定签名](../../docs/mac-signing.md)。
+构建使用本机 Xcode 的 `swift build -c release`，使用长期复用的本机证书签名 `.app`，安装到 `~/Applications`。签名身份保存在仓库外的私有 Signing 目录，构建自动解锁独立签名钥匙串，无需登录密码。系统 Keychain 由固定访问助手读写，更新界面时保留助手二进制，不改变钥匙串许可。双方校验证书与 Bundle ID，普通脚本不能调用助手取凭据。首次允许助手访问归档和 Google 两项后，界面更新不用再次输密码；签名或助手校验失败时停止，不退回临时签名。详见 [固定签名](../../docs/mac-signing.md)。
 
 现有采集 Agent 由 `agents/mac/install.py` 管理，保留原 TCC 责任主体、launchd label、白名单和检查点；客户端不直接读取应用组缓存或微信数据库，不创建第二个采集进程。
 
