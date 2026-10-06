@@ -116,3 +116,11 @@ CRM／邮件 0.1.4 首次事件部署仅更换业务镜像并合并事件环境�
 统计使用 `usage-data` 持久卷、三个只读绑定目录及独立私有秘密文件。清单为 `deployment_mode: existing`：业务仓库准备固定 wheel／基础镜像的离线构建和 Compose；公共 mcpctl 协调认证、Tunnel 和 DNS。首次独立 OAuth 客户端使用公共 prepare_auth_change 显式传入私有 env 后创建；既有客户端后续由 mcpctl 正常协调。首次未提供 env 的入口尝试在任何共享配置改变前停止，回退记录 complete；之后独立客户端与公开入口均成功。
 
 统计私有 bootstrap 记录、构建记录及入口事务位于 `/vol2/1000/Docker/stacks/mcp-platform/runtime/usage-monitor-mcp`。源仓为私有 `ump45nose/usage-monitor-mcp`。原 CRM、邮件 App ID 沿用既有原生连接；不用 Plugin Creator 重新包装。
+
+## 2026-10-07 聚合迁移后的订阅修复
+
+发现聚合入口和部署清单关闭了聊天事件，原订阅及报告仍在，但最新 CRM 订阅已过期。现在恢复显式聊天事件配置，三个事件服务采用公共运行时 0.1.6，增加按当前授权主体隔离的 `get_mcp_event_status`，可区分事件声明、订阅有效期、已验证回调、没有新事件和投递失败。真实网页重扫后，CRM／邮件／用量的 MCP 2 Events 分别返回 1／1／5 项，普通 UserInfo 查询成功。
+
+当前网页 `/scheduled` 的四个相关任务均显示暂停，CRM 触发器仍保存为同一 App ID 的 UserInfo / `crm.daily_chat.ready`。服务端钉钉四项和用量、邮件订阅有效且已验证；两次用量回调 HTTP 200，邮件没有发布记录。任务恢复偏好由用户选择，不凭服务端 active 判断任务已启用或通知已显示。原 Chat 任务工具的异常无法在本 Codex 工具集中直接重测，本次通过网页读取任务状态；不能把这个替代验证写成该工具已修复。
+
+三个镜像、环境及回退证据位于私有目录 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_mcp-events/releases/20261007-subscription-repair-0.1.6`。业务挂载、身份、命令和全部非聊天启用环境保留；没有合成业务事件或历史回放。详细记录在聚合仓库的 `docs/event-subscriptions-repair.md`。历史验收与旧 App 信息保留，以上为本次实时补充。
