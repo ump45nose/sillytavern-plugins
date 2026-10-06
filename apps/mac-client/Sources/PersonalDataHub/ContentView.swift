@@ -65,6 +65,9 @@ struct ContentView: View {
                             Circle().fill(source.needsAttention ? Color.orange : Color.green).frame(width: 6, height: 6)
                             Text(source.state).font(.caption).foregroundStyle(.secondary)
                         }
+                        if let note = source.qualityNote {
+                            Text(note).font(.caption2).foregroundStyle(.orange)
+                        }
                         Text(displayDate(source.last_observed_at)).font(.caption2).foregroundStyle(.secondary)
                     }.padding(.vertical, 4).tag(source.id)
                 }

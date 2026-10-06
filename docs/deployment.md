@@ -28,7 +28,7 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 构建复用已锁定的公共 MCP 基础镜像，安装自有 wheel、PostgreSQL 驱动和独立用量库要求的锁定公共事件库。`uv sync` 先填充锁定 Git 缓存；也可通过 `HUB_EVENTS_SOURCE` 指定该事件库源码路径。构建必须通过 `uv pip check`。Docker 命令需当前操作账户已有的权限；若使用 sudo，需保留 `uv` 所在 PATH。既有部署模式复用当前镜像，因此首次切换镜像应先在原 Compose 项目更新 `crm` 服务，再由 `mcpctl` 记录和校验部署，保留其他服务。
 
-观察采集：`hub status`、`systemctl status personal-data-hub-collectors.service`。运行日志只记录来源、数量和错误类别，避免输出消息正文、邮件内容及凭据。`partial` 表示存在已归档的历史异常片段，不代表所有来源失败。
+观察采集：`hub status`、`systemctl status personal-data-hub-collectors.service`。运行日志只记录来源、数量和错误类别，避免输出消息正文、邮件内容及凭据。`partial` / `segment_invalid` 表示本轮遇到无效片段；归档历史异常数量放在 `quality_warnings`，不会令以后成功的运行一直显示 `partial`。旧运行记录保持原状，不回写历史状态。
 
 ## Mac 同步 Agent
 

@@ -27,10 +27,11 @@ def register_tools(server, store, auth):
         return store.status()
 
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
-    def list_data_records(source: str | None = None, kind: str | None = None, offset: int = 0, limit: int = 100, start: str | None = None, end: str | None = None) -> dict:
-        """按来源、类型和 UTC 时间范围分页查看归档记录，保留来源与附件引用。"""
-        rows = store.list_records(source, kind, offset, limit, instant(start), instant(end))
-        return {"records": rows, "next_offset": offset + len(rows) if len(rows) == limit else None}
+    def list_data_records(source: str | None = None, kind: str | None = None, offset: int = 0, limit: int = 100, start: str | None = None, end: str | None = None, include_content: bool = False) -> dict:
+        """分页列出归档 ID、来源、类型、时间、标题（最多160字符）及摘要（最多500字符）。默认不含 raw、normalized 和附件；正文请用 get_data_record，或显式设置 include_content=true 读取完整记录。"""
+        begin, finish = instant(start), instant(end)
+        if begin and finish and begin >= finish: raise ValueError("invalid_time_range")
+        return store.record_page(source, kind, offset, limit, begin, finish, include_content)
 
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
     def get_data_record(record_id: str) -> dict | None:

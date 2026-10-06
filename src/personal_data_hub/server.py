@@ -90,9 +90,11 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         authenticate(authorization, readonly=True); return store.status()
 
     @api.get("/api/v1/records")
-    def data_records(source: str | None = None, kind: str | None = None, offset: int = 0, limit: int = 100, authorization: str | None = Header(default=None)):
+    def data_records(source: str | None = None, kind: str | None = None, offset: int = 0, limit: int = 100, include_content: bool = False, start: datetime | None = None, end: datetime | None = None, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
-        try: return {"records": store.list_records(source, kind, offset, limit)}
+        if any(value and value.tzinfo is None for value in (start, end)) or (start and end and start >= end):
+            raise HTTPException(422, "invalid_time_range")
+        try: return store.record_page(source, kind, offset, limit, start, end, include_content)
         except ValueError: raise HTTPException(422, "invalid_pagination") from None
 
     @api.get("/api/v1/browse")

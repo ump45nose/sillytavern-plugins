@@ -72,6 +72,10 @@ uv sync --python 3.12 --no-dev
 
 生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。新增只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_data_asset_info`、`read_data_asset`。联系人及日报查询继续可用，MCP 不开放数据写入。
 
+`list_data_records` 与 `GET /api/v1/records` 默认只返回 ID、来源、类型、时间、标题（最多 160 字符）和摘要（最多 500 字符），附带 `total` / `next_offset`。完整正文、原始载荷及附件按 ID 从详情工具 / 接口读取；需要原列表完整字段时显式传 `include_content=true`。来源、类型、时间筛选及原分页参数继续可用。
+
+来源状态的 `last_run` 表示本轮采集结果，`quality_warnings` 单独报告归档中的历史异常数量。Skysight 本轮发现无效片段时为 `partial` / `segment_invalid`；无新增异常的成功运行为 `ok`，历史无效文件仍保留并显示 `historical_segment_invalid` 提示。
+
 API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`，只有文件校验和数据库提交成功才返回 `committed: true`。来源水位仅在整次采集完成后推进；失败后的重复执行按来源身份和内容哈希去重。
 
 显式删除会清理当前记录、历史版本和无其他引用的附件，并保留仅含哈希、来源和时间的墓碑。墓碑拦截旧备份重放；CRM 同时清理兼容查询表并阻止已删除微信事件重放。失败、分页不完整、缓存轮转及时间窗口缩短不会被当作删除。

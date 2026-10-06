@@ -70,11 +70,11 @@ def run(store, source, settings, since=None):
             pending.next_cursor = cursor
             result = store.ingest(source, pending)
             for key in totals: totals[key] += result[key]
-            if cursor and cursor.get("invalid_ids"): invalid = max(invalid, len(cursor["invalid_ids"]))
         except Exception as exc:
             with store.engine.begin() as c:
                 c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="failed", records=totals["changed"], error=type(exc).__name__))
             raise
         with store.engine.begin() as c:
-            c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="partial" if invalid else "ok", records=totals["changed"], error="historical_segment_invalid" if invalid else None))
-    return {"source": source, "invalid": invalid, **totals}
+            # 本轮校验异常影响采集状态；水位中的历史异常另由 status 报告，不能令成功运行永久 partial。
+            c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="partial" if invalid else "ok", records=totals["changed"], error="segment_invalid" if invalid else None))
+    return {"source": source, "invalid": invalid, "historical_invalid": len((cursor or {}).get("invalid_ids", [])), **totals}

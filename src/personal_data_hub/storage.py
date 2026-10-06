@@ -240,6 +240,12 @@ class Store:
         """只投影可读字段，列表不传输原始 AX 事件和长正文。"""
         if offset < 0 or not 1 <= limit <= 100 or len(query) > 200:
             raise ValueError("invalid_browse_parameters")
+        return self.record_page(source, kind, offset, limit, start, end, query=query)
+
+    def record_page(self, source=None, kind=None, offset=0, limit=100, start=None, end=None, include_content=False, query=""):
+        """公共列表默认只读有界摘要；显式选择正文时才读取原始载荷。"""
+        if offset < 0 or not 1 <= limit <= 1000 or len(query) > 200:
+            raise ValueError("invalid_pagination")
         # 不在 SQL 中解析原始 JSON：PG JSON 的 ->> 也会拒绝 AX 中的 NUL。
         title = func.coalesce(previews.c.title, records.c.kind)
         preview = func.coalesce(previews.c.preview, records.c.external_id)
@@ -258,7 +264,12 @@ class Store:
         with self.engine.connect() as c:
             rows = [dict(r) for r in c.execute(statement).mappings()]
             total = c.scalar(select(func.count()).select_from(joined).where(*conditions))
-        return {"records": rows[:limit], "total": total, "next_offset": offset + limit if len(rows) > limit else None}
+            page = rows[:limit]
+            if include_content and page:
+                # 探测下一页只读摘要，不额外读取一条可能很大的原始载荷。
+                full = {r["id"]: dict(r) for r in c.execute(select(records).where(records.c.id.in_([r["id"] for r in page]))).mappings()}
+                page = [full[r["id"]] for r in page if r["id"] in full]
+        return {"records": page, "total": total, "next_offset": offset + limit if len(rows) > limit else None}
 
     @staticmethod
     def preview_fields(kind, external_id, raw, normalized):
@@ -311,8 +322,10 @@ class Store:
     def status(self):
         with self.engine.connect() as c:
             result = []
+            invalid_counts = dict(c.execute(select(records.c.source, func.count()).where(records.c.kind == "computer_segment_invalid").group_by(records.c.source)).all())
             for row in c.execute(select(sources)).mappings():
                 source = row["id"]
                 latest = c.execute(select(runs).where(runs.c.source == source).order_by(runs.c.started_at.desc()).limit(1)).mappings().first()
-                result.append({**dict(row), "count": c.scalar(select(func.count()).select_from(records).where(records.c.source == source)), "last_observed_at": c.scalar(select(func.max(records.c.observed_at)).where(records.c.source == source)), "last_run": dict(latest) if latest else None})
+                warnings = [{"code": "historical_segment_invalid", "count": invalid_counts[source]}] if invalid_counts.get(source) else []
+                result.append({**dict(row), "count": c.scalar(select(func.count()).select_from(records).where(records.c.source == source)), "last_observed_at": c.scalar(select(func.max(records.c.observed_at)).where(records.c.source == source)), "last_run": dict(latest) if latest else None, "quality_warnings": warnings})
             return result

@@ -39,17 +39,26 @@ struct SourceStatus: Decodable, Identifiable {
     let last_observed_at: String?
     let last_run: CollectionRun?
     let deletion_support: String
+    let quality_warnings: [QualityWarning]?
     var name: String { sourceName(id) }
     var state: String {
         switch last_run?.status {
         case "failed": return "采集失败"
-        case "partial": return "已归档，含历史异常"
+        case "partial": return "本轮采集含异常"
         case "running": return "采集中"
         case "ok": return "正常"
         default: return count > 0 ? "已接收" : "等待数据"
         }
     }
+    var qualityNote: String? {
+        guard let warning = quality_warnings?.first(where: { $0.code == "historical_segment_invalid" }), warning.count > 0 else { return nil }
+        return "历史异常 \(warning.count) 条，原始文件已保留"
+    }
     var needsAttention: Bool { last_run?.status == "failed" || last_run?.status == "partial" }
+}
+struct QualityWarning: Decodable {
+    let code: String
+    let count: Int
 }
 struct CollectionRun: Decodable {
     let status: String
