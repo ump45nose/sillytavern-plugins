@@ -1,0 +1,10 @@
+#!/bin/sh
+# 使用 Hermes 既有 Python 运行时启动模块化复盘应用，不污染系统 Python。
+set -eu
+APP_ROOT="${REVIEW_APP_ROOT:-/vol2/1000/Docker/personal-review}"
+PYTHON_BIN="/home/hermes/.hermes/hermes-agent/venv/bin/python3"
+export PYTHONPATH="$APP_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON_BIN" -m review.cli \
+  --env-file "$APP_ROOT/.env" \
+  --policy-file "$APP_ROOT/config/review.yaml" \
+  "$@"

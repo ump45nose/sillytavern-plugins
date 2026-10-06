@@ -1,0 +1,11 @@
+schema_version: 1
+base_config: /vol1/1000/Code/plaud-daily/config.yaml
+data_root: /vol1/1000/plaud-daily/daily-v3
+timezone: Asia/Taipei
+scope: full_recordings
+fusion_mode: auto_validated
+plaud_token_file: /home/hermes/.plaud/tokens-mcp.json
+groq_key_file: /home/hermes/.hermes/secrets/plaud-daily/groq.key
+cpa_url: http://192.168.31.201:8317/v1/chat/completions
+fusion_model: grok-4.7
+max_input_bytes: 750000

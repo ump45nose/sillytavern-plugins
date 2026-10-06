@@ -1,0 +1,8 @@
+[Unit]
+Description=Validate and apply the latest SubBoost config to ShellCrash
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/yuwk/cron/scripts/shellcrash-subboost-refresh

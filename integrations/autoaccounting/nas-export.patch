@@ -1,0 +1,420 @@
+diff --git a/app/src/main/java/net/ankio/auto/export/BillExportAlarmReceiver.kt b/app/src/main/java/net/ankio/auto/export/BillExportAlarmReceiver.kt
+new file mode 100644
+index 00000000..c63942cb
+--- /dev/null
++++ b/app/src/main/java/net/ankio/auto/export/BillExportAlarmReceiver.kt
+@@ -0,0 +1,20 @@
++package net.ankio.auto.export
++
++import android.content.BroadcastReceiver
++import android.content.Context
++import android.content.Intent
++
++class BillExportAlarmReceiver : BroadcastReceiver() {
++    override fun onReceive(context: Context, intent: Intent) {
++        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
++            BillExportScheduler.configure(context)
++            return
++        }
++        if (intent.action == BillExportScheduler.ACTION_ALARM) {
++            BillExportScheduler.handleAlarm(
++                context,
++                intent.getIntExtra(BillExportWorker.KEY_DAY_OFFSET, 0),
++            )
++        }
++    }
++}
+diff --git a/app/src/main/java/net/ankio/auto/export/BillExportScheduler.kt b/app/src/main/java/net/ankio/auto/export/BillExportScheduler.kt
+new file mode 100644
+index 00000000..9d28c687
+--- /dev/null
++++ b/app/src/main/java/net/ankio/auto/export/BillExportScheduler.kt
+@@ -0,0 +1,83 @@
++package net.ankio.auto.export
++
++import android.app.AlarmManager
++import android.app.PendingIntent
++import android.content.Context
++import android.content.Intent
++import android.os.Build
++import androidx.work.Data
++import androidx.work.ExistingPeriodicWorkPolicy
++import androidx.work.ExistingWorkPolicy
++import androidx.work.OneTimeWorkRequestBuilder
++import androidx.work.PeriodicWorkRequestBuilder
++import androidx.work.WorkManager
++import net.ankio.auto.utils.PrefManager
++import java.time.ZoneId
++import java.time.ZonedDateTime
++import java.util.concurrent.TimeUnit
++
++object BillExportScheduler {
++    private const val PERIODIC_NAME = "bill-export-hourly"
++    private const val IMMEDIATE_NAME = "bill-export-immediate"
++    const val ACTION_ALARM = "net.ankio.auto.BILL_EXPORT_ALARM"
++
++    fun configure(context: Context) {
++        val work = WorkManager.getInstance(context)
++        if (!PrefManager.billExportEnabled) {
++            work.cancelUniqueWork(PERIODIC_NAME)
++            cancelAlarms(context)
++            return
++        }
++        val periodic = PeriodicWorkRequestBuilder<BillExportWorker>(1, TimeUnit.HOURS)
++            .build()
++        work.enqueueUniquePeriodicWork(PERIODIC_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic)
++        scheduleAlarm(context, 21, 20, 0, 2120)
++        scheduleAlarm(context, 0, 30, -1, 30)
++    }
++
++    fun enqueueImmediate(context: Context, dayOffset: Int = 0) {
++        if (!PrefManager.billExportEnabled) return
++        val request = OneTimeWorkRequestBuilder<BillExportWorker>()
++            .setInputData(Data.Builder().putInt(BillExportWorker.KEY_DAY_OFFSET, dayOffset).build())
++            .build()
++        WorkManager.getInstance(context)
++            .enqueueUniqueWork(IMMEDIATE_NAME, ExistingWorkPolicy.KEEP, request)
++    }
++
++    fun handleAlarm(context: Context, dayOffset: Int) {
++        enqueueImmediate(context, dayOffset)
++        configure(context)
++    }
++
++    private fun scheduleAlarm(context: Context, hour: Int, minute: Int, offset: Int, requestCode: Int) {
++        val manager = context.getSystemService(AlarmManager::class.java)
++        val now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
++        var next = now.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
++        if (!next.isAfter(now)) next = next.plusDays(1)
++        val pending = alarmIntent(context, offset, requestCode)
++        val millis = next.toInstant().toEpochMilli()
++        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
++            manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
++        } else {
++            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
++        }
++    }
++
++    private fun alarmIntent(context: Context, offset: Int, requestCode: Int): PendingIntent {
++        val intent = Intent(context, BillExportAlarmReceiver::class.java)
++            .setAction(ACTION_ALARM)
++            .putExtra(BillExportWorker.KEY_DAY_OFFSET, offset)
++        return PendingIntent.getBroadcast(
++            context,
++            requestCode,
++            intent,
++            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
++        )
++    }
++
++    private fun cancelAlarms(context: Context) {
++        val manager = context.getSystemService(AlarmManager::class.java)
++        manager.cancel(alarmIntent(context, 0, 2120))
++        manager.cancel(alarmIntent(context, -1, 30))
++    }
++}
+diff --git a/app/src/main/java/net/ankio/auto/export/BillExportWorker.kt b/app/src/main/java/net/ankio/auto/export/BillExportWorker.kt
+new file mode 100644
+index 00000000..fe26f0ca
+--- /dev/null
++++ b/app/src/main/java/net/ankio/auto/export/BillExportWorker.kt
+@@ -0,0 +1,41 @@
++package net.ankio.auto.export
++
++import android.content.Context
++import android.os.SystemClock
++import androidx.work.CoroutineWorker
++import androidx.work.WorkerParameters
++import net.ankio.auto.storage.Logger
++import java.time.LocalDate
++import java.time.ZoneId
++
++class BillExportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
++    override suspend fun doWork(): Result {
++        val started = SystemClock.elapsedRealtime()
++        val offset = inputData.getInt(KEY_DAY_OFFSET, 0)
++        val day = LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(offset.toLong())
++        val result = BillExporter.exportDay(day)
++        return result.fold(
++            onSuccess = {
++                Logger.d(
++                    "账单导出完成: day=$day states=${it.stateCounts} pulled=${it.pulled} " +
++                        "posted=${it.posted} failed=0 elapsed_ms=${SystemClock.elapsedRealtime() - started}"
++                )
++                Result.success()
++            },
++            onFailure = { error ->
++                val failure = error as? BillExportFailure
++                Logger.e(
++                    "账单导出失败: day=$day states=${failure?.stateCounts.orEmpty()} " +
++                        "posted=${failure?.posted ?: 0} failed=1 " +
++                        "error=${failure?.kind ?: "unknown"} " +
++                        "elapsed_ms=${SystemClock.elapsedRealtime() - started}"
++                )
++                Result.failure()
++            },
++        )
++    }
++
++    companion object {
++        const val KEY_DAY_OFFSET = "day_offset"
++    }
++}
+diff --git a/app/src/main/java/net/ankio/auto/export/BillExporter.kt b/app/src/main/java/net/ankio/auto/export/BillExporter.kt
+new file mode 100644
+index 00000000..e8780f24
+--- /dev/null
++++ b/app/src/main/java/net/ankio/auto/export/BillExporter.kt
+@@ -0,0 +1,88 @@
++package net.ankio.auto.export
++
++import com.google.gson.Gson
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
++import net.ankio.auto.http.RequestsUtils
++import net.ankio.auto.http.api.BillAPI
++import net.ankio.auto.utils.PrefManager
++import okhttp3.MediaType.Companion.toMediaType
++import okhttp3.OkHttpClient
++import okhttp3.Request
++import okhttp3.RequestBody.Companion.toRequestBody
++import org.ezbook.server.constant.BillState
++import org.ezbook.server.db.model.BillInfoModel
++import org.ezbook.server.tools.runCatchingExceptCancel
++import java.time.LocalDate
++import java.time.ZoneId
++import java.util.concurrent.TimeUnit
++
++data class BillExportResult(val stateCounts: Map<String, Int>, val posted: Int) {
++    val pulled: Int get() = stateCounts.values.sum()
++}
++
++class BillExportFailure(
++    val kind: String,
++    val stateCounts: Map<String, Int>,
++    val posted: Int,
++    cause: Throwable,
++) : Exception(kind, cause)
++
++object BillExporter {
++    private val zone = ZoneId.of("Asia/Shanghai")
++    private val gson = Gson()
++    private val client = OkHttpClient.Builder()
++        .connectTimeout(15, TimeUnit.SECONDS)
++        .readTimeout(20, TimeUnit.SECONDS)
++        .writeTimeout(20, TimeUnit.SECONDS)
++        .build()
++    private val states = listOf(BillState.Synced, BillState.Edited, BillState.Wait2Edit)
++
++    suspend fun exportDay(day: LocalDate): Result<BillExportResult> = withContext(Dispatchers.IO) {
++        val counts = linkedMapOf<String, Int>()
++        var posted = 0
++        runCatchingExceptCancel {
++            check(PrefManager.billExportEnabled) { "disabled" }
++            val endpoint = PrefManager.billExportUrl.trim()
++            val token = PrefManager.billExportToken.trim()
++            check(endpoint.startsWith("https://")) { "endpoint_must_be_https" }
++            check(token.isNotEmpty()) { "token_missing" }
++
++            val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
++            val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
++
++            // Pull all three states before posting anything. An empty successful list is valid;
++            // any failed local call aborts the entire run and leaves NAS files untouched.
++            val bills = mutableListOf<BillInfoModel>()
++            for (state in states) {
++                val stateBills = BillAPI.exportList(state, start, end).getOrThrow()
++                counts[state.name] = stateBills.size
++                bills += stateBills
++            }
++
++            for (bill in bills) {
++                val request = Request.Builder()
++                    .url(endpoint)
++                    .header("Authorization", "Bearer $token")
++                    .header("Content-Type", "application/json; charset=utf-8")
++                    .post(gson.toJson(bill).toRequestBody("application/json; charset=utf-8".toMediaType()))
++                    .build()
++                client.newCall(request).execute().use { response ->
++                    check(response.isSuccessful) { "nas_http_${response.code}" }
++                }
++                posted++
++            }
++            BillExportResult(counts.toMap(), posted)
++        }.recoverCatching { error ->
++            throw BillExportFailure(shortError(error), counts.toMap(), posted, error)
++        }
++    }
++
++    private fun shortError(error: Throwable): String = when {
++        error.message in setOf("disabled", "endpoint_must_be_https", "token_missing") -> error.message!!
++        error.message?.startsWith("nas_http_") == true -> error.message!!
++        error is RequestsUtils.HttpException -> "local_http_${error.code}"
++        error is java.io.IOException -> "network_io"
++        else -> error.javaClass.simpleName.take(40)
++    }
++}
+diff --git a/app/src/main/java/net/ankio/auto/http/api/BillAPI.kt b/app/src/main/java/net/ankio/auto/http/api/BillAPI.kt
+index c5238dd4..d087473d 100644
+--- a/app/src/main/java/net/ankio/auto/http/api/BillAPI.kt
++++ b/app/src/main/java/net/ankio/auto/http/api/BillAPI.kt
+@@ -32,6 +32,18 @@ import org.ezbook.server.tools.runCatchingExceptCancel
+  * 所有方法都是挂起函数，需要在协程作用域内调用
+  */
+ object BillAPI {
++    /** Strict read-only export call; failures remain distinguishable from an empty result. */
++    suspend fun exportList(
++        state: BillState,
++        startTime: Long,
++        endTime: Long
++    ): Result<List<BillInfoModel>> = withContext(Dispatchers.IO) {
++        runCatchingExceptCancel {
++            val path = "bill/export/list?state=${state.name}&start=$startTime&end=$endTime"
++            LocalNetwork.get<List<BillInfoModel>>(path).getOrThrow().data ?: emptyList()
++        }
++    }
++
+     /**
+      * 添加或更新账单信息
+      * @param billInfoModel 账单信息模型
+@@ -243,4 +255,4 @@ object BillAPI {
+                 null
+             }
+         }
+-}
+\ No newline at end of file
++}
+diff --git a/app/src/main/java/net/ankio/auto/utils/PrefManager.kt b/app/src/main/java/net/ankio/auto/utils/PrefManager.kt
+index 04643377..951af681 100644
+--- a/app/src/main/java/net/ankio/auto/utils/PrefManager.kt
++++ b/app/src/main/java/net/ankio/auto/utils/PrefManager.kt
+@@ -892,6 +892,19 @@ object PrefManager {
+         get() = getBoolean("home_privacy_mode", false)
+         set(value) = putBoolean("home_privacy_mode", value)
+ 
++    /** Side-channel bill export is opt-in and keeps its credential on device. */
++    var billExportEnabled: Boolean
++        get() = getBoolean("bill_export_enabled", false)
++        set(value) = putBoolean("bill_export_enabled", value)
++
++    var billExportUrl: String
++        get() = getString("bill_export_url", "")
++        set(value) = putString("bill_export_url", value.trim())
++
++    var billExportToken: String
++        get() = getString("bill_export_token", "")
++        set(value) = putString("bill_export_token", value.trim())
++
+     /**
+      * 是否已通过应用内入口打开过帮助文档（与「关于 → 官网」同一地址）。
+      * 为 true 时首页不再弹出阅读文档提醒。
+@@ -899,4 +912,4 @@ object PrefManager {
+     var helpDocumentationOpened: Boolean
+         get() = getBoolean("help_documentation_opened", false)
+         set(value) = putBoolean("help_documentation_opened", value)
+-}
+\ No newline at end of file
++}
+diff --git a/server/src/main/java/org/ezbook/server/db/dao/BillInfoDao.kt b/server/src/main/java/org/ezbook/server/db/dao/BillInfoDao.kt
+index cced3d17..32161c77 100644
+--- a/server/src/main/java/org/ezbook/server/db/dao/BillInfoDao.kt
++++ b/server/src/main/java/org/ezbook/server/db/dao/BillInfoDao.kt
+@@ -83,6 +83,14 @@ interface BillInfoDao {
+         endTime: Long
+     ): List<BillInfoModel>
+ 
++    /** Read-only export query. It deliberately does not touch sync state. */
++    @Query("SELECT * FROM BillInfoModel WHERE groupId = -1 AND state = :state AND time >= :startTime AND time < :endTime ORDER BY time ASC, id ASC")
++    suspend fun exportByStateAndTimeRange(
++        state: BillState,
++        startTime: Long,
++        endTime: Long
++    ): List<BillInfoModel>
++
+     @Query("DELETE FROM BillInfoModel WHERE groupId = :groupId")
+     suspend fun deleteGroup(groupId: Long)
+ 
+@@ -545,4 +553,4 @@ interface BillInfoDao {
+         startTime: Long,
+         endTime: Long
+     ): List<CategoryStatsModel>
+-}
+\ No newline at end of file
++}
+diff --git a/server/src/main/java/org/ezbook/server/server/BillRoutes.kt b/server/src/main/java/org/ezbook/server/server/BillRoutes.kt
+index 7471efc2..81004871 100644
+--- a/server/src/main/java/org/ezbook/server/server/BillRoutes.kt
++++ b/server/src/main/java/org/ezbook/server/server/BillRoutes.kt
+@@ -30,6 +30,7 @@ import org.ezbook.server.models.OrderGroupDto
+ import org.ezbook.server.models.ResultModel
+ import org.ezbook.server.log.ServerLog
+ import org.ezbook.server.tools.StatisticsService
++import org.ezbook.server.tools.BillExportSignal
+ import org.ezbook.server.tools.roundAmount
+ import java.text.SimpleDateFormat
+ import java.util.Locale
+@@ -155,6 +156,7 @@ fun Route.billRoutes() {
+             } else {
+                 Db.get().billInfoDao().insert(bill)
+             }
++            BillExportSignal.notifyCommitted()
+             call.respond(ResultModel.ok(id))
+         }
+ 
+@@ -196,6 +198,24 @@ fun Route.billRoutes() {
+             call.respond(ResultModel.ok(result))
+         }
+ 
++        /**
++         * GET /bill/export/list - read-only side-channel export.
++         * Requires one concrete state and a [start,end) millisecond window.
++         */
++        get("/export/list") {
++            val state = call.request.queryParameters["state"]?.let {
++                runCatching { BillState.valueOf(it) }.getOrNull()
++            }
++            val start = call.request.queryParameters["start"]?.toLongOrNull()
++            val end = call.request.queryParameters["end"]?.toLongOrNull()
++            if (state == null || start == null || end == null || start >= end) {
++                call.respond(ResultModel.error(400, "state/start/end 参数无效"))
++                return@get
++            }
++            val result = Db.get().billInfoDao().exportByStateAndTimeRange(state, start, end)
++            call.respond(ResultModel.ok(result))
++        }
++
+         /**
+          * POST /bill/status - 更新账单同步状态
+          *
+@@ -210,6 +230,7 @@ fun Route.billRoutes() {
+             val status = json?.get("sync")?.asBoolean ?: false
+             val newState = if (status) BillState.Synced else BillState.Edited
+             Db.get().billInfoDao().updateStatus(id, newState)
++            BillExportSignal.notifyCommitted()
+             call.respond(ResultModel.ok(0))
+         }
+ 
+diff --git a/server/src/main/java/org/ezbook/server/tools/BillExportSignal.kt b/server/src/main/java/org/ezbook/server/tools/BillExportSignal.kt
+new file mode 100644
+index 00000000..d3283004
+--- /dev/null
++++ b/server/src/main/java/org/ezbook/server/tools/BillExportSignal.kt
+@@ -0,0 +1,18 @@
++package org.ezbook.server.tools
++
++/**
++ * Process-local post-commit signal. The server never performs external I/O;
++ * the Android app registers a listener that enqueues durable background work.
++ */
++object BillExportSignal {
++    @Volatile
++    private var listener: (() -> Unit)? = null
++
++    fun register(listener: (() -> Unit)?) {
++        this.listener = listener
++    }
++
++    fun notifyCommitted() {
++        listener?.invoke()
++    }
++}

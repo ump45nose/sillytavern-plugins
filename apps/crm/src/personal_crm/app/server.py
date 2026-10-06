@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from personal_crm.core import CrmService
+from personal_crm.daily_review import DailyReviewService
 from personal_crm.mcp import _runtime, http_app
 from personal_crm.reminders import ReminderService
 from personal_crm.storage import CrmRepository
@@ -19,7 +20,7 @@ from personal_crm.webhook import create_router
 from .settings import Settings
 
 
-def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
+def create_app(settings: Settings | None = None, repository=None, hub_store=None) -> FastAPI:
     """装配健康检查、Webhook 和 MCP；具体模块只依赖公开服务。"""
 
     runtime = settings or Settings()
@@ -27,24 +28,55 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
     service = CrmService(repo)
     reminder_service = ReminderService(repo)
     events, chat_reports = None, None
-    if runtime.chat_events_enabled:
+    daily_review_reports = {}
+    daily_reviews = DailyReviewService(
+        skylight_path=runtime.codex_skylight_path,
+        memos_database_path=runtime.memos_database_path,
+        memos_creator_id=runtime.memos_creator_id,
+    )
+    if hub_store is not None:
+        from personal_data_hub.mcp import ArchiveDailyReviews
+        daily_reviews = ArchiveDailyReviews(hub_store)
+    if runtime.chat_events_enabled or runtime.daily_review_events_enabled:
+        owners = []
+        if runtime.chat_events_enabled:
+            owners.append(runtime.chat_event_owner)
+        if runtime.daily_review_events_enabled:
+            owners.append(runtime.daily_review_event_owner)
         if (
             runtime.mcp_development_no_auth
-            or runtime.chat_event_owner not in runtime.authorized_usernames
+            or any(owner not in runtime.authorized_usernames for owner in owners)
         ):
-            raise ValueError("chat events require an explicitly authorized OAuth owner")
+            raise ValueError("events require an explicitly authorized OAuth owner")
         from mcp_platform.events import EventService
 
+        events = EventService(_runtime(runtime), storage_path=runtime.chat_event_storage_path)
+    if runtime.chat_events_enabled:
         from personal_crm.events import ChatEventProducer
 
-        events = EventService(_runtime(runtime), storage_path=runtime.chat_event_storage_path)
         chat_reports = ChatEventProducer(
             repo, events, owner=runtime.chat_event_owner,
             storage_path=runtime.chat_event_storage_path.rstrip("/") + "/chat-reports",
             timezone=runtime.chat_event_timezone, send_time=runtime.chat_event_time,
             poll_seconds=runtime.chat_event_poll_seconds,
         )
-    mcp_application = http_app(service, runtime, events=events, chat_reports=chat_reports)
+    if runtime.daily_review_events_enabled:
+        if not runtime.codex_skylight_path or not runtime.memos_database_path:
+            raise ValueError("daily review events require both read-only source paths")
+        from personal_crm.daily_review_events import DailyReviewEventProducer
+
+        for source in ("codex_skylight", "memos"):
+            daily_review_reports[source] = DailyReviewEventProducer(
+                daily_reviews, events, source=source, owner=runtime.daily_review_event_owner,
+                storage_path=runtime.daily_review_event_storage_path,
+                timezone=runtime.daily_review_event_timezone,
+                send_time=runtime.daily_review_event_time,
+                poll_seconds=runtime.daily_review_event_poll_seconds,
+            )
+    mcp_application = http_app(
+        service, runtime, events=events, chat_reports=chat_reports,
+        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store,
+    )
 
     async def run_reminder_scheduler() -> None:
         """定期补齐本周提醒；持久化周预算保证重复执行不会超额。"""
@@ -68,6 +100,9 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
                 tasks.append(asyncio.create_task(run_reminder_scheduler()))
             if chat_reports is not None:
                 tasks.append(asyncio.create_task(chat_reports.serve()))
+            for producer in daily_review_reports.values():
+                tasks.append(asyncio.create_task(producer.serve()))
+            if events is not None:
                 tasks.append(asyncio.create_task(events.serve()))
             try:
                 yield

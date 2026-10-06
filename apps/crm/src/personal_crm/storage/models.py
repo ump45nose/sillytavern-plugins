@@ -33,14 +33,14 @@ from personal_crm.core.domain import (
 class UTCDateTime(TypeDecorator[datetime]):
     """在 SQLite 中以无时区 UTC 保存，读取时恢复 UTC 时区。"""
 
-    impl = DateTime
+    impl = DateTime(timezone=True)
     cache_ok = True
 
     def process_bind_param(self, value: datetime | None, dialect: Any) -> datetime | None:
         """写库前统一时区，并去掉 SQLite 无法可靠保存的 tzinfo。"""
 
-        del dialect
-        return ensure_utc(value).replace(tzinfo=None) if value is not None else None
+        if value is None: return None
+        return ensure_utc(value).replace(tzinfo=None) if dialect.name == "sqlite" else ensure_utc(value)
 
     def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
         """读库后恢复明确的 UTC 时区。"""
@@ -58,10 +58,10 @@ class Person(Base):
 
     __tablename__ = "people"
     __table_args__ = (
-        CheckConstraint("json_valid(aliases)", name="ck_people_aliases_json"),
-        CheckConstraint("json_valid(contact_methods)", name="ck_people_contacts_json"),
-        CheckConstraint("json_valid(organizations)", name="ck_people_orgs_json"),
-        CheckConstraint("json_valid(tags)", name="ck_people_tags_json"),
+        CheckConstraint("json_valid(aliases)", name="ck_people_aliases_json").ddl_if(dialect="sqlite"),
+        CheckConstraint("json_valid(contact_methods)", name="ck_people_contacts_json").ddl_if(dialect="sqlite"),
+        CheckConstraint("json_valid(organizations)", name="ck_people_orgs_json").ddl_if(dialect="sqlite"),
+        CheckConstraint("json_valid(tags)", name="ck_people_tags_json").ddl_if(dialect="sqlite"),
         CheckConstraint("status IN ('active','paused','archived')", name="ck_people_status"),
         CheckConstraint(
             "contact_interval_days IS NULL OR contact_interval_days > 0",

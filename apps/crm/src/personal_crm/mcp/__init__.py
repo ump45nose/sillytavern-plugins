@@ -46,13 +46,17 @@ def _auth_check(settings: Any, *, write: bool):
     return authorize("write" if write else "read", _runtime(settings))
 
 
-def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
+def create_mcp(service: Any, settings: Any, *, chat_reports=None,
+               daily_reviews=None, daily_review_reports=None, hub_store=None) -> FastMCP:
     """创建完整 MCP 服务；本地无 OAuth 配置时便于离线测试。"""
 
     runtime = _runtime(settings)
     server = create_server(
         runtime,
-        instructions="可读取指定日期的微信聊天原文，不代发消息；修改工具会返回 before/after。",
+        instructions=("可读取指定日期的微信聊天原文，以及已同步 Codex Skylight 和 Memos 日报。"
+                      "Skylight、Memos 默认查询北京时间今天；长正文可续读。"
+                      "每日事件提供冻结快照的读取参数。不代发消息；"
+                      "仅采集归档与只读查询，不执行提醒或其他业务处理。"),
     )
     read_auth = _auth_check(settings, write=False)
     write_auth = _auth_check(settings, write=True)
@@ -69,36 +73,6 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
 
         return _row(service, service.get_person(person_id))
 
-    @server.tool(auth=write_auth)
-    def upsert_person(
-        display_name: str,
-        person_id: str | None = None,
-        aliases: list[str] | None = None,
-        pronouns: str | None = None,
-        contact_methods: dict[str, list[str]] | None = None,
-        status: str = "active",
-        relationship_to_me: str | None = None,
-        organizations: list[dict[str, Any]] | None = None,
-        tags: list[str] | None = None,
-        contact_interval_days: int | None = None,
-        profile_notes: str | None = None,
-    ) -> dict[str, Any]:
-        """创建或更新人物，并返回修改前后。"""
-
-        entity, before = service.upsert_person(
-            person_id=person_id,
-            display_name=display_name,
-            aliases=aliases,
-            pronouns=pronouns,
-            contact_methods=contact_methods,
-            status=status,
-            relationship_to_me=relationship_to_me,
-            organizations=organizations,
-            tags=tags,
-            contact_interval_days=contact_interval_days,
-            profile_notes=profile_notes,
-        )
-        return {"entity_id": entity.id, "before": before or None, "after": _row(service, entity)}
 
     @server.tool(auth=read_auth)
     def list_interactions(person_id: str | None = None, limit: int = 100):
@@ -138,38 +112,6 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
         summary = service.repo.daily_summary(start, end)
         return {"date": day, "timezone": timezone, **summary}
 
-    @server.tool(auth=write_auth)
-    def record_interaction(
-        person_id: str,
-        occurred_at: datetime,
-        direction: str,
-        summary: str,
-        interaction_type: str = "message",
-        channel: str = "manual",
-        source_type: str = "manual",
-        source_reference: str | None = None,
-        source_event_key: str | None = None,
-    ) -> dict[str, Any]:
-        """记录互动摘要，并返回幂等状态和自动完成提醒数。"""
-
-        entity, created, completed_count = service.record_interaction(
-            person_id=person_id,
-            occurred_at=occurred_at,
-            direction=direction,
-            summary=summary,
-            interaction_type=interaction_type,
-            channel=channel,
-            source_type=source_type,
-            source_reference=source_reference,
-            source_event_key=source_event_key,
-        )
-        return {
-            "entity_id": entity.id,
-            "before": None,
-            "after": _row(service, entity),
-            "created": created,
-            "completed_reminders": completed_count,
-        }
 
     @server.tool(auth=read_auth)
     def list_facts(person_id: str | None = None, limit: int = 100):
@@ -177,38 +119,7 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
 
         return [_row(service, item) for item in service.repo.list_facts(person_id, limit)]
 
-    @server.tool(auth=write_auth)
-    def add_fact(
-        person_id: str,
-        fact_type: str,
-        content: str,
-        observed_at: datetime | None = None,
-        confidence: float | None = None,
-        source_interaction_id: str | None = None,
-    ) -> dict[str, Any]:
-        """自动确认事实并保留来源。"""
 
-        entity, created = service.record_fact(
-            person_id=person_id,
-            fact_type=fact_type,
-            content=content,
-            observed_at=observed_at,
-            confidence=confidence,
-            source_interaction_id=source_interaction_id,
-        )
-        return {
-            "entity_id": entity.id,
-            "before": None,
-            "after": _row(service, entity),
-            "created": created,
-        }
-
-    @server.tool(auth=write_auth)
-    def update_fact_status(fact_id: str, status: str) -> dict[str, Any]:
-        """更新事实生命周期。"""
-
-        entity, before = service.update_fact_status(fact_id, status)
-        return {"entity_id": entity.id, "before": before, "after": _row(service, entity)}
 
     @server.tool(auth=read_auth)
     def list_reminders(person_id: str | None = None, status: str | None = None, limit: int = 100):
@@ -218,26 +129,6 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
             _row(service, item) for item in service.repo.list_reminders(person_id, status, limit)
         ]
 
-    @server.tool(auth=write_auth)
-    def create_reminder(
-        person_id: str,
-        due_at: datetime,
-        reason: str,
-        reminder_type: str = "follow_up",
-        suggested_message: str | None = None,
-        recurrence_rule: str | None = None,
-    ) -> dict[str, Any]:
-        """创建提醒。"""
-
-        entity = service.create_reminder(
-            person_id=person_id,
-            due_at=due_at,
-            reason=reason,
-            reminder_type=reminder_type,
-            suggested_message=suggested_message,
-            recurrence_rule=recurrence_rule,
-        )
-        return {"entity_id": entity.id, "before": None, "after": _row(service, entity)}
 
     def change_reminder(reminder_id: str, status: str, due_at: datetime | None = None):
         """执行提醒状态变化并返回前后快照。"""
@@ -245,23 +136,8 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
         entity, before = service.update_reminder_status(reminder_id, status, due_at=due_at)
         return {"entity_id": entity.id, "before": before, "after": _row(service, entity)}
 
-    @server.tool(auth=write_auth)
-    def complete_reminder(reminder_id: str):
-        """手工完成提醒。"""
 
-        return change_reminder(reminder_id, "completed")
 
-    @server.tool(auth=write_auth)
-    def snooze_reminder(reminder_id: str, due_at: datetime):
-        """把提醒推迟到新时间。"""
-
-        return change_reminder(reminder_id, "snoozed", due_at)
-
-    @server.tool(auth=write_auth)
-    def skip_reminder(reminder_id: str):
-        """跳过提醒并保留绩效记录。"""
-
-        return change_reminder(reminder_id, "skipped")
 
     @server.tool(auth=read_auth)
     def get_weekly_metrics(week_start: datetime | None = None):
@@ -289,13 +165,33 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None) -> FastMCP:
         from personal_crm.events import register_chat_event_tools
 
         register_chat_event_tools(server, chat_reports, auth=read_auth)
+    if daily_reviews is None:
+        from personal_crm.daily_review import DailyReviewService
+
+        daily_reviews = DailyReviewService(
+            skylight_path=settings.codex_skylight_path,
+            memos_database_path=settings.memos_database_path,
+            memos_creator_id=settings.memos_creator_id,
+        )
+    from personal_crm.daily_review import register_daily_review_tools
+
+    register_daily_review_tools(server, daily_reviews, auth=read_auth)
+    if daily_review_reports:
+        from personal_crm.daily_review_events import register_daily_review_event_tools
+
+        register_daily_review_event_tools(server, daily_review_reports, auth=read_auth)
+    if hub_store is not None:
+        from personal_data_hub.mcp import register_tools
+        register_tools(server, hub_store, read_auth)
     return server
 
 
-def http_app(service: Any, settings: Any, *, events=None, chat_reports=None):
+def http_app(service: Any, settings: Any, *, events=None, chat_reports=None,
+             daily_reviews=None, daily_review_reports=None, hub_store=None):
     """公共基座提供 HTTP、发现路由及经过同一认证的事件协议。"""
 
-    server = create_mcp(service, settings, chat_reports=chat_reports)
+    server = create_mcp(service, settings, chat_reports=chat_reports,
+                        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store)
     config = _runtime(settings)
     if events is not None:
         return create_http_app(server, config, events=events)

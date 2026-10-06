@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/ump45nose/AutoAccounting.git",
+  "revision": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
+  "official_upstream": "https://github.com/AutoAccountingOrg/AutoAccounting.git",
+  "patch": "hub-deletion-outbox.patch",
+  "installation_status": "requires_android_build_and_install"
+}

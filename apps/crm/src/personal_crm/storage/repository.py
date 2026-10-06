@@ -31,7 +31,7 @@ from .models import (
 class CrmRepository:
     """提供四张核心表的稳定访问接口，业务模块不得直接持有 Engine。"""
 
-    def __init__(self, url: str = "sqlite:///crm.db", *, create_schema: bool = True) -> None:
+    def __init__(self, url: str = "sqlite:///crm.db", *, create_schema: bool = True, hub_store=None) -> None:
         engine_options: dict[str, Any] = {"future": True}
         if url in {"sqlite://", "sqlite:///:memory:"}:
             # 内存库必须让所有 Session 复用同一个连接，否则测试会看到不同数据库。
@@ -40,6 +40,7 @@ class CrmRepository:
             )
         elif url.startswith("sqlite:"):
             engine_options["connect_args"] = {"check_same_thread": False, "timeout": 30}
+        self.hub_store = hub_store
         self.engine = create_engine(url, **engine_options)
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
         self._configure_sqlite(self.engine)
@@ -79,6 +80,10 @@ class CrmRepository:
                 if immediate and self.engine.dialect.name == "sqlite":
                     # 在去重查询之前取得写锁，防止两个客户端同时创建人物和事件。
                     session.execute(text("BEGIN IMMEDIATE"))
+                if immediate and self.engine.dialect.name == "postgresql":
+                    if self.hub_store is not None:
+                        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": self.hub_store.lock_id("source:crm")})
+                    session.execute(text("SELECT pg_advisory_xact_lock(214173812)"))
                 yield session
 
     @staticmethod
@@ -258,7 +263,7 @@ class CrmRepository:
             ):
                 # 较老的补录消息不能让 last_interaction_at 倒退。
                 person.last_interaction_at = interaction.occurred_at
-            completed = self._complete_eligible_reminders(session, interaction)
+            completed = None if self.hub_store is not None else self._complete_eligible_reminders(session, interaction)
             session.flush()
             return interaction, True, len(completed)
 
@@ -609,6 +614,8 @@ class CrmRepository:
     ) -> tuple[int, int]:
         """在单一事务内导入微信摘要和事实；任一错误都会整批回滚。"""
 
+        if self.hub_store is not None and facts:
+            raise ValueError("automatic facts disabled in collection mode")
         allowed_directions = {"inbound", "outbound", "mutual"}
         allowed_interaction_types = {"message", "call", "meeting", "manual_note", "other"}
         allowed_channels = {"wechat", "phone", "in_person", "email", "manual", "other"}
@@ -638,6 +645,9 @@ class CrmRepository:
             for item in interactions:
                 event_key = item["source_event_key"]
                 message_key = item.get("source_message_key")
+                if self.hub_store is not None and self.hub_store.crm_event_deleted(session.connection(), source, event_key, message_key):
+                    duplicates += 1
+                    continue
                 identity_predicate = Interaction.source_event_key == event_key
                 if message_key:
                     identity_predicate = or_(
@@ -690,7 +700,7 @@ class CrmRepository:
                     or interaction.occurred_at > person.last_interaction_at
                 ):
                     person.last_interaction_at = interaction.occurred_at
-                self._complete_eligible_reminders(session, interaction)
+                None if self.hub_store is not None else self._complete_eligible_reminders(session, interaction)
                 interaction_by_key[event_key] = interaction
                 accepted += 1
 
@@ -754,6 +764,17 @@ class CrmRepository:
                     client.synced_through = watermark
             client.accepted_total += accepted
             client.duplicate_total += duplicates
+            if self.hub_store is not None:
+                from personal_data_hub.contracts import Batch, Record, instant
+                session.flush()
+                archive = []
+                ids = {x.id for x in interaction_by_key.values()}
+                for model, condition in [(Interaction, Interaction.id.in_(ids)), (Person, Person.id.in_({x.person_id for x in interaction_by_key.values()})), (SyncClient, (SyncClient.source == source) & (SyncClient.client_id == client_id))]:
+                    for entity in session.scalars(select(model).where(condition)):
+                        raw = self.to_dict(entity)
+                        eid = model.__tablename__ + ":" + entity.id if model is not SyncClient else "client:" + __import__("personal_data_hub.contracts", fromlist=["digest"]).digest([source, client_id])
+                        archive.append(Record(eid, model.__tablename__, raw, {"table": model.__tablename__}, instant(raw.get("occurred_at", raw.get("created_at"))), instant(raw.get("updated_at"))))
+                self.hub_store.ingest("crm", Batch(records=archive), connection=session.connection())
         return accepted, duplicates
 
     def list_sync_clients(self) -> list[dict[str, Any]]:
@@ -778,8 +799,7 @@ class CrmRepository:
                 select(Person)
                 .where(
                     text(
-                        "EXISTS (SELECT 1 FROM json_each(people.contact_methods, '$.wxid') "
-                        "WHERE json_each.value = :wxid)"
+                        ("EXISTS (SELECT 1 FROM json_each(people.contact_methods, '$.wxid') WHERE json_each.value = :wxid)" if session.bind.dialect.name == "sqlite" else "EXISTS (SELECT 1 FROM jsonb_array_elements_text((people.contact_methods::jsonb)->'wxid') AS x(value) WHERE x.value = :wxid)")
                     )
                 )
                 .params(wxid=wxid)
@@ -811,7 +831,7 @@ class CrmRepository:
         """运行 SQLite 完整性检查。"""
 
         with self.engine.connect() as connection:
-            return str(connection.execute(text("PRAGMA integrity_check")).scalar_one())
+            return str(connection.execute(text("PRAGMA integrity_check" if self.engine.dialect.name == "sqlite" else "SELECT 'ok'")).scalar_one())
 
     @staticmethod
     def to_dict(entity: Any | None) -> dict[str, Any] | None:

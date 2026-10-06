@@ -1,0 +1,31 @@
+{
+  "personal-crm": {
+    "source": "/home/yuwk/code/personal-crm",
+    "commit": "505643d76ce4511d17dfcd766f057cf171c7e9b2",
+    "included_worktree_changes": true
+  },
+  "usage-monitor-mcp": {
+    "source": "/home/yuwk/code/usage-monitor-mcp",
+    "commit": "0ff2cef851ef58937ac29538fba280a5a48b2ce7",
+    "included_worktree_changes": false
+  },
+  "nas-cron-jobs": {
+    "source": "/home/yuwk/code/nas-cron-jobs",
+    "commit": "e9718d2eaf6098afcbb275ea9ac5519749a935b4",
+    "included_worktree_changes": true
+  },
+  "hermes-cron-reports": {
+    "source": "/home/yuwk/code/hermes-cron-reports",
+    "commit": "924c636d6c05d6200bd9e3c4b61bc5328c3bdf0d",
+    "included_worktree_changes": false
+  },
+  "AutoAccounting": {
+    "source": "/home/yuwk/code/AutoAccounting",
+    "commit": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
+    "included_worktree_changes": false
+  },
+  "skysight": {
+    "source": "/Users/yuwk/Library/Application Support/PersonalReview",
+    "runtime": "ChatGPT bundled Node via existing Python wrapper"
+  }
+}

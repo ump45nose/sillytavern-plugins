@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     chat_event_timezone: str = "Asia/Taipei"
     chat_event_time: str = "23:00"
     chat_event_poll_seconds: int = 60
+    # 既有源仅只读挂载；Memos 使用 0.30 的 SQLite 结构及标题业务日期。
+    codex_skylight_path: str = ""
+    memos_database_path: str = ""
+    memos_creator_id: int = 1
+    daily_review_events_enabled: bool = False
+    daily_review_event_owner: str = ""
+    daily_review_event_storage_path: str = "/data/events/daily-reviews"
+    daily_review_event_timezone: str = "Asia/Shanghai"
+    daily_review_event_time: str = "23:00"
+    daily_review_event_poll_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 

@@ -66,7 +66,7 @@ uv run personal-crm backup /safe/path/personal-crm.db
 
 ## 插件展示与场景说明
 
-本仓库同时维护 **Personal CRM** 的名称、场景描述和图标。插件包位于仓库根目录，接入和维护说明见 [插件说明](docs/plugin.md)，图标来源见 [图标来源](assets/plugin/SOURCES.md)。
+插件展示名称为 **CRM**，采用紫色关系网络图标 C；短描述与原开场提示保留。正式展示资料由 `mcp.app.yaml` 维护并同步根清单与兼容清单，已在原[私有插件](https://chatgpt.com/plugins/Plugin_df394834724481919c995db086c56b42)发布 `1.1.2`，沿用原 App 身份。接入和维护说明见 [插件说明](docs/plugin.md)，图标来源见 [图标来源](assets/plugin/SOURCES.md)。网页图标与已有连接仍需实机核对。
 
 
 ## MCP 公共基座部署
@@ -95,3 +95,20 @@ sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target 
 本地离线开发必须显式设置 `MCP_DEVELOPMENT_NO_AUTH=true` 并监听 `127.0.0.1`；生产凭据缺失时拒绝启动，不自动降级为匿名服务。
 
 MCP 保留线上已有 `get_daily_chat_records`，支持按日期分页读取已同步微信聊天原文，不代发消息。公共基座的新增限流、超时及输出限制在本次 CRM 迁移中关闭，保留原成功返回结构。
+
+## Codex Skylight 与 Memos 日报
+
+新增只读工具 `get_daily_codex_skylight` 和 `get_daily_memos_report`，`day` 均可省略，
+默认取 `Asia/Shanghai` 的今天，也支持 `YYYY-MM-DD` 历史查询。Skylight 读取现有
+Skysight 同步摘要，优先 6 小时摘要并用 10 分钟摘要补空档；`summary_type=all` 可读全部文件。
+Memos 按 `#日报 YYYY-MM-DD` 标题筛选指定作者的正常日报，补写日期不会改变业务日期。
+正文保留原样，长正文通过 `get_daily_review_content` 续读；当天无记录返回 `empty_day=true`，
+源未配置、不可读或损坏则明确报错。
+
+生产清单只读挂载已有摘要目录和 Memos 0.30 数据目录（包含 WAL/SHM），不改动源数据。
+清单启用每日北京时间 **23:00** 的 `crm.daily_codex_skylight.ready` 与
+`crm.daily_memos_report.ready`，沿用现有 `/mcp` 的 `events/list`、`events/subscribe` 和
+签名 Webhook 投递。订阅只对配置的 OAuth 所有者开放；事件提供当日不可变快照的读取参数，
+正文由 `get_daily_review_event_report` / `get_daily_review_event_content` 受保护读取。
+发布失败会重试同一快照，重启不重复生产已经完成的业务日，停机后按原业务日期补发。
+使用与配置示例见 [使用说明](docs/usage.md) 与 [部署说明](docs/deployment.md)。

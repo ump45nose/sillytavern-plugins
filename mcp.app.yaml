@@ -1,0 +1,72 @@
+schema_version: 1
+id: personal-crm
+name: Personal CRM
+command:
+- personal-data-hub
+public_url: https://crm-home.172906573.xyz
+port: 8080
+host_port: 18086
+bind_address: 192.168.31.201
+compose_project: personal-crm
+compose_service: crm
+volumes:
+- name: personal-crm_crm-data
+  mount: /data
+  external: true
+- name: personal-data-hub-assets
+  mount: /hub-assets
+  external: true
+bind_mounts:
+- source: /home/yuwk/.config/personal-data-hub/container
+  mount: /run/hub
+  read_only: true
+environment:
+  HOST: 0.0.0.0
+  PORT: '8080'
+  OAUTH_STORAGE_PATH: /data/oauth
+  MCP_DEVELOPMENT_NO_AUTH: 'false'
+  DAILY_REVIEW_EVENTS_ENABLED: 'false'
+  HUB_CONFIG: /run/hub/config.json
+  REMINDER_SCHEDULER_ENABLED: 'false'
+  CHAT_EVENTS_ENABLED: 'false'
+required_env:
+- DATABASE_URL
+- WECHAT_WEBHOOK_SECRET
+- OIDC_CLIENT_SECRET
+- OAUTH_JWT_SIGNING_KEY
+- OAUTH_STORAGE_ENCRYPTION_KEY
+- OIDC_AUTHORIZED_USERNAMES
+auth:
+  client_id: personal-crm
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+backup_command:
+- hub
+- backup
+- --destination
+- '{backup_path}'
+integrity_command:
+- hub
+- status
+plugin:
+  name: personal-crm
+  version: 1.1.2
+  description: 统一读取个人信息采集归档：联系人和微信互动、Codex Computer History、录音、财务、健康、Hermes 执行报告、日历、任务、邮件、Git、Memos、Mem0
+    和用量数据。仅采集、聚合与查询。
+  display_name: CRM
+  app_id: asdk_app_6ac28369423081918d34fa531d15a62d
+  app_binding: dev-6ac28369423081918d34fa531d15a62d
+  logo: apps/crm/assets/plugin/logo-c.png
+  keywords:
+  - CRM
+  - 联系人
+  - 关系管理
+  - 微信摘要
+  - HR
+  - 猎头
+  - 跟进
+  - 提醒
+  short_description: 查询统一归档的个人信息与采集状态
+  brand_color: '#5953C8'
+external_networks:
+- data_net
+deployment_mode: existing

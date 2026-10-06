@@ -1,0 +1,57 @@
+# 部署与维护
+
+## 当前 NAS 入口
+
+| 入口 | 管理方式 | 持久化 |
+| --- | --- | --- |
+| 统一 API / CRM MCP | 原 `personal-crm` Compose 项目、`crm` 服务、18086 端口及公网 CRM URL | 原 OAuth 卷、统一 PostgreSQL、统一文件卷 |
+| Health / AutoAccounting | 原 `health-webhook.service`，保留 8765 端口，使用 `90-personal-data-hub.conf` drop-in | 直接写统一 PostgreSQL |
+| 周期采集 | `personal-data-hub-collectors.service` | 统一运行记录、提交水位和附件 |
+| ShellCrash 原始计量 | 原 `shellcrash-traffic-collector.service` | 原流量 SQLite；同一生产者 |
+| 独立用量 MCP | 原 `usage-monitor-mcp` 服务 | 原用量数据、OAuth 和配置 |
+
+已复用现有 PostgreSQL、网络、Cloudflare 路由、Authelia 和持久卷。没有另建 PostgreSQL 或身份体系。主仓库的 `mcp.app.yaml` 是原 CRM 身份的当前部署清单；独立用量 MCP 的清单仍在 `apps/usage-monitor/`。
+
+私有配置目录为 `/home/yuwk/.config/personal-data-hub`，容器只读配置位于其 `container/` 子目录。`personal-data-hub-assets` 是 `/vol1/1000/personal-data-hub/assets` 的绑定命名卷。生产密码和凭据不放入 Git，不在构建上下文中传递。
+
+宿主采集器以原用户运行。Google 的既有凭据由隔离只读导出进程读取，只返回采集结果；未放宽原凭据目录权限。Plaud 官方 MCP 在专用 Python 环境运行，自有采集入口为 `agents/nas/plaud-sync.py`。邮件适配只调用现有邮件服务容器的只读函数，保留原授权、筛选和附件政策，不修改未读状态。
+
+## 更新
+
+```bash
+uv sync --python 3.12 --no-dev
+HUB_IMAGE=local/personal-data-hub:0.1.0-stage1 ./deployment/build-image.sh
+.venv/bin/mcpctl plan personal-crm --source /home/yuwk/code/personal-data-hub --target nas
+.venv/bin/mcpctl deploy personal-crm --source /home/yuwk/code/personal-data-hub --target nas
+sudo systemctl restart personal-data-hub-collectors.service health-webhook.service
+```
+
+构建复用已锁定的公共 MCP 基础镜像，只安装自有 wheel 与 PostgreSQL 驱动。Docker 命令需当前操作账户已有的权限；若使用 sudo，需保留 `uv` 所在 PATH。既有部署模式复用当前镜像，因此首次切换镜像应先在原 Compose 项目更新 `crm` 服务，再由 `mcpctl` 记录和校验部署，保留其他服务。
+
+观察采集：`hub status`、`systemctl status personal-data-hub-collectors.service`。运行日志只记录来源、数量和错误类别，避免输出消息正文、邮件内容及凭据。`partial` 表示存在已归档的历史异常片段，不代表所有来源失败。
+
+## Mac 同步 Agent
+
+在 Mac 克隆同一仓库至 `/Users/yuwk/WorkSpace/Code/github/personal-data-hub` 后运行：
+
+```bash
+/usr/bin/python3 /Users/yuwk/WorkSpace/Code/github/personal-data-hub/agents/mac/install.py
+```
+
+安装器复用 `com.yuwk.personal-review-skysight` 和 `com.personal-crm.wechat`。保留原 Python / ChatGPT Node 授权路径、设备身份、白名单和检查点；Skysight 间隔调整为 900 秒。执行副本继续放在原 Application Support 路径，来源和更新由本仓库管理。微信 `.env` 迁到 Application Support，保留原虚拟环境解释器，代码改为读取本仓库的 `apps/crm/src`。
+
+Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。第二阶段才开发统一客户端与信息查看界面。
+
+## AutoAccounting
+
+上游锁定在 `integrations/autoaccounting/upstream.lock.json` 指定提交，自有 `export/` 代码和 `hub-deletion-outbox.patch` 在本仓库管理。对该固定提交应用补丁后构建 APK。Android 导出器先持久化已尝试导出的账单 ID，再向 NAS 推送；只有本地成功读取为空才生成删除事件，NAS 成功回执后才清空 outbox。
+
+既有安装首次升级前导出的 ID 不在新增 outbox 内；这些账单需重新导出或回填已知 ID 后才能进行源端删除跟踪。未安装新 APK 前，旧账单推送兼容，但不会主动发出新的删除事件。
+
+## 备份与回退
+
+`hub backup --destination PATH` 生成包含归档表、版本、墓碑、水位和 CRM 兼容表的事务一致 JSONL；文件目录另行备份。生产 PostgreSQL 同时沿用现有运维备份，不以 SQLite 替代。
+
+迁移前的原 Compose、环境文件、镜像信息、旧 ShellCrash 入口以及已暂停 Hermes 作业清单保存在私有 `rollback/`。旧数据卷和源码目录未删除。回退恢复原服务时应先停止统一采集和新推送入口；切换后产生的 PostgreSQL 数据需另行处理，旧 SQLite 不是新数据的同步副本。不可丢弃墓碑后直接重放旧备份。
+
+12 个旧个人复盘、邮件处理及 Plaud 转录作业已通过 Hermes 官方 CLI 暂停；其他作业保留。`legacy/` 不注册自动任务，避免迁移后出现两个生产者。

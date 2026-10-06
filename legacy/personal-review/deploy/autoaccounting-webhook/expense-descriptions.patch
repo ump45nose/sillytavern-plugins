@@ -1,0 +1,52 @@
+diff --git a/autoaccounting_store.py b/autoaccounting_store.py
+--- a/autoaccounting_store.py
++++ b/autoaccounting_store.py
+@@ -193,8 +193,7 @@ class BillStore:
+         state_counts = {"Synced": 0, "Edited": 0, "New": 0}
+         currencies: dict[str, dict[str, Any]] = {}
+         excluded: dict[str, dict[str, Any]] = {}
+-        expense_descriptions: list[str] = []
+-        expense_record_count = 0
++        expense_totals: dict[tuple[str, str], Decimal] = {}
+         for record in records.values():
+             state = "New" if record["state"] == "Wait2Edit" else record["state"]
+             state_counts[state] += 1
+@@ -225,11 +224,10 @@ class BillStore:
+                 bucket["income_money"] += money
+             elif bill_type == "Expend":
+                 bucket["expense_gross_money"] += money
+-                expense_record_count += 1
+                 description = _expense_description(record)
+-                # 同类描述只展示一次，但遗漏数仍按真实消费笔数计算。
+-                if description not in expense_descriptions and len(expense_descriptions) < MAX_EXPENSE_DESCRIPTIONS:
+-                    expense_descriptions.append(description)
++                # 同币种同用途合并，日报只需要“买了什么、花多少钱”。
++                expense_key = (description, code)
++                expense_totals[expense_key] = expense_totals.get(expense_key, Decimal(0)) + money
+             elif bill_type == "IncomeRefund":
+                 bucket["refund_money"] += money
+ 
+@@ -257,7 +255,7 @@ class BillStore:
+         bill_path = self.bills_dir / f"{day}.jsonl"
+         source_bytes = bill_path.read_bytes()
+         summary = {
+-            "schema_version": 1,
++            "schema_version": 2,
+             "date": day,
+             "timezone": "Asia/Shanghai",
+             "generated_at": datetime.now(tz=ZONE).isoformat(),
+@@ -265,10 +263,10 @@ class BillStore:
+             "state_counts": state_counts,
+             "currencies": normalized,
+             "excluded": normalized_excluded,
+-            "expense_descriptions": {
+-                "items": expense_descriptions,
+-                "omitted_count": max(0, expense_record_count - len(expense_descriptions)),
+-            },
++            "expense_items": [
++                {"label": label, "amount": _money(amount), "currency": currency}
++                for (label, currency), amount in sorted(expense_totals.items())[:MAX_EXPENSE_DESCRIPTIONS]
++            ],
+             "source_jsonl_sha256": hashlib.sha256(source_bytes).hexdigest(),
+         }
+         self._atomic_json(self.summary_dir / f"{day}.json", summary)

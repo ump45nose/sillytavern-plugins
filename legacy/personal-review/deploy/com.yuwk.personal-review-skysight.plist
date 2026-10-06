@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.yuwk.personal-review-skysight</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/yuwk/Library/Application Support/PersonalReview/sync_skysight.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>21</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <!-- 登录或重启后立即补跑一次，避免错过固定 21:00 后整日摘要断档。同步脚本自身负责幂等。 -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/yuwk/Library/Logs/PersonalReview/skysight-sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/yuwk/Library/Logs/PersonalReview/skysight-sync.error.log</string>
+</dict>
+</plist>
