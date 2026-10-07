@@ -21,6 +21,11 @@ for name in ["run-skysight.py", "sync-skysight.mjs"]:
     shutil.copy2(skysight / name, old)
     old.chmod(0o700)
 uid = str(os.getuid())
+managed_python = repo / "apps/crm/.venv/bin/python"
+if not managed_python.exists():
+    raise RuntimeError("先安装 apps/crm 的 Python 环境")
+subprocess.run([shutil.which("uv") or "uv", "pip", "install", "--python", str(managed_python),
+                "-r", str(repo / "agents/mac/wechat-media-requirements.txt")], check=True)
 for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
     path = agents / (name + ".plist")
     if not (backup / path.name).exists(): shutil.copy2(path, backup / path.name)
@@ -43,6 +48,8 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
         data.setdefault("EnvironmentVariables", {})["PYTHONPATH"] = str(repo / "apps/crm/src")
         data["EnvironmentVariables"]["WECHAT_FACT_EXTRACTION"] = "false"
         data["EnvironmentVariables"].setdefault("CHATLOG_SCOPE_MODE", "all")
+        data["EnvironmentVariables"]["WECHAT_MEDIA_ENABLED"] = "true"
+        data["EnvironmentVariables"].setdefault("WECHAT_MEDIA_QUEUE", str(home / "Library/Application Support/personal-crm/wechat/media-queue.json"))
         # 旧凭据迁出旧仓库；checkpoint/client-id/白名单继续用原路径。
         old_env = Path(data["EnvironmentVariables"]["CRM_ENV_FILE"])
         new_env = home / "Library/Application Support/personal-crm/connector.env"

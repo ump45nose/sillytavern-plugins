@@ -44,6 +44,8 @@ Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档�
 
 2026-10-07 微信采集默认改为全部单聊和群聊，原始消息 JSON 与正文直接归档，Fact 抽取关闭。生产镜像为 `local/personal-data-hub:wechat-faithful-2ba5c0e`，Mac 查看端为 0.3.0 build 7；历史回填、保留的旧记录和媒体文件限制见 [微信采集验收](wechat-faithful-validation.md)。
 
+后续媒体采集的 Mac 依赖在 `agents/mac/wechat-media-requirements.txt` 锁定上游提交，安装器先安装到原 CRM Python 环境，再设置 `WECHAT_MEDIA_ENABLED=true` 和仓库外的 `WECHAT_MEDIA_QUEUE`。只复用既有数据库缓存 key，图片保存原始加密 `.dat`，不提取图片密钥。NAS 需先部署支持微信媒体 PUT 的服务端；升级后重启周期采集器，使正文对账保留附件。保留媒体队列和 spool、正文 checkpoint、设备身份、原 webhook token 与全部持久卷。
+
 ## Mac 客户端
 
 `python3 apps/mac-client/install.py` 在 Mac 构建并安装到 `~/Applications/Personal Data Hub.app`，保留前一版本。客户端的 Keychain 凭据和 Application Support 连接设置位于仓库外；打开应用后可从菜单栏查看归档与请求同步，现有 Agent 的安装和更新仍由 `agents/mac/install.py` 管理。

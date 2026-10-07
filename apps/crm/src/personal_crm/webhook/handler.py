@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
+import os
+import re
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 
 class WebhookInteraction(BaseModel):
@@ -112,6 +118,48 @@ def create_router(repository, secret: str) -> APIRouter:
             "duplicates": duplicates,
             "errors": [],
         }
+
+    @api.put("/api/v1/webhooks/wechat/media/{event_key}")
+    async def media(
+        event_key: str, request: Request,
+        name: str = Query(min_length=1, max_length=255),
+        message_key: str | None = Query(default=None, pattern=r"^[a-f0-9]{64}$"),
+        x_webhook_token: str | None = Header(default=None),
+        x_content_sha256: str = Header(default=""),
+    ):
+        """复用微信出站令牌，流式上传并绑定既有微信消息。"""
+        authenticate(x_webhook_token)
+        if repository.hub_store is None:
+            raise HTTPException(503, "media_archive_unavailable")
+        if not re.fullmatch(r"[a-f0-9]{64}", event_key) or not re.fullmatch(r"[a-f0-9]{64}", x_content_sha256):
+            raise HTTPException(422, "invalid_media_identity")
+        name = name.replace("\\", "/").rsplit("/", 1)[-1]
+        if not name or "\x00" in name or name in {".", ".."}:
+            raise HTTPException(422, "invalid_media_name")
+        media_type = request.headers.get("Content-Type", "application/octet-stream")
+        if not re.fullmatch(r"[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+", media_type):
+            raise HTTPException(422, "invalid_media_type")
+        from personal_data_hub.contracts import Asset
+        fd, filename = tempfile.mkstemp(prefix=".wechat-upload-", dir=repository.hub_store.root)
+        path = Path(filename)
+        try:
+            digest = hashlib.sha256(); size = 0
+            with os.fdopen(fd, "wb") as output:
+                async for block in request.stream():
+                    size += len(block)
+                    if size > 8 * 1024 ** 3:
+                        raise HTTPException(413, "media_too_large")
+                    digest.update(block); output.write(block)
+                output.flush(); os.fsync(output.fileno())
+            if not size or not hmac.compare_digest(digest.hexdigest(), x_content_sha256):
+                raise HTTPException(422, "media_hash_mismatch")
+            try:
+                result = await run_in_threadpool(repository.attach_wechat_media, event_key, message_key, Asset(name, path=path, media_type=media_type))
+            except ValueError:
+                raise HTTPException(422, "media_binding_failed") from None
+            return JSONResponse(status_code=404 if result["status"] == "pending" else 200, content=result)
+        finally:
+            path.unlink(missing_ok=True)
 
     return api
 

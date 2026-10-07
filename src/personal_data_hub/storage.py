@@ -4,14 +4,12 @@ import contextlib
 import fcntl
 import hashlib
 import os
-import shutil
 import tempfile
 from pathlib import Path
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
-from sqlalchemy.dialects.postgresql import JSONB
 
-from .contracts import Asset, Batch, Record, canonical, digest, utcnow
+from .contracts import Asset, Batch, digest, utcnow
 
 metadata = MetaData()
 # 原始 UI/AX 事件可能带 NUL；PostgreSQL JSONB 拒绝它，JSON 能原样归档转义值。
@@ -174,10 +172,16 @@ class Store:
                     if c.scalar(select(tombstones.c.record_id).where(tombstones.c.record_id == rid)):
                         ignored += 1
                         continue  # 旧备份/离线重放不能复活已删除内容。
+                    old = c.execute(select(records).where(records.c.id == rid)).mappings().first()
                     attachments = [self.put_asset(a) for a in item.assets]
+                    if source == "crm" and item.kind == "interactions" and old:
+                        # 正文镜像和周期采集不撤销独立补齐的微信媒体。
+                        retained = {a["id"]: a for a in old["assets"]}
+                        for attachment in attachments:
+                            retained.setdefault(attachment["id"], attachment)
+                        attachments = list(retained.values())
                     body = dict(raw=item.raw, normalized=item.normalized, assets=attachments, occurred_at=item.occurred_at.isoformat() if item.occurred_at else None, updated_at=item.updated_at.isoformat() if item.updated_at else None, kind=item.kind, timezone=item.timezone)
                     key = digest(body)
-                    old = c.execute(select(records).where(records.c.id == rid)).mappings().first()
                     now = utcnow()
                     if old and old["hash"] == key:
                         c.execute(update(records).where(records.c.id == rid).values(observed_at=now))

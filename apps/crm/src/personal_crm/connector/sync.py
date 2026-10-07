@@ -132,6 +132,14 @@ class WeChatConnector:
         """同步一次；读取或写入失败时均不推进本地 checkpoint。"""
 
         state = load(self.config.checkpoint_path)
+        media_queue = None
+        if self.config.media_enabled and not dry_run:
+            from .media import MediaQueue
+            media_queue = MediaQueue(self.config)
+            try:
+                media_queue.initialize()
+            except Exception:
+                return SyncResult("", [], [], False, ["media_queue_unavailable"])
         try:
             source_batch = self._get(state)
             events = source_batch.events
@@ -141,6 +149,7 @@ class WeChatConnector:
             return SyncResult("", [], [], False, [f"welink: {type(error).__name__}"])
 
         interactions: list[dict[str, Any]] = []
+        media_items: list[dict[str, Any]] = []
         facts: list[dict[str, Any]] = []
         known_keys = set(state.get("keys", []))
         known_message_keys = set(state.get("message_keys", []))
@@ -179,6 +188,10 @@ class WeChatConnector:
                     **({"message": event["message"]} if "message" in event else {}),
                 }
             )
+            if media_queue and "message" in event:
+                media_items.append(dict(interactions[-1], message=dict(
+                    event["message"], _media_account_id=event.get("_media_account_id"),
+                )))
             if message_key:
                 # 升级后的首轮允许重放旧事件来补齐服务端稳定身份；确认后在本机记忆。
                 batch_message_keys.add(message_key)
@@ -209,6 +222,13 @@ class WeChatConnector:
             return SyncResult(batch_id, interactions, facts, False, [])
         if not self.config.webhook_url:
             return SyncResult(batch_id, interactions, facts, False, ["未配置 CRM_WEBHOOK_URL"])
+
+        # 入队失败时不能推进正文水位；上传失败由独立队列重试。
+        if media_queue:
+            try:
+                media_queue.enqueue(media_items)
+            except Exception:
+                return SyncResult(batch_id, interactions, facts, False, ["media_queue_unavailable"])
 
         # 中间分片可以幂等重放；只有最后一片成功才推进服务端和本机水位。
         part_count = max(1, (max(len(interactions), len(facts)) + 499) // 500)

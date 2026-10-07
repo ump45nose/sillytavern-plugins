@@ -207,6 +207,7 @@ class ChatlogMessageSource:
             facts = []
         return {
             "id": event_id,
+            "_media_account_id": scope["account_id"],
             "source_message_key": message_key,
             "contact": scope["person_name"],
             "wxid": scope["requested_id"],

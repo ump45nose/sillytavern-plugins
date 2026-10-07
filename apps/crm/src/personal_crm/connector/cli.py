@@ -3,7 +3,10 @@
 import argparse
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+
+import httpx
 
 from .checkpoint import load
 from .config import ConnectorConfig, as_datetime
@@ -34,13 +37,34 @@ def main(argv=None):
     args = parser.parse_args(argv)
     config = ConnectorConfig.from_env()
     connector = WeChatConnector(config)
-    while True:
-        result = connector.sync_once(args.dry_run)
-        # 所有命令均只输出批次统计；正文只进入鉴权后的归档请求。
-        print(json.dumps(_output(result, True), ensure_ascii=False, indent=2), flush=True)
-        if not args.watch or args.dry_run:
-            return 0 if not result.errors else 1
-        # 成功窗口（包括已确认的空窗口）快速追赶历史；失败时恢复常规轮询。
-        watermark = as_datetime(load(config.checkpoint_path).get("last_synced_at"))
-        behind = watermark is not None and (datetime.now(UTC) - watermark).total_seconds() > config.chatlog_overlap_seconds + 60
-        time.sleep(min(config.poll_seconds, 1.0) if result.sent and behind else config.poll_seconds)
+    def media_run():
+        from .media import MediaQueue
+        with httpx.Client(timeout=max(config.timeout, 300)) as client:
+            return MediaQueue(config).run_once(client)
+
+    # 原文件读取/上传可能慢于文字轮询；仅允许一个媒体 worker。
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = None
+        while True:
+            result = connector.sync_once(args.dry_run)
+            print(json.dumps(_output(result, True), ensure_ascii=False, indent=2), flush=True)
+            if config.media_enabled and not args.dry_run:
+                if future is not None and future.done():
+                    try:
+                        media_status = future.result()
+                    except Exception:
+                        media_status = {"error": "media_worker_failed"}
+                    print(json.dumps({"media": media_status}), flush=True)
+                    future = None
+                if future is None:
+                    future = executor.submit(media_run)
+            if not args.watch or args.dry_run:
+                if future is not None:
+                    try:
+                        print(json.dumps({"media": future.result()}), flush=True)
+                    except Exception:
+                        print('{"media":{"error":"media_worker_failed"}}', flush=True)
+                return 0 if not result.errors else 1
+            watermark = as_datetime(load(config.checkpoint_path).get("last_synced_at"))
+            behind = watermark is not None and (datetime.now(UTC) - watermark).total_seconds() > config.chatlog_overlap_seconds + 60
+            time.sleep(min(config.poll_seconds, 1.0) if result.sent and behind else config.poll_seconds)

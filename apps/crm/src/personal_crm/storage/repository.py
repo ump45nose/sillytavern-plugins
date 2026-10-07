@@ -797,6 +797,40 @@ class CrmRepository:
                 self.hub_store.ingest("crm", Batch(records=archive), connection=session.connection())
         return accepted, duplicates
 
+    def attach_wechat_media(self, event_key: str, message_key: str | None, asset) -> dict:
+        """在已归档消息上补齐附件；正文、水位和删除状态保持原样。"""
+        if self.hub_store is None:
+            raise ValueError("media archive unavailable")
+        from personal_data_hub.contracts import Batch, Record
+        from personal_data_hub.storage import records
+
+        with self.transaction(immediate=True) as session:
+            connection = session.connection()
+            if self.hub_store.crm_event_deleted(connection, "chatlog", event_key, message_key):
+                return {"status": "deleted"}
+            identity = Interaction.source_event_key == event_key
+            if message_key:
+                identity = or_(identity, Interaction.source_message_key == message_key)
+            interaction = session.scalar(select(Interaction).where(
+                Interaction.source_type == "chatlog", Interaction.channel == "wechat",
+                Interaction.message.is_not(None), identity,
+            ))
+            if interaction is None:
+                return {"status": "pending"}
+            if message_key and interaction.source_message_key != message_key:
+                raise ValueError("conflicting message identity")
+            external_id = "interactions:" + interaction.id
+            row = connection.execute(select(records).where(
+                records.c.id == self.hub_store.identity("crm", external_id),
+            )).mappings().first()
+            if row is None:
+                return {"status": "pending"}
+            self.hub_store.ingest("crm", Batch(records=[Record(
+                external_id, "interactions", row["raw"], row["normalized"],
+                row["occurred_at"], row["updated_at"], row["timezone"], [asset],
+            )]), connection=connection)
+            return {"status": "attached"}
+
     def list_sync_clients(self) -> list[dict[str, Any]]:
         """返回各连接器的最近成功状态，不包含账号标识、密钥或消息内容。"""
 
