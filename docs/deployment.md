@@ -48,7 +48,7 @@ Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档�
 
 ## Mac 客户端
 
-`python3 apps/mac-client/install.py` 在已有采集配置的 Mac 构建并安装统一应用 0.3.1 build 8 到 `~/Applications/Personal Data Hub.app`，保留前一版为 `Personal Data Hub.previous.app`，注册登录启动并迁移两个原采集任务。`dist/Personal Data Hub.zip` 是同一签名应用的本机更新包。签名资源包含微信 Python 3.12、依赖、采集代码、固定原生读取器及 Skysight 脚本；私有凭据、数据库、附件、正文水位和媒体队列均不入包。
+`python3 apps/mac-client/install.py` 在已有采集配置的 Mac 构建并安装统一应用 0.3.1 build 9 到 `~/Applications/Personal Data Hub.app`，保留前一版为 `Personal Data Hub.previous.app`，注册登录启动并迁移两个原采集任务。`dist/Personal Data Hub.zip` 是同一签名应用的本机更新包。签名资源包含微信 Python 3.12、依赖、采集代码、固定原生读取器及 Skysight 脚本；私有凭据、数据库、附件、正文水位和媒体队列均不入包。
 
 组件安装前校验签名、哈希及迁移后解释器的 imports，并通过临时 launchd 任务验证真实后台权限链能读取微信目录；验证失败时两个原任务继续运行。运行副本放在 `~/Library/Application Support/PersonalDataHub/Agents/versions/<SHA256>/`。保留原两个 launchd label、设备身份、水位、未来媒体 cutoff 和钥匙串访问助手。微信使用原获准 Python 的真实路径运行简单启动脚本，再启动包内 Python，电脑活动继续使用已授权的 Python / ChatGPT Node；这些外部执行器需保留，不依赖仓库链接。安装前备份原 plist 和停止后的水位到 `PersonalDataHub/backups/collection-app-*`；迁移失败恢复原 plist 及加载状态。登录项注册在采集迁移前完成，避免注册失败留下部分迁移状态。
 

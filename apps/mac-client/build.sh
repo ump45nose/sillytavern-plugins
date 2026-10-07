@@ -5,9 +5,10 @@ task_app="$task_root/dist/Personal Data Hub.app"
 cd "$task_root"
 swift build -c release
 task_bin=$(swift build -c release --show-bin-path)
-mkdir -p "$task_app/Contents/MacOS"
+mkdir -p "$task_app/Contents/MacOS" "$task_app/Contents/Resources"
 cp "$task_bin/PersonalDataHub" "$task_app/Contents/MacOS/PersonalDataHub"
 cp Info.plist "$task_app/Contents/Info.plist"
+cp "$task_root/Resources/AppIcon.icns" "$task_app/Contents/Resources/AppIcon.icns"
 python3 "$task_root/credential-reader/install.py"
 "$task_root/../crm/.venv/bin/python" "$task_root/bundle-agents.py" "$task_app"
 swift -suppress-warnings "$task_root/signing.swift" "$task_app"

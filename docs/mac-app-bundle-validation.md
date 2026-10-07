@@ -2,6 +2,8 @@
 
 2026-10-07 在现有 Mac 完成 0.3.1 build 8 的打包、安装、采集迁移和登录项注册。NAS 服务镜像保持 `local/personal-data-hub:wechat-media-0a7fe87`，本轮未修改后端。
 
+同日图标更新为 build 9：新增蓝色归档盒与资料卡图标，ICNS 含 16–1024 像素尺寸；重新构建、安装和 ZIP 解压后的严格签名验证通过。采集 archive 未变，安装返回 `unchanged=true`，两个后台任务无需重启；登录项仍为 `enabled`，固定助手的真实凭据读取通过。
+
 ## 交付
 
 - 已安装：`~/Applications/Personal Data Hub.app`；前版保存在 `Personal Data Hub.previous.app`。
