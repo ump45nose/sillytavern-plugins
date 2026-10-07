@@ -29,10 +29,11 @@ WECHAT_SOURCE=chatlog
 CHATLOG_EXECUTABLE=/Users/your-name/Library/Application Support/personal-crm/bin/chatlog-keeper
 CHATLOG_EXPECTED_SHA256=replace-with-release-sha256
 CHATLOG_SCOPES=/Users/your-name/Library/Application Support/personal-crm/wechat/whitelist-scopes.json
+CHATLOG_SCOPE_MODE=all
 CHATLOG_PAGE_SIZE=200
 CHATLOG_WINDOW_SECONDS=86400
 CHATLOG_OVERLAP_SECONDS=300
-WECHAT_FACT_EXTRACTION=true
+WECHAT_FACT_EXTRACTION=false
 CHATLOG_POLL_SECONDS=60
 CHATLOG_TIMEOUT=120
 CRM_WEBHOOK_URL=https://crm.example.com/api/v1/webhooks/wechat
@@ -44,43 +45,42 @@ WECHAT_CONTACTS=visible_wechat_id_alice,visible_wechat_id_bob
 WECHAT_SINCE=2026-06-06T00:00:00Z
 ```
 
-`CHATLOG_SCOPES` 是权限 `0600` 的本地 JSON 数组，每项包含
-`requested_id/person_name/account_id/conversation_id/conversation_type`。其中
-`requested_id` 必须与 `WECHAT_CONTACTS` 完全一致；账号和内部会话 ID 只留在 Mac，
-不会写入 Webhook。二进制应从已审计 Release 固定到私有目录，并配置 SHA-256。
-
-先做不推进 checkpoint 的 dry run：
+`CHATLOG_SCOPE_MODE=all` 是默认模式，动态枚举本机微信的全部单聊和群聊；
+`all_direct` 只读取全部单聊，`configured` 才使用 `WECHAT_CONTACTS` 白名单。
+`CHATLOG_SCOPES` 保留原有联系人的身份映射，新会话沿用源目录身份，不按同名昵称合并。
+源协议每次最多读取 128 个会话；连接器分批读完后才提交本轮数据。
+二进制仍固定到已审计 Release，并验证 SHA-256；不提取或生成新密钥。
 
 ```bash
 CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --dry-run
+CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --watch
 ```
 
-确认输出只包含摘要后，再去掉 `--dry-run`。常驻模式使用
-`personal-crm-wechat --watch`。Connector 按一天窗口回填并保留五分钟重叠；只有 NAS
-对整个批次（包括空窗口）返回成功且无错误项时，才会原子推进 checkpoint。
-chatlog 读取失败、NAS 5xx 或进程重启均不会丢失水位。
+命令和常驻日志只输出数量、接收状态和错误类别，不输出聊天正文。
+正文、消息类型、时间、发送方和源消息的其他字段原样保存在 `Interaction.message` JSON，
+不生成摘要、不启用 Fact、ASR 或模型处理。图片、语音、文件等保留源读取器返回的
+内容和元数据；源端只返回占位文本时，不代表附件文件已经下载。
+`summary` 的 `消息内容：` 前缀用于原有查询兼容；NUL 字符只从兼容 Text 字段中移除，
+完整 JSON 与每日记录详情仍保留原字符、空白和长正文。
 
-多客户端同步时，每台 Mac 的 `CRM_CLIENT_ID` 必须不同，本地 checkpoint 也独立保存。
-同一微信账号使用相同的 `CRM_ACCOUNT_NAMESPACE`，不同微信账号使用不同值；多账号映射
-可在每条 scope 中配置 `account_namespace`。该命名空间和内部会话 ID 只用于本机计算
-SHA-256，不直接出站。稳定消息键取自账号、会话及微信 `server_id`，不包含设备 rowid。
-缺少 `server_id` 的消息继续按旧事件键去重，不按时间或正文猜测身份。
+常驻模式沿用一天窗口及五分钟重叠。每个 Webhook 分片不超过 500 条互动/事实；
+只有最后一片成功才推进 NAS 成功水位，整轮确认后才原子保存 Mac checkpoint。
+中间失败时可幂等重放已经接收的分片。历史追赶快速继续，追平后按配置周期轮询。
+历史回填应先停止原 Agent，备份配置和 checkpoint，再使用独立空 checkpoint 重读
+所需窗口；重复消息补齐原记录的源消息，不重建互动 ID。不能只倒退时间却保留
+已确认消息键，否则本机去重会跳过需要补齐正文的旧消息。
 
-旧客户端仍可上报；服务端将未标识客户端的请求记为 `legacy`。升级后首次回放旧事件
-会补齐稳定消息键，不重建原记录。历史记录必须先由原设备回放补齐身份，另一设备才能
-对这些旧记录跨机去重；只凭旧键无法恢复原先未上报的服务器消息 ID。
+多设备保持独立 `CRM_CLIENT_ID` 和 checkpoint；同账号使用相同
+`CRM_ACCOUNT_NAMESPACE`。稳定身份仍由账号、会话及服务器消息 ID 生成，
+设备 rowid/offset 不参与跨机身份；缺少服务器 ID 时只按设备事件键去重。
+已归档源消息不会因另一设备的本地 offset 不同而反复覆盖。
+旧客户端没有 `message` 字段时仍兼容。显式删除墓碑继续阻止历史重放复活。
 
-管理员可携带 `X-Webhook-Token` 查询内网端点
-`GET /api/v1/webhooks/wechat/clients`，核验每台设备的 `synced_through`、最近成功时间和
-接收/重复计数。状态查询与同步使用相同鉴权，不返回联系人或聊天内容。
-
-Connector 在解析 `record` 时只在当前调用栈内使用原始 `content`，随后立即丢弃，
-不在日志、checkpoint 或 Webhook 中保存正文。`WECHAT_FACT_EXTRACTION=true` 会启用
-高置信规则抽取器：仅处理对方明确自述的偏好、边界、人生事件、组织和联系方式，
-并只外发受限结构化 Fact；出站消息、卡片、链接和超长内容不抽取。抽取器通过独立
-Protocol 隔离，后续可替换成本地模型或 Agent，同时保持原文不离开 Mac 的边界。
-启用时还会为每个实际出现消息的白名单会话生成一个可幂等去重的 `contact` Fact，
-用于记录微信来源身份并验证 Fact 链路；它不包含内部账号或会话 ID。
+管理员使用原 `X-Webhook-Token` 查询
+`GET /api/v1/webhooks/wechat/clients`，检查设备水位、最近接收时间及计数。
+部署前执行 `apps/crm` 的 Alembic `upgrade head`；已有统一 PostgreSQL 没有
+Alembic 版本表时，先备份，再执行 `database/003_wechat_messages.sql` 中的
+可空 `message JSON` 加列语句，不回放初始建表迁移。
 
 ## Codex Skylight 与 Memos 日报查询和事件
 

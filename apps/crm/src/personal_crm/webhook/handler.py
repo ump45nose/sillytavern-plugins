@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException
@@ -23,6 +24,7 @@ class WebhookInteraction(BaseModel):
     channel: str = "wechat"
     direction: str
     summary: str = Field(min_length=1)
+    message: dict[str, Any] | None = None
     source_reference: str | None = Field(default=None, max_length=1000)
     source_event_key: str = Field(min_length=1, max_length=128)
     source_message_key: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")

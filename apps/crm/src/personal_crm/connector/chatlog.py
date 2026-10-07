@@ -52,16 +52,63 @@ class ChatlogMessageSource:
         return executable
 
     def _scopes(self) -> list[dict[str, str]]:
-        """读取五人白名单映射，并按协议规定的 scope 顺序排序。"""
+        """枚举本机会话；显式 configured 模式仍使用原白名单。"""
 
         try:
             raw = json.loads(
                 Path(self.config.chatlog_scopes_path).expanduser().read_text(encoding="utf-8")
             )
         except (OSError, ValueError) as error:
-            raise ChatlogSourceError("scopes_unavailable") from error
+            if self.config.chatlog_scope_mode == "configured":
+                raise ChatlogSourceError("scopes_unavailable") from error
+            raw = []
         if not isinstance(raw, list):
             raise ChatlogSourceError("scopes_invalid")
+
+        if self.config.chatlog_scope_mode not in {"configured", "all_direct", "all"}:
+            raise ChatlogSourceError("scope_mode_invalid")
+        if self.config.chatlog_scope_mode != "configured":
+            pinned = {
+                (item.get("account_id"), item.get("conversation_id"), item.get("conversation_type")): item
+                for item in raw if isinstance(item, dict)
+            }
+            try:
+                result = subprocess.run(
+                    [str(self._verified_executable()), "directory", "--source", "wechat"],
+                    capture_output=True, text=True, timeout=self.config.timeout, check=False,
+                )
+                directory = json.loads(result.stdout)
+            except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+                raise ChatlogSourceError("directory_unavailable") from error
+            if result.returncode or not isinstance(directory, dict) or not directory.get("available"):
+                raise ChatlogSourceError("directory_unavailable")
+            raw = []
+            for item in directory.get("conversations", []):
+                if not isinstance(item, dict):
+                    raise ChatlogSourceError("directory_invalid")
+                declared_kind = item.get("conversation_type")
+                if declared_kind not in {"direct", "group"}:
+                    raise ChatlogSourceError("directory_invalid")
+                account, conversation = item.get("account_id"), item.get("conversation_id")
+                if not account or not conversation:
+                    raise ChatlogSourceError("directory_invalid")
+                # message-stream-v1 的微信类型由原生 ID 的 @chatroom 后缀确定。
+                # 目录可能把普通 wxid 误标成 group；保留原标记，不跳过会话。
+                kind = "group" if str(conversation).endswith("@chatroom") else "direct"
+                if kind == "group" and self.config.chatlog_scope_mode == "all_direct":
+                    continue
+                known = pinned.get((account, conversation, kind), {})
+                raw.append({
+                    "requested_id": known.get("requested_id") or conversation,
+                    "person_name": known.get("person_name") or item.get("label") or conversation,
+                    "account_id": account,
+                    "account_namespace": known.get("account_namespace") or self.config.account_namespace or account,
+                    "conversation_id": conversation,
+                    "conversation_type": kind,
+                    **({"directory_conversation_type": declared_kind} if declared_kind != kind else {}),
+                })
+            if not raw:
+                raise ChatlogSourceError("directory_empty")
 
         scopes: list[dict[str, str]] = []
         allowed = self.config.allowed_contacts
@@ -80,7 +127,7 @@ class ChatlogMessageSource:
             ):
                 raise ChatlogSourceError("scopes_invalid")
             # 双重执行白名单：环境配置和映射文件必须同时允许该联系人。
-            if allowed and requested_id not in allowed:
+            if self.config.chatlog_scope_mode == "configured" and allowed and requested_id not in allowed:
                 continue
             scopes.append(
                 {
@@ -92,9 +139,10 @@ class ChatlogMessageSource:
                     ),
                     "conversation_id": conversation_id,
                     "conversation_type": conversation_type,
+                    **({"directory_conversation_type": item["directory_conversation_type"]} if "directory_conversation_type" in item else {}),
                 }
             )
-        if allowed and {item["requested_id"] for item in scopes} != allowed:
+        if self.config.chatlog_scope_mode == "configured" and allowed and {item["requested_id"] for item in scopes} != allowed:
             raise ChatlogSourceError("scopes_allowlist_mismatch")
         return sorted(
             scopes,
@@ -123,11 +171,11 @@ class ChatlogMessageSource:
         return start, max(start, end)
 
     def _event(self, record: dict[str, Any], scope: dict[str, str]) -> dict[str, Any] | None:
-        """本机抽取 Fact 后立即裁剪正文，原始 content 不离开当前调用栈。"""
+        """保留源消息，不裁剪、改写或生成正文。"""
 
         occurred_at = as_datetime(record.get("ts"))
-        if occurred_at is None:
-            return None
+        if occurred_at is None or not isinstance(record.get("content"), str):
+            raise ChatlogSourceError("invalid_record")
         identity = {
             "account_id": scope["account_id"],
             "conversation_id": scope["conversation_id"],
@@ -165,15 +213,29 @@ class ChatlogMessageSource:
             "timestamp": occurred_at.isoformat(),
             "direction": direction,
             "message_type": str(record.get("msg_type") or "消息"),
+            "content": record["content"],
+            "message": {
+                "account_namespace": scope.get("account_namespace") or scope["account_id"],
+                "conversation_id": scope["conversation_id"],
+                "conversation_type": scope["conversation_type"],
+                **({"directory_conversation_type": scope["directory_conversation_type"]} if "directory_conversation_type" in scope else {}),
+                "record": record,
+            },
             "facts": facts,
         }
 
     def read(self, state: dict[str, Any]) -> SourceBatch:
-        """读取一个完整 NDJSON 批次；协议未 complete 时整批失败。"""
+        """按源协议的 128 会话上限读取；全部完成才允许提交水位。"""
 
         executable = self._verified_executable()
         scopes = self._scopes()
         start, end = self._window(state)
+        events: list[dict[str, Any]] = []
+        for offset in range(0, len(scopes), 128):
+            events.extend(self._read_chunk(executable, scopes[offset:offset + 128], start, end))
+        return SourceBatch(events=events, until=end)
+
+    def _read_chunk(self, executable: Path, scopes: list[dict[str, str]], start: datetime, end: datetime) -> list[dict[str, Any]]:
         request = {
             "protocol": "message-stream-v1",
             "version": 1,
@@ -237,4 +299,4 @@ class ChatlogMessageSource:
             raise ChatlogSourceError("invalid_stream") from error
         if completed.returncode != 0 or not complete:
             raise ChatlogSourceError("incomplete_stream")
-        return SourceBatch(events=events, until=end)
+        return events

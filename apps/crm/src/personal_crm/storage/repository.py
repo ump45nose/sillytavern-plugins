@@ -304,10 +304,11 @@ class CrmRepository:
                     "person_name": name,
                     "occurred_at": item.occurred_at.isoformat(),
                     "direction": item.direction,
-                    "message_type": item.interaction_type,
-                    "content": item.summary.removeprefix("消息内容：")
-                    if item.summary.startswith("消息内容：")
-                    else None,
+                    "message_type": item.message["record"].get("msg_type") if item.message else item.interaction_type,
+                    "content": item.message["record"]["content"] if item.message else (
+                        item.summary.removeprefix("消息内容：") if item.summary.startswith("消息内容：") else None
+                    ),
+                    "message": item.message,
                 }
                 for item, name in rows
             ]
@@ -612,7 +613,7 @@ class CrmRepository:
         batch_id: str | None = None,
         synced_through: datetime | None = None,
     ) -> tuple[int, int]:
-        """在单一事务内导入微信摘要和事实；任一错误都会整批回滚。"""
+        """同事务保存源消息和兼容互动；任一错误都会整批回滚。"""
 
         if self.hub_store is not None and facts:
             raise ValueError("automatic facts disabled in collection mode")
@@ -634,6 +635,20 @@ class CrmRepository:
                 raise ValueError("invalid interaction type")
             if item["channel"] not in allowed_channels:
                 raise ValueError("invalid interaction channel")
+            message = item.get("message")
+            if message is not None:
+                if not isinstance(message, dict) or message.get("conversation_type") not in {"direct", "group"}:
+                    raise ValueError("invalid source message")
+                if not all(isinstance(message.get(k), str) and message[k] for k in ("account_namespace", "conversation_id")):
+                    raise ValueError("invalid source message identity")
+                record = message.get("record")
+                if not isinstance(record, dict) or not isinstance(record.get("content"), str):
+                    raise ValueError("invalid source message content")
+                if isinstance(record.get("ts"), bool) or not isinstance(record.get("ts"), (int, float)):
+                    raise ValueError("invalid source message time")
+                timestamp = record["ts"] / 1000 if record["ts"] > 10_000_000_000 else record["ts"]
+                if ensure_utc(item["occurred_at"]) != datetime.fromtimestamp(timestamp, UTC):
+                    raise ValueError("source message time mismatch")
         for item in facts:
             if item["fact_type"] not in allowed_fact_types:
                 raise ValueError("invalid fact type")
@@ -672,11 +687,15 @@ class CrmRepository:
                     if message_key and existing.source_message_key is None:
                         existing.source_message_key = message_key
                     # 保留线上已有的内容补齐语义，不覆盖已经记录的完整内容。
-                    incoming = item["summary"].strip()
+                    incoming = item["summary"] if item.get("message") else item["summary"].strip()
+                    if existing.message is None and item.get("message") is not None:
+                        existing.message = item["message"]
+                        # PostgreSQL Text 不接受 NUL；无损原文始终在 JSON 和详情接口中。
+                        existing.summary = ("消息内容：" + item["message"]["record"]["content"]).replace("\x00", "")
                     if incoming.startswith("消息内容：") and not existing.summary.startswith(
                         "消息内容："
                     ):
-                        existing.summary = incoming
+                        existing.summary = incoming.replace("\x00", "")
                     duplicates += 1
                     interaction_by_key[event_key] = existing
                     continue
@@ -687,7 +706,8 @@ class CrmRepository:
                     interaction_type=item["interaction_type"],
                     channel=item["channel"],
                     direction=item["direction"],
-                    summary=item["summary"].strip(),
+                    summary=("消息内容：" + item["message"]["record"]["content"]).replace("\x00", "") if item.get("message") else item["summary"].strip(),
+                    message=item.get("message"),
                     source_type=source,
                     source_reference=item.get("source_reference"),
                     source_event_key=event_key,
@@ -805,7 +825,11 @@ class CrmRepository:
                 .params(wxid=wxid)
             )
         if person is None:
-            person = session.scalar(select(Person).where(Person.display_name == display_name))
+            # 全会话采集时同名联系人和群聊不能合并成同一个人物。
+            candidates = session.scalars(select(Person).where(Person.display_name == display_name))
+            person = next((p for p in candidates if not wxid or not p.contact_methods.get("wxid")), None)
+            if person is not None and wxid:
+                person.contact_methods = {**person.contact_methods, "wxid": [wxid]}
         if person is None:
             contacts = {"wxid": [wxid]} if wxid else {}
             person = Person(display_name=display_name, contact_methods=contacts)

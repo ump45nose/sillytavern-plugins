@@ -92,7 +92,7 @@ class Person(Base):
 
 
 class Interaction(Base):
-    """一次有意义的互动摘要，不保存微信完整正文。"""
+    """互动查询兼容表；微信源消息以 JSON 原样保存。"""
 
     __tablename__ = "interactions"
     __table_args__ = (
@@ -121,6 +121,7 @@ class Interaction(Base):
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     direction: Mapped[str] = mapped_column(String(20), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     source_type: Mapped[str] = mapped_column(String(80), nullable=False)
     source_reference: Mapped[str | None] = mapped_column(Text)
     source_event_key: Mapped[str | None] = mapped_column(String(128))

@@ -1,4 +1,4 @@
-"""从本机微信数据源读取裁剪事件并可靠推送到 NAS。"""
+"""从本机微信数据源忠实读取消息并可靠推送到 NAS。"""
 
 from __future__ import annotations
 
@@ -79,20 +79,22 @@ class WeChatConnector:
     def _filter(self, event: dict[str, Any]) -> bool:
         """在生成任何出站数据前应用白名单与时间窗口。"""
 
-        contact = str(event.get("contact") or event.get("peer") or event.get("sender") or "")
+        contact = str(event.get("wxid") or event.get("contact") or event.get("peer") or event.get("sender") or "")
         occurred_at = as_datetime(
             event.get("timestamp") or event.get("created_at") or event.get("time")
         )
-        if self.config.allowed_contacts and contact not in self.config.allowed_contacts:
+        configured = self.config.source_type != "chatlog" or self.config.chatlog_scope_mode == "configured"
+        if configured and self.config.allowed_contacts and contact not in self.config.allowed_contacts:
             return False
         if self.config.since and (not occurred_at or occurred_at < self.config.since):
             return False
         return not (self.config.until and occurred_at and occurred_at > self.config.until)
 
-    @staticmethod
-    def _safe_summary(event: dict[str, Any], person_name: str) -> str:
-        """使用上游摘要或无正文的降级描述，禁止把原始消息伪装成摘要。"""
+    def _safe_summary(self, event: dict[str, Any], person_name: str) -> str:
+        """微信正文原样传递；只为旧适配器保留摘要兼容行为。"""
 
+        if self.config.source_type == "chatlog" and isinstance(event.get("content"), str):
+            return "消息内容：" + event["content"]
         source_text = str(event.get("text") or event.get("content") or "").strip()
         candidate = str(event.get("summary") or "").strip()
         if candidate and candidate != source_text and len(candidate) <= 1000:
@@ -174,6 +176,7 @@ class WeChatConnector:
                     "source_reference": f"{self.config.source_type}:wechat:{event_key}",
                     "source_event_key": event_key,
                     **({"source_message_key": message_key} if message_key else {}),
+                    **({"message": event["message"]} if "message" in event else {}),
                 }
             )
             if message_key:
@@ -199,14 +202,6 @@ class WeChatConnector:
                 ),
             )
         )
-        payload = {
-            "batch_id": batch_id,
-            "source": self.config.source_type,
-            "client_id": self.config.client_id,
-            "synced_through": source_batch.until.isoformat(),
-            "interactions": interactions,
-            "facts": facts,
-        }
         if dry_run:
             return SyncResult(batch_id, interactions, facts, False, [])
         # chatlog 的空窗口也发送给 NAS 确认可用性，成功后才能推进回填水位。
@@ -215,21 +210,35 @@ class WeChatConnector:
         if not self.config.webhook_url:
             return SyncResult(batch_id, interactions, facts, False, ["未配置 CRM_WEBHOOK_URL"])
 
-        try:
-            response = self.client.post(
-                self.config.webhook_url,
-                json=payload,
-                headers={"X-Webhook-Token": self.config.webhook_token},
-            )
-            response.raise_for_status()
-            body = response.json()
-            errors = body.get("errors", []) if isinstance(body, dict) else ["invalid response"]
-            if errors:
-                return SyncResult(batch_id, interactions, facts, False, list(errors))
-        except Exception as error:
-            return SyncResult(
-                batch_id, interactions, facts, False, [f"webhook: {type(error).__name__}"]
-            )
+        # 中间分片可以幂等重放；只有最后一片成功才推进服务端和本机水位。
+        part_count = max(1, (max(len(interactions), len(facts)) + 499) // 500)
+        accepted = duplicates = 0
+        for part in range(part_count):
+            part_id = batch_id if part_count == 1 else str(uuid.uuid5(uuid.UUID(batch_id), str(part)))
+            payload = {
+                "batch_id": part_id,
+                "source": self.config.source_type,
+                "client_id": self.config.client_id,
+                "synced_through": source_batch.until.isoformat() if part == part_count - 1 else None,
+                "interactions": interactions[part * 500:(part + 1) * 500],
+                "facts": facts[part * 500:(part + 1) * 500],
+            }
+            try:
+                response = self.client.post(
+                    self.config.webhook_url, json=payload,
+                    headers={"X-Webhook-Token": self.config.webhook_token},
+                )
+                response.raise_for_status()
+                body = response.json()
+                errors = body.get("errors", []) if isinstance(body, dict) else ["invalid response"]
+                if errors:
+                    return SyncResult(batch_id, interactions, facts, False, list(errors))
+                accepted += body.get("accepted", 0)
+                duplicates += body.get("duplicates", 0)
+            except Exception as error:
+                return SyncResult(
+                    batch_id, interactions, facts, False, [f"webhook: {type(error).__name__}"]
+                )
 
         # 只有整个批次被 NAS 接受后才提交所有事件键。
         save(
@@ -247,6 +256,6 @@ class WeChatConnector:
             facts,
             True,
             [],
-            accepted=body.get("accepted", 0),
-            duplicates=body.get("duplicates", 0),
+            accepted=accepted,
+            duplicates=duplicates,
         )

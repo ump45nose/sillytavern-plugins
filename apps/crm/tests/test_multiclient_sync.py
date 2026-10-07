@@ -24,6 +24,7 @@ def _device_payload(client_id, offset, server_id="server-1", account="same-accou
         "conversation_id": "conversation",
         "person_name": "Alice",
         "requested_id": "Alice",
+        "conversation_type": "direct",
     }
     event = source._event(
         {
@@ -174,8 +175,9 @@ def test_missing_server_id_does_not_guess_cross_device_identity():
         "conversation_id": "conversation",
         "person_name": "Alice",
         "requested_id": "Alice",
+        "conversation_type": "direct",
     }
-    assert source._event({"ts": 1788483600, "server_id": "0"}, scope)["source_message_key"] is None
+    assert source._event({"ts": 1788483600, "server_id": "0", "content": ""}, scope)["source_message_key"] is None
 
 
 def test_deployed_content_enrichment_and_daily_queries_are_preserved(tmp_path):

@@ -212,6 +212,7 @@ def chatlog_config(tmp_path, scopes_path, **kwargs):
     return ConnectorConfig(
         source_type="chatlog",
         chatlog_executable=__file__,
+        chatlog_scope_mode="configured",
         chatlog_scopes_path=str(scopes_path),
         allowed_contacts={"Alice"},
         since=datetime(2026, 9, 4, tzinfo=UTC),
@@ -220,8 +221,8 @@ def chatlog_config(tmp_path, scopes_path, **kwargs):
     )
 
 
-def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatch):
-    """验证 NDJSON 记录按 scope 对齐，且原始 content 在适配层立即丢弃。"""
+def test_chatlog_stream_maps_scope_and_preserves_raw_content(tmp_path, monkeypatch):
+    """验证 NDJSON 记录按 scope 对齐，且完整源消息保留。"""
 
     scopes = tmp_path / "scopes.json"
     scopes.write_text(
@@ -268,8 +269,8 @@ def test_chatlog_stream_maps_scope_and_discards_raw_content(tmp_path, monkeypatc
     assert len(batch.events) == 1
     assert batch.events[0]["contact"] == "Alice"
     assert batch.events[0]["direction"] == "outbound"
-    assert "content" not in batch.events[0]
-    assert "secret" not in json.dumps(batch.events[0])
+    assert batch.events[0]["content"] == "secret"
+    assert batch.events[0]["message"]["record"]["content"] == "secret"
 
 
 def test_rule_based_fact_extractor_only_accepts_explicit_inbound_statements():
@@ -286,8 +287,8 @@ def test_rule_based_fact_extractor_only_accepts_explicit_inbound_statements():
     assert extractor.extract("<msg>我喜欢手冲咖啡</msg>", "inbound") == []
 
 
-def test_chatlog_enabled_extraction_keeps_raw_text_out_of_event(tmp_path, monkeypatch):
-    """验证启用抽取后仅保留结构化事实，完整微信正文仍不会进入事件。"""
+def test_chatlog_explicit_legacy_extraction_also_preserves_source(tmp_path, monkeypatch):
+    """显式兼容事实抽取不影响忠实保存消息。"""
 
     scopes = tmp_path / "scopes.json"
     scopes.write_text(
@@ -339,8 +340,8 @@ def test_chatlog_enabled_extraction_keeps_raw_text_out_of_event(tmp_path, monkey
         "contact",
     ]
     assert event_payload["facts"][1]["content"] == "微信联系人：Alice"
-    assert original not in json.dumps(event_payload, ensure_ascii=False)
-    assert "content" not in event_payload
+    assert event_payload["content"] == original
+    assert event_payload["message"]["record"]["content"] == original
 
 
 def test_chatlog_incomplete_stream_fails_closed(tmp_path, monkeypatch):

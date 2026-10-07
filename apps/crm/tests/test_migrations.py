@@ -28,7 +28,9 @@ def test_blank_database_upgrade_records_head(tmp_path):
         version = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
     assert {"people", "interactions", "facts", "reminders"} <= tables
     assert "sync_clients" in tables
-    assert version == "002_sync_clients"
+    from sqlalchemy import inspect
+    assert "message" in {x["name"] for x in inspect(create_engine(f"sqlite:///{database}")).get_columns("interactions")}
+    assert version == "003_wechat_messages"
     command.check(config)
 
 
