@@ -161,6 +161,50 @@ class LocalFiles:
         self.verify([FileAsset(**r) for r in result])
         return result
 
+    def relocate(self, asset, target):
+        """Move one verified file inside configured roots without overwriting."""
+        import errno
+        import shutil
+        import tempfile
+
+        self.verify([asset])
+        source = self.checked(asset.path)
+        destination = self.checked(target, output=True)
+        if source == destination:
+            return self.asset(destination, relative=asset.relative, episode=asset.episode)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = self.checked(destination, output=True)
+        if destination.exists():
+            if destination.stat().st_size != asset.size:
+                raise FileExistsError("迁移目标已存在不同文件")
+            source_hash = asset.sha1 or sha1_file(source)
+            if sha1_file(destination) != source_hash:
+                raise FileExistsError("迁移目标已存在不同内容")
+            return self.asset(destination, relative=asset.relative, episode=asset.episode)
+        try:
+            os.replace(source, destination)
+        except OSError as exc:
+            if exc.errno != errno.EXDEV:
+                raise
+            with tempfile.NamedTemporaryFile(dir=destination.parent,
+                                             prefix=".media-relocate-", delete=False) as stream:
+                temporary = Path(stream.name)
+            try:
+                shutil.copy2(source, temporary)
+                if temporary.stat().st_size != asset.size:
+                    raise ValueError("跨卷迁移后的文件大小不一致")
+                source_hash = asset.sha1 or sha1_file(source)
+                if sha1_file(temporary) != source_hash:
+                    raise ValueError("跨卷迁移后的文件校验失败")
+                os.replace(temporary, destination)
+                source.unlink()
+            finally:
+                temporary.unlink(missing_ok=True)
+        moved = self.asset(destination, relative=asset.relative, episode=asset.episode)
+        if moved.size != asset.size:
+            raise ValueError("迁移后文件大小不一致")
+        return moved
+
     def remove(self, files):
         existing = [asset for asset in files if Path(asset.path).exists()]
         self.verify(existing)
