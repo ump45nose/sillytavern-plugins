@@ -328,6 +328,6 @@
     },
     "no_agent": true,
     "source": "hermes/benefits_steam.py",
-    "enabled": false
+    "enabled": true
   }
 ]

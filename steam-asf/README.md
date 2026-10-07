@@ -106,12 +106,23 @@ purchase-block evidence and owned-package results. HTTP routes existing,
 simulated tests, or a no-candidate result cannot establish successful real
 promotion verification. No `--claim` argument is deployed.
 
-`benefits-steam-readonly` is registered with `7,37 * * * *` in Asia/Taipei and
-paused while login/acceptance is pending. Use Hermes' own create/update APIs,
-under the Lingjun runtime identity, to enable it after read-only acceptance;
-do not hand-edit `jobs.json`. The existing noon benefits notice job reads Steam
+`benefits-steam-readonly` uses `7,37 * * * *` in Asia/Taipei. On the current NAS,
+first login, same-account restart reconnect and real read-only interface checks
+have passed; the job is enabled and a scheduler fire has been verified.
+For a new installation, keep it paused until those checks pass. Use Hermes' own
+create/update APIs under the Lingjun runtime identity; do not hand-edit `jobs.json`.
+The existing noon benefits notice job reads Steam
 alongside the six prior platforms. Only exceptions produce a notice. Eligible
 dry-run packages are explicitly reported as awaiting claim authorization.
+
+The first `GetChangesSince/0` required a full history update. Its state and
+adapter settings were privately backed up before setting the incremental
+baseline to the first verified cursor (`39563190`); the pending queue was kept.
+`private/discovery-window.json` records that older history is unverified.
+Existing state/config baselines must be restored as a pair. Real changed
+packages with `MissingToken=true` remain held for review. Current positive
+official-store samples are DLC and excluded by the game-only rule; this does
+not establish a fully eligible game promotion or a successful claim.
 
 To roll back, pause the Steam job and stop only `benefits-steam-asf` with
 Compose. Retain all private ASF data and benefits journals. The pre-Steam
