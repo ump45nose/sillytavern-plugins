@@ -27,12 +27,13 @@
     "name": "公共媒体获取能力",
     "description": "为片单、独立查询网页及下载MCP承载共享搜索、核验、下载与提交登记。",
     "labels": "搜索,下载,公共能力",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "icon": "Moviepilot_A.png",
     "author": "yuwk",
     "level": 1,
     "system_version": ">=2.14.2,<3",
     "history": {
+      "v0.1.3": "共享包升级到0.4.0，增加通用洗版比较、Adult分类、JavDB CLI适配与受限Adult 115目标。",
       "v0.1.2": "移除Mini4K Relay依赖；新增NAS终端一次性登录、持久会话锁与认证失败原因。需共享包0.3.3。",
       "v0.1.1": "修复Mini4K别名空结果解析；新增仅公网自动选源，手动PT不受限制；公网BT默认走115。需共享包0.3.1。",
       "v0.1.0": "独立宿主与公共配置、旧记录补充迁移、共享会话和跨入口提交去重；默认关闭。"
@@ -47,7 +48,9 @@
     "author": "yuwk",
     "level": 1,
     "system_version": ">=2.14.2,<3",
-    "history": {"v0.1.0": "独立归档业务层、公共能力适配、可恢复任务和收藏归档页面。"}
+    "history": {
+      "v0.1.0": "独立归档业务层、公共能力适配、可恢复任务和收藏归档页面。"
+    }
   },
   "DiscRemux": {
     "name": "原盘REMUX",
@@ -58,7 +61,9 @@
     "author": "yuwk",
     "level": 1,
     "system_version": ">=2.14.2,<3",
-    "history": {"v0.1.0": "MakeMKV引擎适配、人工选片页面、独立转换任务与产物校验。"}
+    "history": {
+      "v0.1.0": "MakeMKV引擎适配、人工选片页面、独立转换任务与产物校验。"
+    }
   },
   "ThemeStudio": {
     "name": "主题曲管理",
@@ -69,6 +74,19 @@
     "level": 1,
     "history": {
       "v0.3.0": "首次提供主题曲管理界面及私有 Worker 接口"
+    }
+  },
+  "AdultCollection": {
+    "name": "Adult 收藏与洗版",
+    "description": "Emby收藏驱动的Vixen 4K归档与JAV双源洗版检测。",
+    "labels": "整理,洗版,Adult",
+    "version": "0.1.0",
+    "icon": "Moviepilot_A.png",
+    "author": "yuwk",
+    "level": 1,
+    "system_version": ">=2.14.2,<3",
+    "history": {
+      "v0.1.0": "Vixen 4K+liked迁移至Collection；JAV需M-Team与JavDB双源核验，明显更优时进入洗版流程。需media-capabilities 0.4.0。"
     }
   }
 }
