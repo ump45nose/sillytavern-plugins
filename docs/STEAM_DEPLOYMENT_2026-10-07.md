@@ -18,7 +18,7 @@ Steam 业务分支 `steam-asf-adapter`（`a3b50bc`）已 fast-forward 合入并�
   插件下载与 GitHub 发布摘要一致：
   `sha256:949a7be69d8c03bb85f1c8e8d169eea37c1c363166227237110e62e9c66e1961`。
 - 全局和插件更新、Watchtower 更新均关闭。初始 bot 禁用、挂卡暂停、
-  `EnableFreePackages=false`。没有启动 Steam 登录，没有发送领取请求。
+  `EnableFreePackages=false`。没有发送领取请求。
 - 持久目录位于源码外，由 Hermes runtime UID 988/GID 984 持有；
   私有目录 0700，配置 0600。IPC 密钥未出现在配置之外的日志中。
 - 无认证 `/Api/ASF` 返回 401；正确认证返回 200、版本匹配。
@@ -43,7 +43,23 @@ Steam 业务分支 `steam-asf-adapter`（`a3b50bc`）已 fast-forward 合入并�
 
 ## 必须由用户完成的下一步
 
-在用户自己的 NAS SSH 交互终端运行：
+首次密码登录尝试实际返回 `InvalidPassword`，未完成认证。2026-10-07
+已增加手机扫码辅助入口：不接收密码或验证码，扫码阶段关闭原始日志消息和
+控制台输出，避免 ASF 默认把二维码授权链接写进日志。只保留时间、日志级别、
+方法名与异常类型；QR 图片保持私有，授权结束或失败后删除。扫码接口曾出现
+`SteamKit2.AsyncJobFailedException` 超时；辅助入口已补上断线后的 QR 偏好恢复，
+最多观察三个扫码会话，不自动提交密码。每次退出恢复正常 headless 部署。
+
+用户已确认预期 SteamID64、CN 商店地区和登录名。这些账号资料不写入源码；
+仍需用户在 Steam 手机 App 扫码并确认，才能核对实际登录身份。当前没有成功
+登录证明，没有创建账号执行配置，Steam cron 保持暂停。
+
+首选由执行器生成二维码、用户手机确认。部署和保护流程见
+`nas-cron-jobs/steam-asf/README.md`，入口为
+`/home/yuwk/cron/scripts/steam-asf/qr-login.py`。成功后必须实际重启容器并核对
+同一个 SteamID 恢复连接，才创建只读执行配置。
+
+若账号需要密码登录，可在用户自己的 NAS SSH 交互终端运行：
 
 ```sh
 sudo -u hermes env -i PATH=/usr/bin:/bin python3 /home/yuwk/cron/scripts/steam-asf/login.py
