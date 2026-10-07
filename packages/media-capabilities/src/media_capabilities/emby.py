@@ -39,7 +39,7 @@ class EmbyTransport:
         result, start = [], 0
         while True:
             payload = self.get(path, StartIndex=start, Limit=200,
-                               Fields="Path,ProviderIds,MediaSources,RunTimeTicks", **params)
+                               Fields="Path,ProviderIds,MediaSources,RunTimeTicks,Studios", **params)
             rows = payload.get("Items", [])
             result.extend(rows)
             start += len(rows)
@@ -88,7 +88,8 @@ class EmbyLibrary:
     def _row(self, raw):
         path = raw.get("Path") or ""
         return {"item_id": str(raw["Id"]), "path": self._map(path) if path else "",
-                "episode": raw.get("IndexNumber") if raw.get("Type") == "Episode" else None}
+                "episode": raw.get("IndexNumber") if raw.get("Type") == "Episode" else None,
+                "studios": [str(row.get("Name") or "") for row in (raw.get("Studios") or []) if row.get("Name")]}
 
     def discover(self, users, *, unit_keys=None, resolve_episodes=True):
         if self.server_id is None:
