@@ -320,7 +320,7 @@
     "source": "hermes/media_automation_notice_daily.py"
   },
   {
-    "name": "benefits-steam-readonly",
+    "name": "benefits-steam-free-claim",
     "schedule": {
       "kind": "cron",
       "expr": "7,37 * * * *",

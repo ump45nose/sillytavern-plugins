@@ -104,11 +104,13 @@ Read `benefits-runtime/delivery/steam.json` and the same run's saved result.
 Check real PICS wire schemas, bounded automatic discovery, actual official
 purchase-block evidence and owned-package results. HTTP routes existing,
 simulated tests, or a no-candidate result cannot establish successful real
-promotion verification. No `--claim` argument is deployed.
+promotion verification. Start new installations without `--claim`.
 
-`benefits-steam-readonly` uses `7,37 * * * *` in Asia/Taipei. On the current NAS,
+`benefits-steam-free-claim` uses `7,37 * * * *` in Asia/Taipei. On the current NAS,
 first login, same-account restart reconnect and real read-only interface checks
-have passed; the job is enabled and a scheduler fire has been verified.
+have passed; the user subsequently authorized free claims. The existing job ID
+is retained, its launcher arguments now include `--claim`, and a real scheduler
+fire in this mode has been verified. Only vetted free promotions are submitted.
 For a new installation, keep it paused until those checks pass. Use Hermes' own
 create/update APIs under the Lingjun runtime identity; do not hand-edit `jobs.json`.
 The existing noon benefits notice job reads Steam
@@ -122,7 +124,25 @@ baseline to the first verified cursor (`39563190`); the pending queue was kept.
 Existing state/config baselines must be restored as a pair. Real changed
 packages with `MissingToken=true` remain held for review. Current positive
 official-store samples are DLC and excluded by the game-only rule; this does
-not establish a fully eligible game promotion or a successful claim.
+not establish a fully eligible limited-time game promotion.
+
+The explicitly selected acceptance game, Arena of Trophies (app 2922790), was
+verified free on its real CN store page and PICS. One `RequestFreeAppLicense`
+POST granted package 1135007; app/package ownership was read back, raising the
+positive package count from 275 to 276. Its private durable acceptance receipt
+was written before the POST and confirmed afterwards. The granted package is
+also in the shared journal/rate budget. An owned recheck submitted no new POST.
+This F2P sample does not enable background collection of all free games.
+
+The private adapter config now sets `store_proxy_url` to the existing local
+HTTP proxy for anonymous store GETs. The proxy had routed Steam store traffic
+DIRECT, reproducing CDN TLS timeouts. A persistent exact-domain rule for
+`store.steampowered.com` now uses the existing international proxy group; other
+Steam domain rules and selector choices are preserved. Account country remains
+CN, TLS remains verified, and IPC authentication never enters this proxy.
+Store transport errors and transient 5xx retry once with 10-second per-attempt
+timeouts; 429/403/redirects and license POSTs do not retry. Config/route backups
+are private. To return to read-only, remove only the Steam launcher's `--claim`.
 
 To roll back, pause the Steam job and stop only `benefits-steam-asf` with
 Compose. Retain all private ASF data and benefits journals. The pre-Steam
