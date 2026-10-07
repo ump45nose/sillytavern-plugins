@@ -118,15 +118,21 @@ def main():
         command = ['docker', 'compose', '-f', str(args.compose)]
         if overlay is not None:
             command += ['-f', str(overlay)]
+        child = None
         try:
-            result = subprocess.run(command + ['up', '-d', '--force-recreate', 'asf'],
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            child = subprocess.Popen(command + ['up', '-d', '--force-recreate', '--timeout', '10', 'asf'],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+            code = child.wait(timeout=90)
         except (OSError, subprocess.TimeoutExpired):
+            if child is not None and child.poll() is None:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
             raise RuntimeError('container_recreate_failed') from None
-        if result.returncode:
+        if code:
             raise RuntimeError('container_recreate_failed')
 
-    current = bot()
+    current = ready()
     if current.get('IsConnectedAndLoggedOn'):
         raise RuntimeError('already_logged_on_use_identity_acceptance')
     if current.get('KeepRunning'):
