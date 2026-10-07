@@ -260,6 +260,93 @@ class AcquisitionService:
         self.workers.submit(load)
         return self.search_status(session_id)
 
+    def detect_upgrade(self, data):
+        """Read-only wash detection against verified candidates; never submits a download."""
+        from .selection import quality_key
+        from .upgrade import decide_upgrade, facts_from_library
+
+        payload = dict(data or {})
+        current_data = payload.pop("current", None)
+        if not isinstance(current_data, dict):
+            raise ValueError("需要 current 当前版本事实")
+        unknown = set(current_data) - {"title", "video_bytes", "probe"}
+        if unknown:
+            raise ValueError("current 未知参数：" + ", ".join(sorted(unknown)))
+        try:
+            video_bytes = int(current_data.get("video_bytes") or 0)
+        except (TypeError, ValueError):
+            raise ValueError("current.video_bytes 必须是正整数")
+        current = facts_from_library(
+            str(current_data.get("title") or payload.get("title") or ""),
+            video_bytes, current_data.get("probe"))
+
+        request = AcquisitionRequest.parse(payload)
+        target, explicit, choices = self._target(request, search_only=False)
+        if target is None:
+            return {"status": "needs_selection" if choices else "no_match",
+                    "choices": choices, "current": current.dump(),
+                    "sources": {}, "decision": None}
+
+        source_status, verified = {}, []
+        for source_id, source in self.sources.items():
+            candidates, cursor = {}, None
+            try:
+                for _ in range(3):
+                    page = self._fetch(source_id, target, cursor).result(
+                        timeout=self.search_timeout)
+                    if page.status not in ("OK", "NO_RESULTS"):
+                        source_status[source_id] = {
+                            "status": page.status, "reason": page.reason}
+                        break
+                    for candidate in page.candidates:
+                        candidates[candidate.candidate_id] = candidate
+                    cursor = page.next_cursor
+                    if not cursor:
+                        break
+                else:
+                    cursor = None
+                if source_id not in source_status:
+                    source_status[source_id] = {
+                        "status": "OK" if candidates else "NO_RESULTS",
+                        "reason": "", "searched": len(candidates)}
+            except Exception:
+                source_status[source_id] = {
+                    "status": "UNAVAILABLE", "reason": "站点查询失败"}
+                continue
+
+            ranked = sorted(
+                candidates.values(),
+                key=lambda candidate: (
+                    quality_key(candidate.title),
+                    int(candidate.size_bytes or 0),
+                    int(candidate.seeders or 0)),
+                reverse=True)[:5]
+            resolved_count = 0
+            for candidate in ranked:
+                try:
+                    rows = source.resolve(candidate, target) or []
+                except Exception:
+                    continue
+                verified.extend(rows)
+                resolved_count += len(rows)
+            source_status[source_id]["verified"] = resolved_count
+            if candidates and not resolved_count:
+                source_status[source_id].update(
+                    status="UNVERIFIED",
+                    reason="搜索有结果但无法核实候选文件事实")
+
+        decision = decide_upgrade(
+            current, verified, strategy="tiered",
+            near_size_ratio=self.profiles.near_size_ratio)
+        return {
+            "status": "complete",
+            "media": self.identity_dict(target.media),
+            "scope": target.scope,
+            "current": current.dump(),
+            "sources": source_status,
+            "decision": decision.dump(),
+        }
+
     def download(self, data, wait_timeout=120):
         request = AcquisitionRequest.parse(data)
         task_id = request.request_id or uuid.uuid4().hex
