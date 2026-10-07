@@ -42,6 +42,7 @@
 30 media-automation-media-search-1
 30 media-automation-media-download-mcp-1
 30 moviepilot
+30 benefits-steam-asf
 
 40 qbit_manage qbittorrent
 40 IYUUPlus qbittorrent

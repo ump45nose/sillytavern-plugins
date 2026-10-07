@@ -10,6 +10,7 @@
     "benefits_native_runner.py": "hermes/benefits_native_runner.py",
     "benefits_rewards.py": "hermes/benefits_rewards.py",
     "benefits_smzdm.py": "hermes/benefits_smzdm.py",
+    "benefits_steam.py": "hermes/benefits_steam.py",
     "benefits_v2ex.py": "hermes/benefits_v2ex.py",
     "collect_containers.py": "hermes/collect_containers.py",
     "collect_environment.py": "hermes/collect_environment.py",

@@ -41,6 +41,8 @@ application owns and rewrites them itself.
 - `shellcrash-traffic`: traffic collector, reports, AI JSON and SubBoost refresh.
 - `subboost-update`: subscription refresh every six minutes and rule index hourly.
 - `taglab-delete-worker`: music cleanup every five minutes.
+- `steam-asf`: pinned ASF/FreePackages deployment and private terminal login;
+  Steam read-only execution is scheduled through Hermes after account acceptance.
 
 ## Intentionally external schedulers
 

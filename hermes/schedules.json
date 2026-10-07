@@ -318,5 +318,16 @@
     },
     "no_agent": true,
     "source": "hermes/media_automation_notice_daily.py"
+  },
+  {
+    "name": "benefits-steam-readonly",
+    "schedule": {
+      "kind": "cron",
+      "expr": "7,37 * * * *",
+      "display": "7,37 * * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_steam.py",
+    "enabled": false
   }
 ]

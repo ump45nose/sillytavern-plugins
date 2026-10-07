@@ -12,6 +12,11 @@ REASONS = {
     "configuration_or_io_error": "配置或结果保存失败", "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "Epic 配置或浏览器异常",
     "full_intervention_pending": "微软任务遇到验证或登录问题",
+    "steam_login_required": "Steam 需要首次登录或恢复会话",
+    "steam_account_mismatch": "Steam 账号身份不匹配",
+    "private_file_unreadable": "Steam 私有配置未准备完成",
+    "discovery_coverage_incomplete": "自动发现覆盖不完整",
+    "discovery_candidates_require_review": "候选证据需要核对",
 }
 
 
@@ -61,6 +66,18 @@ def describe(platform, row):
             names = [x["name"] for x in items if x.get("reason") == key]
             if names:
                 parts.append(label + "：" + "、".join(names[:12]))
+    elif platform == "steam":
+        parts += ["核验候选 " + count("discovered_packages") + " 个",
+                  "新领 " + count("claimed_packages") + " 个包"]
+        eligible = [x["name"] for x in items if x.get("reason") == "dry_run_eligible"]
+        owned = [x["name"] for x in items if x.get("reason") in {
+            "owned_package_verified", "previous_submission_owned_verified"}]
+        if eligible:
+            parts.append("只读核验合格、待授权领取：" + "、".join(eligible[:12]))
+        if owned:
+            parts.append("已拥有：" + "、".join(owned[:12]))
+        if business.get("discovery") != "complete":
+            parts.append("发现覆盖或候选证据未确认")
     elif platform == "laowang":
         parts += ["奖励 " + count("reward"), "连续 " + count("streak") + " 天"]
     elif platform == "aliyun":

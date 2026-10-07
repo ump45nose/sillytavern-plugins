@@ -19,6 +19,7 @@ TASKS = {
     "laowang": "laowang",
     "epic": "Epic 免费游戏",
     "rewards": "Microsoft Rewards",
+    "steam": "Steam 限免",
 }
 REASONS = {
     "authentication_invalid": "登录失效",
@@ -29,6 +30,14 @@ REASONS = {
     "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "配置或浏览器异常",
     "full_intervention_pending": "遇到验证或登录问题",
+    "steam_login_required": "需要首次登录或恢复 Steam 会话",
+    "steam_account_mismatch": "SteamID 与登录账号不匹配",
+    "private_file_unreadable": "等待 Steam 首次登录与账号授权",
+    "ipc_authentication_failed": "ASF IPC 认证失败",
+    "ipc_transport_uncertain": "ASF IPC 连接未确认",
+    "private_file_permissions_or_size": "Steam 私有配置权限不符合要求",
+    "discovery_coverage_incomplete": "自动发现覆盖不完整",
+    "discovery_candidates_require_review": "候选证据需要核对",
 }
 TASK_LABELS = {
     "checkin": "签到",
@@ -40,6 +49,7 @@ TASK_LABELS = {
     "desktop_search": "电脑搜索",
     "more_promotions": "更多活动",
     "claim": "领取任务",
+    "discovery": "自动发现",
     "app_daily": "APP签到",
     "app_promotions": "APP活动",
 }
@@ -49,6 +59,7 @@ STATE_LABELS = {
     "failed": "失败",
     "busy": "执行中",
     "pending": "待处理",
+    "incomplete": "未完成",
 }
 EXECUTION_LABELS = {
     "failed": "执行失败",
@@ -122,6 +133,15 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         ]
         if uncredited:
             parts.append("积分未确认：" + "、".join(uncredited[:8]))
+        if platform == "steam":
+            eligible = [str(item.get("name") or item.get("id")) for item in items
+                        if isinstance(item, Mapping) and item.get("reason") == "dry_run_eligible"]
+            if eligible:
+                parts.append("只读核验合格、待授权领取：" + "、".join(eligible[:8]))
+            if isinstance(business, Mapping) and business.get("discovery") != "complete":
+                reason = str(row.get("reason") or "unknown")
+                if reason in REASONS and execution == "ok":
+                    parts.append(REASONS[reason])
 
     return "；".join(parts) if parts else None
 
