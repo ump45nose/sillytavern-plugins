@@ -114,13 +114,15 @@ def main():
             time.sleep(1)
         raise RuntimeError('ipc_start_deadline_exceeded')
 
-    def compose(overlay=None):
+    def compose(overlay=None, stop=False):
         command = ['docker', 'compose', '-f', str(args.compose)]
         if overlay is not None:
             command += ['-f', str(overlay)]
         child = None
         try:
-            child = subprocess.Popen(command + ['up', '-d', '--force-recreate', '--timeout', '10', 'asf'],
+            operation = (['stop', '--timeout', '10', 'asf'] if stop else
+                         ['up', '-d', '--force-recreate', '--timeout', '10', 'asf'])
+            child = subprocess.Popen(command + operation,
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      start_new_session=True)
             code = child.wait(timeout=90)
@@ -129,6 +131,11 @@ def main():
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait()
             raise RuntimeError('container_recreate_failed') from None
+        except BaseException:
+            if child is not None and child.poll() is None:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
+            raise
         if code:
             raise RuntimeError('container_recreate_failed')
 
@@ -157,6 +164,9 @@ def main():
                            '--no-restart --no-config-migrate >/dev/null 2>&1'],
             'volumes': [str(log_config) + ':/app/NLog.config:ro'],
         }}})
+        # Stop first: ASF watches config files and its restart policy can race
+        # Compose recreation if headless/bot settings change while it runs.
+        compose(stop=True)
         mutated = True
         private_json(bot_path, {**original_bot, 'Enabled': False, 'SteamLogin': args.login_name,
                                'EnableFreePackages': False, 'FarmingPreferences': 1,
@@ -215,24 +225,23 @@ def main():
             time.sleep(1)
         else:
             raise RuntimeError('persistent_session_not_ready')
-        # Stop before writing config so the watcher cannot race an active login.
-        if bot().get('KeepRunning'):
-            request(prefix + '/Stop', post=True)
-        private_json(bot_path, {**original_bot, 'Enabled': True, 'SteamLogin': args.login_name,
-                               'EnableFreePackages': False, 'FarmingPreferences': 1,
-                               'RemoteCommunication': 0, 'OnlineStatus': 0, 'UseLoginKeys': True})
         verified = True
         print('qr_account_verified; restoring normal headless service', flush=True)
     finally:
         try:
             if mutated:
+                try:
+                    compose(stop=True)
+                except RuntimeError:
+                    # Restore private settings even if Docker is unavailable;
+                    # then retry the normal Compose deployment below.
+                    pass
                 if not verified:
-                    try:
-                        if bot().get('KeepRunning'):
-                            request(prefix + '/Stop', post=True)
-                    except Exception:
-                        pass
                     private_json(bot_path, {**original_bot, 'Enabled': False})
+                else:
+                    private_json(bot_path, {**original_bot, 'Enabled': True, 'SteamLogin': args.login_name,
+                                           'EnableFreePackages': False, 'FarmingPreferences': 1,
+                                           'RemoteCommunication': 0, 'OnlineStatus': 0, 'UseLoginKeys': True})
                 private_json(global_path, original_global)
                 compose()
         finally:
