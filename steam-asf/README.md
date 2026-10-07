@@ -13,7 +13,8 @@ Private data lives outside both repositories under
 
 - `config/`: ASF global/bot configuration and persistent login/session databases.
 - `plugins/`: verified FreePackages binaries, mounted read-only.
-- `logs/`: ASF logs; the Docker log is separately bounded.
+- `logs/`: private QR diagnostic metadata; the Docker log is separately bounded.
+  Normal ASF `log.txt` remains in the container's writable layer.
 - `private/connection.json`: generated IPC identity, preserved across restores.
 - `private/steam.json`: created after the user completes login and identity checks.
 
