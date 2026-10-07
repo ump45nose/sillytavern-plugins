@@ -21,10 +21,11 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, ProxyHandler
 
 
-NULL_LOGGING = '''<nlog xmlns="http://www.nlog-project.org/schemas/NLog.xsd"
+QR_LOGGING = '''<nlog xmlns="http://www.nlog-project.org/schemas/NLog.xsd"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" throwConfigExceptions="true">
- <targets><target name="discard" xsi:type="Null"/></targets>
- <rules><logger name="*" minlevel="Trace" writeTo="discard"/></rules>
+ <targets><target name="metadata" xsi:type="File" fileName="/app/logs/qr-metadata.log"
+  layout="${longdate}|${level}|${callsite:className=false:includeNamespace=false}|${exception:format=Type}"/></targets>
+ <rules><logger name="*" minlevel="Info" writeTo="metadata"/></rules>
 </nlog>
 '''
 
@@ -143,7 +144,7 @@ def main():
     try:
         # ASF's QR implementation logs its URI and writes ASCII QR directly to
         # stdout. Disable both paths before switching off headless mode.
-        log_config.write_text(NULL_LOGGING)
+        log_config.write_text(QR_LOGGING)
         log_config.chmod(0o600)
         private_json(overlay, {'services': {'asf': {
             'entrypoint': ['/bin/sh', '-c', 'umask 077; exec dotnet /asf/ArchiSteamFarm.dll '
@@ -165,12 +166,20 @@ def main():
         request(prefix + '/Input', {'Type': 8, 'Value': 'Y'}, post=True)
         request(prefix + '/Start', post=True)
         previous = None
+        had_challenge = False
+        sessions = 1
         until = time.monotonic() + args.timeout
         while time.monotonic() < until:
             current = bot()
             if current.get('IsConnectedAndLoggedOn'):
                 break
             challenge = current.get('QrChallengeURL')
+            if had_challenge and not challenge:
+                sessions += 1
+                had_challenge = False
+                if sessions > 3:
+                    raise RuntimeError('qr_session_retry_limit')
+                print('qr_session_reset; waiting for a fresh challenge', flush=True)
             if challenge and challenge != previous:
                 url = urlsplit(challenge)
                 if url.scheme != 'https' or url.netloc != 's.team' or not url.path.startswith('/q/'):
@@ -179,11 +188,15 @@ def main():
                 image.save(png)
                 png.chmod(0o600)
                 previous = challenge
+                had_challenge = True
                 print('qr_ready: ' + str(png), flush=True)
             if not current.get('KeepRunning'):
                 raise RuntimeError('steam_login_stopped')
             if current.get('RequiredInput') in (1, 2, 3, 4, 5, 7):
                 raise RuntimeError('qr_login_requires_other_authorization')
+            # ASF consumes its QR preference once. Keep only that non-secret
+            # preference ready for a network reconnect, never credentials.
+            request(prefix + '/Input', {'Type': 8, 'Value': 'Y'}, post=True)
             time.sleep(2)
         else:
             raise RuntimeError('qr_login_deadline_exceeded')
@@ -240,7 +253,11 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, ValueError, KeyError, OSError):
+    except RuntimeError as error:
+        reason = str(error) if re.fullmatch(r'[a-z0-9_]+', str(error)) else 'local_login_error'
+        print('QR login stopped: ' + reason, file=sys.stderr)
+        raise SystemExit(1)
+    except (ValueError, KeyError, OSError):
         # Never print HTTP responses, arbitrary exception text or QR URIs.
         print('QR login stopped; inspect sanitized state before retrying.', file=sys.stderr)
         raise SystemExit(1)
