@@ -84,7 +84,7 @@ manifest 必须明确 package/app IDs、game 类型、四个排除标志、永�
 
 ## 已核接口与来源
 
-- 接口核验基线：FreePackages `9c8be907681fbc67c7bd70589ba7fc4245340b50`（2026-10-06 读取）；未运行该版本的真实 ASF 实例
+- 源码接口审阅基线：FreePackages `9c8be907681fbc67c7bd70589ba7fc4245340b50`（2026-10-06 读取）。2026-10-07 已在 NAS 核验 ASF 6.3.10.3 + FreePackages 1.7.1.1 的真实只读响应，见 [部署与验收记录](../../docs/STEAM_DEPLOYMENT_2026-10-07.md)。已拥有列表的零号基础条目接受后排除，不作为候选。
 - [FreePackages README / IPC 清单](https://github.com/Citrinate/FreePackages)
 - [FreePackagesController](https://github.com/Citrinate/FreePackages/blob/main/FreePackages/IPC/Api/FreePackagesController.cs)：GetChangesSince、GetProductInfo、GetOwnedPackages、RequestFreeSubLicense
 - [ASF IPC](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/IPC)：Authentication header
@@ -92,4 +92,4 @@ manifest 必须明确 package/app IDs、game 类型、四个排除标志、永�
 - [SteamKit 枚举](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/enums.steamd) / [EResult](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/eresult.steamd)
 - [历史商店购买块结构](https://github.com/moonstar-x/free-games-crawler/blob/2322f553f182d94c9a0a5b718d65ef0db55c5bd8/test/crawlers/__mocks__/steam_page_game.txt)：仅核 DOM，不代表当前活动；测试重建最小结构，不包含原页面 sessionid
 
-新代码没有复制上游实现或引入运行依赖。ASF/插件的版本升级可能改变协议；响应结构不符会停止领取。真实 ASF+FreePackages 联调和真实账号入库验收仍需后续授权与环境。
+新代码没有复制上游实现或引入运行依赖。ASF/插件的版本升级可能改变协议；响应结构不符会停止领取。真实登录、持久恢复和只读接口已联调；当前实际永久赠送样本为被排除的 DLC，合格普通游戏的完整正向路径尚未覆盖。真实领取与入库验收仍需另行明确授权。
