@@ -300,6 +300,40 @@ class EmbyLibrary:
             receipt["state"] = "published"
             checkpoint()
 
+    def capture_movie_states(self, unit, users):
+        if unit.kind != "movie" or len(unit.items) != 1:
+            raise ValueError("仅支持单电影状态迁移")
+        item_id = str(unit.items[0]["item_id"])
+        return {str(user): self.http.state(str(user), item_id) for user in users}
+
+    def restore_relocated_movie(self, path, user_states, timeout=120):
+        """Restore watched/favorite state after a same-library file relocation."""
+        expected_path = self._map(str(path), reverse=True)
+        self.http.refresh()
+        receipts = {}
+        for user, state in user_states.items():
+            deadline = time.monotonic() + max(1, min(int(timeout), 180))
+            target = None
+            while time.monotonic() < deadline:
+                rows = self.http.items(
+                    str(user), Recursive=True, IncludeItemTypes="Movie")
+                matches = [row for row in rows
+                           if str(row.get("Path") or "") == expected_path]
+                if len(matches) == 1:
+                    target = str(matches[0]["Id"])
+                    break
+                if len(matches) > 1:
+                    raise ValueError("迁移目标在 Emby 中存在多个同路径条目")
+                time.sleep(3)
+            if target is None:
+                raise LibraryPending("迁移目标尚未被 Emby 扫描到")
+            if self.http.state(str(user), target) != state:
+                self.http.set_state(str(user), target, state)
+            if self.http.state(str(user), target) != state:
+                raise ValueError("迁移后的已看/收藏状态回读不一致")
+            receipts[str(user)] = {"target": target, "state": state}
+        return receipts
+
     def migrate(self, job, artifacts, checkpoint):
         self._publish_identity(job, artifacts, checkpoint)
         self.http.refresh()
