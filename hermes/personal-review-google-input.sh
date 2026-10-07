@@ -1,7 +1,1 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Google 原始输入由 no-agent 任务生成，凭据内容不会进入参数、stdout 或 Hermes prompt。
-cd /vol2/1000/Docker/personal-review
-export PYTHONPATH=.
-exec /home/hermes/.hermes/hermes-agent/venv/bin/python3 "$(dirname "$0")/personal-review-google-input.py"
+/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-google-input.sh
