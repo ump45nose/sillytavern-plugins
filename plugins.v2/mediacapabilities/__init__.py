@@ -84,6 +84,7 @@ class MediaCapabilities(_PluginBase):
                 ('/acquisition_search', self.acquisition_search, ['POST'], '开始聚合资源查询'),
                 ('/acquisition_search_status', self.acquisition_search_status, ['GET'], '读取逐站查询结果'),
                 ('/acquisition_more', self.acquisition_more, ['POST'], '查询下一页资源'),
+                ('/acquisition_upgrade_check', self.acquisition_upgrade_check, ['POST'], '只读洗版检测'),
                 ('/acquisition_download', self.acquisition_download, ['POST'], '原子选源与下载提交'),
                 ('/acquisition_status', self.acquisition_status, ['GET'], '读取下载回执与进度'),
             ]]
@@ -99,6 +100,11 @@ class MediaCapabilities(_PluginBase):
     def acquisition_more(self, payload: dict) -> dict:
         from media_capabilities.acquisition.runtime import guarded
         return guarded(lambda: self.get_runtime().execution().more(payload['session_id'], payload['source_id']))
+
+    def acquisition_upgrade_check(self, payload: dict) -> dict:
+        from media_capabilities.acquisition.runtime import guarded
+        return guarded(lambda: self.get_runtime(readonly=True).execution(
+            readonly=True).detect_upgrade(payload))
 
     def acquisition_download(self, payload: dict, wait_timeout: float = 120) -> dict:
         from media_capabilities.acquisition.runtime import guarded
