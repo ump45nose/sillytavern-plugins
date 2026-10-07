@@ -19,6 +19,8 @@ DEFAULTS = {
     "emby_token_path": "/config/adultcollection-emby.token",
     "source_roots": ["/Adult/JAV", "/Adult/Western"],
     "path_mappings": [],
+    "downloader_path_mappings": [],
+    "downloaders": [],
     "jav_root": "/Adult/JAV",
     "western_root": "/Adult/Western",
     "adult_strm_root": "/Adult/STRM",
@@ -31,6 +33,7 @@ DEFAULTS = {
     "javdb_limit": 12,
     "source_timeout": 30,
     "magnet_timeout": 25,
+    "emby_migration_timeout": 120,
     "ffprobe": "ffprobe",
 }
 
@@ -77,7 +80,7 @@ class AdultCollection(_PluginBase):
         from pathlib import Path
         from media_capabilities.emby import EmbyTransport, EmbyLibrary
         from media_capabilities.files import LocalFiles
-        from media_capabilities.moviepilot import expected_episodes
+        from media_capabilities.moviepilot import expected_episodes, MoviePilotDownloader
         from media_capabilities.store import PluginTaskStore
         from .workflow import AdultCollectionService
 
@@ -94,8 +97,13 @@ class AdultCollection(_PluginBase):
             self.config["western_root"],
         ]))
         files = LocalFiles(roots, roots, self.config["ffprobe"])
+        downloader = MoviePilotDownloader(files, {
+            "downloaders": self.config.get("downloaders") or [],
+            "path_mappings": self.config.get("downloader_path_mappings") or [],
+        })
         self.application = AdultCollectionService(
-            PluginTaskStore(self), library, files, self.config)
+            PluginTaskStore(self), library, files, self.config,
+            downloader=downloader)
 
     def get_state(self):
         return bool(self.config.get("enabled"))
@@ -207,15 +215,42 @@ class AdultCollection(_PluginBase):
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
 
-    @staticmethod
-    def get_render_mode():
-        return "vue", "dist"
-
     def get_form(self):
-        return None, deepcopy(DEFAULTS)
+        fields = [
+            ("VSwitch", "enabled", "启用 Adult 收藏与洗版"),
+            ("VSwitch", "dry_run", "仅检测，不迁移文件"),
+            ("VSwitch", "auto_upgrade", "JAV 自动提交洗版任务"),
+            ("VSwitch", "public_route_enabled", "允许 JavDB 公网磁力下载到 115"),
+            ("VTextField", "cron", "扫描计划"),
+            ("VTextField", "emby_url", "Emby 地址"),
+            ("VTextField", "emby_token_path", "Emby token 文件"),
+            ("VTextField", "jav_root", "JAV 媒体库目录"),
+            ("VTextField", "western_root", "Western 媒体库目录"),
+            ("VTextField", "adult_strm_root", "Adult STRM 目录"),
+            ("VTextField", "mteam_site_id", "M-Team 站点 ID"),
+            ("VTextField", "javdb_binary", "javdb-cli 路径"),
+            ("VTextField", "near_size_ratio", "同档资源体积接近阈值"),
+            ("VTextField", "emby_migration_timeout", "Emby 状态迁移等待秒数"),
+        ]
+        content = [{
+            "component": "VRow",
+            "content": [{
+                "component": "VCol",
+                "props": {"cols": 12, "md": 6},
+                "content": [{
+                    "component": component,
+                    "props": {"model": key, "label": label},
+                }],
+            }],
+        } for component, key, label in fields]
+        return [{"component": "VForm", "content": content}], deepcopy(DEFAULTS)
 
     def get_page(self):
-        return None
+        text = self.error or (
+            "默认 dry-run。Vixen 仅 4K+收藏迁移；JAV 需 M-Team 与 JavDB 双源核验。"
+        )
+        return [{"component": "VAlert", "props": {
+            "type": "warning" if self.error else "info", "text": text}}]
 
     def get_command(self):
         return []
