@@ -4,7 +4,9 @@ import pytest
 
 from media_capabilities.acquisition.adult import classify_adult, collection_path
 from media_capabilities.acquisition.javdb_cli import JavDbCli, normalize_jav_number
+from media_capabilities.acquisition.models import MediaIdentity, ResourceCandidate, SourcePage
 from media_capabilities.acquisition.quality_selection import MediaCandidate
+from media_capabilities.acquisition.service import AcquisitionService
 from media_capabilities.acquisition.upgrade import decide_upgrade, facts_from_library, is_4k
 
 
@@ -81,3 +83,44 @@ def test_javdb_cli_parses_stable_json_contract(monkeypatch):
     rows = cli.magnets("ABC-123")
     assert rows[0].size_bytes == 4096 * 1024 * 1024
     assert rows[0].magnet.endswith("a" * 40)
+
+
+def test_generic_detector_is_read_only_and_uses_verified_candidates():
+    class Identities:
+        def identify(self, request):
+            return [MediaIdentity(
+                request.title, "movie", tmdb_id=123, year=request.year,
+                exact_match=True)]
+
+    class Source:
+        source_id = "fake"
+        public_source = False
+
+        def search(self, target, cursor=None):
+            return SourcePage("OK", [
+                ResourceCandidate(
+                    "release", "fake", "Film.2026.2160p.BluRay.mkv",
+                    14_000, seeders=8)
+            ])
+
+        def resolve(self, candidate, target):
+            return [MediaCandidate(
+                "pt", candidate.title, 14_000, 14_000,
+                candidate.candidate_id, files=("Film.2026.2160p.BluRay.mkv",))]
+
+    service = AcquisitionService(
+        Identities(), [Source()], downloader=None, registry=None)
+    try:
+        result = service.detect_upgrade({
+            "title": "Film", "year": 2026, "media_type": "movie",
+            "current": {
+                "title": "Film.2026.1080p.WEB-DL.mkv",
+                "video_bytes": 8_000,
+                "probe": probe(1920, 1080),
+            },
+        })
+    finally:
+        service.close()
+    assert result["status"] == "complete"
+    assert result["decision"]["action"] == "upgrade"
+    assert result["sources"]["fake"]["verified"] == 1
