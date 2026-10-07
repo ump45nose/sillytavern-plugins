@@ -31,15 +31,16 @@ class JavDbMagnet:
 
 
 def normalize_jav_number(value: str) -> str:
-    text = re.sub(r"[^A-Za-z0-9]", "", value or "").upper()
-    match = re.search(r"(FC2PPV\d{4,9}|[A-Z]{2,12}\d{2,7})", text)
+    text = (value or "").upper()
+    fc2 = re.search(
+        r"(?<![A-Z0-9])FC2(?:[-_. ]*PPV)?[-_. ]*(\\d{4,9})(?!\\d)", text)
+    if fc2:
+        return "FC2-PPV-" + fc2.group(1)
+    match = re.search(
+        r"(?<![A-Z0-9])([A-Z]{2,12})[-_. ]?(\\d{2,7})(?!\\d)", text)
     if not match:
         raise ValueError("无法识别 JAV 番号")
-    token = match.group(1)
-    if token.startswith("FC2PPV"):
-        return "FC2-PPV-" + token.removeprefix("FC2PPV")
-    split = re.fullmatch(r"([A-Z]{2,12})(\d{2,7})", token)
-    return f"{split.group(1)}-{split.group(2)}"
+    return f"{match.group(1)}-{match.group(2)}"
 
 
 def _truthy(value) -> bool:
