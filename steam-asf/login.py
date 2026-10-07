@@ -2,6 +2,7 @@
 """Human-run terminal login: transient IPC inputs, never password/code files."""
 import argparse
 import atexit
+import fcntl
 import getpass
 import json
 import os
@@ -24,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--steam-id')
     parser.add_argument('--region')
+    parser.add_argument('--login-name', help='Steam account login name, not the display nickname')
     args = parser.parse_args()
     if os.getuid() != 988 or not sys.stdin.isatty():
         parser.error('run as hermes in your own interactive terminal')
@@ -31,7 +33,14 @@ def main():
     args.region = args.region or input('Actual Steam store country (CN/TW/US etc.): ').strip().upper()
     if not re.fullmatch(r'7656119[0-9]{10}', args.steam_id) or not re.fullmatch(r'[A-Z]{2}', args.region):
         parser.error('exact SteamID64 and real store country code required')
+    if args.login_name and not re.fullmatch(r'[A-Za-z0-9_]{1,64}', args.login_name):
+        parser.error('invalid Steam login name')
     os.umask(0o077)
+    lock = (ROOT / 'private/qr-login.lock').open('a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise RuntimeError('another_steam_login_is_running') from None
     connection_path = ROOT / 'private/connection.json'
     if connection_path.stat().st_mode & 0o077 or connection_path.stat().st_uid != os.getuid():
         parser.error('IPC credential file must be owner-only')
@@ -96,7 +105,7 @@ def main():
         if current.get('KeepRunning'):
             request(prefix + '/Stop', post=True)
         print('Authorize NAS login for SteamID ' + args.steam_id + ', store country ' + args.region + '.')
-        login_name = getpass.getpass('Steam login name (hidden): ')
+        login_name = args.login_name or getpass.getpass('Steam login name (hidden): ')
         password = getpass.getpass('Steam password (hidden; memory only): ')
         if not login_name or not password:
             raise RuntimeError('empty_login_input')

@@ -75,6 +75,11 @@ In your own interactive NAS SSH terminal, run the installed helper:
 sudo -u hermes env -i PATH=/usr/bin:/bin python3 /home/yuwk/cron/scripts/steam-asf/login.py
 ```
 
+`--steam-id`, `--region` and `--login-name` can prefill the non-secret account
+identity. Use the Steam account name shown below the nickname in mobile Guard;
+the display nickname cannot authenticate. The password and Guard code still
+use hidden terminal input, never arguments. Both login helpers share a lock.
+
 Enter the exact SteamID64 and actual Steam store country. The helper hides the
 account name/password/Guard code and sends them only through authenticated
 loopback IPC `/Input`; ASF does not serialize these transient inputs into its
