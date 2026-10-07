@@ -42,7 +42,7 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。客户端在 `apps/mac-client` 管理，复用这两个 Agent。
 
-2026-10-07 微信采集默认改为全部单聊和群聊，原始消息 JSON 与正文直接归档，Fact 抽取关闭。生产镜像为 `local/personal-data-hub:wechat-faithful-2ba5c0e`，Mac 查看端为 0.3.0 build 7；历史回填、保留的旧记录和媒体文件限制见 [微信采集验收](wechat-faithful-validation.md)。
+2026-10-07 微信采集默认改为全部单聊和群聊，原始消息 JSON 与正文直接归档，Fact 抽取关闭。媒体增量升级后的生产镜像为 `local/personal-data-hub:wechat-media-0a7fe87`，Mac 查看端为 0.3.0 build 7；历史回填、保留的旧记录和媒体文件限制见 [微信采集验收](wechat-faithful-validation.md)。
 
 后续媒体采集的 Mac 依赖在 `agents/mac/wechat-media-requirements.txt` 锁定上游提交，安装器先安装到原 CRM Python 环境，再设置 `WECHAT_MEDIA_ENABLED=true` 和仓库外的 `WECHAT_MEDIA_QUEUE`。只复用既有数据库缓存 key，图片保存原始加密 `.dat`，不提取图片密钥。NAS 需先部署支持微信媒体 PUT 的服务端；升级后重启周期采集器，使正文对账保留附件。保留媒体队列和 spool、正文 checkpoint、设备身份、原 webhook token 与全部持久卷。
 
