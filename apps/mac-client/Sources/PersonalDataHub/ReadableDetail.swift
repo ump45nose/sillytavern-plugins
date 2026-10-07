@@ -36,8 +36,8 @@ struct ReadableDetailView: View {
                 else if let record = model.detail {
                     let object = (try? JSONSerialization.jsonObject(with: Data(record.rawJSON.utf8))) as? [String: Any] ?? [:]
                     let raw = object["raw"] as? [String: Any] ?? [:], normal = object["normalized"] as? [String: Any] ?? [:]
-                    let content = record.fields.first { ["content", "body", "summary", "message"].contains($0.id) }?.value ?? ""
-                    let name = frontTitle(content) ?? record.fields.first { ["title", "subject", "display_name", "name"].contains($0.id) }?.value ?? kindName(record.kind)
+                    let content = record.wechatContent ?? record.fields.first { ["content", "body", "summary", "message"].contains($0.id) }?.value ?? ""
+                    let name = (record.wechatContent == nil ? frontTitle(content) : nil) ?? record.fields.first { ["title", "subject", "display_name", "name"].contains($0.id) }?.value ?? kindName(record.kind)
                     VStack(alignment: .leading, spacing: 24) {
                         HStack(alignment: .top, spacing: 16) {
                             Image(systemName: moduleIcons[domain(record.kind)] ?? "doc.text").font(.title).foregroundStyle(.indigo).frame(width: 54, height: 54).background(Color.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
@@ -93,7 +93,10 @@ struct ReadableDetailView: View {
                             }
                         } else {
                             let body = record.fields.first { ["content", "body", "summary", "message"].contains($0.id) }?.value
-                            if let body = body, !body.isEmpty {
+                            if let original = record.wechatContent {
+                                Text(verbatim: original.replacingOccurrences(of: "\u{0000}", with: ""))
+                                    .font(.system(size: 15)).lineSpacing(6).textSelection(.enabled)
+                            } else if let body = body, !body.isEmpty {
                                 let preview = readingBody(String(body.prefix(50000))).replacingOccurrences(of: "\u{0000}", with: "")
                                 MarkdownReadingView(text: preview)
                                 if body.count > 50000 { Text("此处显示部分正文，导出可获取完整内容。").font(.caption).foregroundStyle(.secondary) }

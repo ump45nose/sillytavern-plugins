@@ -42,6 +42,8 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。客户端在 `apps/mac-client` 管理，复用这两个 Agent。
 
+2026-10-07 微信采集默认改为全部单聊和群聊，原始消息 JSON 与正文直接归档，Fact 抽取关闭。生产镜像为 `local/personal-data-hub:wechat-faithful-2ba5c0e`，Mac 查看端为 0.3.0 build 7；历史回填、保留的旧记录和媒体文件限制见 [微信采集验收](wechat-faithful-validation.md)。
+
 ## Mac 客户端
 
 `python3 apps/mac-client/install.py` 在 Mac 构建并安装到 `~/Applications/Personal Data Hub.app`，保留前一版本。客户端的 Keychain 凭据和 Application Support 连接设置位于仓库外；打开应用后可从菜单栏查看归档与请求同步，现有 Agent 的安装和更新仍由 `agents/mac/install.py` 管理。

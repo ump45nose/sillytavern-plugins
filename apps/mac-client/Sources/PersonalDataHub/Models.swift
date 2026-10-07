@@ -120,6 +120,7 @@ struct RecordDetail {
     let occurredAt: String?
     let observedAt: String?
     let timezone: String
+    let wechatContent: String?
     let fields: [DetailField]
     let assets: [ArchiveAsset]
     let rawJSON: String
@@ -132,6 +133,11 @@ struct RecordDetail {
         occurredAt = object["occurred_at"] as? String; observedAt = object["observed_at"] as? String
         timezone = object["timezone"] as? String ?? ""
         var raw = object["raw"] as? [String: Any] ?? [:]
+        if source == "crm", kind == "interactions", raw["channel"] as? String == "wechat",
+           let message = raw["message"] as? [String: Any],
+           let record = message["record"] as? [String: Any] {
+            wechatContent = record["content"] as? String
+        } else { wechatContent = nil }
         if let bill = raw["bill"] as? [String: Any] { raw.merge(bill) { current, _ in current } }
         let normalized = object["normalized"] as? [String: Any] ?? [:]
         let readable = ["title", "subject", "sender", "content", "message", "summary", "name", "display_name", "body", "amount", "currency", "type", "remark", "duration_ms", "repo", "date", "state", "status", "upload_bytes", "download_bytes", "download_state", "validation_error", "device", "tokens", "estimated_cost_usd", "cache_read_tokens", "cache_write_tokens", "output_tokens"]
