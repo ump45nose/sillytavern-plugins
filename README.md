@@ -1,6 +1,6 @@
 # benefits-automation
 
-六个平台的 Linux 一次性脚本集合。每个平台有独立入口和业务模块，按需使用 `common/` 的运行、锁、结果和凭据能力。HTTP 签到不加载浏览器库；浏览器任务串行，用完即关闭。
+六个已部署平台与一个 Steam 开发适配器的 Linux 一次性脚本集合。每个平台有独立入口和业务模块，按需使用 `common/` 的运行、锁、结果和凭据能力。HTTP 签到不加载浏览器库；浏览器任务串行，用完即关闭。
 
 **Hermes 负责调度、日报汇总和通知。** 本仓库的边界是执行平台操作、输出 JSON 并保存执行结果，不包含 Hermes cron、Telegram 推送、消息队列、浏览器池或容器部署要求。
 
@@ -14,6 +14,8 @@
 | Laowang | [Laowang](platforms/laowang/README.md) | 自动验证码、提交和签到读回通过 |
 | Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 每日活动、桌面搜索、APP 签到/活动确认；探索必应仍在验收 |
 | Epic 免费游戏 | [Epic](platforms/epic/README.md) | 当前免费游戏已在库，原生轮询确认；新订单待验证 |
+
+新增开发适配器：[Steam ASF / FreePackages](platforms/steam/README.md)。自动发现、筛选、领取和核验的本地 HTTP 模拟端到端已跑通；默认只读，真实账号领取尚未验收，不属于下述六平台生产迁移。
 
 最新证据见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 和 [生产迁移记录](docs/MIGRATION_2026-10-03.md)。生产启动已迁至 Hermes no-agent cron，六条旧青龙任务已停用。Epic 新订单与 Rewards 未确认项保留为使用中的待完善能力。京东和中国移动不在当前六个平台中。
 
