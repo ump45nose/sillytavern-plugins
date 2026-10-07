@@ -23,7 +23,7 @@ def test_tiered_upgrade_reuses_existing_quality_hierarchy():
     current = facts_from_library("Film.2026.1080p.WEB-DL.mkv", 10_000, probe(1920, 1080))
     decision = decide_upgrade(current, [
         candidate("Film.2026.1080p.BluRay.mkv", 11_000),
-        candidate("Film.2026.2160p.WEB-DL.mkv", 14_000, cid="best"),
+        candidate("Film.2026.2160p.BluRay.mkv", 14_000, cid="best"),
     ])
     assert decision.upgrade is True
     assert decision.candidate_id == "best"
