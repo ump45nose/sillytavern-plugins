@@ -33,11 +33,11 @@ class JavDbMagnet:
 def normalize_jav_number(value: str) -> str:
     text = (value or "").upper()
     fc2 = re.search(
-        r"(?<![A-Z0-9])FC2(?:[-_. ]*PPV)?[-_. ]*(\\d{4,9})(?!\\d)", text)
+        r"(?<![A-Z0-9])FC2(?:[-_. ]*PPV)?[-_. ]*(\d{4,9})(?!\d)", text)
     if fc2:
         return "FC2-PPV-" + fc2.group(1)
     match = re.search(
-        r"(?<![A-Z0-9])([A-Z]{2,12})[-_. ]?(\\d{2,7})(?!\\d)", text)
+        r"(?<![A-Z0-9])([A-Z]{2,12})[-_. ]?(\d{2,7})(?!\d)", text)
     if not match:
         raise ValueError("无法识别 JAV 番号")
     return f"{match.group(1)}-{match.group(2)}"
