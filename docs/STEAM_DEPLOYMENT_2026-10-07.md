@@ -16,7 +16,8 @@ Hermes 封装与通知维护在 `nas-cron-jobs`。账号首次登录和持久重
 - ASF、插件及 Watchtower 自动更新关闭，挂卡暂停，远程通信关闭，
   `EnableFreePackages=false`。部署参数不含 `--claim`。
 - 持久数据位于源码外的 `/vol2/1000/Docker/benefits-automation/steam-asf`，
-  runtime UID 988/GID 984 持有；私有目录 0700、账号配置和会话数据库 0600。
+  runtime UID 988/GID 984 持有；私有目录 0700、账号配置 0600。
+  会话数据库也仅限属主访问；ASF 重新保存后可能为 0700，不能假定持续为 0600。
   该目录不受 `/home/hermes` ACL 扩权任务影响。配置中没有密码或 Guard 码。
 - 用户在 NAS 隐藏输入终端完成授权，实际 SteamID 与预期值一致。
   账号登录名和刷新会话只保存在私有数据中。CN 地区由用户确认；不根据 ASF
@@ -72,7 +73,7 @@ Hermes 实际调度 run `24c2d66a-0804-4606-b11e-99167fd3d337` 在
 
 - Hermes `benefits-steam-readonly` 已启用，`7,37 * * * *`、Asia/Taipei，
   no-agent、local delivery。通过 Hermes API 排入一次立即运行，由真实调度器
-  执行并读回 last_status=ok；常规下一次执行为 14:07。
+  执行并读回 last_status=ok；随后 14:07 常规定时触发也已验证，下一次为 14:37。
 - 实际调度、结果保存和未核验业务状态分别验证；没有把进程成功当成领取成功。
 - 原中午福利告警读取 Steam 和既有六个平台，仅报告异常或待授权项。当前真实
   Steam 结果的告警渲染已验证，并经现有专用 notice bot 确认送达原福利话题。
@@ -81,6 +82,42 @@ Hermes 实际调度 run `24c2d66a-0804-4606-b11e-99167fd3d337` 在
   相关文件，未执行全量 cron 部署或其他平台业务。
 - 回退时通过 Hermes API 暂停 Steam 任务，再停止该 ASF 服务；保留账号会话、
   discovery 队列和 journal。不能删除 intent 来重新提交。真实领取需另行明确授权。
+
+## 第二轮真实只读验收
+
+用户要求继续验收后，于 13:58 起再次验证实际账号、IPC、发现队列和官方样本。
+身份核验通过、有效已拥有包仍为 275 个；ASF healthy，IPC 无认证仍返回 401，
+仅绑定回环地址，自动领取关闭，部署参数没有 `--claim`。配置未保存密码或 Guard 码。
+
+真实入口连续运行两次，run 为 `ef7b3d6b-fd05-4ebb-8d53-6a979030ca19` 和
+`04506bb3-3eca-48f7-8b7d-c51ecdd93b81`，均扫描上限 30 个包，候选和领取为 0。
+第二次保留 27 个 metadata 未核验项；游标推进至 `39563679`，队列 38 个，
+`history_gap=false`。队列未清空，批次之外的包仍会轮转处理；结果明确保留
+`discovery_coverage_incomplete` 和 business.discovery=unknown。
+
+本轮另外读取了公开包 1804048、1838346 的真实 metadata，billingtype 分别为
+10、12，严格排除为非 NoCost；新包 1865745 的实际响应仍为 MissingToken=true。
+这区分了已确认的范围排除与无法获取元数据，未把未知包当作不存在的活动。
+
+再次验证 Rotwood DLC 的真实 CN 购买块，永久赠送 package 对应关系仍通过，
+app 的 DLC 类型仍被拒绝。搜索线索
+[Arena of Trophies](https://store.steampowered.com/app/2922790/?cc=CN&l=english)
+在真实 PICS 中为 Game、isfreeapp=1，被 F2P 排除。
+[Fireside Feelings](https://store.steampowered.com/app/2990600/?cc=CN&l=english)
+的真实 Game metadata 通过 app 类型规则，但本轮 CN 官方商店请求超时，不能确认
+当前永久赠送活动。搜索摘要不作为活动证据，未绕过地区、元数据或官方证据检查。
+
+14:07 常规定时任务自行触发，无手动 trigger。调度器读回
+`last_run_at=2026-10-07T14:07:10.306061+08:00`、last_status=ok、无 last_error，
+下一次为 14:37。真实 run `c5df148d-5b30-4e5a-96b9-99b9e9c75cd9` 扫描 30 个包，
+候选 0、领取 0；保留 28 个 metadata 未核验项。游标 `39563760`、队列 40 个，
+history_gap=false。delivery 与同 run 的归档 result 完全一致。此项证明常规调度和
+结果交付生效，业务仍为覆盖不完整；不构成合格普通游戏正向流程已通过的证据。
+
+使用部署中的 Steam 告警渲染器生成本次未核验说明，经已有专用 notice bot 确认
+向福利话题送达 1 条验收进展通知。未执行其他平台业务，也未重复发送先前的通知。
+登录排查与验收边界已保存到
+[Hermes Notion 记录](https://app.notion.com/p/3f2b46085d50815092a9d6f73d2966fb)。
 
 ## 环境事实登记
 
