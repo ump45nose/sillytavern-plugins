@@ -9,7 +9,7 @@ class MediaCapabilities(_PluginBase):
     plugin_name = '公共媒体获取能力'
     plugin_desc = '为片单、独立查询网页和下载 MCP 提供共享的搜索、核验与下载宿主'
     plugin_icon = 'Moviepilot_A.png'
-    plugin_version = '0.1.2'
+    plugin_version = '0.1.3'
     plugin_author = 'yuwk'
     author_url = ''
     plugin_config_prefix = 'mediacapabilities_'
@@ -56,7 +56,7 @@ class MediaCapabilities(_PluginBase):
             if self.runtime:
                 self.runtime.close()
             self.runtime = None
-            self.error = '请安装 media-capabilities[acquisition] 0.3.3' if isinstance(exc, ModuleNotFoundError) \
+            self.error = '请安装 media-capabilities[acquisition] 0.4.0' if isinstance(exc, ModuleNotFoundError) \
                 else str(exc) if isinstance(exc, ValueError) else '公共获取宿主初始化失败，请检查配置和持久化存储'
             logger.warning(self.error)
 
