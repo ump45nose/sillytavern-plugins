@@ -97,9 +97,11 @@ class Client:
 
     def owned(self):
         data = self.request('/Api/FreePackages/' + self.bot + '/GetOwnedPackages')
-        if not isinstance(data, list) or any(type(n) is not int or not 0 < n < 2**32 for n in data):
+        if not isinstance(data, list) or any(type(n) is not int or not 0 <= n < 2**32 for n in data):
             raise SteamError('ipc_invalid_owned_response')
-        return set(data)
+        # FreePackages exposes ASF's uint keys verbatim. Real licenses include
+        # the base package 0; it is not a claimable candidate package.
+        return {n for n in data if n > 0}
 
     def claim(self, package_id):
         # Query parameter, not a guessed JSON request body. Never queue: queued work

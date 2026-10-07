@@ -255,11 +255,18 @@ class IPCTests(unittest.TestCase):
         for response in [{'Bot1': {'IsConnectedAndLoggedOn': False}}, {'Bot1': {'IsConnectedAndLoggedOn': True, 'SteamID': 123}}]:
             with patch.object(client, 'request', return_value=response), self.assertRaises(SteamError):
                 client.session()
-        for data in [{}, ['123'], [True], [0]]:
+        for data in [{}, ['123'], [True], [-1], [2**32]]:
             with patch.object(client, 'request', return_value=data), self.assertRaises(SteamError):
                 client.owned()
         with patch.object(client, 'request', return_value=[{'Packages': {'123': {'ID': 123, 'MissingToken': False, 'KeyValues': product()}}}]):
             self.assertEqual(client.package(123), product())
+
+    def test_real_owned_wire_zero_is_not_a_candidate(self):
+        client = self.client()
+        with patch.object(client, 'request', return_value=[0, 123, 456, 123]):
+            self.assertEqual(client.owned(), {123, 456})
+        with patch.object(client, 'request', return_value=[0]):
+            self.assertEqual(client.owned(), set())
 
     def test_auth_and_redirects_are_not_retried(self):
         for status, reason in [(401, 'ipc_authentication_failed'), (403, 'ipc_authentication_failed'), (429, 'rate_limited'), (302, 'ipc_redirect_rejected')]:
