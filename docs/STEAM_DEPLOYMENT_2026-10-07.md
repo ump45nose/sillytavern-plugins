@@ -2,8 +2,9 @@
 
 Steam 业务分支 `steam-asf-adapter`（`a3b50bc`）已 fast-forward 合入并推送
 `benefits-automation/main`。业务入口直接使用 NAS 上的本仓库；部署、登录辅助入口、
-Hermes 封装与通知维护在 `nas-cron-jobs`。账号首次登录和持久重启恢复已完成，
-只读定时任务已启用。尚未发送任何领取请求，也未完成合格普通游戏的领取验收。
+Hermes 封装与通知维护在 `nas-cron-jobs`。账号首次登录和持久重启恢复已完成。
+用户随后授权免费领取；已实际取得一个免费游戏并回查确认，定时入口已开启
+经核实的限免领取。普通游戏限时赠送的正向样本仍待实际活动覆盖。
 
 ## 部署与账号
 
@@ -14,7 +15,7 @@ Hermes 封装与通知维护在 `nas-cron-jobs`。账号首次登录和持久重
   插件下载与发布摘要一致：
   `sha256:949a7be69d8c03bb85f1c8e8d169eea37c1c363166227237110e62e9c66e1961`。
 - ASF、插件及 Watchtower 自动更新关闭，挂卡暂停，远程通信关闭，
-  `EnableFreePackages=false`。部署参数不含 `--claim`。
+  `EnableFreePackages=false`。初期只读部署参数不含 `--claim`；授权后由业务入口领取。
 - 持久数据位于源码外的 `/vol2/1000/Docker/benefits-automation/steam-asf`，
   runtime UID 988/GID 984 持有；私有目录 0700、账号配置 0600。
   会话数据库也仅限属主访问；ASF 重新保存后可能为 0700，不能假定持续为 0600。
@@ -118,6 +119,58 @@ history_gap=false。delivery 与同 run 的归档 result 完全一致。此项�
 向福利话题送达 1 条验收进展通知。未执行其他平台业务，也未重复发送先前的通知。
 登录排查与验收边界已保存到
 [Hermes Notion 记录](https://app.notion.com/p/3f2b46085d50815092a9d6f73d2966fb)。
+
+## 授权领取、商店超时修复与免费游戏测试
+
+用户明确要求“缺少的如果免费就领”，并要求解决超时、找免费游戏测试。
+已开启业务入口的 `--claim`；未知 metadata 本身不能证明免费，仍需真实免费
+证据与未拥有核查。保持 ASF 后台泛收集关闭，现有限免流程的 DLC、试玩、地区
+和永久赠送检查继续生效。
+
+商店超时复现为不同 CDN 地址上的 TLS 握手超时或连接关闭。既有 ShellCrash
+规则把 `steampowered.com` 直连，导致指定本机代理后仍走故障路径。
+已在持久自定义规则及运行配置中加入唯一的精确域名规则
+`DOMAIN,store.steampowered.com,🌐 国际服务`，通过已有 controller 热加载并核对
+生效；其他配置字段与代理组选择保持一致。只改变公开商店页面的传输，Steam
+其余域名规则、IPC 本机直连和实际账号 CN 地区均保留。
+
+业务配置新增仅限本机、无认证信息的 `store_proxy_url`。匿名商店 GET 的传输错误
+和 500/502/503/504 最多重试一次，每次超时 10 秒；429、403 和重定向不重试。
+不传 Steam Cookie 或 IPC 密钥，TLS 证书检查继续开启，领取 POST 不重试。
+修复后连续读取三个真实 CN 页面均约 1.3 秒返回。Fireside Feelings 的真实售价
+为 ¥19.80，明确排除；未根据之前的搜索预告把付费游戏当免费活动。
+
+实际测试游戏为
+[Arena of Trophies](https://store.steampowered.com/app/2922790/?cc=CN&l=english)：
+PICS 的 Game、isfreeapp=1 和 CN 商店同一购买块内的 Free To Play 价格及对应
+app 启动操作均通过。此样本是 F2P，使用显式单 app 免费许可接口验收，未伪造
+限时促销证据或改变自动发现的范围。
+
+- run `ec8fee91-ed82-4608-a212-f35a042b0b17`；领取前 app 未拥有。
+- 在共享账号/SteamID 锁内先把单 app intent 持久化到私有目录，再发送一次
+  `RequestFreeAppLicense` POST；Result=1、GrantedApps=[2922790]、
+  GrantedPackages=[1135007]。
+- 实际 owned app/package 回查确认到账，有效已拥有包 275 → 276。
+  新 package 的 PICS 为 billingtype=12、licensetype=1、status=0，包含该 app。
+- intent 标记 confirmed；授予包登记到共享 journal，计入已有领取频率预算。
+  再次核对已拥有，新增 POST=0。私有 receipt 保留实际方法与完整回查证据，
+  common run result 也已保存。
+- Hermes 原任务 ID 保留，名称改为 `benefits-steam-free-claim`，仍为每小时
+  7、37 分钟、Asia/Taipei。私有 launcher 已读回 arguments=[--claim]，
+  其他六平台配置保持一致。
+- 实际调度 run `36d8f7f0-3dd8-4b4a-88c1-5c55846010c2` 于 14:32 执行成功，
+  扫描 30 个变化包，合格候选 0、额外领取 0，29 项缺少 metadata；继续保留
+  `discovery_coverage_incomplete`。自动运行成功不代表这些未知包已被证明免费。
+- 14:37 常规定时自行触发，run `d48414ab-e5ee-4dec-80a4-cec656cf2549` 同样成功，
+  扫描 30 个包，28 项 metadata 不足，候选/额外领取 0；游标 39564417、队列 110。
+  归档与交付结果一致；同账号仍拥有测试 app 与 package，ASF healthy。
+- 真实免费领取验收通知经原福利 notice bot 确认送达 1 条。13 项相关既有回归检查
+  及针对性重试、代理、真实 CN 价格/免费块冒烟通过，未运行其他平台业务。
+
+ShellCrash 修改前的私有备份位于
+`/etc/ShellCrash/backups/benefits-steam-store-20261007-142718`；业务配置与 launcher
+也有授权前备份。回退领取仅移除 Steam arguments 中的 `--claim`，保留所有 intent
+与 journal；回退商店路由仅移除该精确规则并热加载。
 
 ## 环境事实登记
 

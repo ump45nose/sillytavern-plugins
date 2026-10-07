@@ -158,13 +158,13 @@ def region_restriction(node, list_key, flag_key, region, separator=' '):
     return None
 
 
-def verify_app(tree, app_id, region):
+def verify_app(tree, app_id, region, allow_free_to_play=False):
     if tree.get('Name') != 'appinfo' or leaf(tree, 'appid') != str(app_id):
         return 'app_metadata_mismatch'
     common, extended = child(tree, 'common'), child(tree, 'extended')
     if (leaf(common, 'type') or '').lower() != 'game':
         return 'non_game_or_unknown_app_excluded'
-    if leaf(extended, 'isfreeapp') not in (None, '0', 'false'):
+    if not allow_free_to_play and leaf(extended, 'isfreeapp') not in (None, '0', 'false'):
         return 'free_to_play_or_unknown_app_excluded'
     if leaf(extended, 'playtest_type') is not None or leaf(extended, 'betaforappid') not in (None, '0'):
         return 'playtest_app_excluded'

@@ -15,7 +15,7 @@
 | Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 每日活动、桌面搜索、APP 签到/活动确认；探索必应仍在验收 |
 | Epic 免费游戏 | [Epic](platforms/epic/README.md) | 当前免费游戏已在库，原生轮询确认；新订单待验证 |
 
-[Steam ASF / FreePackages](platforms/steam/README.md) 已合入 main 并部署到 NAS：首次登录、同账号重启恢复、真实 PICS/已拥有查询及 CN 官方永久赠送证据解析已核验；Hermes 只读定时任务已启用并验证调度、通知。真实扫描中缺少访问 token 的包保留待核查，两个官方促销样本为 DLC，按规则排除；合格普通游戏的完整正向路径尚未覆盖，未发送领取请求。见 [2026-10-07 部署与验收记录](docs/STEAM_DEPLOYMENT_2026-10-07.md)。这次 Steam 部署独立于下述六平台生产迁移。
+[Steam ASF / FreePackages](platforms/steam/README.md) 已合入 main 并部署到 NAS：登录、持久恢复、真实接口、定时和通知已核验。用户已授权免费领取，Arena of Trophies 实际取得免费许可，owned 回查与防重复检查通过；公开商店超时的代理路由已修复，Hermes 已启用经核实的限免领取。缺少访问 token 的包继续待核查，合格普通游戏的限时赠送正向样本仍待实际活动覆盖。见 [2026-10-07 部署与验收记录](docs/STEAM_DEPLOYMENT_2026-10-07.md)。这次 Steam 部署独立于下述六平台生产迁移。
 
 最新证据见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 和 [生产迁移记录](docs/MIGRATION_2026-10-03.md)。生产启动已迁至 Hermes no-agent cron，六条旧青龙任务已停用。Epic 新订单与 Rewards 未确认项保留为使用中的待完善能力。京东和中国移动不在当前六个平台中。
 

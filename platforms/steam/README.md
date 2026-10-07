@@ -2,7 +2,7 @@
 
 已实现可运行的链路：PICS 变化发现 → package/app 核验 → Steam 官方商店永久赠送证据 → 已拥有核对 → 写入提交意图 → 请求免费 package → 到账读回 → common JSON 结果。只用 Python 标准库，不启动浏览器、不保存 Steam 密码、不创建 cron。
 
-**开发验证范围：本地 HTTP 模拟服务端到端通过；未登录真实 Steam、未实际领取。** 2026-10-07 已部署真实 ASF/FreePackages 并核对 IPC 认证、插件路由和持久目录；真实账号端到端待首次登录，见 [部署记录](../../docs/STEAM_DEPLOYMENT_2026-10-07.md)。自动发现是保守、有限覆盖的实现，不保证搜全所有正在限免的游戏。任何证据不足都不领取。
+2026-10-07 已完成真实登录、持久重启恢复、只读发现和通知验收。用户随后授权免费领取，实际取得 Arena of Trophies 的免费许可，owned 回查与防重复检查通过；NAS 定时入口已开启 `--claim`。该验收样本使用单 app 的免费许可接口，自动限免发现仍保留以下普通游戏、活动期限和官方永久赠送证据规则，见 [部署记录](../../docs/STEAM_DEPLOYMENT_2026-10-07.md)。发现覆盖有限，证据不足的包继续待核查。
 
 ## 先跑模拟流程（无需账号、完全离线）
 
@@ -38,6 +38,13 @@ python3 platforms/steam/run.py --runtime-root /absolute/private/benefits-data --
 ```
 
 `--execute` 默认仍是只读发现/核验，不发领取 POST；合格候选显示 `dry_run_eligible`，退出码 3。日志不打印配置、原始响应或 IPC 密码。凭据放 JSON，不放命令行。
+
+公开商店请求可在私有配置中显式设置 `store_proxy_url`，例如
+`http://127.0.0.1:7890`；只接受没有认证信息的本机 HTTP 代理，未设置时直连。
+仅匿名官方商店 GET 使用该代理，保持真实账号 `cc`、TLS 校验和禁止重定向，
+不发送 Steam Cookie 或 IPC 认证。传输错误及 500/502/503/504 最多重试一次，
+每次超时 10 秒；429、403、重定向不重试。IPC 和领取 POST 始终不自动重试。
+代理自身的 Steam 商店路由也需实际验证，单纯指定代理不代表请求已走代理出口。
 
 只有额外显式加 `--claim` 才开启真实领取。执行前应先审核只读输出并取得账号操作授权：
 
@@ -92,4 +99,4 @@ manifest 必须明确 package/app IDs、game 类型、四个排除标志、永�
 - [SteamKit 枚举](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/enums.steamd) / [EResult](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/eresult.steamd)
 - [历史商店购买块结构](https://github.com/moonstar-x/free-games-crawler/blob/2322f553f182d94c9a0a5b718d65ef0db55c5bd8/test/crawlers/__mocks__/steam_page_game.txt)：仅核 DOM，不代表当前活动；测试重建最小结构，不包含原页面 sessionid
 
-新代码没有复制上游实现或引入运行依赖。ASF/插件的版本升级可能改变协议；响应结构不符会停止领取。真实登录、持久恢复和只读接口已联调；当前实际永久赠送样本为被排除的 DLC，合格普通游戏的完整正向路径尚未覆盖。真实领取与入库验收仍需另行明确授权。
+新代码没有复制上游实现或引入运行依赖。ASF/插件的版本升级可能改变协议；响应结构不符会停止领取。用户已授权免费领取，单个真实 F2P 游戏的官方免费证据、`RequestFreeAppLicense`、owned app/package 回查已验证；默认自动发现仍不批量收集 F2P。合格普通游戏的限时永久赠送正向分支仍需实际活动覆盖。

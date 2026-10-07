@@ -8,29 +8,57 @@ from html.parser import HTMLParser
 from http.client import HTTPException
 import re
 import json
+import ipaddress
+import time
 from pathlib import Path
 from common.model import atomic_json
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener, ProxyHandler
 from .ipc import NoRedirect, SteamError
 from .candidates import child, leaf, verify_package, verify_app
 
 
+def validate_store_proxy(value):
+    """Only an explicit local HTTP proxy, never credentials or environment proxy."""
+    if not isinstance(value, str):
+        raise SteamError('invalid_store_proxy')
+    try:
+        url = urlsplit(value)
+        local = url.hostname == 'localhost' or ipaddress.ip_address(url.hostname).is_loopback
+        if (url.scheme != 'http' or not local or url.username is not None or url.password is not None
+                or url.path not in {'', '/'} or url.query or url.fragment
+                or url.port is None or not 1 <= url.port <= 65535):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise SteamError('invalid_store_proxy') from None
+    return value.rstrip('/')
+
+
 class StoreClient:
-    def __init__(self):
-        self.opener = build_opener(ProxyHandler({}), NoRedirect())
+    def __init__(self, proxy_url=None):
+        proxies = {'https': validate_store_proxy(proxy_url)} if proxy_url is not None else {}
+        self.opener = build_opener(ProxyHandler(proxies), NoRedirect())
 
     def page(self, app_id, region):
         # Public store page only, no Steam cookies, keys, or ASF credentials.
+        # Region remains the account's declared country even with a local proxy.
         url = f'https://store.steampowered.com/app/{app_id}/?' + urlencode({'cc': region, 'l': 'english'})
-        try:
-            with self.opener.open(Request(url, headers={'Accept': 'text/html'}), timeout=15) as response:
-                raw = response.read(2 * 1024 * 1024 + 1)
-        except HTTPError as error:
-            raise SteamError('store_rate_limited' if error.code == 429 else 'store_unavailable') from None
-        except (URLError, OSError, TimeoutError, HTTPException):
-            raise SteamError('store_unavailable') from None
+        for attempt in range(2):
+            try:
+                with self.opener.open(Request(url, headers={'Accept': 'text/html'}), timeout=10) as response:
+                    raw = response.read(2 * 1024 * 1024 + 1)
+                break
+            except HTTPError as error:
+                if error.code == 429:
+                    raise SteamError('store_rate_limited') from None
+                if error.code not in {500, 502, 503, 504} or attempt:
+                    raise SteamError('store_unavailable') from None
+            except (URLError, OSError, TimeoutError, HTTPException):
+                if attempt:
+                    raise SteamError('store_unavailable') from None
+            # Retry only this anonymous GET. IPC and license POSTs never retry.
+            time.sleep(0.3)
         if len(raw) > 2 * 1024 * 1024:
             raise SteamError('store_response_too_large')
         try:
@@ -49,16 +77,20 @@ class PurchaseBlocks(HTMLParser):
         self.ignored = 0
         self.free_form = False
         self.promotion_text = False
+        self.price_depth = None
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
         classes = set((values.get('class') or '').split())
         if self.block is None and tag == 'div' and 'game_area_purchase_game' in classes:
-            self.block = {'text': [], 'promotion_text': [], 'packages': set()}
+            self.block = {'text': [], 'promotion_text': [], 'price_text': [],
+                          'packages': set(), 'apps': set()}
             self.depth = 1
         elif self.block is not None and tag == 'div':
             self.depth += 1
         if self.block is not None:
+            if tag == 'div' and 'game_purchase_price' in classes:
+                self.price_depth = self.depth
             if tag == 'p':
                 self.promotion_text = 'game_purchase_discount_quantity' in classes
             if tag == 'form':
@@ -77,6 +109,8 @@ class PurchaseBlocks(HTMLParser):
                 value = values.get(key, '') or ''
                 for match in re.finditer(r'\bAddFreeLicense\s*\(\s*([1-9][0-9]*)\s*[,)]', value):
                     self.block['packages'].add(int(match.group(1)))
+                for match in re.finditer(r'\bsteam://run/([1-9][0-9]*)\b', value):
+                    self.block['apps'].add(int(match.group(1)))
 
     def handle_endtag(self, tag):
         if self.block is None:
@@ -88,18 +122,37 @@ class PurchaseBlocks(HTMLParser):
         if tag in {'script', 'style'}:
             self.ignored = max(0, self.ignored - 1)
         if tag == 'div':
+            if self.depth == self.price_depth:
+                self.price_depth = None
             self.depth -= 1
             if self.depth == 0:
                 self.blocks.append(self.block)
                 self.block = None
                 self.ignored = 0
                 self.free_form = False
+                self.price_depth = None
 
     def handle_data(self, data):
         if self.block is not None and not self.ignored:
             self.block['text'].append(data)
             if self.promotion_text:
                 self.block['promotion_text'].append(data)
+            if self.price_depth is not None:
+                self.block['price_text'].append(data)
+
+
+def official_free_game(html, app_id):
+    """One explicitly selected F2P acceptance sample, not promotion discovery."""
+    parser = PurchaseBlocks()
+    try:
+        parser.feed(html)
+        parser.close()
+    except (ValueError, RecursionError):
+        return False
+    return any(block['apps'] == {app_id}
+               and ' '.join(' '.join(block['price_text']).split()).casefold() == 'free to play'
+               and not re.search(r'\b(free weekend|free trial)\b', ' '.join(block['text']), re.IGNORECASE)
+               for block in parser.blocks)
 
 
 def official_offer(html, package_id):

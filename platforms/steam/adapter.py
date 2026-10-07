@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.locks import Lease, Busy
 from common.model import atomic_json, result
 from common.details import metric
-from platforms.steam.discovery import discover, StoreClient, DiscoveryState
+from platforms.steam.discovery import discover, StoreClient, DiscoveryState, validate_store_proxy
 from platforms.steam.ipc import Client, SteamError
 from platforms.steam.workflow import Journal, run_workflow
 
@@ -32,12 +32,14 @@ def read_private_json(raw_path, limit=65536):
 
 def config(value):
     required = {'ipc_url', 'ipc_password', 'bot', 'steam_id', 'region'}
-    if not isinstance(value, dict) or not required <= set(value) or set(value) - required - {'candidates_path', 'discovery'}:
+    if not isinstance(value, dict) or not required <= set(value) or set(value) - required - {'candidates_path', 'discovery', 'store_proxy_url'}:
         raise SteamError('invalid_steam_config')
     if not isinstance(value['steam_id'], str) or not re.fullmatch(r'7656119[0-9]{10}', value['steam_id']):
         raise SteamError('invalid_steam_id')
     if not isinstance(value['region'], str) or not re.fullmatch(r'[A-Z]{2}', value['region']):
         raise SteamError('invalid_steam_region')
+    if 'store_proxy_url' in value:
+        validate_store_proxy(value['store_proxy_url'])
     if 'candidates_path' in value and 'discovery' in value:
         raise SteamError('choose_one_candidate_source')
     discovery = value.get('discovery', {})
@@ -114,7 +116,8 @@ def main():
                 discovery_settings = settings.get('discovery', {})
                 discovery_state = DiscoveryState(shared / (settings['steam_id'] + '.discovery.json'),
                                                  discovery_settings.get('change_number', 0))
-                manifest, discovery_report = discover(client, StoreClient(), settings['region'],
+                store_options = {'proxy_url': settings['store_proxy_url']} if 'store_proxy_url' in settings else {}
+                manifest, discovery_report = discover(client, StoreClient(**store_options), settings['region'],
                     state=discovery_state, confirmed={int(pid) for pid, entry in journal.entries.items() if entry['state'] == 'confirmed'},
                     **discovery_settings)
 

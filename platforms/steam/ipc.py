@@ -103,6 +103,20 @@ class Client:
         # the base package 0; it is not a claimable candidate package.
         return {n for n in data if n > 0}
 
+    def owned_apps(self):
+        data = self.request('/Api/FreePackages/' + self.bot + '/GetOwnedApps')
+        if not isinstance(data, list) or any(type(n) is not int or not 0 < n < 2**32 for n in data):
+            raise SteamError('ipc_invalid_owned_apps_response')
+        return set(data)
+
+    def claim_free_app(self, app_id):
+        # Explicit single-app acceptance only. The normal promotion workflow
+        # continues to use vetted package IDs, not a background free-app queue.
+        if type(app_id) is not int or not 0 < app_id < 2**32:
+            raise SteamError('invalid_free_app_id')
+        return self.request('/Api/FreePackages/' + self.bot + '/RequestFreeAppLicense',
+                            'POST', {'appIDs': app_id})
+
     def claim(self, package_id):
         # Query parameter, not a guessed JSON request body. Never queue: queued work
         # could outlive the promotion window and bypass our final checks.
