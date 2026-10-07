@@ -162,9 +162,10 @@ class AdultSourceSearch:
 
 
 class AdultCollectionService:
-    def __init__(self, store, library, files, config, sources=None):
+    def __init__(self, store, library, files, config, sources=None, downloader=None):
         self.store, self.library, self.files, self.config = store, library, files, config
         self.sources = sources or AdultSourceSearch(config)
+        self.downloader = downloader
 
     def _state(self):
         state = self.store.read() or {}
@@ -196,15 +197,66 @@ class AdultCollectionService:
         if str(Path(asset.path)) == str(Path(target)):
             return self._record(state, unit, kind=kind, status="COLLECTED",
                                 path=asset.path, target=target)
-        self._record(state, unit, kind=kind, status="MOVING",
-                     path=asset.path, target=target)
+        if self.downloader is None or not self.downloader.deletion_allowed([asset]):
+            return self._record(
+                state, unit, kind=kind, status="WAIT_REFERENCE",
+                path=asset.path, target=target,
+                reason="文件仍被下载器/硬链接引用，禁止迁移以免破坏保种")
+
+        user_states = self.library.capture_movie_states(
+            unit, self.config.get("users") or [])
+        self._record(
+            state, unit, kind=kind, status="MOVING",
+            path=asset.path, source_path=asset.path, target=target,
+            user_states=user_states)
         moved = self.files.relocate(asset, target)
+        self._record(
+            state, unit, kind=kind, status="MIGRATION_PENDING",
+            path=moved.path, source_path=asset.path, target=target,
+            user_states=user_states)
         try:
-            self.library.http.refresh()
-        except Exception:
-            pass
-        return self._record(state, unit, kind=kind, status="COLLECTED",
-                            path=moved.path, target=target)
+            receipts = self.library.restore_relocated_movie(
+                moved.path, user_states,
+                timeout=int(self.config.get("emby_migration_timeout", 120)))
+        except Exception as exc:
+            return self._record(
+                state, unit, kind=kind, status="MIGRATION_PENDING",
+                path=moved.path, source_path=asset.path, target=target,
+                user_states=user_states,
+                reason=f"文件已安全迁移，等待 Emby 状态恢复：{type(exc).__name__}")
+        return self._record(
+            state, unit, kind=kind, status="COLLECTED",
+            path=moved.path, source_path=asset.path, target=target,
+            user_states=user_states, migration_receipts=receipts,
+            reason="文件迁移完成，收藏/已看状态已回读确认")
+
+    def _recover_relocations(self, state):
+        recovered = []
+        for record in state["jobs"].values():
+            if record.get("status") not in ("MOVING", "MIGRATION_PENDING"):
+                continue
+            source = Path(record.get("source_path") or "")
+            target = Path(record.get("target") or "")
+            if not target.is_absolute() or not target.exists() or source.exists():
+                continue
+            try:
+                receipts = self.library.restore_relocated_movie(
+                    str(target), record.get("user_states") or {},
+                    timeout=int(self.config.get("emby_migration_timeout", 120)))
+            except Exception as exc:
+                record["status"] = "MIGRATION_PENDING"
+                record["reason"] = (
+                    "文件已迁移，Emby 状态恢复仍待完成：" + type(exc).__name__)
+                self._write(state)
+                recovered.append(record)
+                continue
+            record.update(
+                status="COLLECTED", path=str(target),
+                migration_receipts=receipts,
+                reason="恢复完成，收藏/已看状态已回读确认")
+            self._write(state)
+            recovered.append(record)
+        return recovered
 
     def _vixen(self, state, unit, asset, probe):
         root = self.config.get("western_root", "/Adult/Western")
@@ -283,10 +335,10 @@ class AdultCollectionService:
 
     def run(self, unit_keys=None):
         state = self._state()
+        result = self._recover_relocations(state)
         units = self.library.discover(
             self.config.get("users") or [], unit_keys=unit_keys,
             resolve_episodes=False)
-        result = []
         for unit in units:
             if unit.kind != "movie" or not unit.items:
                 continue
