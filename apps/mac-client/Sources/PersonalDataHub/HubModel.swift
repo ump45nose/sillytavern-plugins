@@ -144,8 +144,7 @@ final class HubModel: ObservableObject {
 
     func setLogin(_ enabled: Bool) {
         do {
-            if enabled { try SMAppService.mainApp.register() }
-            else { try SMAppService.mainApp.unregister() }
+            try LoginItem.setEnabled(enabled)
         } catch { self.error = "无法更新开机启动，请查看系统登录项设置。" }
         loginEnabled = SMAppService.mainApp.status == .enabled
         loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval

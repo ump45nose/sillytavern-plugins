@@ -32,13 +32,13 @@ sudo systemctl restart personal-data-hub-collectors.service health-webhook.servi
 
 ## Mac 同步 Agent
 
-在 Mac 克隆同一仓库至 `/Users/yuwk/WorkSpace/Code/github/personal-data-hub` 后运行：
+统一应用 0.3.1 起，日常更新使用下文的 `apps/mac-client/install.py`；它打包并迁移已有 Agent。单独的源码 Agent 安装器保留供初始配置维护使用：
 
 ```bash
 /usr/bin/python3 /Users/yuwk/WorkSpace/Code/github/personal-data-hub/agents/mac/install.py
 ```
 
-安装器复用 `com.yuwk.personal-review-skysight` 和 `com.personal-crm.wechat`。保留原 Python / ChatGPT Node 授权路径、设备身份、白名单和检查点；Skysight 间隔调整为 900 秒。执行副本继续放在原 Application Support 路径，来源和更新由本仓库管理。微信 `.env` 迁到 Application Support，保留原虚拟环境解释器，代码改为读取本仓库的 `apps/crm/src`。
+源码安装器复用 `com.yuwk.personal-review-skysight` 和 `com.personal-crm.wechat`。保留原 Python / ChatGPT Node 授权路径、设备身份、白名单和检查点；Skysight 间隔为 900 秒。微信私有 `.env` 放在 Application Support。统一应用安装后改用包内 Python 和采集代码，不再使用仓库虚拟环境；不要交替运行两个安装器切换代码位置。
 
 Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档；收到提交回执后才更新水位。计数修复只发生在交付副本，原 metadata 与验证记录同时保存。缓存轮转不产生删除事件。客户端在 `apps/mac-client` 管理，复用这两个 Agent。
 
@@ -48,7 +48,11 @@ Mac 先交付稳定闭合文件，再由 NAS 校验组合哈希并提交归档�
 
 ## Mac 客户端
 
-`python3 apps/mac-client/install.py` 在 Mac 构建并安装到 `~/Applications/Personal Data Hub.app`，保留前一版本。客户端的 Keychain 凭据和 Application Support 连接设置位于仓库外；打开应用后可从菜单栏查看归档与请求同步，现有 Agent 的安装和更新仍由 `agents/mac/install.py` 管理。
+`python3 apps/mac-client/install.py` 在已有采集配置的 Mac 构建并安装统一应用 0.3.1 build 8 到 `~/Applications/Personal Data Hub.app`，保留前一版为 `Personal Data Hub.previous.app`，注册登录启动并迁移两个原采集任务。`dist/Personal Data Hub.zip` 是同一签名应用的本机更新包。签名资源包含微信 Python 3.12、依赖、采集代码、固定原生读取器及 Skysight 脚本；私有凭据、数据库、附件、正文水位和媒体队列均不入包。
+
+组件安装前校验签名、哈希及迁移后解释器的 imports，并通过临时 launchd 任务验证真实后台权限链能读取微信目录；验证失败时两个原任务继续运行。运行副本放在 `~/Library/Application Support/PersonalDataHub/Agents/versions/<SHA256>/`。保留原两个 launchd label、设备身份、水位、未来媒体 cutoff 和钥匙串访问助手。微信使用原获准 Python 的真实路径运行简单启动脚本，再启动包内 Python，电脑活动继续使用已授权的 Python / ChatGPT Node；这些外部执行器需保留，不依赖仓库链接。安装前备份原 plist 和停止后的水位到 `PersonalDataHub/backups/collection-app-*`；迁移失败恢复原 plist 及加载状态。登录项注册在采集迁移前完成，避免注册失败留下部分迁移状态。
+
+客户端的 Keychain 凭据和连接设置位于仓库外；关闭窗口后驻留菜单栏，退出界面不停止后台采集。`--agent-bundle-status` / `--login-status` 分别查询组件和登录项；只有 `enabled` 表示界面登录启动已生效，`requiresApproval` 需在系统设置批准。新 Mac 仍需既有配置、固定签名及首次数据权限，公开分发需要另行签名和公证。真机验证见 [统一应用验收](mac-app-bundle-validation.md)。
 
 NAS 在私有配置中增加 `hub_viewer_token_file`。容器目录中的对应文件只读挂载到 `/run/hub`；不替换原 `hub_api_token_file`、Health / 财务 token 或 OAuth。升级服务后执行 `hub backfill-previews` 补齐历史查看字段，新采集自动维护。客户端连接原 HTTPS 公网入口，无新域名或端口。
 

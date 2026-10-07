@@ -46,6 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.model.hotkeyError = self.hotkey?.register(code: prefs.hotkeyCode, modifiers: prefs.hotkeyModifiers) == true ? nil : "快捷键已被占用，请在设置中更换。"
         }
         if !CommandLine.arguments.contains("--ui-smoke") { model.start() }
+        if !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--interaction-smoke") {
+            Task {
+                do { try await Task.detached { try LocalAgents.prepareBundledIfNeeded() }.value }
+                catch { model.error = error.localizedDescription }
+            }
+        }
         if CommandLine.arguments.contains("--show") { showWindow() }
         if CommandLine.arguments.contains("--ui-smoke") {
             Task { await checkWindow() }
@@ -210,6 +216,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum Main {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--install-agents") || CommandLine.arguments.contains("--agent-bundle-status") {
+            do { try LocalAgents.installBundled(statusOnly: CommandLine.arguments.contains("--agent-bundle-status")); exit(0) }
+            catch { fputs("bundled_agents_failed\n", stderr); exit(1) }
+        }
+        if CommandLine.arguments.contains("--enable-login") || CommandLine.arguments.contains("--disable-login") || CommandLine.arguments.contains("--login-status") {
+            do {
+                if !CommandLine.arguments.contains("--login-status") {
+                    try LoginItem.setEnabled(CommandLine.arguments.contains("--enable-login"))
+                }
+                let value = LoginItem.status
+                print("{\"loginItem\":\"\(value)\"}")
+                exit(value == "requiresApproval" ? 2 : 0)
+            } catch { fputs("login_item_update_failed\n", stderr); exit(1) }
+        }
         if CommandLine.arguments.contains("--keychain-roundtrip-smoke") {
             SecKeychainSetUserInteractionAllowed(false)
             do {

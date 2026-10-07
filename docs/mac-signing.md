@@ -8,6 +8,8 @@
 
 每次安装继续运行 `python3 apps/mac-client/install.py`，自动复用同一证书，校验签名后安装并保留上一版。缺少身份、钥匙串损坏或签名校验失败时停止，不退回临时签名；已经安装证书版本的 Mac 丢失签名目录时也不会自动生成新身份。
 
+统一应用 0.3.1 将采集环境作为 `Contents/Resources/collection.tar.gz` 封装并纳入外层签名；安装器先验证完整应用和资源 SHA-256，再解压到私有 Application Support 版本目录。原生读取器保持其原始字节，避免因重新签名改变微信读取行为。包内仅有固定凭据助手的代码副本和公开校验信息，不包含 Signing 私钥或任何 Keychain 凭据；本机安装继续校验并使用原获准助手，升级不替换它。登录启动使用 `SMAppService.mainApp`，Bundle ID 与指定要求保持一致。
+
 助手源码在 `apps/mac-client/credential-reader/main.swift`；首次编译明确使用 macOS 13.0 部署目标，安装到 `~/Library/Application Support/PersonalDataHub/Personal Data Hub Credentials.app`。身份及源码/二进制 SHA-256 保存在 `Signing/credential-reader.json`。后续构建只验证并保留原文件，不重新签名；源码、身份或二进制不一致时停止，助手本身升级须显式迁移。备份整个 Signing 目录和此助手应用，不能提交 Git 或放进公开构建产物。
 
 首次迁移时运行已安装客户端的 `--keychain-prepare`，macOS 对归档与 Google 两项凭据要求“始终允许”，授权固定助手访问。此操作不重新授权 Google、不复制 NAS 刷新凭据，也不把凭据导出到文件。后续界面版本复用助手的许可。助手只允许同一证书签名、指定 Bundle ID 的客户端调用，且只支持归档与 Google 两项；客户端也验证助手的证书及标识。数据通过子进程私有管道传递，不出现在参数或日志。手动锁定登录钥匙串、撤销访问许可或升级助手，仍按系统规则处理。

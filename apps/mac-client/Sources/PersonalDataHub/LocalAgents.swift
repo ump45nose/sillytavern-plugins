@@ -16,6 +16,34 @@ struct AgentStatus: Identifiable {
 }
 
 enum LocalAgents {
+    static func installBundled(statusOnly: Bool = false) throws {
+        guard let resources = Bundle.main.resourceURL,
+              FileManager.default.fileExists(atPath: resources.appendingPathComponent("collection.json").path) else {
+            throw NSError(domain: "PersonalDataHub", code: 1, userInfo: [NSLocalizedDescriptionKey: "应用缺少采集组件，请重新安装完整应用。"])
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        process.arguments = [resources.appendingPathComponent("install-agents.py").path, "--app", Bundle.main.bundleURL.path] + (statusOnly ? ["--status"] : [])
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run(); process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "PersonalDataHub", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "采集组件安装失败，原配置已保留。"])
+        }
+    }
+
+    static func prepareBundledIfNeeded() throws {
+        guard let resources = Bundle.main.resourceURL,
+              let data = try? Data(contentsOf: resources.appendingPathComponent("collection.json")),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        let receipt = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/PersonalDataHub/Agents/current.json")
+        if let saved = try? Data(contentsOf: receipt),
+           let installed = try? JSONSerialization.jsonObject(with: saved) as? [String: Any],
+           installed["archiveSHA256"] as? String == manifest["archiveSHA256"] as? String,
+           inspect().allSatisfy({ $0.loaded }) { return }
+        try installBundled()
+    }
+
     static let labels = [
         ("com.yuwk.personal-review-skysight", "电脑活动同步"),
         ("com.personal-crm.wechat", "微信采集")
