@@ -58,7 +58,7 @@ def main():
             atomic_write(target, path.read_text(), 0o755 if path.suffix in {".py", ".sh"} else 0o644)
     # Human-run Steam login helpers contain no credentials and are separate
     # from trusted scheduled entrypoints. Installing them never starts a login.
-    for name in ("login.py", "prepare.py"):
+    for name in ("login.py", "qr-login.py", "prepare.py"):
         atomic_write(args.runtime / "scripts/steam-asf" / name,
                      (source / "steam-asf" / name).read_text(), 0o755)
     for kind, base in (("profile_scripts", args.profile_home / "scripts"),

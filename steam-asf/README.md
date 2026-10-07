@@ -44,6 +44,26 @@ Authentication header. No reverse proxy or public listener is created.
 
 ## First login: user participation
 
+Prefer mobile QR authorization with the installed helper, using the existing
+Hermes Python environment (it supplies `qrcode` and Pillow):
+
+```sh
+sudo -u hermes env -i PATH=/usr/bin:/bin /home/hermes/.hermes/hermes-agent/venv/bin/python /home/yuwk/cron/scripts/steam-asf/qr-login.py --steam-id YOUR_STEAMID64 --region YOUR_COUNTRY --login-name YOUR_ACCOUNT_LOGIN
+```
+
+The helper briefly recreates this ASF container with headless mode disabled,
+a Null NLog target and stdout/stderr redirected, because upstream otherwise
+logs the QR authorization URI. IPC remains authenticated and loopback-only.
+Only a private PNG is produced; display it to the account owner, who scans it
+and approves in Steam mobile. The account login name must match, then SteamID
+is checked before enabling persistent reconnect. Normal headless deployment
+is restored on success, timeout or interruption, and temporary QR files are
+removed. No password or Guard code is requested. After authorization, a real
+container restart must reconnect to the same account before the helper writes
+the private adapter configuration. Do not force-kill this controller; use
+SIGTERM so it can restore the normal service.
+
+For accounts requiring password-based login instead, use hidden terminal input.
 In your own interactive NAS SSH terminal, run the installed helper:
 
 ```sh

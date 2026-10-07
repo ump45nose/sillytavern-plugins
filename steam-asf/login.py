@@ -129,9 +129,12 @@ def main():
                 raise RuntimeError('login_rejected_or_more_input_required')
             elif kind in provided and not current.get('KeepRunning'):
                 raise RuntimeError('guard_not_accepted_no_automatic_retry')
+            elif not current.get('KeepRunning'):
+                raise RuntimeError('steam_login_stopped_no_automatic_retry')
             time.sleep(2)
         else:
-            request(prefix + '/Stop', post=True)
+            if bot().get('KeepRunning'):
+                request(prefix + '/Stop', post=True)
             raise RuntimeError('login_deadline_exceeded')
     if str(current.get('s_SteamID', current.get('SteamID'))) != args.steam_id:
         request(prefix + '/Stop', post=True)
