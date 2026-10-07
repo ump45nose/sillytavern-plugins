@@ -24,7 +24,7 @@ The Film plugin never imports the Theme worker or its audio dependencies. The Th
 `apps/media-search` adds an independent Vue/Python query page; `apps/media-download-mcp`
 adds a generic four-tool MCP service (stdio and Streamable HTTP). They reuse the
 `media-capabilities` acquisition package through the independently installed **MediaCapabilities
-0.1.2** MoviePilot host plugin, requiring the shared **0.3.3 acquisition wheel**.
+0.1.3** MoviePilot host plugin, requiring the shared **0.4.0 acquisition wheel**.
 Neither service requires FilmWatchlist to be installed. FilmWatchlist 1.4.3 connects to the
 same runtime and registry through MoviePilot's plugin manager; its scans and preview flag
 remain business settings. The public host starts disabled and owns download permissions.
@@ -32,7 +32,9 @@ remain business settings. The public host starts disabled and owns download perm
 The new entrypoints search M-Team and Mini4K, support quality/subtitle/balanced profiles,
 and download movies, complete seasons, single episodes, or one complete BT resource for
 an ended series. They return download receipts without managing version replacement or
-library writeback. Existing FilmWatchlist records and writeback keep their own lifecycle.
+library writeback. MediaCapabilities additionally exposes a read-only upgrade detector that
+compares the installed version with verified M-Team/Mini4K candidates without submitting a
+download. Existing FilmWatchlist records and writeback keep their own lifecycle.
 See [architecture and host setup](docs/media-acquisition.md),
 [web startup](apps/media-search/README.md), and [MCP startup](apps/media-download-mcp/README.md).
 
@@ -43,6 +45,17 @@ See [the original plugin guide](docs/filmwatchlist.md). Install from this reposi
 The plugin now separates candidate policy/submission (`workflow.py`), saved-task recovery/writeback (`observe.py`) and compatible record helpers (`state.py`). Both PT policies use one persisted-intent submission function. Uncertain submissions remain pending until observed; a missing task alone never authorizes another submission. Recovery runs before source enumeration and M-Team availability checks.
 
 New tasks freeze media/season/source/target facts. A mutable source is rechecked before completion writeback; source outages only postpone that writeback. Completed-source corrections preserve the old receipt in `completed_history`, and new candidate IDs do not encode share URLs or extraction codes. Legacy candidate IDs, records and download handles remain readable. Older TV records can enrich missing episode membership by saved media IDs while cloud task recovery remains independent.
+
+## Adult collection and JAV wash
+
+`AdultCollection` is an independent favorite-driven plugin. It starts disabled and in dry-run.
+Vixen items under `/Adult/Western` are collected only when the real media is 4K; eligible
+items move under `/Adult/Western/Collection`. JAV items under `/Adult/JAV` are checked
+against verified M-Team and JavDB candidates before moving under `/Adult/JAV/Collection`.
+The JavDB integration consumes the external `javdb-cli` JSON contract instead of maintaining
+another HTML scraper. Actual moves reuse qB/hardlink safety checks and restore Emby user state.
+
+See [upgrade and Adult workflow](docs/media-upgrade-and-adult.md).
 
 ## Theme worker and Studio
 
