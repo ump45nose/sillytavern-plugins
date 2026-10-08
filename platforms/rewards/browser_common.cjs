@@ -138,7 +138,7 @@ async function guard(page, { observeEvidence } = {}) {
     });
   const checks = [
     ["accountLocked", "#serviceAbuseLandingTitle"],
-    ["captcha", 'iframe[src*="captcha"],iframe[src*="challenge"],#captcha'],
+    ["captcha", 'iframe[src*="captcha" i],iframe[src*="challenge" i],#captcha'],
     ["terms", '[data-testid="terms-consent"],input[name="acceptTerms"]'],
     [
       "age",
@@ -148,7 +148,19 @@ async function guard(page, { observeEvidence } = {}) {
     ["login", "input[type=password],#i0116,input#usernameEntry"],
   ];
   for (const [flag, selector] of checks) {
-    if (await page.locator(selector).count())
+    const matches = page.locator(selector);
+    let detected = (await matches.count()) > 0;
+    if (detected && flag === "captcha") {
+      detected = await matches.evaluateAll((elements) => elements.some((el) => {
+        if (el.id === "captcha") return true;
+        try {
+          const src = new URL(el.getAttribute("src"), document.baseURI);
+          // OAuth PKCE code_challenge is a query parameter, not a CAPTCHA.
+          return /captcha|challenge/i.test(src.hostname + src.pathname);
+        } catch { return false; }
+      }));
+    }
+    if (detected)
       throw new obstacles.Obstacle({
         url: rawUrl,
         flags: { [flag]: true },

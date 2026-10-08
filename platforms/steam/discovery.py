@@ -219,13 +219,21 @@ def discover(client, store, region, now=None, change_number=0, max_packages=30, 
     queue = list(dict.fromkeys((state.queue if state else []) + [row['ID'] for row in pending]))
     confirmed = confirmed or set()
     queue = [pid for pid in queue if pid not in confirmed]
+    admission_deferred = False
     if len(queue) > 4000:
-        raise SteamError('discovery_queue_capacity_requires_review')
+        if state is None or not state.queue:
+            raise SteamError('discovery_queue_capacity_requires_review')
+        # Drain already durable work before admitting another change window.
+        # Keep the cursor so deferred package changes can be read again.
+        queue = [pid for pid in state.queue if pid not in confirmed]
+        admission_deferred = True
     history_gap = (state.history_gap if state else False) or changes['RequiresFullUpdate'] or changes['RequiresFullPackageUpdate']
     if state:
         if changes['CurrentChangeNumber'] < state.cursor:
             raise SteamError('discovery_cursor_moved_backwards')
-        state.cursor, state.queue, state.history_gap = changes['CurrentChangeNumber'], queue, history_gap
+        if not admission_deferred:
+            state.cursor = changes['CurrentChangeNumber']
+        state.queue, state.history_gap = queue, history_gap
         state.save()
     batch, remaining = queue[:max_packages], queue[max_packages:]
     truncated = bool(remaining)
@@ -244,12 +252,8 @@ def discover(client, store, region, now=None, change_number=0, max_packages=30, 
                     raise SteamError('package_metadata_unavailable')
                 continue
             extended = child(tree, 'extended')
-            expiry = leaf(extended, 'expirytime')
-            if not isinstance(expiry, str) or not expiry.isdecimal() or not 0 < int(expiry) < 253402300799:
-                raise SteamError('promotion_deadline_unverified')
-            end = datetime.fromtimestamp(int(expiry), timezone.utc)
-            current = clock()
-            if end <= current:
+            if any(leaf(extended, key) == '1' for key in
+                   ('betatesterpackage', 'deactivated_demo', 'freeweekend')):
                 continue
             app_tree = child(tree, 'appids')
             app_nodes = app_tree.get('Children') if isinstance(app_tree, dict) else None
@@ -261,6 +265,27 @@ def discover(client, store, region, now=None, change_number=0, max_packages=30, 
                 if not isinstance(value, str) or not value.isdecimal() or not 0 < int(value) < 2**32:
                     raise SteamError('package_contents_unverified')
                 app_ids.append(int(value))
+            apps = [(app_id, client.app(app_id)) for app_id in app_ids]
+            # Confirm scope exclusions before requiring a promotion deadline.
+            # Otherwise permanent F2P/demo packages remain queued forever merely
+            # because they have no expirytime. Missing metadata stays unknown.
+            excluded = False
+            for app_id, app in apps:
+                if app.get('Name') != 'appinfo' or leaf(app, 'appid') != str(app_id):
+                    raise SteamError('app_metadata_mismatch')
+                kind = leaf(child(app, 'common'), 'type')
+                if ((isinstance(kind, str) and kind and kind.lower() != 'game')
+                        or leaf(child(app, 'extended'), 'isfreeapp') in {'1', 'true'}):
+                    excluded = True
+            if excluded:
+                continue
+            expiry = leaf(extended, 'expirytime')
+            if not isinstance(expiry, str) or not expiry.isdecimal() or not 0 < int(expiry) < 253402300799:
+                raise SteamError('promotion_deadline_unverified')
+            end = datetime.fromtimestamp(int(expiry), timezone.utc)
+            current = clock()
+            if end <= current:
+                continue
             row = {'package_id': pid, 'app_ids': app_ids, 'name': f'Steam package {pid}',
                    'promotion_kind': 'limited_time_free_to_keep', 'permanent_license': True,
                    'free_to_play': False, 'free_weekend': False, 'demo': False, 'playtest': False,
@@ -273,8 +298,7 @@ def discover(client, store, region, now=None, change_number=0, max_packages=30, 
             reason = verify_package(tree, row, current, region)
             if reason:
                 raise SteamError(reason)
-            for app_id in app_ids:
-                app = client.app(app_id)
+            for app_id, app in apps:
                 reason = verify_app(app, app_id, region)
                 if reason:
                     raise SteamError(reason)
@@ -300,6 +324,6 @@ def discover(client, store, region, now=None, change_number=0, max_packages=30, 
         state.save()
     return {'schema_version': 1, 'candidates': candidates}, {
         'rejected': rejected, 'scanned': len(batch),
-        'change_number': changes['CurrentChangeNumber'],
-        'coverage_incomplete': truncated or history_gap,
+        'change_number': state.cursor if state else changes['CurrentChangeNumber'],
+        'coverage_incomplete': admission_deferred or truncated or history_gap,
     }

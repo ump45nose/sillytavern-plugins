@@ -44,6 +44,13 @@ const STOP = new Set([
   "app_token_missing",
   "app_token_expired_or_scope_changed",
   "app_rate_limited",
+  "app_authorization_unavailable",
+]);
+const PUBLIC_FAILURES = new Set([
+  ...STOP, "app_token_invalid", "app_token_exchange_failed",
+  "app_inventory_unavailable", "app_response_unavailable",
+  "app_response_too_large", "app_locale_invalid", "journal_invalid",
+  "journal_limit", "business_date_invalid",
 ]);
 function manifest(value) {
   if (
@@ -171,7 +178,11 @@ async function execute(
   checkStop(snapshots.before);
   for (const capability of enabled) {
     let out;
-    if (stopped)
+    if (stopped && ["complete", "not_applicable"].includes(
+      snapshots.before.business[capability]))
+      out = {execution: "ok", reason: "confirmed_before_intervention",
+        business: {[capability]: snapshots.before.business[capability]}};
+    else if (stopped)
       out = {
         execution: "failed",
         reason: "not_run_after_stop",
@@ -192,7 +203,7 @@ async function execute(
       } catch (error) {
         out = {
           execution: "failed",
-          reason: STOP.has(error.message) ? error.message : "capability_failed",
+          reason: PUBLIC_FAILURES.has(error.message) ? error.message : "capability_failed",
           business: { [capability]: "unknown" },
         };
       }
@@ -218,6 +229,17 @@ async function execute(
       reason: "not_run_after_stop",
       business: { snapshot: "unknown" },
     };
+  // Only a fresh, attributable page counter confirms APP check-in. A POST ACK
+  // or a balance increase cannot establish which task credited those points.
+  if (!stopped && enabled.includes("app_daily") &&
+      snapshots.after.execution === "ok" &&
+      snapshots.after.business.app_daily === "complete") {
+    business.app_daily = "complete";
+    stages.app_daily = {...stages.app_daily, execution: "ok",
+      reason: "app_checkin_confirmed_by_fresh_snapshot",
+      business: {app_daily: "complete"}};
+    failed = Object.values(stages).some(out => out.execution !== "ok");
+  }
   const complete = Object.values(business).every((v) =>
     ["complete", "not_applicable"].includes(v),
   );
@@ -302,7 +324,7 @@ function createBindings({
           journal: journal("goal-journal.json"),
         }
       : undefined;
-  const snapshot =
+  const browserSnapshot =
     desktopRequired || mobileRequired
       ? () =>
           require("./snapshot.cjs").run(
@@ -360,6 +382,22 @@ function createBindings({
     });
     return appSession.client;
   });
+  const snapshot = async () => {
+    const out = await browserSnapshot();
+    if (out.execution === "ok" && requested.has("app_promotions")) {
+      try {
+        const rows = require("./app.cjs").promotions(await (await appClient()).read());
+        out.business.app_promotions = rows.length === 0 ? "not_applicable" :
+          rows.every(row => row.complete === true) ? "complete" : "unknown";
+        out.details ||= {metrics: {}, items: []};
+        out.details.metrics.app_promotions = metric("count",
+          rows.filter(row => row.complete === true).length, rows.length);
+      } catch {
+        out.business.app_promotions = "unknown";
+      }
+    }
+    return out;
+  };
   if (["app_daily", "app_promotions", "read_to_earn"].some(key => requested.has(key)))
     for (const [capability, method] of [
       ["app_daily", "submitDaily"],

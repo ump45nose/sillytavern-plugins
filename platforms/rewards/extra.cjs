@@ -69,6 +69,8 @@ const QUERIES = {
     "compare home broadband plans",
   ],
   bankaccounts: ["compare checking accounts", "high yield savings accounts"],
+  airportparking: ["airport parking options", "compare airport parking prices"],
+  allinclusiveresorts: ["all inclusive resort holidays", "compare all inclusive resorts"],
   concerttickets: ["concert tickets near me", "upcoming live music concerts"],
   lyrics: ["Shake It Off song lyrics", "Bohemian Rhapsody lyrics"],
   rentalcars: ["car rental deals", "compare airport car rentals"],
@@ -300,7 +302,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 job.offerId.includes("_" + k + "_"),
               );
               if (!key) {
-                record(job, "unknown");
+                record(job, "unknown", "search_topic_unsupported");
                 continue;
               }
               // GPL adaptation of v4.3.2 activateSearchOnBing: use the current

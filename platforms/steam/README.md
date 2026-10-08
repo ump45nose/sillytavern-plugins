@@ -56,7 +56,7 @@ bot 必须是一个精确名字；拒绝 ASF、逗号列表、路径/空白。`/
 
 ## 自动发现边界与安全门槛
 
-首次从 `GetChangesSince/0` 读取服务当前可提供的近期 PICS 变化，先原子保存游标及工作队列，再检查最多 30 个 package（配置 1–50）。后续从已保存游标读取增量，队列轮转，旧候选不会永远被最新批次挤掉。合格及证据不足的候选保留重查，已确认领取的移出；dry-run不会吃掉候选。可在 `discovery.change_number` 提供初始已知基线，已有状态不允许悄悄改基线。发现状态在共享 SteamID 目录的 `.discovery.json`，队列上限 4000 条，超限停止且不推进游标，需审核窗口/容量；不静默丢候选。PICS 历史通常约 12 小时，ASF 启动晚或上游 full-update 标记意味着不完整；仍有待扫描队列/full-update 输出 `discovery_coverage_incomplete`，`business.discovery=unknown`，不能当成“全站没有限免”。
+首次从 `GetChangesSince/0` 读取服务当前可提供的近期 PICS 变化，先原子保存游标及工作队列，再检查最多 30 个 package（配置 1–50）。后续从已保存游标读取增量，队列轮转，旧候选不会永远被最新批次挤掉。合格及证据不足的候选保留重查，已确认领取的移出；dry-run不会吃掉候选。可在 `discovery.change_number` 提供初始已知基线，已有状态不允许悄悄改基线。发现状态在共享 SteamID 目录的 `.discovery.json`，队列上限 4000 条。新增变化超限时，有持久队列就先处理旧队列，不接纳新窗口、不推进游标；没有旧队列可处理时停止并要求审核窗口/容量。不静默丢候选，也不将未接纳窗口算作已扫描。PICS 历史通常约 12 小时，ASF 启动晚或上游 full-update 标记意味着不完整；仍有待扫描队列、延期窗口或 full-update 输出 `discovery_coverage_incomplete`，`business.discovery=unknown`，不能当成“全站没有限免”。
 
 每个候选必须同时满足：
 
@@ -69,7 +69,7 @@ bot 必须是一个精确名字；拒绝 ASF、逗号列表、路径/空白。`/
 
 领取截止时间取 PICS epoch；不猜商店显示日期的时区。商店文案/DOM 变化、年龄门槛、region 页面缺购买块、缺 deadline、包内容变化或 metadata token 缺失，一律 hold。`GetOwnedPackages` 如果返回空拥有错误会按 unknown/失败处理，不猜成空库。该接口只能证明持有 package，不能单独证明它是永久许可；永久性来自领取前的官方促销与 PICS 证据。
 
-发现过程中明确非 NoCost 或已过期的条目会被排除；可疑候选保留 `blocked` 原因。有覆盖缺口或证据不全时返回退出码 3。有限窗口内没有候选且源响应正常时返回 `no_candidates`、claim=`not_applicable`，是正常 no-op，不是成功领到游戏。
+发现过程中明确非 NoCost、已过期、freeweekend、beta/demo、非游戏或 isfreeapp 的条目会被排除。类型和免费游戏排除先于期限检查，因此明确不适用的包不会仅因缺 expirytime 长期占用队列；排除所需的 metadata 仍必须完整且 ID 对应。缺失 metadata 的候选保留 `blocked` 原因。有覆盖缺口或证据不全时返回退出码 3。有限窗口内没有候选且源响应正常时返回 `no_candidates`、claim=`not_applicable`，是正常 no-op，不是成功领到游戏。
 
 ## 状态、幂等与恢复
 

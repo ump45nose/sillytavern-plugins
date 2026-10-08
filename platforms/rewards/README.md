@@ -43,6 +43,12 @@ python3 platforms/rewards/run.py --runtime-root /absolute/private/runtime \
 - `claim`：明确有待收积分时提交一次；无待收积分不适用。
 - `app_daily` / `app_promotions`：通过已有浏览器登录进行 OAuth，token 存在私有账号目录；随后一次性 HTTP 客户端执行 APP 任务，不保留后台浏览器。APP 签到优先用当前页面进度确认，不能把 1000 分连续签到奖励误认作每日签到。
 
+完整任务在开始时也读取 APP 活动的当前清单。中途遇到验证码等人工处理条件时立即停止后续动作，但保留本次开始快照已确认完成的任务。APP 签到只有重新读取到对应页面计数完成后才确认，提交响应或余额上涨不足以确认；APP 授权与限流失败保留固定公开原因，不输出私有响应。
+
+探索主题包含 airportparking 和 allinclusiveresorts；没有绑定主题的活动显示 `search_topic_unsupported`。2026-10-08 的实际 APP 签到为 1/1，APP 活动为 4/4。当日早先完整任务被验证码检测拦截，后续核查发现正常 OAuth 隐藏 iframe 被误判。
+
+验证码 iframe 的识别只检查解析后的主机名和路径，不把 URL 查询参数中的 OAuth PKCE `code_challenge` 当作验证码。`#captcha` 标记和真正的 captcha/challenge iframe 仍会停止任务。仅凭 iframe URL 中出现单词 challenge 不足以确认验证码。
+
 2026-10-03 实测每日活动、桌面搜索、APP 签到与 APP 活动确认；无分配的 onboarding 和无待收积分均不适用。更多活动有平台锁定项；探索必应仍按 [验收记录](../../docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 报告，不用部分成功代表全部完成。
 
 ## 独立模式与边界
