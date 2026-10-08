@@ -165,6 +165,11 @@ class Engine:
 
     def _sync_source(self, spec, section, adapter, digest):
         source, account = spec.name, section["account"]
+        if source == "xhs_creators":
+            from .companion_materials import sync_creators
+            self.guard.validate_scan(spec, account, adapter)
+            sync_creators(adapter, self.store, section)
+            return True
         try:
             success = collect_source(self.cfg, self.store, self.guard, spec, section, adapter)
             if success is None:  # Start date not reached or metadata-only source.

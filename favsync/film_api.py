@@ -18,6 +18,7 @@ from .store import Store
 def serve(cfg):
     store = Store(cfg["state_dir"])
     token = os.environ.get("FILM_API_TOKEN", "")
+    companion_token = os.environ.get("COMPANION_MATERIALS_TOKEN", "")
     if not token:
         store.close()
         raise ValueError("FILM_API_TOKEN is required")
@@ -55,6 +56,25 @@ def serve(cfg):
             path = urlsplit(self.path)
             if path.path == "/health":
                 self.send_json(200, {"status": "ok"})
+                return
+            if path.path == "/v1/companion/materials":
+                supplied = self.headers.get("Authorization", "")
+                if not companion_token or not hmac.compare_digest(supplied, "Bearer " + companion_token):
+                    self.send_json(401, {"error": "unauthorized"})
+                    return
+                try:
+                    params = parse_qs(path.query, keep_blank_values=True)
+                    if set(params) - {"cursor", "limit"} or any(len(v) != 1 for v in params.values()):
+                        raise ValueError
+                    cursor = int(params.get("cursor", ["0"])[0] or "0")
+                    limit = int(params.get("limit", ["100"])[0])
+                    if cursor < 0 or not 1 <= limit <= 100:
+                        raise ValueError
+                except ValueError:
+                    self.send_json(400, {"error": "invalid_query"})
+                    return
+                from .companion_materials import list_materials
+                self.send_json(200, list_materials(store.db, cursor, limit))
                 return
             if not self.authenticated():
                 return

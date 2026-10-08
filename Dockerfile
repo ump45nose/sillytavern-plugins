@@ -1,7 +1,7 @@
 FROM python:3.11-slim-bookworm
 ARG TARGETARCH
 ARG TDL_VERSION=0.20.4
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git tzdata \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git tzdata libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 RUN set -eu; \
     arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
@@ -18,6 +18,7 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir 'setuptools>=68' wheel \
     && python -c 'import tomllib,subprocess,sys; p=tomllib.load(open("pyproject.toml","rb"))["project"]; subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir",*p["dependencies"],*p["optional-dependencies"]["all"]])'
 COPY favsync ./favsync
+RUN python -m favsync.companion_ocr
 RUN pip install --no-cache-dir --no-deps --no-build-isolation . \
     && tdl version && gallery-dl --version \
     && python -c 'import gallery_dl.extractor.exhentai' \

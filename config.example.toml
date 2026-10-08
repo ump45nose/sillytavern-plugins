@@ -66,6 +66,10 @@ strict_original = true
 enabled = false # 受限增量同步；不自动回填整个历史收藏。
 account = "personal"
 
+[xhs_creators]
+enabled = false # 每轮两位作者、两条详情；固定八位生活素材源，90 天逐步回填。
+account = "personal" # 与收藏/点赞复用同一身份、节奏与持久熔断。
+
 [xhs_likes]
 enabled = false # 受限增量同步；不自动回填整个历史点赞。
 account = "personal"

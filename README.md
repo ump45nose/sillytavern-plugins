@@ -285,3 +285,17 @@ docker compose run --rm -T --entrypoint python favsync -m favsync.maintenance --
 单个来源发生异常会记录失败并继续后面的来源；认证和风控异常停止同账号后续请求。小红书保留现有请求上限与熔断，已见但未完成的笔记仍可刷新访问令牌；达到页数或条目额度记录 `partial` 和具体原因。日报区分受限扫描与完整扫描，并列出 Wallabag 正文已保存但图片不完整的数量。
 
 修复与验收记录见 [2026-09-29 repair](docs/reviews/2026-09-29-repairs.md)。
+
+## 2026-10-08 NAS 部署说明
+
+NAS 正式入口现为 `/vol2/1000/Docker/stacks/automation/compose.yaml`，Favsync 与 Steam ASF 共用 automation 项目。组入口直接声明正式业务定义；本仓 Compose 保留为开发与配置参考。原容器名、favsync_default 网络与 CookieCloud 卷名保留。更新仅指定受影响服务。Wallabag 的持久目录以 PHP-FPM 原生 65534:65534 写入，管理员通过受控 NAS ACL 管理。
+
+## 陪伴作者素材
+
+`xhs_creators` 是独立、可关闭的只采集文本来源，默认八位已选作者，允许在私有配置中以 `creators = [{id = "...", name = "..."}]` 扩充。每轮按最近扫描时间选择至多两位作者，先使用共享的两个详情名额，其余预算供收藏/点赞。复用既有小红书身份验证、15–30 秒请求间隔、缓存和持久风控熔断；不自动解除熔断。作者首页刷新与最近 90 天增量翻页交替进行，近期未处理图文优先，视频不下载、不转录。有限读取一页评论，仅导出至多五条作者自己的回复。
+
+正文去标签后不足 80 字时，对前两张图执行 RapidOCR 3.9.2 + ONNX Runtime 1.24.3 的中文 PP-OCRv5 mobile CPU OCR，单任务、两个计算线程。检测、识别、方向模型在构建时下载固定版本并校验 SHA256，运行时只读取镜像内模型；图片哈希和 OCR 版本共同缓存，置信度低于 0.85 的文字不进入素材。OCR 失败保留正文和私有笔记缓存，后续预算轮次重试；不会重新下载视频。模型清单与校验值见 `favsync/companion_ocr.py`。
+
+既有 API 新增 `GET /v1/companion/materials?cursor=0&limit=100`，独立 `COMPANION_MATERIALS_TOKEN` Bearer 鉴权。接口只读缓存，最大分页 100；返回正文、可信 OCR、作者回复、无签名原帖链接、作者来源、发布时间、前后更新关系与采集状态。增量 cursor 为单调修订号，不返回 Cookie、xsec_token 或访问令牌，不触发即时采集。素材令牌不能操作影视接口；影视令牌也不能读取陪伴素材。生产令牌保存 automation 的 `env/favsync-api.env`，不进入 Git。
+
+OCR 集成在现有 Favsync worker，API 仍由 Favsync API 提供，不增加常驻容器。角色生活规划、聊天上下文及投递幂等由 `nas-cron-jobs` 负责，不在采集器生成陪伴文案。数据库 schema 增量升级后，回退使用关闭作者源与消费者的方式保留新表；不要将旧镜像直接挂载新 schema 数据库。

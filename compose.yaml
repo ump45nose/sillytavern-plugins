@@ -4,130 +4,159 @@ services:
     image: local/favsync:0.1.0
     restart: unless-stopped
     init: true
-    # The host SOCKS/HTTP mixed proxy listens on loopback. Host networking also
-    # gives future download adapters the same default proxy path.
     network_mode: host
-    user: "${PUID:-1000}:${PGID:-1000}"
-    command: ["--config", "/app/config.toml", "run"]
+    user: ${PUID:-1000}:${PGID:-1001}
+    command:
+    - --config
+    - /app/config.toml
+    - run
     environment:
       HOME: /data/state/home
       TZ: Asia/Taipei
     volumes:
-      - ./config.toml:/app/config.toml:ro
-      - ./state:/data/state
-      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}:/downloads
-      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/EH:/eh-downloads
-      - ./secrets:/run/favsync-secrets:ro
+    - ./config.toml:/app/config.toml:ro
+    - ./state:/data/state
+    - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}:/downloads
+    - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/EH:/eh-downloads
+    - ./secrets:/run/favsync-secrets:ro
     tmpfs:
-      - /tmp
+    - /tmp
     read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     stop_grace_period: 30s
     logging:
       driver: json-file
       options:
         max-size: 10m
-        max-file: "3"
-
+        max-file: '3'
+    container_name: favsync-favsync-1
   favsync-api:
     image: local/favsync:0.1.0
     restart: unless-stopped
     init: true
     network_mode: host
-    user: "${PUID:-1000}:${PGID:-1000}"
-    command: ["--config", "/app/config.toml", "film-api"]
+    user: ${PUID:-1000}:${PGID:-1001}
+    command:
+    - --config
+    - /app/config.toml
+    - film-api
     environment:
       HOME: /data/state/home
       TZ: Asia/Taipei
       FILM_API_TOKEN: ${FILM_API_TOKEN:?set FILM_API_TOKEN in .env}
+      COMPANION_MATERIALS_TOKEN: ${COMPANION_MATERIALS_TOKEN:-}
     volumes:
-      - ./config.toml:/app/config.toml:ro
-      - ./state:/data/state
+    - ./config.toml:/app/config.toml:ro
+    - ./state:/data/state
     read_only: true
-    tmpfs: [/tmp]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    tmpfs:
+    - /tmp
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     logging:
       driver: json-file
       options:
         max-size: 10m
-        max-file: "3"
-
+        max-file: '3'
+    container_name: favsync-favsync-api-1
   cookiecloud:
-    profiles: [cookiecloud]
+    profiles:
+    - cookiecloud
     image: easychen/cookiecloud:latest
     restart: unless-stopped
     ports:
-      - "${COOKIECLOUD_BIND:-127.0.0.1}:${COOKIECLOUD_PORT:-18088}:8088"
+    - ${COOKIECLOUD_BIND:-127.0.0.1}:${COOKIECLOUD_PORT:-18088}:8088
     volumes:
-      - cookiecloud-data:/data/api/data
+    - cookiecloud-data:/data/api/data
     logging:
       driver: json-file
       options:
         max-size: 10m
-        max-file: "3"
-
+        max-file: '3'
+    container_name: favsync-cookiecloud-1
   xhs-downloader:
-    profiles: [extended]
+    profiles:
+    - extended
     build:
       context: .
       dockerfile: Dockerfile.xhs-downloader
     image: local/xhs-downloader:2.8
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5556:5556"
-    user: "${PUID:-1000}:${PGID:-1001}"
-    command: ["python", "main.py", "api"]
+    - 127.0.0.1:5556:5556
+    user: ${PUID:-1000}:${PGID:-1001}
+    command:
+    - python
+    - main.py
+    - api
     environment:
       TZ: Asia/Taipei
     volumes:
-      - ./state/xhs-downloader:/app/Volume
+    - ./state/xhs-downloader:/app/Volume
     read_only: true
-    tmpfs: [/tmp]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-
+    tmpfs:
+    - /tmp
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    container_name: favsync-xhs-downloader-1
   bili-sync:
-    profiles: [extended]
+    profiles:
+    - extended
     build:
       context: .
       dockerfile: Dockerfile.bili-sync
     image: local/bili-sync-rs:2.11.1-flat1
     restart: unless-stopped
-    user: "${PUID:-1000}:${PGID:-1001}"
+    user: ${PUID:-1000}:${PGID:-1001}
     ports:
-      - "192.168.31.201:12345:12345"
+    - 192.168.31.201:12345:12345
     environment:
       TZ: Asia/Taipei
-      BILI_SYNC_FLAT_OUTPUT: "1"
-      BILI_SYNC_MIN_FREE_BYTES: "214748364800"
+      BILI_SYNC_FLAT_OUTPUT: '1'
+      BILI_SYNC_MIN_FREE_BYTES: '214748364800'
     volumes:
-      - ./state/bili-sync:/app/.config/bili-sync
-      - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/Bilibili:/downloads/Bilibili
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-
+    - ./state/bili-sync:/app/.config/bili-sync
+    - ${DOWNLOAD_ROOT:-/vol3/1000/Picture/Downloads}/Bilibili:/downloads/Bilibili
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    container_name: favsync-bili-sync-1
   wallabag:
-    profiles: [wallabag]
+    profiles:
+    - wallabag
     image: wallabag/wallabag:2.6.14
     restart: unless-stopped
     ports:
-      - "${WALLABAG_BIND:-127.0.0.1}:${WALLABAG_PORT:-18081}:80"
+    - ${WALLABAG_BIND:-127.0.0.1}:${WALLABAG_PORT:-18081}:80
     environment:
       TZ: Asia/Taipei
       SYMFONY__ENV__DATABASE_DRIVER: pdo_sqlite
-      SYMFONY__ENV__DOMAIN_NAME: "${WALLABAG_URL:-http://127.0.0.1:18081}"
+      SYMFONY__ENV__DOMAIN_NAME: ${WALLABAG_URL:-http://127.0.0.1:18081}
       SYMFONY__ENV__SERVER_NAME: Favsync wallabag
-      SYMFONY__ENV__FOSUSER_REGISTRATION: "false"
+      SYMFONY__ENV__FOSUSER_REGISTRATION: 'false'
     volumes:
-      - ./state/wallabag/data:/var/www/wallabag/data
-      - ./state/wallabag/images:/var/www/wallabag/web/assets/images
+    - ./state/wallabag/data:/var/www/wallabag/data
+    - ./state/wallabag/images:/var/www/wallabag/web/assets/images
     logging:
       driver: json-file
       options:
         max-size: 10m
-        max-file: "3"
-
+        max-file: '3'
+    container_name: favsync-wallabag-1
 volumes:
   cookiecloud-data:
+    name: favsync_cookiecloud-data
+    external: true
+name: automation
+networks:
+  default:
+    name: favsync_default
+    external: true

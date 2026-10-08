@@ -70,6 +70,19 @@ class XhsAdapter:
         self._bundle_remaining = self.cfg["xhs"]["max_detail_items_per_run"]
         self._observation = None
 
+    @staticmethod
+    def check_response(payload):
+        if payload.get("ok"):
+            return
+        code = str((payload.get("error") or {}).get("code", "scan_incomplete")).lower()
+        if code in ("not_authenticated", "unauthenticated", "login_required", "auth_required", "session_expired"):
+            raise SyncError("auth_required")
+        if code in ("verification_required", "captcha_required", "ip_blocked", "461", "471"):
+            raise SyncError("verification_required")
+        if code in ("rate_limited", "too_many_requests", "429"):
+            raise SyncError("rate_limited")
+        raise SyncError("scan_incomplete")
+
     def begin_source(self, source, account):
         self._observation = {"source": source, "account": account, "started_at": time.time(),
                              "scan_pages": 0, "new_ids": 0, "detail_requests": 0,
@@ -93,6 +106,18 @@ class XhsAdapter:
     def _pace(self):
         low = float(self.cfg["xhs"]["request_delay_min_seconds"])
         high = float(self.cfg["xhs"]["request_delay_max_seconds"])
+        # Preserve the same pacing across budgeted backfill invocations, not
+        # just requests within one worker cycle. Engine's state lock serializes
+        # writers, and cookies/identity remain in their existing private store.
+        if self.store is not None:
+            last = float(self.store.setting("xhs_request_at") or 0)
+            if last:
+                wait = random.uniform(low, high) - max(0, time.time() - last)
+                if wait > 0:
+                    time.sleep(wait)
+            self._last_request_at = time.monotonic()
+            self.store.setting("xhs_request_at", str(time.time()))
+            return
         if self._last_request_at:
             wait = random.uniform(low, high) - (time.monotonic() - self._last_request_at)
             if wait > 0:

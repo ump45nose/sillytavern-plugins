@@ -20,6 +20,7 @@ SOURCE_SPECS = (
     SourceSpec("x_bookmarks", "x", "x", "X 书签", "x_bookmarks", markdown=True),
     SourceSpec("x_likes", "x", "x", "X 点赞", baseline=True),
     SourceSpec("eh_favorites", "eh", "eh", "EH 收藏", baseline=True),
+    SourceSpec("xhs_creators", "xhs", "xhs", "陪伴作者素材"),
     SourceSpec("xhs_favorites", "xhs", "xhs", "小红书收藏", markdown=True),
     SourceSpec("xhs_likes", "xhs", "xhs", "小红书点赞"),
     SourceSpec("pixiv_art_public", "pixiv", "pixiv", "Pixiv 公开图片", "pixiv", baseline=True),

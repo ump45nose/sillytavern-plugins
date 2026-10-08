@@ -7,7 +7,7 @@ import time
 from .common import SyncError, process_lock
 from .film_store import init_schema
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def connect(state, *, readonly=False):
@@ -90,6 +90,8 @@ def _upgrade(db):
       PRIMARY KEY(source,account,item_id));
     """)
     init_schema(db)
+    from .companion_materials import init_schema as init_companion_schema
+    init_companion_schema(db)
     columns = {r[1] for r in db.execute("PRAGMA table_info(items)")}
     if "bundle_status" not in columns:
         db.execute("ALTER TABLE items ADD COLUMN bundle_status TEXT NOT NULL DEFAULT 'none'")
@@ -107,5 +109,5 @@ def _upgrade(db):
     source_columns = {r[1] for r in db.execute("PRAGMA table_info(sources)")}
     if "scan_reason" not in source_columns:
         db.execute("ALTER TABLE sources ADD COLUMN scan_reason TEXT")
-    db.execute("PRAGMA user_version=1")
+    db.execute("PRAGMA user_version=2")
     db.commit()
