@@ -45,4 +45,6 @@ sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy dingtalk --target nas
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback dingtalk --target nas
 ```
 
-首次迁移保留 NPM 原配置作为回退路径；DDNS 不再管理该域名的 A/AAAA，其他域名不变。入口验收使用健康检查、未认证 401 与 OAuth 发现，不调用钉钉写工具。GPT Web App／插件发布是下一阶段，本轮不更新插件文件或身份。
+首次迁移保留 NPM 原配置作为回退路径；DDNS 不再管理该域名的 A/AAAA，其他域名不变。入口验收使用健康检查、未认证 401 与 OAuth 发现，不调用钉钉写工具。
+
+GPT Web 展示资料已确定沿用名称「钉钉」及官网官方 PNG，2026-10-04 已核对现有图标与官网当前资源字节一致。`mcp.app.yaml` 已登记原展示资料、图标路径和 App 绑定；原描述、开场提示和版本保留。当前仅保存资料，尚未发布或重新连接插件。
