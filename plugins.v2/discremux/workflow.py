@@ -23,18 +23,16 @@ class RemuxService:
             source = request["source"]
             if not self.files.is_disc(source):
                 raise ValueError("请选择 ISO 或 BDMV 原盘")
-            self.files.validate_output(source, self.options["output_dir"])
+            output_root = self.files.validate_output(source, self.options.get("output_dir", ""))
             manifest = self.files.capture([source])
             key = stable_id([request.get("idempotency_key") or request,
-                             self.options["output_dir"], [a.dump() for a in manifest]])
+                             self.options.get("output_dir", ""), [a.dump() for a in manifest]])
             state = self.store.read()
             jobs = state.setdefault("jobs", {})
             if key not in jobs:
-                output_root = self.options["output_dir"]
-                if not output_root:
-                    raise ValueError("请配置 REMUX 产物保存目录")
                 jobs[key] = {"id": key, "stage": "ANALYZING", "request": deepcopy(request),
                              "source": [a.dump() for a in manifest], "output_dir": output_root,
+                             "in_place": not bool(self.options.get("output_dir")),
                              "delete_original": bool(request.get("delete_original",
                                                            self.options.get("delete_original", False))),
                              "reason": "", "progress": 0, "outputs": []}

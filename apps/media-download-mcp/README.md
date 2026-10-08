@@ -80,7 +80,7 @@ NAS 当前使用 media-automation 根 Compose 中的 media-download-mcp 服务�
 
 ```bash
 sudo -n env MEDIA_DOWNLOAD_RUNTIME_DIR=/home/yuwk/.config/mcp-platform/media-download-mcp \
-  docker compose --project-name media-automation -f /home/yuwk/media-automation/compose.yaml up -d --no-build media-download-mcp
+  docker compose --project-name media -f /vol2/1000/Docker/stacks/media/compose.yaml up -d --no-build media-download-mcp
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan media-download-mcp --target nas
 sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy media-download-mcp --target nas
 ```

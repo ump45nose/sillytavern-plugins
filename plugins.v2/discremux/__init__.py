@@ -6,7 +6,7 @@ from app.plugins import _PluginBase
 from app.db.user_oper import get_current_active_superuser_async
 
 
-DEFAULTS = {"enabled": False, "source_roots": ["/Media"], "output_dir": "/Media/Remux",
+DEFAULTS = {"enabled": False, "source_roots": ["/Media"], "output_dir": "",
             "delete_original": False, "makemkvcon": "makemkvcon", "ffprobe": "ffprobe",
             "timeout_seconds": 21600, "downloaders": [], "path_mappings": []}
 
@@ -15,7 +15,7 @@ class DiscRemux(_PluginBase):
     plugin_name = "原盘REMUX"
     plugin_desc = "分析ISO/BDMV，自动或人工选片，输出无损MKV文件"
     plugin_icon = "Moviepilot_A.png"
-    plugin_version = "0.1.0"
+    plugin_version = "0.1.1"
     plugin_author = "yuwk"
     author_url = ""
     plugin_config_prefix = "discremux_"
@@ -37,7 +37,8 @@ class DiscRemux(_PluginBase):
                 from media_capabilities.moviepilot import MoviePilotDownloader
                 from media_capabilities.store import PluginTaskStore
                 from .workflow import RemuxService
-                self.files = LocalFiles(self.config["source_roots"], [self.config["output_dir"]], self.config["ffprobe"])
+                output_roots = [self.config["output_dir"]] if self.config["output_dir"] else self.config["source_roots"]
+                self.files = LocalFiles(self.config["source_roots"], output_roots, self.config["ffprobe"])
                 self.engine = MakeMKVEngine(self.files, self.config["makemkvcon"], int(self.config["timeout_seconds"]))
                 self.application = RemuxService(PluginTaskStore(self), self.files, self.engine,
                                                  MoviePilotDownloader(self.files, self.config), self.config)

@@ -1,11 +1,18 @@
 services:
   media-search:
     image: local/media-search:0.1.2-server-login
+    user: 1000:1001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     build:
       context: ../..
       dockerfile: apps/media-search/Dockerfile
-    ports: ["127.0.0.1:8090:8090"]
+    ports:
+    - 127.0.0.1:8090:8090
     volumes:
-      - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/config.json:/config/config.json:ro
-      - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/secrets:/run/secrets:ro
+    - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/config.json:/config/config.json:ro
+    - ${MEDIA_SEARCH_RUNTIME_DIR:-.}/secrets:/run/secrets:ro
     restart: unless-stopped
+    container_name: media-automation-media-search-1

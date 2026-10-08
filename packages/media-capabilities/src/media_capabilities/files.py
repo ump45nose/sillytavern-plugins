@@ -32,13 +32,13 @@ class LocalFiles:
         self.output_roots = [Path(p).resolve() for p in (output_roots or roots)]
         self.ffprobe = ffprobe
 
-    def checked(self, value: str | Path, *, output=False) -> Path:
+    def checked(self, value: str | Path, *, output=False, allow_root=False) -> Path:
         path = Path(value)
         if not path.is_absolute() or ".." in path.parts:
             raise ValueError("需要允许目录内的绝对路径")
         resolved = path.resolve()
         roots = self.output_roots if output else self.roots + self.output_roots
-        if not any(resolved != root and resolved.is_relative_to(root) for root in roots):
+        if not any((allow_root or resolved != root) and resolved.is_relative_to(root) for root in roots):
             raise ValueError("路径超出配置目录或指向目录根")
         # Do not follow a symbolic link during destructive or preparation work.
         if any(p.is_symlink() for p in [path, *path.parents]):
@@ -53,9 +53,14 @@ class LocalFiles:
 
     def validate_output(self, source, directory):
         original = self.checked(source)
-        output = Path(directory).resolve()
-        if output not in self.output_roots or original.is_dir() and output.is_relative_to(original):
+        # ISO files stay beside their source; MKVs stay beside BDMV in a disc folder.
+        in_place = not directory
+        target = directory or (original if original.is_dir() and original.name.upper() != "BDMV"
+                               else original.parent)
+        output = self.checked(target, output=True, allow_root=True)
+        if original.is_dir() and output.is_relative_to(original) and not (in_place and output == original):
             raise ValueError("输出目录不允许位于所选原盘内")
+        return str(output)
 
     def browse(self, directory: str) -> list[dict]:
         path = Path(directory).resolve()
@@ -88,7 +93,11 @@ class LocalFiles:
             if path.is_dir():
                 if not self.is_disc(value):
                     raise ValueError("只允许展开原盘目录")
-                children = sorted(path.rglob("*"))
+                # Working receipts and sibling MKVs are not part of a Blu-ray disc.
+                # Exclude them so repeat submissions and cleanup never claim outputs.
+                children = sorted(child for child in path.rglob("*")
+                                  if ".discremux" not in child.relative_to(path).parts
+                                  and not (child.parent == path and child.suffix.lower() == ".mkv"))
                 if len(children) > 10000:
                     raise ValueError("原盘目录超过文件数量限制")
                 for child in children:
@@ -130,14 +139,14 @@ class LocalFiles:
         return info
 
     def commit_outputs(self, job, outputs):
-        root = Path(job["output_dir"]).resolve()
-        if root not in self.output_roots:
-            raise ValueError("产物目录不是配置的输出目录")
+        root = self.checked(job["output_dir"], output=True, allow_root=True)
         request = job["request"]
-        directory = root / (safe_name(request.get("title") or Path(request["source"]).stem)
-                            + "-" + job["id"][:10])
-        if job.get("attempt", 1) > 1:
+        in_place = job.get("in_place", False)
+        directory = root if in_place else root / (
+            safe_name(request.get("title") or Path(request["source"]).stem) + "-" + job["id"][:10])
+        if not in_place and job.get("attempt", 1) > 1:
             directory = directory.with_name(directory.name + f"-r{int(job['attempt'])}")
+        self.checked(directory, output=True, allow_root=True)
         directory.mkdir(parents=True, exist_ok=True)
         result = []
         for row in outputs:
@@ -147,6 +156,8 @@ class LocalFiles:
             name = safe_name(request.get("title") or Path(request["source"]).stem)
             if asset.episode is not None:
                 name += f".S{int(request.get('season') or 1):02d}E{asset.episode:02d}"
+            if in_place and job.get("attempt", 1) > 1:
+                name += f"-{job['id'][:10]}-r{int(job['attempt'])}"
             target = self.checked(directory / (name + ".mkv"), output=True)
             # A hard link is an atomic no-overwrite commit on the output volume.
             try:

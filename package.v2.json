@@ -53,12 +53,12 @@
     "name": "原盘REMUX",
     "description": "独立ISO/BDMV原盘分析、自动及人工选片、无损MKV产物管理。",
     "labels": "整理,工具",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "icon": "Moviepilot_A.png",
     "author": "yuwk",
     "level": 1,
     "system_version": ">=2.14.2,<3",
-    "history": {"v0.1.0": "MakeMKV引擎适配、人工选片页面、独立转换任务与产物校验。"}
+    "history": {"v0.1.1": "默认原地输出MKV，保留显式独立目录配置与重试产物隔离。", "v0.1.0": "MakeMKV引擎适配、人工选片页面、独立转换任务与产物校验。"}
   },
   "ThemeStudio": {
     "name": "主题曲管理",

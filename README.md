@@ -6,7 +6,9 @@ MediaArchive and DiscRemux add favorite-driven archival and independent ISO/BDMV
 preparation. Their business workflows use injected capability interfaces; the
 separately built `packages/media-capabilities` wheel supplies shared file, Emby,
 qB, 115 and MakeMKV integrations. Both plugins start disabled, archive starts in
-preview, and source cleanup is opt-in. See [architecture and installation](docs/media-archive-and-remux.md).
+preview, and source cleanup is opt-in. DiscRemux defaults to publishing MKVs in the
+source folder; an explicit output directory retains the separate-folder layout.
+See [architecture and installation](docs/media-archive-and-remux.md).
 
 ## Layout and entry points
 
@@ -24,7 +26,7 @@ The Film plugin never imports the Theme worker or its audio dependencies. The Th
 `apps/media-search` adds an independent Vue/Python query page; `apps/media-download-mcp`
 adds a generic four-tool MCP service (stdio and Streamable HTTP). They reuse the
 `media-capabilities` acquisition package through the independently installed **MediaCapabilities
-0.1.2** MoviePilot host plugin, requiring the shared **0.3.3 acquisition wheel**.
+0.1.2** MoviePilot host plugin, requiring the shared **0.3.4 acquisition wheel**.
 Neither service requires FilmWatchlist to be installed. FilmWatchlist 1.4.3 connects to the
 same runtime and registry through MoviePilot's plugin manager; its scans and preview flag
 remain business settings. The public host starts disabled and owns download permissions.
@@ -95,3 +97,7 @@ Favsync's current film API has no conditional revision write, so identity readba
 ## Source and licenses
 
 The original repositories and exact imported commits are recorded in `docs/source-snapshots.json`. Theme's MIT license remains scoped to its application under `apps/emby-theme-worker/LICENSE`; ThemeStudio third-party notices remain beside that plugin. FilmWatchlist's source had no separate license file. This consolidation does not assign Theme's license to FilmWatchlist or the entire maintenance tree.
+
+## 2026-10-08 NAS 部署说明
+
+NAS 正式入口现为 `/vol2/1000/Docker/stacks/media/compose.yaml`，本仓三个服务并入 media。源码 Compose 和私有 NAS overrides 继续由组入口 include；不另建 media-automation 项目。更新示例：`docker compose -p media -f /vol2/1000/Docker/stacks/media/compose.yaml up -d --no-deps media-search`。

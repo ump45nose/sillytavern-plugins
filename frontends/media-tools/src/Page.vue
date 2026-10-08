@@ -29,7 +29,7 @@ async function run(backfill=false){await post('run',{backfill});notice.value=bac
 async function submitDisc(){const episodes=episodeText.value.trim()?episodeText.value.split(',').map(e=>Number(e.trim())):[];if(episodes.some(e=>!Number.isInteger(e)||e<1))throw Error('集序请输入正整数，用英文逗号分隔');const r=await post('jobs',{source:source.value,kind:kind.value,title:title.value||undefined,season:kind.value==='tv'?season.value:null,episodes,runtime_seconds:runtime.value?runtime.value*60:null});notice.value=`已提交 ${r.job_id.slice(0,10)}`;tab.value='任务';await refresh()}
 async function selectJob(job){const choices=job.titles.filter(t=>chosen.value[`${job.id}:${t.id}`]).map(t=>({id:t.id,episode:job.request.kind==='tv'?Number(mapped.value[`${job.id}:${t.id}`]):null}));await post('select',{job_id:job.id,choices});notice.value='已提交人工选择';await refresh()}
 const settingsLabels={emby_url:'Emby 地址',emby_token_path:'Emby token 文件路径',cron:'每日任务 Cron',
-  output_dir:'REMUX 产物保存目录',movie_path:'115 电影目录',tv_path:'115 剧集目录',strm_root:'STRM 保存目录',
+  output_dir:'REMUX 产物保存目录（留空原地处理）',movie_path:'115 电影目录',tv_path:'115 剧集目录',strm_root:'STRM 保存目录',
   remux_output_dir:'归档允许读取的 REMUX 产物目录',makemkvcon:'MakeMKV 命令路径',ffprobe:'FFprobe 命令路径',
   timeout_seconds:'单标题转换超时（秒）',high_ratio:'高分享率保留阈值',high_days:'高分享率观察窗口（天）'}
 const objectLabels={source_roots:'允许读取的媒体目录',path_mappings:remux.value?'下载器路径映射':'Emby 路径映射',
@@ -70,6 +70,7 @@ onBeforeUnmount(()=>clearInterval(timer))
  <section v-if="tab==='设置'">
   <div class="actions"><label><input v-model="config.enabled" type="checkbox">启用插件</label><template v-if="!remux"><label><input v-model="config.dry_run" type="checkbox">预览模式</label><label><input v-model="config.cleanup_enabled" type="checkbox">验证完成后清理本地</label><label><input v-model="config.backfill" type="checkbox">允许回溯历史收藏</label></template><label v-else><input v-model="config.delete_original" type="checkbox">验证产物且无做种/共享引用后删除原盘</label></div>
   <div class="form-grid"><label v-for="(label,key) in settingsLabels" v-show="key in config" :key="key">{{label}}<input v-model="config[key]" :type="typeof config[key]==='number'?'number':'text'"></label></div>
+  <p v-if="remux">产物目录默认留空：ISO 在同目录生成 MKV，BDMV 在原盘文件夹内生成 MKV。填写目录后使用独立产物文件夹。</p>
   <section v-if="!remux"><h3>收藏用户（可多选）</h3><button :disabled="loading" @click="safe(loadUsers)">读取已保存连接的 Emby 用户</button><label v-for="user in users" :key="user.id" class="user"><input v-model="config.users" type="checkbox" :value="user.id">{{user.name}}</label><p v-if="!users.length">已选择用户 ID：{{(config.users||[]).join('、')||'暂无'}}</p></section>
   <details><summary>目录、路径映射与保种规则</summary><div class="form-grid"><label v-for="(label,key) in objectLabels" v-show="key in jsonFields" :key="key">{{label}}<textarea v-model="jsonFields[key]" rows="5" spellcheck="false"></textarea></label></div></details>
   <button :disabled="loading||busy" @click="safe(save)">保存设置</button>
