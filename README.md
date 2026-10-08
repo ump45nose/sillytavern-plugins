@@ -132,3 +132,8 @@ fence. Apply it to the existing Hermes checkout when restoring this deployment;
 the source migration installer does not automatically patch the framework.
 
 嘉颖陪伴 cron 的素材来源、连续生活状态、30 天历史与选择性部署说明见 [hermes/COMPANION.md](hermes/COMPANION.md)。
+
+## Hermes 报告源码收束
+
+独立 `hermes-cron-reports` 的报告统一在 [hermes/reports](hermes/reports/README.md) 维护。
+已核对源文件并保留本仓库较新的修复；部署入口和现有调度不变。原仓库保留历史。
