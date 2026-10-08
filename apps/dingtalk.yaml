@@ -1,2 +1,3 @@
-repository: https://github.com/ump45nose/dingtalk-workspace-plugin.git
-revision: e1e1a3cd726edf0c1885630c0305bc0c80cb525f
+repository: https://github.com/ump45nose/mcp-platform.git
+revision: c10fba61d2890ba9afb43110ed8917981443aa0b
+path: integrations/dingtalk
