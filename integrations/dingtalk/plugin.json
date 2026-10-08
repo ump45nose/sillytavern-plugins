@@ -1,0 +1,48 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dingtalk-workspace",
+  "version": "1.1.4",
+  "description": "连接钉钉办公数据，处理文档与知识库、组织通讯录、日历会议、个人待办、工作日志和周报、审批流程、在线表格与 AI 表，以及群聊和机器人消息。适用于“查我今天的日程和待办”“创建会议并邀请同事”“汇总或提交本周工作日志”“读取并更新钉钉表格”“查询审批进度”“整理项目文档”“向指定钉钉群发送通知”。支持文档创建与模板、日程查询和维护、待办及子任务、日志查询和提交、审批查询与处理、表格数据读写和 AI 表记录/视图/仪表盘管理。具体操作受当前账号和企业授权范围限制；没有提供考勤查询或打卡能力。",
+  "author": {
+    "name": "yuwk"
+  },
+  "repository": "https://github.com/ump45nose/mcp-platform/tree/main/integrations/dingtalk",
+  "keywords": [
+    "钉钉",
+    "DingTalk",
+    "办公协作",
+    "周报",
+    "工作日志",
+    "待办",
+    "日历",
+    "审批",
+    "文档",
+    "AI表",
+    "机器人"
+  ],
+  "extensions": {
+    "com.openai": {
+      "apps": "./.app.json",
+      "interface": {
+        "displayName": "钉钉",
+        "shortDescription": "处理钉钉文档、周报日志、日程、待办、审批与表格",
+        "longDescription": "连接钉钉办公数据，处理文档与知识库、组织通讯录、日历会议、个人待办、工作日志和周报、审批流程、在线表格与 AI 表，以及群聊和机器人消息。适用于“查我今天的日程和待办”“创建会议并邀请同事”“汇总或提交本周工作日志”“读取并更新钉钉表格”“查询审批进度”“整理项目文档”“向指定钉钉群发送通知”。支持文档创建与模板、日程查询和维护、待办及子任务、日志查询和提交、审批查询与处理、表格数据读写和 AI 表记录/视图/仪表盘管理。具体操作受当前账号和企业授权范围限制；没有提供考勤查询或打卡能力。",
+        "developerName": "yuwk",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://github.com/ump45nose/mcp-platform/tree/main/integrations/dingtalk",
+        "defaultPrompt": [
+          "查看我今天的钉钉日程和待办。",
+          "整理本周钉钉工作日志，准备周报草稿。",
+          "查询这条钉钉审批的当前进度。"
+        ],
+        "brandColor": "#0067FF",
+        "logo": "./assets/plugin/logo.png",
+        "composerIcon": "./assets/plugin/logo.png"
+      }
+    }
+  }
+}

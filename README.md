@@ -50,7 +50,7 @@ targets:
   nas:
     source_roots:
       personal-crm: /yuwk/code/mmp/personal-crm
-      dingtalk: /yuwk/code/mmp/dingding-workspace-plugin/mmp-platform
+      dingtalk: /home/yuwk/code/mcp-platform/integrations/dingtalk
       local-env-mcp: /home/yuwk/mcp-platform/integrations/local-env-mcp
       media-download-mcp: /home/yuwk/media-automation/apps/media-download-mcp
     env_files:
@@ -201,3 +201,12 @@ GPT 网页按“创建自定义 MCP 服务器”表单接入，名称“邮件�
 ## 2026-10-08 NAS 部署说明
 
 NAS 正式 MCP 项目统一为 mcp，入口 `/vol2/1000/Docker/stacks/mcp/compose.yaml`。业务清单登记 compose_project=mcp，并显式保留容器名；公共生成器支持 container_name、cap_drop 和 security_opt。targets 的稳定 compose_files 直接指向上述组入口，runtime 生成目录保留。公共生成器只替换目标服务并保留同组服务、现有卷别名和网络别名；现有 usage-data 在清单中登记为 external。组入口直接声明 services，供原版 Dockge 管理，不使用 Dockge 定制代码。CLI 为 `/home/yuwk/code/mcp-platform/.venv/bin/mcpctl`；源码移动后应在新路径重新安装 editable CLI，避免旧 shebang/.pth。
+
+## 钉钉源码收束（2026-10-08）
+
+钉钉清单、官方图标、插件资料和只读事件生产器现统一在
+[integrations/dingtalk](integrations/dingtalk/README.md)。应用目录指向本仓库的锁定导入提交，
+旧展示包保留在该目录的 `legacy-plugin/`，当前原生 App 身份不变。
+上面的 `source_roots` 是合并后的路径示例，不是已执行的 NAS 迁移；
+本次未修改 NAS 私有目标、部署、调度或用量统计镜像。实际切换另行核对并部署。
+原源仓库保留历史，未删除或归档。

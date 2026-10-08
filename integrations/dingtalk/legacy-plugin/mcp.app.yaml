@@ -1,0 +1,34 @@
+schema_version: 1
+id: dingtalk
+name: 钉钉 MCP
+deployment_mode: existing
+authentication: oauth
+public_url: https://mcphub-home.172906573.xyz
+port: 3000
+host_port: 3100
+bind_address: 192.168.31.201
+health_path: /health
+mcp_path: /mcp
+plugin:
+  name: dingtalk-workspace
+  version: 1.1.3
+  description: 连接钉钉办公数据，处理文档与知识库、组织通讯录、日历会议、个人待办、工作日志和周报、审批流程、在线表格与 AI 表，以及群聊和机器人消息。适用于“查我今天的日程和待办”“创建会议并邀请同事”“汇总或提交本周工作日志”“读取并更新钉钉表格”“查询审批进度”“整理项目文档”“向指定钉钉群发送通知”。支持文档创建与模板、日程查询和维护、待办及子任务、日志查询和提交、审批查询与处理、表格数据读写和
+    AI 表记录/视图/仪表盘管理。具体操作受当前账号和企业授权范围限制；没有提供考勤查询或打卡能力。
+  display_name: 钉钉
+  short_description: 处理钉钉文档、周报日志、日程、待办、审批与表格
+  brand_color: '#0067FF'
+  app_id: asdk_app_6aabd5bd61b08191acdf86118b720bf5
+  app_binding: dev-6aabd5bd61b08191acdf86118b720bf5
+  logo: assets/plugin/logo.png
+  keywords:
+  - 钉钉
+  - DingTalk
+  - 办公协作
+  - 周报
+  - 工作日志
+  - 待办
+  - 日历
+  - 审批
+  - 文档
+  - AI表
+  - 机器人
