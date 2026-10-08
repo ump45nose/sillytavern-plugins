@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, time, timedelta
 import json
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from personal_crm.storage import CrmRepository
@@ -16,11 +17,21 @@ def main(argv: list[str] | None = None) -> int:
     """执行个人 CRM 运维命令。"""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["init-db", "integrity", "backup", "daily-summary"])
+    parser.add_argument("command", choices=["init-db", "integrity", "backup", "daily-summary", "migrate"])
     parser.add_argument("path", nargs="?")
     parser.add_argument("--date", help="daily-summary 的业务日期，格式 YYYY-MM-DD")
     parser.add_argument("--timezone", default="Asia/Shanghai", help="daily-summary 的业务时区")
     args = parser.parse_args(argv)
+    if args.command == "migrate":
+        from alembic import command
+        from alembic.config import Config
+
+        config = Config()
+        config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
+        config.set_main_option("sqlalchemy.url", Settings().database_url.replace("%", "%%"))
+        command.upgrade(config, "head")
+        print("migrated")
+        return 0
     repository = CrmRepository(Settings().database_url)
     if args.command == "integrity":
         print(repository.integrity_check())

@@ -71,3 +71,7 @@ FnOS 升级或在 NAS UI 中修改 `Docker` 目录权限后，父目录 Trim ACL
 使用 root 运行 `deploy/fix-permissions.sh`：脚本会先备份 ACL 元数据，再让静态代码由 `yuwk`
 维护且对 Hermes 只读，让 `data/state/logs/tmp/artifacts` 同时允许 Hermes 运行和 `yuwk` 维护，
 并保持 `.env` 为 `hermes:hermes 0600`。脚本不会读取或复制 `.env` 内容。
+
+## 2026-10-08 NAS 部署说明
+
+2026-10-08 修复：bin/review/schemas/scripts 指向迁移后源码时，权限修复入口明确校验目标目录；处理 FnOS Trim ACL 及健康桥接的两个代码依赖，不递归修改未知链接或容器数据卷。源码允许 Hermes 读取，运行数据保持独立权限。日报成功材料必须以 `# 今日日报材料｜YYYY-MM-DD` 开头；投递回执关联同次 execution 的输出文件，模型仅回复错误不能确认 checkpoint。部署源 cron/jobs/cron.py 与 personal-jobs/personal-review-daily-ack.py 保留这一合同。

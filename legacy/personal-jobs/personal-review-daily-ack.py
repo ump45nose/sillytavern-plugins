@@ -41,6 +41,30 @@ def _latest_execution(path: Path, job_id: str) -> dict:
     return dict(row)
 
 
+
+def _assert_material_delivery(config, job: dict, execution: dict, day: str) -> None:
+    """只有同一次执行的实际日报输出才能确认来源游标。"""
+
+    started = datetime.fromisoformat(str(execution["started_at"]))
+    finished = datetime.fromisoformat(str(execution["finished_at"]))
+    directory = config.path("REVIEW_JOBS_FILE").parent / "output" / str(job["id"])
+    matches = []
+    for path in directory.glob("*.md"):
+        try:
+            stamp = datetime.strptime(path.stem, "%Y-%m-%d_%H-%M-%S").replace(tzinfo=config.timezone)
+        except ValueError:
+            continue
+        if started.timestamp() - 1 <= stamp.timestamp() <= finished.timestamp() + 1:
+            matches.append(path)
+    if len(matches) != 1:
+        raise RuntimeError("日报执行输出缺失或不唯一，checkpoint 保持 pending")
+    document = matches[0].read_text(encoding="utf-8")
+    _, separator, response = document.rpartition("\n## Response\n")
+    headline = response.strip().splitlines()[0] if separator and response.strip() else ""
+    if headline.strip() != f"# 今日日报材料｜{day}":
+        raise RuntimeError("日报执行仅有模型回复，未投递对应日期材料，checkpoint 保持 pending")
+
+
 def main() -> int:
     """只在成功投递覆盖最新 pending 材料时原子确认 checkpoint。"""
 
@@ -73,6 +97,8 @@ def main() -> int:
     if prepared_at > finished_at:
         print(json.dumps({"status": "skipped", "reason": "pending-newer-than-delivery", "session_id": session_id}, ensure_ascii=False))
         return 0
+
+    _assert_material_delivery(config, job, execution, local_run.date().isoformat())
 
     delivery_id = f"hermes-cron:{job['id']}:{execution['id']}"
     result = state.acknowledge_checkpoints(session_id, delivery_id)

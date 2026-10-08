@@ -8,12 +8,13 @@ public_url: https://usage-home.172906573.xyz
 port: 8080
 host_port: 18103
 bind_address: 192.168.31.201
-compose_project: usage-monitor-mcp
+compose_project: mcp
 compose_service: app
-user: '1000:1001'
+user: 1000:1001
 volumes:
 - name: usage-data
   mount: /data
+  external: true
 bind_mounts:
 - source: /vol2/1000/Docker/token-monitor/hub-data
   mount: /sources/token-monitor
@@ -67,3 +68,10 @@ plugin:
   - 流量
   - 日报
   - 钉钉事件
+cap_drop:
+- ALL
+security_opt:
+- no-new-privileges:true
+external_networks:
+- usage-monitor-mcp_default
+container_name: usage-monitor-mcp-app-1

@@ -173,6 +173,7 @@ class CronPlanner:
             f"（最多 {self.config.policy['daily']['action_options']} 项），都不必凑数。"
             "若无法可靠整理，直接发送返回的 text，并在末尾注明“本次仅发送精简回退版”；不要重试已失败的来源工具。"
             "用户随后确认时只做轻量精炼，保留事实、第一人称和不确定性；Git、CRM 只能在用户认可后写入留痕。"
+            "材料成功取得后，第一行固定为 # 今日日报材料｜YYYY-MM-DD，日期取返回材料。配置或 prepare 失败时只报告错误，不使用该材料标题。"
             "不要写 Memos，也不要提交 checkpoint。"
         )
 

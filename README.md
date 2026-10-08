@@ -89,3 +89,7 @@ API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`
 归档查看凭据保存在 Mac Keychain，NAS 仅允许它读取信息。Google 编辑使用另一个 Keychain 项和独立浏览器授权，Mac 直连官方 API，NAS 按原周期归档，MCP 保持只读。全局 **⌃⌥Space** 呼出日程任务浮窗；任务日期不提供时刻或本地提醒。展示接口仅读取可重建的有界索引，不传输原始 AX 事件。安装和连接见 [客户端说明](apps/mac-client/README.md)，展示定义见 [Mac 信息展示](docs/mac-display.md)。
 
 部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md)、[列表和状态修正](docs/query-status-validation.md) 与 [展示改造验收](docs/mac-display-validation.md)。
+
+## 2026-10-08 NAS 部署说明
+
+NAS Personal Data Hub/CRM 归 mcp，正式入口 `/vol2/1000/Docker/stacks/mcp/compose.yaml` 的 crm 服务。CRM 非 root 1000:1001、cap_drop ALL、no-new-privileges；既有卷和 OAuth 身份保留。个人 CRM wheel 必须打包 migrations，部署步骤显式运行 `personal-crm migrate`，不会在启动时自动改库。当前 SQLite 迁移到 003_wechat_messages，保留 interactions 记录。旧复盘任务仅修复既有运行路径，没有注册新任务。
