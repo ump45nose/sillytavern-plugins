@@ -8,6 +8,16 @@ import runpy
 import time
 
 
+def confirmed_ready(boot, name):
+    # Confirm a failed observation before reporting it during Docker changes.
+    for attempt in range(3):
+        if boot["ready"](name):
+            return True
+        if attempt < 2:
+            time.sleep(1)
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("audit", "repair"))
@@ -40,7 +50,7 @@ def main():
                 while not boot["ready"](name) and time.monotonic() < deadline:
                     time.sleep(1)
                 print(f"container started: {name}")
-            if not boot["ready"](name):
+            if not confirmed_ready(boot, name):
                 errors.append(f"container unavailable: {name}")
         for message in errors:
             print(message)

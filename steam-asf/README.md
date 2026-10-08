@@ -148,3 +148,7 @@ To roll back, pause the Steam job and stop only `benefits-steam-asf` with
 Compose. Retain all private ASF data and benefits journals. The pre-Steam
 deployment JSON is backed up in the private Lingjun directory. Restoring a
 source revision must not discard durable submission intents.
+
+## 2026-10-08 NAS 部署说明
+
+NAS 正式入口现为 `/vol2/1000/Docker/stacks/automation/compose.yaml`，本目录 Compose 由 automation 组 include；容器 benefits-steam-asf 和持久配置不变，default 网络显式保留 benefits-steam_default。更新示例：`docker compose -p automation -f /vol2/1000/Docker/stacks/automation/compose.yaml up -d --no-deps asf`。

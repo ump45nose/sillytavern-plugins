@@ -271,6 +271,7 @@
   },
   {
     "name": "benefits-aliyun",
+    "enabled": false,
     "schedule": {
       "kind": "cron",
       "expr": "22 8 * * *",

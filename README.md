@@ -89,12 +89,37 @@ stays outside this repository; this NAS requires group `hermes`, mode 0640 for
 the existing viewer token because named ACL alone did not allow runtime reads.
 Set `ha_url` and `npm_health_url` to the actual listener addresses in private
 configuration. The probes bypass outbound proxies for these local services.
+Set `moviepilot_api_base` to MoviePilot's actual private IP listener, including
+`/api/v1`; a LAN-only port binding cannot be reached through `127.0.0.1`.
+The report does not follow redirects or forward its API credential elsewhere.
 
 The six former container stop/start schedules use `container-maintenance.py`:
 former stop/enforcement times audit the persistent boot plan; former start
 times start stopped entries in dependency order. They leave unlisted containers
-alone. Generic review prompt templates are in `model/review-prompts.json`;
+alone. A failed readiness observation is confirmed up to three times before
+reporting an unavailable container. Generic review prompt templates are in `model/review-prompts.json`;
 installing them into the private scheduler remains an explicit maintenance step.
+
+Episode extraction reports pending backlog separately from failed processing.
+A bounded run with pending work and no actual failures exits successfully;
+failed extraction or memory writes still produce a nonzero exit status.
+The extractor has its own 180-second request timeout in the Hermes runtime;
+changing only the profile's auxiliary timeout does not change that bound.
+
+`benefits-aliyun` was paused at the user's request on 2026-10-08 because its
+CookieCloud login expires too frequently. The schedule inventory records it
+disabled; redeployment must preserve the paused live job.
+The private deployment task also has `enabled: false`: the launcher skips it,
+the daily summary labels it disabled, and the exception report excludes it.
+Its historical result is retained.
+
+`welfare_monitor.py` persists per-host HTTP 429 cooldowns in its existing
+private SQLite state. It honors Retry-After, defaults to one hour when absent
+or invalid, and waits at least one minute; other feeds on that host skip their
+requests while the cooldown applies. It keeps the existing cookies and proxy.
+Successful source probes do not mark unseen items as delivered. On 2026-10-08
+the two Linux.do feeds were readable again (100 and 30 items); this observation
+does not imply future rate limits have been eliminated.
 
 `hermes/schedules.json` and `model/schedules.json` contain a sanitized inventory,
 without prompts, chat IDs, credentials, execution history or generated one-shot
@@ -105,3 +130,5 @@ The applied scheduler heartbeat change is retained in
 heartbeat continue while a network delivery holds the per-job side-effect
 fence. Apply it to the existing Hermes checkout when restoring this deployment;
 the source migration installer does not automatically patch the framework.
+
+嘉颖陪伴 cron 的素材来源、连续生活状态、30 天历史与选择性部署说明见 [hermes/COMPANION.md](hermes/COMPANION.md)。

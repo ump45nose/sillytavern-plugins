@@ -31,7 +31,6 @@
 30 ilab-conjure
 30 mcphub
 30 sillytavern
-30 hermes-studio
 30 favsync-wallabag-1
 30 favsync-cookiecloud-1
 30 favsync-xhs-downloader-1
@@ -49,4 +48,6 @@
 40 emby-theme-worker embyserver
 40 favsync-favsync-1 favsync-wallabag-1
 40 favsync-favsync-api-1 favsync-favsync-1
+40 usage-monitor-mcp-app-1 token-monitor-hub
+40 mcp-platform-media-download-gateway-1 media-automation-media-download-mcp-1
 45 watchtower

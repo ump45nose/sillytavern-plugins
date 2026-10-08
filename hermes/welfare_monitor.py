@@ -18,10 +18,13 @@ import re
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import textwrap
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -41,6 +44,13 @@ LDOH_COOKIE_PATH = PROFILE_ROOT / "secrets/welfare-monitor/ldoh_cookies.txt"
 
 USER_AGENT = "Mozilla/5.0 (compatible; welfare-monitor/1.0)"
 MAX_MESSAGE_CHARS = 3800
+_RATE_LIMITS: dict[str, float] = {}
+
+
+class SourceRateLimit(RuntimeError):
+    def __init__(self, host: str, retry_at: float):
+        self.host, self.retry_at = host, retry_at
+        super().__init__("上游 HTTP 429；同域来源等待限流窗口")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -127,31 +137,53 @@ def get_response(
 
 
 def curl_get(url: str, *, cookie_path: Path, accept: str) -> bytes:
+    host = urlparse(url).hostname or ""
+    if _RATE_LIMITS.get(host, 0) > time.time():
+        raise SourceRateLimit(host, _RATE_LIMITS[host])
     load_cookie_jar(cookie_path)
-    result = subprocess.run(
-        [
-            "/usr/bin/curl",
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--connect-timeout",
-            "10",
-            "--max-time",
-            "30",
-            "--max-filesize",
-            "5242880",
-            "--user-agent",
-            USER_AGENT,
-            "--header",
-            f"Accept: {accept}",
-            "--cookie",
-            str(cookie_path),
-            url,
-        ],
-        check=False,
-        capture_output=True,
-    )
+    with tempfile.NamedTemporaryFile() as headers:
+        result = subprocess.run(
+            [
+                "/usr/bin/curl",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--dump-header",
+                headers.name,
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "30",
+                "--max-filesize",
+                "5242880",
+                "--user-agent",
+                USER_AGENT,
+                "--header",
+                f"Accept: {accept}",
+                "--cookie",
+                str(cookie_path),
+                url,
+            ],
+            check=False,
+            capture_output=True,
+        )
+        headers.seek(0)
+        response_headers = headers.read(131072).decode("latin-1")
+    statuses = re.findall(r"^HTTP/\S+\s+(\d{3})", response_headers, re.MULTILINE)
+    if statuses and statuses[-1] == "429":
+        delay = 3600.0
+        values = re.findall(r"^Retry-After:\s*([^\r\n]+)", response_headers,
+                            re.MULTILINE | re.IGNORECASE)
+        if values:
+            try:
+                delay = (float(values[-1]) if values[-1].isdigit() else
+                         parsedate_to_datetime(values[-1]).timestamp() - time.time())
+            except (ValueError, TypeError, OverflowError):
+                pass
+        retry_at = time.time() + max(60.0, delay)
+        _RATE_LIMITS[host] = retry_at
+        raise SourceRateLimit(host, retry_at)
     if result.returncode:
         detail = safe_text(result.stderr.decode("utf-8", "replace"), 180)
         raise RuntimeError(f"curl exit {result.returncode}: {detail}")
@@ -366,6 +398,8 @@ def connect_db() -> sqlite3.Connection:
         )
         """
     )
+    connection.execute("CREATE TABLE IF NOT EXISTS rate_limits "
+                       "(host TEXT PRIMARY KEY, retry_at REAL NOT NULL)")
     connection.commit()
     return connection
 
@@ -431,6 +465,10 @@ def process_failure(
     suppress: bool,
 ) -> str | None:
     detail = safe_text(f"{type(error).__name__}: {error}", 220)
+    if isinstance(error, SourceRateLimit):
+        connection.execute("INSERT INTO rate_limits VALUES(?,?) ON CONFLICT(host) "
+                           "DO UPDATE SET retry_at=max(rate_limits.retry_at,excluded.retry_at)",
+                           (error.host, error.retry_at))
     row = connection.execute(
         "SELECT last_error, error_notified FROM source_state WHERE source = ?",
         (source.key,),
@@ -518,6 +556,9 @@ def run(*, baseline: bool = False) -> int:
             return 0
 
         connection = connect_db()
+        _RATE_LIMITS.clear()
+        _RATE_LIMITS.update({row["host"]: row["retry_at"] for row in
+                             connection.execute("SELECT host,retry_at FROM rate_limits")})
         found: list[Item] = []
         errors: list[str] = []
         counts: list[str] = []

@@ -92,6 +92,9 @@ def render(day):
     root = Path(cfg["runtime_root"]) / "delivery"
     lines = [f"每日签到结果 {day}"]
     for platform, task in cfg["tasks"].items():
+        if task.get("enabled", True) is False:
+            lines.append(task["label"] + "：已停用")
+            continue
         try:
             row = bounded(root / (platform + ".json"))
             if (row.get("business_date") != day or row.get("platform") != platform

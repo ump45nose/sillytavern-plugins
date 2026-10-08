@@ -4,6 +4,7 @@
 import argparse
 import datetime as dt
 import fcntl
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ import urllib.error
 import urllib.request
 
 ORDER = Path('/home/yuwk/cron/scripts/container-boot-order.txt')
+IGNORE = Path('/home/yuwk/cron/scripts/container-boot-ignore.txt')
 LOCK = '/tmp/container-boot.lock'
 
 
@@ -124,6 +126,13 @@ def wait_ready(name, seconds=120):
         time.sleep(5)
 
 
+def load_ignore():
+    if not IGNORE.exists():
+        return []
+    return [line.split('#', 1)[0].strip() for line in IGNORE.read_text().splitlines()
+            if line.split('#', 1)[0].strip()]
+
+
 def check(entries):
     result = run('docker', 'ps', '-a', '--format', '{{json .}}')
     if not result or result.returncode:
@@ -132,15 +141,20 @@ def check(entries):
     containers = {row['Names']: row for row in map(json.loads, result.stdout.splitlines())}
     planned = {name for _, name, _ in entries}
     missing = sorted(planned - containers.keys())
+    ignore = load_ignore()
+    ignored_active = sorted(name for name, row in containers.items()
+                            if row['State'] == 'running' and name not in planned
+                            and any(fnmatch.fnmatchcase(name, pattern) for pattern in ignore))
     active_unplanned = sorted(name for name, row in containers.items()
-                              if row['State'] == 'running' and name not in planned)
+                              if row['State'] == 'running' and name not in planned
+                              and name not in ignored_active)
     stopped_planned = sorted(name for name in planned & containers.keys()
                              if containers[name]['State'] != 'running')
     counts = {}
     for stage, _, _ in entries:
         counts[stage] = counts.get(stage, 0) + 1
     log(f'plan: {len(entries)} containers; stage counts {counts}')
-    log(f'missing={missing} active_unplanned={active_unplanned} stopped_planned={stopped_planned}')
+    log(f'missing={missing} active_unplanned={active_unplanned} ignored_active={ignored_active} stopped_planned={stopped_planned}')
     return int(bool(missing or active_unplanned or stopped_planned))
 
 

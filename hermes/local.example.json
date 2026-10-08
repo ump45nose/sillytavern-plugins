@@ -1,5 +1,12 @@
 {
   "companion_delivery": "telegram:CHAT_ID:THREAD_ID",
+  "companion": {
+    "enabled": false,
+    "materials_url": "http://YOUR_FAVSYNC_HOST:18082/v1/companion/materials",
+    "materials_token_file": "/home/hermes/.hermes/profiles/lingjun/companion/materials.token",
+    "extra_context_tokens": 12000,
+    "model_context_window": 256000
+  },
   "notice_bot_username": "YOUR_NOTICE_BOT",
   "container_proxy_url": "http://YOUR_LAN_PROXY:7890",
   "github_login": "YOUR_GITHUB_LOGIN",
@@ -9,5 +16,6 @@
   "health_api_url": "",
   "health_token_file": "",
   "npm_health_url": "http://127.0.0.1:28081/",
-  "ha_url": "http://127.0.0.1:8123/"
+  "ha_url": "http://127.0.0.1:8123/",
+  "moviepilot_api_base": "http://127.0.0.1:28300/api/v1"
 }

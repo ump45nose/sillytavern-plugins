@@ -40,8 +40,15 @@ def main():
     parser.add_argument("--profile-home", type=Path, default=Path("/home/hermes/.hermes/profiles/lingjun"))
     parser.add_argument("--agent-root", type=Path, default=Path("/home/hermes/.hermes/hermes-agent"))
     parser.add_argument("--review-root", type=Path, default=Path("/vol2/1000/Docker/personal-review"))
+    parser.add_argument("--only", action="append", default=[], metavar="REPO_FILE",
+                        help="Install only these exact source files and their manifest wrappers; repeatable")
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
+    selected = {Path(p).as_posix() for p in args.only}
+    for relative in selected:
+        path = (source / relative).resolve()
+        if not path.is_relative_to(source) or not path.is_file() or Path(relative).parts[0] not in {"hermes", "model", "retired"}:
+            parser.error(f"invalid selected source file: {relative}")
     manifest = json.loads((source / "hermes/manifest.json").read_text())
     local_config = args.runtime / "env/hermes.local.json"
     if local_config.exists():
@@ -54,11 +61,15 @@ def main():
         for path in (source / group).rglob("*"):
             if not path.is_file() or "__pycache__" in path.parts:
                 continue
+            if selected and path.relative_to(source).as_posix() not in selected:
+                continue
             target = args.runtime / path.relative_to(source)
             atomic_write(target, path.read_text(), 0o755 if path.suffix in {".py", ".sh"} else 0o644)
     # Human-run Steam login helpers contain no credentials and are separate
     # from trusted scheduled entrypoints. Installing them never starts a login.
     for name in ("login.py", "qr-login.py", "prepare.py"):
+        if selected:
+            continue
         atomic_write(args.runtime / "scripts/steam-asf" / name,
                      (source / "steam-asf" / name).read_text(), 0o755)
     for kind, base in (("profile_scripts", args.profile_home / "scripts"),
@@ -66,6 +77,8 @@ def main():
                        ("review_scripts", args.review_root / "scripts"),
                        ("review_sources", args.review_root / "review/sources")):
         for name, relative in manifest.get(kind, {}).items():
+            if selected and relative not in selected:
+                continue
             old = base / name
             if old.exists():
                 saved = backup / kind / name

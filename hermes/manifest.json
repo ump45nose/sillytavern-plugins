@@ -1,5 +1,7 @@
 {
   "profile_scripts": {
+    "companion_pre_run.py": "hermes/companion_pre_run.py",
+    "companion_chat_hook.py": "hermes/companion_chat_hook.py",
     "plaud-daily.sh": "model/plaud-daily.sh",
     "benefits_aliyun.py": "hermes/benefits_aliyun.py",
     "benefits_automation_daily_report.py": "hermes/benefits_automation_daily_report.py",

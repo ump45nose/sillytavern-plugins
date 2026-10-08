@@ -23,6 +23,9 @@ def bounded(path, limit=65536):
 def main(platform):
     cfg = bounded(CONFIG)
     task = cfg["tasks"][platform]
+    if task.get("enabled", True) is False:
+        print(task["label"] + "：已停用")
+        return 0
     repo, runtime = Path(cfg["repository"]), Path(cfg["runtime_root"])
     sys.path.insert(0, str(repo))
     from common.model import result, validate, atomic_json

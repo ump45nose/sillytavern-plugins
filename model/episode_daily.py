@@ -348,7 +348,6 @@ def main() -> int:
     return 1 if (
         report["failed"]
         or report["memory_failed"]
-        or report["remaining"]
     ) else 0
 
 

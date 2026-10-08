@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import urllib.error
 import urllib.request
@@ -40,7 +41,7 @@ TASK_STAGE_LABELS = {
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Keep the local MoviePilot credential on the configured loopback API."""
+    """Keep the MoviePilot credential on the configured API without redirects."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -50,6 +51,24 @@ class MoviePilotAPIError(RuntimeError):
     def __init__(self, detail: str):
         super().__init__(detail)
         self.detail = detail
+
+
+def moviepilot_api_base() -> str:
+    path = Path(os.environ.get("HERMES_CRON_CONFIG", "/home/yuwk/cron/env/hermes.local.json"))
+    try:
+        config = json.loads(path.read_text()) if path.exists() else {}
+        base = str(config.get("moviepilot_api_base", MOVIEPILOT_API_BASE)).rstrip("/")
+        from urllib.parse import urlsplit
+        import ipaddress
+        url = urlsplit(base)
+        address = ipaddress.ip_address(url.hostname)
+        if (url.scheme not in {"http", "https"} or url.username is not None
+                or url.password is not None or url.query or url.fragment
+                or url.path != "/api/v1" or not (address.is_private or address.is_loopback)):
+            raise ValueError()
+        return base
+    except (OSError, ValueError, TypeError, AttributeError):
+        raise MoviePilotAPIError("MoviePilot 本机接口配置无效或不可读") from None
 
 
 def moviepilot_api_token() -> str:
@@ -101,6 +120,7 @@ def moviepilot_job_snapshots() -> tuple[dict[str, list[dict] | None], list[str],
     issues: list[str] = []
     try:
         token = moviepilot_api_token()
+        base = moviepilot_api_base()
     except MoviePilotAPIError as exc:
         detail = exc.detail
         return {plugin: None for plugin in MOVIEPILOT_PLUGINS}, [detail], ""
@@ -111,7 +131,7 @@ def moviepilot_job_snapshots() -> tuple[dict[str, list[dict] | None], list[str],
     for plugin in MOVIEPILOT_PLUGINS:
         route = f"/plugin/{plugin}/jobs"
         request = urllib.request.Request(
-            MOVIEPILOT_API_BASE + route,
+            base + route,
             headers={"X-API-KEY": token, "Accept": "application/json"},
             method="GET",
         )

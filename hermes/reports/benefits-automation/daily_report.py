@@ -150,7 +150,21 @@ def build_report(day: str | None = None) -> str:
     report_day = day or datetime.now(TIMEZONE).date().isoformat()
     date.fromisoformat(report_day)
     problems: list[tuple[str, str]] = []
+    # Disabled tasks retain their old results but no longer produce missing or
+    # failed-result alerts. Unreadable configuration must still fail visibly.
+    deployment_path = DELIVERY_ROOT.parents[1] / "benefits-deployment.json"
+    disabled = set()
+    if deployment_path.exists():
+        with deployment_path.open("rb") as stream:
+            raw = stream.read(MAX_JSON_BYTES + 1)
+        if len(raw) > MAX_JSON_BYTES:
+            raise ValueError("benefits deployment configuration exceeds read limit")
+        config = json.loads(raw)
+        disabled = {name for name, task in config["tasks"].items()
+                    if task.get("enabled", True) is False}
     for platform, label in TASKS.items():
+        if platform in disabled:
+            continue
         row, read_error = load_result(platform)
         if read_error:
             problems.append((label, read_error))
