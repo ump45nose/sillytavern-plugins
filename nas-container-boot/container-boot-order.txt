@@ -16,6 +16,7 @@
 30 qbittorrent
 30 navidrome
 30 memos
+30 fn-web-preview
 30 new-api postgresql
 30 apisix cli-proxy-api new-api
 30 cpa-manager-plus cli-proxy-api
