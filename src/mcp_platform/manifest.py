@@ -80,7 +80,10 @@ class AppManifest(BaseModel):
     expected_tools: list[str] = Field(default_factory=list)
     compose_project: str = ""
     compose_service: str = "app"
+    container_name: str = ""
     user: str = ""
+    cap_drop: list[str] = Field(default_factory=list)
+    security_opt: list[str] = Field(default_factory=list)
     working_dir: str = ""
     init: bool = False
     external_networks: list[str] = Field(default_factory=list)

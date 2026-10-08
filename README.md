@@ -197,3 +197,7 @@ CRM 作为真实示例继续在自己的仓库维护业务实现。首轮完成 
 GPT 网页按“创建自定义 MCP 服务器”表单接入，名称“邮件”，使用 Zoho Mail 官方图标；禁止调用 Plugin Creator。邮件已在真实网页注册并由用户完成 OAuth，官方图标、已连接账户与 19 个工具已核对，[打开邮件插件](https://chatgpt.com/plugins/plugin_asdk_app_6ac285e95d74819193f153ce16dc5640)。客户端账号发现及一次 INBOX 查询已通过，返回 4 个账号、1 个文件夹，未触发邮件写操作。实际状态、构建摘要及回滚说明见 [邮件部署记录](docs/email-mcp-rollout-2026-10-05.md)及[适配说明](integrations/email-mcp/README.md)。
 
 启用 MCP Events 的服务由公共运行时提供 `get_mcp_event_status` 只读工具，返回当前授权账户的事件声明、订阅有效期与回调验证、队列计数和最近 10 次投递元数据。不返回回调 URL、签名秘密、筛选参数或业务正文；`accepted` 只表示回调已接收，不能证明 ChatGPT 的任务和通知已执行。订阅过期时显示无效，不修改或重放事件。
+
+## 2026-10-08 NAS 部署说明
+
+NAS 正式 MCP 项目统一为 mcp，入口 `/vol2/1000/Docker/stacks/mcp/compose.yaml`。业务清单登记 compose_project=mcp，并显式保留容器名；公共生成器支持 container_name、cap_drop 和 security_opt。targets 的稳定 compose_files 直接指向上述组入口，runtime 生成目录保留。公共生成器只替换目标服务并保留同组服务、现有卷别名和网络别名；现有 usage-data 在清单中登记为 external。组入口直接声明 services，供原版 Dockge 管理，不使用 Dockge 定制代码。CLI 为 `/home/yuwk/code/mcp-platform/.venv/bin/mcpctl`；源码移动后应在新路径重新安装 editable CLI，避免旧 shebang/.pth。

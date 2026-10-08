@@ -9,13 +9,13 @@
 使用 NAS 已有锁定运行时镜像 `local/personal-crm:refresh-policy-0.1.3`，基础镜像 SHA256 为 `05c8ddd875743c4635fb12ce5ac21b5c383055227aaa5b7d6064b3c1c7c1f888`。其中公共包为 `0.1.3`、FastMCP 为 `3.4.4`、MCP SDK 为 `1.28.1`；下载后端的 SDK 版本保持 `2.3.0`。脚本在部署前校验基础镜像摘要。构建上下文仅含 Dockerfile 与网关源码，不含秘密、OAuth 状态或业务数据。
 
 ```bash
-MEDIA_GATEWAY_IMAGE=$(/home/yuwk/mcp-platform/.venv/bin/python -c \
-  'from pathlib import Path; import yaml; print(yaml.safe_load(Path("/home/yuwk/mcp-platform/integrations/media-download-mcp/compose.yaml").read_text())["services"]["gateway"]["image"])')
+MEDIA_GATEWAY_IMAGE=$(/home/yuwk/code/mcp-platform/.venv/bin/python -c \
+  'from pathlib import Path; import yaml; print(yaml.safe_load(Path("/home/yuwk/code/mcp-platform/integrations/media-download-mcp/compose.yaml").read_text())["services"]["gateway"]["image"])')
 sudo -n env DOCKER_BUILDKIT=0 docker build --pull=false \
   -t "$MEDIA_GATEWAY_IMAGE" \
-  /home/yuwk/mcp-platform/integrations/media-download-mcp
-sudo -n /home/yuwk/mcp-platform/.venv/bin/python \
-  /home/yuwk/mcp-platform/integrations/media-download-mcp/deploy_gateway.py
+  /home/yuwk/code/mcp-platform/integrations/media-download-mcp
+sudo -n /home/yuwk/code/mcp-platform/.venv/bin/python \
+  /home/yuwk/code/mcp-platform/integrations/media-download-mcp/deploy_gateway.py
 ```
 
 首次生成的签名、存储及 OIDC 密钥在仓库外 `/home/yuwk/.config/mcp-platform/media-download-gateway/gateway.env`，OAuth 状态在同目录 `oauth/`；目录 700、秘密文件 600。后续复用原密钥、注册和 `media-download-oauth-v1` 盐。原访问令牌仍为 `/home/yuwk/.config/mcp-platform/media-download-mcp/secrets/access.token`，只读挂入网关；不放入插件或 URL。原 Bearer 客户端继续使用同一入口，映射到显式配置且已授权的原账号。

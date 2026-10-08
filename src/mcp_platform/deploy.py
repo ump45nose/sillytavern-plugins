@@ -75,8 +75,14 @@ def compose_text(app, image, env_file, original=""):
             "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "20s"},
         "logging": {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}},
     }
+    if app.container_name:
+        service["container_name"] = app.container_name
     if app.user:
         service["user"] = app.user
+    if app.cap_drop:
+        service["cap_drop"] = app.cap_drop
+    if app.security_opt:
+        service["security_opt"] = app.security_opt
     if app.working_dir:
         service["working_dir"] = app.working_dir
     if app.init:
@@ -87,15 +93,48 @@ def compose_text(app, image, env_file, original=""):
         result["networks"] = {name: {"external": True} for name in app.external_networks}
     if original:
         existing = yaml.safe_load(original) or {}
+        for name, value in list(volumes.items()):
+            aliases = [key for key, definition in existing.get("volumes", {}).items()
+                       if (definition or {}).get("name", key) == name
+                       and (definition or {}).get("external", False) == value.get("external", False)]
+            if len(aliases) > 1:
+                raise ValueError("共享 Compose 的卷有多个别名，拒绝猜测部署目标")
+            if aliases and aliases[0] != name:
+                alias = aliases[0]
+                volumes[alias] = volumes.pop(name)
+                service["volumes"] = [
+                    alias + mount[len(name):] if isinstance(mount, str) and mount.startswith(name + ":")
+                    else mount for mount in service["volumes"]
+                ]
+        prior_service = existing.get("services", {}).get(app.compose_service, {})
+        prior_networks = prior_service.get("networks", {})
+        if app.external_networks and isinstance(prior_networks, dict):
+            # Keep the NAS service aliases when updating a service in its group.
+            service["networks"] = {
+                name: prior_networks.get(name) or {} for name in app.external_networks
+            }
         for section in ("volumes", "networks"):
             for name, value in result.get(section, {}).items():
                 prior = existing.get(section, {}).get(name)
-                if prior is not None and prior != value:
-                    raise ValueError("共享 Compose 的卷或网络定义冲突")
+                if prior is not None:
+                    # Compose config adds default resource names and empty IPAM.
+                    normalized = dict(prior)
+                    if normalized.get("name") == name:
+                        normalized.pop("name")
+                    if section == "networks" and normalized.get("ipam") == {}:
+                        normalized.pop("ipam")
+                    desired = dict(value)
+                    if desired.get("name") == name:
+                        desired.pop("name")
+                    if normalized != desired:
+                        raise ValueError("共享 Compose 的卷或网络定义冲突")
         existing.setdefault("services", {})[app.compose_service] = service
         for section in ("volumes", "networks"):
             if section in result:
-                existing.setdefault(section, {}).update(result[section])
+                resources = existing.setdefault(section, {})
+                for name, value in result[section].items():
+                    if resources.get(name) is None:
+                        resources[name] = value
         result = existing
     return yaml.safe_dump(result, sort_keys=False)
 
