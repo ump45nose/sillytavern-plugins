@@ -4,7 +4,7 @@ import Combine
 import Security
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let model = HubModel()
     var statusItem: NSStatusItem!
     var window: NSWindow?
@@ -36,10 +36,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.tag = i; item.target = self; menu.insertItem(item, at: 3+i)
         }
         let mainMenu = NSMenu()
-        let appMenuItem = NSMenuItem(title: "Personal Hub", action: nil, keyEquivalent: "")
+        let appMenuItem = NSMenuItem(title: "个人信息归档", action: nil, keyEquivalent: "")
         let appMenu = NSMenu()
-        for item in menu.items { if let copy = item.copy() as? NSMenuItem { appMenu.addItem(copy) } }
+        appMenu.addItem(withTitle: "关于个人信息归档", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let settingsItem = appMenu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "隐藏个人信息归档", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = appMenu.addItem(withTitle: "隐藏其他应用", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(withTitle: "显示全部", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        let quitItem = appMenu.addItem(withTitle: "退出个人信息归档", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
         appMenuItem.submenu = appMenu; mainMenu.addItem(appMenuItem); NSApp.mainMenu = mainMenu
+        let fileMenu = NSMenu(title: "文件")
+        for item in menu.items where [#selector(showWindow), #selector(newTask), #selector(newEvent), #selector(search)].contains(item.action) {
+            if let copy = item.copy() as? NSMenuItem { fileMenu.addItem(copy) }
+        }
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(withTitle: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let editMenu = NSMenu(title: "编辑")
+        for (title, action, key) in [("撤销", "undo:", "z"), ("重做", "redo:", "Z"), ("剪切", "cut:", "x"), ("复制", "copy:", "c"), ("粘贴", "paste:", "v"), ("全选", "selectAll:", "a")] {
+            editMenu.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        }
+        let viewMenu = NSMenu(title: "显示")
+        for item in menu.items where item.action == #selector(switchOverview(_:)) {
+            if let copy = item.copy() as? NSMenuItem { viewMenu.addItem(copy) }
+        }
+        let windowMenu = NSMenu(title: "窗口")
+        windowMenu.addItem(withTitle: "最小化", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "缩放", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(NSMenuItem.separator())
+        windowMenu.addItem(withTitle: "所有窗口置于前方", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        for submenu in [fileMenu, editMenu, viewMenu, windowMenu] {
+            let item = NSMenuItem(title: submenu.title, action: nil, keyEquivalent: "")
+            item.submenu = submenu; mainMenu.addItem(item)
+        }
+        NSApp.windowsMenu = windowMenu
         hotkey = GlobalHotkey { [weak self] in self?.toggleQuick() }
         shortcutSubscription = model.$preferences.sink { [weak self] prefs in
             guard let self = self else { return }
@@ -48,8 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !CommandLine.arguments.contains("--ui-smoke") { model.start() }
         if !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--interaction-smoke") {
             Task {
-                do { try await Task.detached { try LocalAgents.prepareBundledIfNeeded() }.value }
-                catch { model.error = error.localizedDescription }
+                await model.configureCollection()
             }
         }
         if CommandLine.arguments.contains("--show") { showWindow() }
@@ -168,13 +201,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showWindow() {
+        NSApp.setActivationPolicy(.regular)
         if window == nil {
             let content = NSHostingView(rootView: ContentView(model: model))
             let value = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                  backing: .buffered, defer: false)
-            value.title = "Personal Data Hub"
+            value.title = "个人信息归档"
             value.contentView = content
+            value.delegate = self
             value.isReleasedWhenClosed = false
             if !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--interaction-smoke") { value.setFrameAutosaveName("PersonalDataHubArchive") }
             value.center()
@@ -186,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func newTask() { showWindow(); model.editingTask = nil; model.taskEditor = true }
     @objc func newEvent() { showWindow(); model.editingEvent = nil; model.eventEditor = true }
     @objc func search() { showWindow(); NotificationCenter.default.post(name: .hubSearch, object: nil) }
+    @objc func showSettings() { showWindow(); NotificationCenter.default.post(name: .hubSettings, object: nil) }
     @objc func switchOverview(_ item: NSMenuItem) { showWindow(); model.section = "overview"; model.overviewMode = ["today", "trends", "recent"][item.tag-1] }
     func toggleQuick(refresh: Bool = true) {
         if quick?.isVisible == true { closeQuick(); return }
@@ -211,13 +247,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showWindow(); return true
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func windowWillClose(_ notification: Notification) {
+        guard let closing = notification.object as? NSWindow, closing === window else { return }
+        NSApp.setActivationPolicy(.accessory)
+    }
 }
 
 @main
 enum Main {
     @MainActor static func main() {
+        if let index = CommandLine.arguments.firstIndex(of: "--prepare-update"), CommandLine.arguments.count > index + 1,
+           let identifier = Bundle.main.bundleIdentifier {
+            let destination = URL(fileURLWithPath: CommandLine.arguments[index + 1]).standardizedFileURL
+            let clients = NSRunningApplication.runningApplications(withBundleIdentifier: identifier).filter {
+                $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && $0.activationPolicy != .prohibited &&
+                $0.bundleURL?.standardizedFileURL == destination
+            }
+            for client in clients where !client.terminate() {
+                fputs("client_update_requires_quit\n", stderr); exit(1)
+            }
+            let deadline = Date().addingTimeInterval(10)
+            while clients.contains(where: { !$0.isTerminated }) && Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+            guard clients.allSatisfy(\.isTerminated) else { fputs("client_update_requires_quit\n", stderr); exit(1) }
+            print("client_update_ready; collection_processes_preserved"); exit(0)
+        }
+        for (flag, source, check) in [("--collect-wechat", "wechat", false), ("--collect-activity", "activity", false), ("--collect-network", "network", false),
+                                     ("--collection-check-wechat", "wechat", true), ("--collection-check-activity", "activity", true), ("--collection-check-network", "network", true)] {
+            if let index = CommandLine.arguments.firstIndex(of: flag) {
+                do { exit(try CollectionRuntime.run(source, checkAccess: check, arguments: Array(CommandLine.arguments.dropFirst(index + 1)))) }
+                catch { fputs("collection_runtime_unavailable\n", stderr); exit(1) }
+            }
+        }
+        if CommandLine.arguments.contains("--install-network") {
+            do { try LocalAgents.configureNetwork(enabled: true); exit(0) }
+            catch { fputs("network_install_failed\n", stderr); exit(1) }
+        }
         if CommandLine.arguments.contains("--install-agents") || CommandLine.arguments.contains("--agent-bundle-status") {
             do { try LocalAgents.installBundled(statusOnly: CommandLine.arguments.contains("--agent-bundle-status")); exit(0) }
+            catch CollectionFailure.authorizationRequired { fputs("collection_authorization_required\n", stderr); exit(2) }
             catch { fputs("bundled_agents_failed\n", stderr); exit(1) }
         }
         if CommandLine.arguments.contains("--enable-login") || CommandLine.arguments.contains("--disable-login") || CommandLine.arguments.contains("--login-status") {
@@ -283,6 +352,17 @@ enum Main {
             }
             RunLoop.main.run(); return
         }
+        if CommandLine.arguments.contains("--google-config-status") {
+            SecKeychainSetUserInteractionAllowed(false)
+            Task {
+                do {
+                    let status = try await GoogleClient().configurationStatus()
+                    let data = try JSONSerialization.data(withJSONObject: status, options: [.sortedKeys])
+                    print(String(decoding: data, as: UTF8.self)); exit(0)
+                } catch { fputs("google_config_status_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+            }
+            RunLoop.main.run(); return
+        }
         if CommandLine.arguments.contains("--authorize-google") {
             Task {
                 do { try await GoogleClient().authorize(); print("google_authorized"); exit(0) }
@@ -318,12 +398,15 @@ enum Main {
                 do {
                     let api = HubAPI(Connection.load())
                     let sources: [SourceStatus] = try await api.get("api/v1/sources")
+                    print("client_smoke_stage sources_ok")
                     let page: RecordPage = try await api.get("api/v1/browse", query: [URLQueryItem(name: "limit", value: "3")])
                     let kinds: [KindCount] = try await api.get("api/v1/kinds")
+                    print("client_smoke_stage browse_and_kinds_ok")
                     if let first = page.records.first { _ = try await api.record(first.id) }
                     let summaries: RecordPage = try await api.get("api/v1/browse", query: [URLQueryItem(name: "source", value: "skysight-summaries"), URLQueryItem(name: "limit", value: "1")])
                     guard let summary = summaries.records.first else { throw HubError.response }
                     let detail = try await api.record(summary.id)
+                    print("client_smoke_stage details_ok")
                     guard let asset = detail.assets.first else { throw HubError.response }
                     let file = try await api.download(asset)
                     defer { try? FileManager.default.removeItem(at: file) }
@@ -335,6 +418,24 @@ enum Main {
             }
             RunLoop.main.run()
             return
+        }
+        if CommandLine.arguments.contains("--reading-smoke") {
+            SecKeychainSetUserInteractionAllowed(false)
+            Task {
+                do {
+                    let model = HubModel()
+                    await model.loadDailyReports()
+                    guard let report = model.dailyReports.first else { throw HubError.response }
+                    let complete = model.dailyReports.first { $0.preview.count >= 500 } ?? report
+                    await model.select(complete.id)
+                    guard let detail = model.detail,
+                          let body = detail.fields.first(where: { $0.id == "content" })?.value, !body.isEmpty,
+                          body.hasPrefix("#日报") else { throw HubError.response }
+                    print("reading_smoke_ok archived_daily_reports=\(model.dailyReports.count) latest_day=\(report.dailyReportDate ?? "unknown") body_characters=\(body.count) original_record=true")
+                    exit(0)
+                } catch { fputs("reading_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
+            }
+            RunLoop.main.run(); return
         }
         if CommandLine.arguments.contains("--sync") {
             do { try LocalAgents.synchronize(); print("sync_requested_existing_agent"); exit(0) }

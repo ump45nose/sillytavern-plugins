@@ -10,8 +10,7 @@ destination = Path.home() / "Applications/Personal Data Hub.app"
 destination.parent.mkdir(exist_ok=True)
 # 运行中的旧版本先正常退出，只影响查看端。
 if destination.exists():
-    subprocess.run(["osascript", "-e", 'tell application id "com.yuwk.personal-data-hub" to quit'],
-                   capture_output=True, check=False)
+    subprocess.run([str(source / "Contents/MacOS/PersonalDataHub"), "--prepare-update", str(destination)], check=True)
 backup = destination.with_name("Personal Data Hub.previous.app")
 if destination.exists():
     if backup.exists(): shutil.rmtree(backup)
@@ -25,7 +24,11 @@ try:
         raise RuntimeError("login_item_registration_failed")
     # Complete registration before changing live agents. The agent installer
     # restores its own state on failure; no fallible app setup follows migration.
-    subprocess.run([str(executable), "--install-agents"], check=True)
+    collection = subprocess.run([str(executable), "--install-agents"])
+    if collection.returncode not in (0, 2):
+        raise RuntimeError("collection_install_failed")
+    # First installation can finish before the user grants the client's access.
+    # The app guides authorization and retries; existing jobs stay loaded meanwhile.
 except BaseException:
     if destination.exists(): shutil.rmtree(destination)
     if backup.exists(): backup.rename(destination)

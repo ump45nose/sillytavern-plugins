@@ -119,6 +119,7 @@ def test_key_is_stable_across_order_and_payload_has_no_source_text(tmp_path):
     "response",
     [
         FakeResponse(503, {}),
+        FakeResponse(422, {"detail": "private source content"}),
         FakeResponse(200, {"errors": ["bad"]}),
         FakeResponse(error=httpx.ConnectError("offline")),
     ],
@@ -129,6 +130,8 @@ def test_failure_does_not_advance_checkpoint(tmp_path, response):
     result = connector.sync_once()
     assert not result.sent and result.errors
     assert not Path(config.checkpoint_path).exists()
+    if response.status_code >= 400:
+        assert result.errors == [f"webhook: HTTP {response.status_code}"]
 
 
 def test_success_advances_and_same_batch_retry_is_idempotent(tmp_path):

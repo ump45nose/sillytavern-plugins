@@ -32,7 +32,14 @@ struct ReadableDetailView: View {
         VStack(spacing: 0) {
             HStack { Text("信息详情").font(.headline); Spacer(); Button("导出完整数据") { model.exportRecord() }.disabled(model.detail == nil); Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction) }.padding(20).background(.bar)
             ScrollView {
-                if model.loadingDetail { ProgressView("正在读取…").frame(maxWidth: .infinity, minHeight: 300) }
+                if model.loadingDetail { PageLoadingView(message: "正在读取完整内容…").padding(28) }
+                else if let error = model.detailError {
+                    VStack(spacing: 16) {
+                        Image(systemName: "wifi.exclamationmark").font(.largeTitle).foregroundStyle(.orange)
+                        Text(error).foregroundStyle(.secondary)
+                        Button("重新加载") { Task { await model.select(model.selectedID) } }
+                    }.frame(maxWidth: .infinity, minHeight: 300)
+                }
                 else if let record = model.detail {
                     let object = (try? JSONSerialization.jsonObject(with: Data(record.rawJSON.utf8))) as? [String: Any] ?? [:]
                     let raw = object["raw"] as? [String: Any] ?? [:], normal = object["normalized"] as? [String: Any] ?? [:]
@@ -129,12 +136,15 @@ struct ReadableDetailView: View {
                                     VStack(alignment: .leading, spacing: 4) { Text(asset.name).lineLimit(1); Text(ByteCountFormatter.string(fromByteCount: asset.size, countStyle: .file)).font(.caption).foregroundStyle(.secondary) }
                                     Spacer()
                                     if asset.media_type.hasPrefix("audio") || ["wav", "mp3", "m4a"].contains((asset.name as NSString).pathExtension.lowercased()) {
-                                        Button(audio.playing ? "暂停" : "播放") { Task { await audio.toggle(asset, api: model.api) } }.disabled(audio.loading)
+                                        Button { Task { await audio.toggle(asset, api: model.api) } } label: {
+                                            HStack { if audio.loading { ProgressView().controlSize(.small) }; Text(audio.loading ? "正在读取音频…" : audio.playing ? "暂停" : "播放") }
+                                        }.disabled(audio.loading)
                                     }
                                     Button("保存") { Task { await model.download(asset) } }.disabled(model.downloading)
                                 }.padding(.vertical, 4)
                             }
                             if let message = audio.message { Text(message).foregroundStyle(.orange).font(.caption) }
+                            if model.downloading { LoadingBanner(message: "正在下载并校验附件…") }
                         }
                         Divider()
                         DisclosureGroup("归档信息与原始数据") {
@@ -168,6 +178,8 @@ private func profileText(_ value: Any?) -> String? {
     return nil
 }
 private func frontTitle(_ text: String) -> String? {
+    if text.hasPrefix("#日报 ") { return text.components(separatedBy: .newlines).first }
+    if text.hasPrefix("# ") { return text.components(separatedBy: .newlines).first.map { String($0.dropFirst(2)) } }
     guard text.hasPrefix("---\n") else { return nil }
     return text.components(separatedBy: "\n").prefix(30).first { $0.hasPrefix("title:") }.map { String($0.dropFirst(6)).trimmingCharacters(in: CharacterSet(charactersIn: " \"'")) }
 }

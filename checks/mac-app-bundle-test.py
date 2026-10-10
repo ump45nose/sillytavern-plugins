@@ -41,8 +41,10 @@ class BundleTests(unittest.TestCase):
         app = root / "Applications/Hub.app"
         resources = app / "Contents/Resources"
         resources.mkdir(parents=True)
+        (app / "Contents/MacOS").mkdir()
+        (app / "Contents/MacOS/PersonalDataHub").write_bytes(b"signed-client")
         archive = resources / "collection.tar.gz"
-        payload = {"bin/chatlog-keeper": b"reader", "run-wechat.py": b"runner", "launch-wechat.py": b"launcher"}
+        payload = {"bin/chatlog-keeper": b"reader", "run-wechat.py": b"runner", "bin/node": b"node"}
         with tarfile.open(archive, "w:gz") as tar:
             for name, data in payload.items():
                 info = tarfile.TarInfo(name)
@@ -54,6 +56,7 @@ class BundleTests(unittest.TestCase):
         binary.write_bytes(b"approved-reader")
         manifest = {"schema": 1, "archiveSHA256": installer.digest(archive),
                     "chatlogSHA256": hashlib.sha256(b"reader").hexdigest(),
+                    "nodeSHA256": hashlib.sha256(b"node").hexdigest(),
                     "credentialReader": {"binarySHA256": installer.digest(binary)}}
         (resources / "collection.json").write_text(json.dumps(manifest))
         checkpoint = root / "private/checkpoint.json"
@@ -64,8 +67,8 @@ class BundleTests(unittest.TestCase):
         authorized_python = root / "approved-python"
         authorized_python.write_bytes(b"authorized-runtime")
         for label in installer.LABELS:
-            config = {"Label": label, "ProgramArguments": [str(authorized_python), "old-wrapper", "approved-node", "old-sync", "--host", "nas"],
-                      "WorkingDirectory": str(root / "old-checkout"), "EnvironmentVariables": {"CRM_CHECKPOINT": str(checkpoint), "CRM_CLIENT_ID": "existing-device", "CRM_ENV_FILE": str(root / "private-existing.env"), "PYTHONPATH": "old-checkout"}, "RunAtLoad": True}
+            config = {"Label": label, "ProgramArguments": [str(authorized_python), "old-wrapper", "approved-node", "sync-skysight.mjs", "--host", "nas"],
+                      "WorkingDirectory": str(root / "old-checkout"), "EnvironmentVariables": {"CRM_CHECKPOINT": str(checkpoint), "CRM_CLIENT_ID": "existing-device", "CRM_ACCOUNT_NAMESPACE": "existing-account", "CHATLOG_SCOPE_MODE": "all_direct", "CRM_ENV_FILE": str(root / "private-existing.env"), "PYTHONPATH": "old-checkout", "WECHAT_FACT_EXTRACTION": "true"}, "RunAtLoad": True}
             (agent_folder / (label + ".plist")).write_bytes(plistlib.dumps(config))
         return app, checkpoint, agent_folder
 
@@ -107,12 +110,15 @@ class BundleTests(unittest.TestCase):
                     else:
                         config = plistlib.loads(current)
                         self.assertEqual(config["EnvironmentVariables"]["CRM_CLIENT_ID"], "existing-device")
+                        self.assertEqual(config["EnvironmentVariables"]["CRM_ACCOUNT_NAMESPACE"], "existing-account")
+                        self.assertEqual(config["EnvironmentVariables"]["CHATLOG_SCOPE_MODE"], "all_direct")
                         self.assertEqual(config["EnvironmentVariables"]["CRM_ENV_FILE"], str(root / "private-existing.env"))
                         self.assertNotIn("PYTHONPATH", config["EnvironmentVariables"] if label == installer.LABELS[0] else {})
                         if label == installer.LABELS[1]:
-                            self.assertEqual(config["ProgramArguments"][::2][:2], [str(root / "approved-python"), "approved-node"])
+                            self.assertEqual(config["ProgramArguments"], [str(app / "Contents/MacOS/PersonalDataHub"), "--collect-activity", "--host", "nas"])
                         else:
-                            self.assertEqual(config["ProgramArguments"][0], str((root / "approved-python").resolve()))
+                            self.assertEqual(config["ProgramArguments"], [str(app / "Contents/MacOS/PersonalDataHub"), "--collect-wechat"])
+                            self.assertEqual(config["EnvironmentVariables"]["WECHAT_FACT_EXTRACTION"], "false")
 
     def test_relative_state_paths_preserved_and_unsupported_config_stays_loaded(self):
         for unsupported in [False, True]:
@@ -156,11 +162,45 @@ class BundleTests(unittest.TestCase):
             root = Path(temporary)
             app, checkpoint, agents = self._fixture(root)
             originals = {path: path.read_bytes() for path in agents.iterdir()}
-            with patch.object(Path, "home", return_value=root), patch.object(installer, "run", return_value=SimpleNamespace(returncode=0)) as command, patch.object(installer, "background_preflight", side_effect=RuntimeError("collection_background_read_preflight_failed")):
-                with self.assertRaisesRegex(RuntimeError, "background_read_preflight_failed"):
+            with patch.object(Path, "home", return_value=root), patch.object(installer, "run", return_value=SimpleNamespace(returncode=0)) as command, patch.object(installer, "background_preflight", side_effect=RuntimeError("collection_authorization_required")):
+                with self.assertRaisesRegex(RuntimeError, "authorization_required"):
                     installer.install(app)
                 self.assertFalse(any(call.args[0][1] == "bootout" for call in command.call_args_list))
             self.assertTrue(all(path.read_bytes() == value for path, value in originals.items()))
+
+    def test_console_wechat_and_direct_node_migrate_without_old_interpreters(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app, checkpoint, agents = self._fixture(root)
+            for label, arguments in [(installer.LABELS[0], ["/removed/.venv/bin/personal-crm-wechat", "--watch"]),
+                                     (installer.LABELS[1], ["/removed/node", "/old/sync-skysight.mjs", "--host", "existing-nas"])]:
+                path = agents / (label + ".plist")
+                config = plistlib.loads(path.read_bytes())
+                config["ProgramArguments"] = arguments
+                path.write_bytes(plistlib.dumps(config))
+            loaded = set(installer.LABELS)
+            def run(args, check=True):
+                if args[0] == "/bin/launchctl":
+                    label = args[-1].split("/")[-1].removesuffix(".plist")
+                    if args[1] == "print": return SimpleNamespace(returncode=0 if label in loaded else 1)
+                    if args[1] == "bootout": loaded.discard(label)
+                    if args[1] == "bootstrap": loaded.add(label)
+                return SimpleNamespace(returncode=0)
+            with patch.object(Path, "home", return_value=root), patch.object(installer, "run", side_effect=run) as command, patch.object(installer, "background_preflight"):
+                installer.install(app)
+                command.reset_mock()
+                installer.install(app)
+                self.assertFalse(any(call.args[0][0] == "/bin/launchctl" and call.args[0][1] in ["bootout", "bootstrap"] for call in command.call_args_list))
+                command.reset_mock()
+                with patch.object(installer, "background_preflight", side_effect=RuntimeError("collection_authorization_required")):
+                    with self.assertRaisesRegex(RuntimeError, "authorization_required"):
+                        installer.install(app)
+                self.assertEqual(loaded, set(installer.LABELS))
+                self.assertFalse(any(call.args[0][0] == "/bin/launchctl" and call.args[0][1] in ["bootout", "bootstrap"] for call in command.call_args_list))
+            for label in installer.LABELS:
+                config = plistlib.loads((agents / (label + ".plist")).read_bytes())
+                self.assertEqual(config["ProgramArguments"][0], str(app / "Contents/MacOS/PersonalDataHub"))
+            self.assertEqual(config["ProgramArguments"][2:], ["--host", "existing-nas"])
 
 
 if __name__ == "__main__":

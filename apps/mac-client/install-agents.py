@@ -14,8 +14,41 @@ import subprocess
 import tarfile
 import tempfile
 import time
+from uuid import uuid4
 
 LABELS = ["com.personal-crm.wechat", "com.yuwk.personal-review-skysight"]
+NETWORK_LABEL = "com.yuwk.personal-data-hub-network"
+
+
+def install_network(app, enabled=None):
+    home = Path.home(); support = home / "Library/Application Support/PersonalDataHub"
+    folder = support / "Network"; path = folder / "config.json"
+    if enabled is None and not path.exists(): return
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    config = json.loads(path.read_text()) if path.exists() else {}
+    config.setdefault("device_id", uuid4().hex)
+    # Reuse this machine's existing NAS route, never bundle SSH credentials.
+    activity = plistlib.loads((home / "Library/LaunchAgents" / (LABELS[1] + ".plist")).read_bytes())
+    arguments = activity_parameters(activity["ProgramArguments"])
+    host = arguments[arguments.index("--host") + 1] if "--host" in arguments else activity.get("EnvironmentVariables", {}).get("SKYSIGHT_SSH_HOST", "yuwk-201")
+    config.setdefault("host", host); config.setdefault("timezone", "Asia/Shanghai")
+    if enabled is not None: config["enabled"] = enabled
+    temporary = path.with_suffix(".tmp"); temporary.write_text(json.dumps(config, indent=2)); temporary.chmod(0o600); temporary.replace(path)
+    target = "gui/" + str(os.getuid())
+    agent_path = home / "Library/LaunchAgents" / (NETWORK_LABEL + ".plist")
+    launcher = app / "Contents/MacOS/PersonalDataHub"
+    if not config.get("enabled"):
+        stop_job(target, NETWORK_LABEL); return
+    runtime_hash = json.loads((app / "Contents/Resources/collection.json").read_text())["archiveSHA256"]
+    agent = {"Label": NETWORK_LABEL, "ProgramArguments": [str(launcher), "--collect-network"], "EnvironmentVariables": {"PDH_NETWORK_RUNTIME": runtime_hash},
+             "RunAtLoad": True, "KeepAlive": True, "ThrottleInterval": 30,
+             "WorkingDirectory": str(support), "StandardOutPath": str(folder / "agent.log"), "StandardErrorPath": str(folder / "agent-error.log")}
+    loaded = run(["/bin/launchctl", "print", target + "/" + NETWORK_LABEL], False).returncode == 0
+    old = plistlib.loads(agent_path.read_bytes()) if agent_path.exists() else None
+    if loaded and old == agent: return
+    stop_job(target, NETWORK_LABEL)
+    agent_path.write_bytes(plistlib.dumps(agent)); agent_path.chmod(0o600)
+    run(["/bin/launchctl", "bootstrap", target, str(agent_path)])
 
 
 def digest(path):
@@ -64,17 +97,23 @@ def safe_extract(archive, target):
         tar.extractall(target, members=members)
 
 
-def background_preflight(target, environment, authorized_python, version):
-    """Test the actual launchd responsibility chain before touching either live job."""
-    code = (
-        "import json,subprocess,sys;sys.path.insert(0,sys.argv[1]);"
-        "from personal_crm.connector.config import ConnectorConfig;"
-        "c=ConnectorConfig.from_env();"
-        "r=subprocess.run([c.chatlog_executable,'directory','--source','wechat'],"
-        "capture_output=True,text=True,timeout=c.timeout);"
-        "d=json.loads(r.stdout);"
-        "print(json.dumps({'readable':r.returncode==0 and d.get('available') is True}),flush=True)"
-    )
+def activity_parameters(arguments):
+    """Accept both legacy Node and Python wrappers, and our own app entry point."""
+    if len(arguments) >= 2 and arguments[1] == "--collect-activity":
+        return arguments[2:]
+    for index, argument in enumerate(arguments):
+        if Path(argument).name == "sync-skysight.mjs":
+            return arguments[index + 1:]
+    raise RuntimeError("existing_collection_configuration_unsupported")
+
+
+def background_preflight(target, configurations, launcher, version):
+    """Check each source under the client's actual background identity."""
+    for source, environment, parameters in configurations:
+        _background_check(target, source, environment, parameters, launcher, version)
+
+
+def _background_check(target, source, environment, parameters, launcher, version):
     label = "com.yuwk.personal-data-hub-preflight." + str(os.getpid())
     with tempfile.TemporaryDirectory(prefix=".preflight-", dir=version.parent.parent) as temporary:
         folder = Path(temporary)
@@ -82,8 +121,7 @@ def background_preflight(target, environment, authorized_python, version):
         config = {
             "Label": label, "RunAtLoad": True, "WorkingDirectory": str(version),
             "EnvironmentVariables": {**environment, "CHATLOG_EXECUTABLE": str(version / "bin/chatlog-keeper")},
-            "ProgramArguments": [str(authorized_python), "-I", str(version / "launch-wechat.py"),
-                                 str(version / "python/bin/python3.12"), "-I", "-c", code, str(version / "packages")],
+            "ProgramArguments": [str(launcher), "--collection-check-" + source, *parameters],
             "StandardOutPath": str(output), "StandardErrorPath": str(folder / "error.log"),
         }
         path = folder / "preflight.plist"
@@ -100,6 +138,8 @@ def background_preflight(target, environment, authorized_python, version):
                     if result is not None:
                         if result.get("readable") is True:
                             return
+                        if result.get("error") == "authorization_required":
+                            raise RuntimeError("collection_authorization_required")
                         break
                 time.sleep(1)
             raise RuntimeError("collection_background_read_preflight_failed")
@@ -131,10 +171,13 @@ def _install(app, status=False):
     configs = {label: plistlib.loads(value) for label, value in originals.items()}
     wechat = configs[LABELS[0]]
     env = wechat.setdefault("EnvironmentVariables", {})
+    collection_only = env.get("WECHAT_FACT_EXTRACTION") == "false"
+    env["WECHAT_FACT_EXTRACTION"] = "false"
     activity = configs[LABELS[1]]
     args = activity.get("ProgramArguments", [])
-    if not env.get("CRM_CHECKPOINT") or len(args) < 4:
+    if not env.get("CRM_CHECKPOINT"):
         raise RuntimeError("existing_collection_configuration_unsupported")
+    parameters = activity_parameters(args)
     # Resolve private state relative to its old working directory before changing it.
     for name in ["CRM_CHECKPOINT", "CRM_ENV_FILE", "WECHAT_MEDIA_QUEUE"]:
         if env.get(name):
@@ -149,21 +192,21 @@ def _install(app, status=False):
     versions.mkdir(parents=True, exist_ok=True, mode=0o700)
     version = versions / manifest["archiveSHA256"]
     current = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
-    # TCC is bound to the existing interpreter's identity/path. Its tiny wrapper
-    # starts the bundled environment; neither executable depends on a repo path.
-    authorized_python = Path(current.get("authorizedWechatPython") or wechat["ProgramArguments"][0]).resolve()
-    if not authorized_python.is_file():
-        raise RuntimeError("approved_collection_launcher_required")
+    launcher = app / "Contents/MacOS/PersonalDataHub"
+    if not launcher.is_file():
+        raise RuntimeError("collection_launcher_unavailable")
     python = version / "python/bin/python3.12"
-    wechat_arguments = [str(authorized_python), "-I", str(version / "launch-wechat.py"),
-                        str(python), "-I", str(version / "run-wechat.py"), "--watch"]
-    activity_arguments = list(args)
-    activity_arguments[1] = str(version / "skysight/run-skysight.py")
-    activity_arguments[3] = str(version / "skysight/sync-skysight.mjs")
-    code_paths_match = (wechat["ProgramArguments"] == wechat_arguments and args == activity_arguments
+    wechat_arguments = [str(launcher), "--collect-wechat"]
+    activity_arguments = [str(launcher), "--collect-activity", *parameters]
+    code_paths_match = (collection_only and wechat["ProgramArguments"] == wechat_arguments and args == activity_arguments
                         and env.get("CHATLOG_EXECUTABLE") == str(version / "bin/chatlog-keeper")
                         and env.get("CHATLOG_EXPECTED_SHA256") == manifest["chatlogSHA256"])
-    if current.get("archiveSHA256") == manifest["archiveSHA256"] and all(loaded.values()) and code_paths_match:
+    if (current.get("archiveSHA256") == manifest["archiveSHA256"]
+            and current.get("launcher") == str(launcher) and all(loaded.values()) and code_paths_match):
+        # A matching receipt does not prove macOS still allows background reads.
+        # Probe temporary jobs without restarting either live collector.
+        background_preflight(target, [("wechat", env, []),
+                                     ("activity", activity.get("EnvironmentVariables", {}), parameters)], launcher, version)
         print(json.dumps({"collection_installed": True, "unchanged": True, "agents": len(LABELS)}))
         return
     if not version.exists():
@@ -179,11 +222,10 @@ def _install(app, status=False):
     run([str(python), "-I", "-c", check_code, str(version / "packages")])
     if digest(version / "bin/chatlog-keeper") != manifest["chatlogSHA256"]:
         raise RuntimeError("chatlog_checksum_mismatch")
-    private_helper = support / "Personal Data Hub Credentials.app"
-    helper_binary = "Contents/MacOS/PersonalDataHubCredentialReader"
-    if not private_helper.is_dir() or digest(private_helper / helper_binary) != manifest["credentialReader"]["binarySHA256"]:
-        raise RuntimeError("approved_credential_reader_required")
-    background_preflight(target, env, authorized_python, version)
+    if digest(version / "bin/node") != manifest["nodeSHA256"]:
+        raise RuntimeError("node_checksum_mismatch")
+    background_preflight(target, [("wechat", env, []),
+                                 ("activity", activity.get("EnvironmentVariables", {}), parameters)], launcher, version)
     # Preserve the approved helper byte for byte, including Keychain partition ACLs.
     backup = support / "backups" / ("collection-app-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     backup.mkdir(parents=True, mode=0o700)
@@ -208,9 +250,7 @@ def _install(app, status=False):
         env["CHATLOG_EXPECTED_SHA256"] = manifest["chatlogSHA256"]
         wechat["ProgramArguments"] = wechat_arguments
         wechat["WorkingDirectory"] = str(version)
-        # Keep the existing TCC-authorized Python and ChatGPT Node, change code only.
-        args[1] = str(version / "skysight/run-skysight.py")
-        args[3] = str(version / "skysight/sync-skysight.mjs")
+        activity["ProgramArguments"] = activity_arguments
         activity["WorkingDirectory"] = str(support)
         for label, config in configs.items():
             agent_paths[label].write_bytes(plistlib.dumps(config))
@@ -221,8 +261,8 @@ def _install(app, status=False):
             run(["/bin/launchctl", "bootstrap", target, str(agent_paths[label])])
         receipt = {"archiveSHA256": manifest["archiveSHA256"], "runtime": str(version),
                    "app": str(app), "checkpoint_preserved": True, "backup": str(backup),
-                   "authorizedWechatPython": str(authorized_python),
-                   "credential_reader_preserved": True, "activity_authorized_runtimes_preserved": True}
+                   "launcher": str(launcher), "authorization_subject": "com.yuwk.personal-data-hub",
+                   "credential_reader_preserved": True}
         receipt_path.write_text(json.dumps(receipt, indent=2))
         receipt_path.chmod(0o600)
         print(json.dumps({"collection_installed": True, "checkpoint_preserved": True, "agents": len(LABELS)}))
@@ -261,7 +301,9 @@ def install(app, status=False):
     with (folder / ".install.lock").open("a") as lock:
         Path(lock.name).chmod(0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
-        return _install(app)
+        result = _install(app)
+        install_network(app)
+        return result
 
 
 if __name__ == "__main__":
@@ -269,10 +311,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--app", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--status", action="store_true")
+    parser.add_argument("--network", choices=["enable", "disable"])
     args = parser.parse_args()
     try:
-        install(args.app.resolve(), args.status)
+        if args.network: install_network(args.app.resolve(), args.network == "enable")
+        else: install(args.app.resolve(), args.status)
     except Exception as error:
         # Private configs and subprocess stderr must never enter UI/terminal logs.
         print("collection_install_failed:" + (str(error) if isinstance(error, RuntimeError) else type(error).__name__))
-        raise SystemExit(1)
+        raise SystemExit(2 if str(error) == "collection_authorization_required" else 1)

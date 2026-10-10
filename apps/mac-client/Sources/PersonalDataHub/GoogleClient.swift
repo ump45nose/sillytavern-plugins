@@ -5,12 +5,15 @@ import Network
 import Security
 
 enum GoogleError: LocalizedError {
-    case unconfigured, unauthorized, request(Int), conflict, invalid, callback, timeout, wrongAccount, keychain(OSStatus)
+    case unconfigured, clientConfigurationMissing, browserUnavailable, authorizationTimeout, unauthorized, request(Int), conflict, invalid, callback, timeout, wrongAccount, keychain(OSStatus)
     var errorDescription: String? {
         switch self {
         case .keychain(let status): return "系统钥匙串暂不能读取 Google 凭据（\(status)）。请解锁钥匙串并允许凭据助手访问。无需重新进行浏览器授权。"
         case .wrongAccount: return "请选择与 NAS 采集相同的 Google 账号。"
         case .unconfigured: return "Google 尚未连接。请在设置中连接 Google。"
+        case .clientConfigurationMissing: return "这台 Mac 缺少 Google 连接配置，暂时无法打开授权页。请先完成设备的 Google 连接设置。"
+        case .browserUnavailable: return "无法打开 Google 授权页，请检查默认浏览器后重试。"
+        case .authorizationTimeout: return "等待 Google 授权超时，请再次连接并在浏览器中完成授权。"
         case .unauthorized: return "Google 授权已失效，请重新连接。"
         case .request(let code): return "Google 请求失败（\(code)）。草稿已保留。"
         case .conflict: return "内容已在其他设备修改，请刷新后重新编辑。"
@@ -128,8 +131,11 @@ final class OAuthCallback: @unchecked Sendable {
                 }
             }
             listener.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + 180) { [weak self] in self?.finish(.failure(GoogleError.timeout)) }
+            queue.asyncAfter(deadline: .now() + 180) { [weak self] in self?.finish(.failure(GoogleError.authorizationTimeout)) }
         }
+    }
+    func browserFailed() {
+        queue.async { [weak self] in self?.finish(.failure(GoogleError.browserUnavailable)) }
     }
     private func finish(_ result: Result<String, Error>) {
         guard let c = continuation else { return }
@@ -148,8 +154,22 @@ actor GoogleClient {
         if !accessToken.isEmpty { expires = Date().addingTimeInterval(3600) }
     }
     private func config() throws -> [String: String] {
-        guard let d = try JSONSerialization.jsonObject(with: GoogleKeychain.read("oauth")) as? [String: String], d["client_id"] != nil else { throw GoogleError.unconfigured }
+        let data: Data
+        do {
+            // Existing device credentials remain authoritative across app updates.
+            data = try GoogleKeychain.read("oauth")
+        } catch GoogleError.unconfigured {
+            guard let resources = Bundle.main.resourceURL,
+                  let packaged = try? Data(contentsOf: resources.appendingPathComponent("google-oauth.json")) else { throw GoogleError.clientConfigurationMissing }
+            data = packaged
+        }
+        guard let d = try JSONSerialization.jsonObject(with: data) as? [String: String],
+              let clientID = d["client_id"], !clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw GoogleError.clientConfigurationMissing }
         return d
+    }
+    func configurationStatus() throws -> [String: Bool] {
+        let cfg = try config()
+        return ["configured": true, "authorized": !(cfg["refresh_token"] ?? "").isEmpty]
     }
     func authorize() async throws {
         var cfg = try config()
@@ -158,13 +178,15 @@ actor GoogleClient {
         let state = UUID().uuidString
         let callback = try OAuthCallback(state: state)
         var redirect = ""
-        let code = try await callback.code { port in
+        let code = try await callback.code { [weak callback] port in
             redirect = "http://127.0.0.1:\(port)"
             var c = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
             c.queryItems = ["client_id": cfg["client_id"]!, "redirect_uri": redirect, "response_type": "code",
                            "scope": "https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar.events.owned https://www.googleapis.com/auth/calendar.calendarlist.readonly",
                            "access_type": "offline", "prompt": "consent", "code_challenge": challenge, "code_challenge_method": "S256", "state": state].map { URLQueryItem(name: $0.key, value: $0.value) }
-            if let url = c.url { DispatchQueue.main.async { NSWorkspace.shared.open(url) } }
+            if let url = c.url {
+                DispatchQueue.main.async { if !NSWorkspace.shared.open(url) { callback?.browserFailed() } }
+            } else { callback?.browserFailed() }
         }
         let token = try await tokenRequest(["client_id": cfg["client_id"]!, "client_secret": cfg["client_secret"] ?? "", "code": code,
                                            "redirect_uri": redirect, "grant_type": "authorization_code", "code_verifier": verifier])

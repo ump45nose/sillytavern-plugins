@@ -71,7 +71,7 @@ struct TrendPage: Codable { let days: [Dashboard] }
 struct TimelinePage: Codable { let items: [DisplayCard]; let next_cursor: String? }
 
 let moduleLabels = ["agenda": "日程与任务", "health": "健康", "social": "最近交流", "activity": "电脑活动",
-                    "recordings": "录音", "reports": "执行日报", "mail": "邮件", "git": "Git 进展",
+                    "recordings": "录音", "reports": "执行记录", "mail": "邮件", "git": "Git 进展",
                     "notes": "笔记与记忆", "finance": "财务", "usage": "AI 用量", "network": "网络流量"]
 let moduleIcons = ["agenda": "calendar", "health": "heart", "social": "person.2", "activity": "desktopcomputer",
                    "recordings": "waveform", "reports": "doc.text", "mail": "envelope", "git": "chevron.left.forwardslash.chevron.right",

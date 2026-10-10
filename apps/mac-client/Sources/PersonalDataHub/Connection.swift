@@ -47,7 +47,7 @@ struct Connection: Codable {
 }
 
 enum HubError: LocalizedError {
-    case invalidEndpoint, credentials, keychain, http(Int), response, integrity, redirect
+    case invalidEndpoint, credentials, keychain, http(Int), response, integrity, redirect, readTimeout, network
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint: return "请输入有效的 HTTPS 服务地址。"
@@ -59,6 +59,8 @@ enum HubError: LocalizedError {
         case .response: return "服务返回了无法读取的数据。"
         case .integrity: return "附件校验失败，未保存文件。"
         case .redirect: return "服务地址发生跳转，请检查连接设置。"
+        case .readTimeout: return "读取超时，请点击刷新重试。"
+        case .network: return "暂时无法连接归档服务，请检查网络后重试。"
         }
     }
 }
@@ -99,21 +101,32 @@ struct HubAPI {
     }
 
     func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        let (data, response) = try await session.data(for: request(path, query: query))
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(for: request(path, query: query)) }
+        catch { throw Self.readError(error) }
         try check(response)
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw HubError.response }
     }
 
     func record(_ id: String) async throws -> RecordDetail {
-        let (data, response) = try await session.data(for: request("api/v1/records/" + id))
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(for: request("api/v1/records/" + id)) }
+        catch { throw Self.readError(error) }
         try check(response)
         return try RecordDetail(data: data)
     }
 
     func download(_ asset: ArchiveAsset) async throws -> URL {
-        let (url, response) = try await session.download(for: request("api/v1/assets/" + asset.id))
+        let (url, response): (URL, URLResponse)
+        do { (url, response) = try await session.download(for: request("api/v1/assets/" + asset.id)) }
+        catch { throw Self.readError(error) }
         do { try check(response) } catch { try? FileManager.default.removeItem(at: url); throw error }
         return url
+    }
+    private static func readError(_ error: Error) -> Error {
+        guard let failure = error as? URLError else { return error }
+        if failure.code == .cancelled { return CancellationError() }
+        return failure.code == .timedOut ? HubError.readTimeout : HubError.network
     }
 }

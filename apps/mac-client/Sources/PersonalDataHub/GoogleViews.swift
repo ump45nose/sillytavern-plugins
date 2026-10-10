@@ -190,7 +190,7 @@ struct AgendaView: View {
             } else {
                 HubCard(title: "连接 Google", icon: "calendar.badge.plus") {
                     Text("连接后即可实时查看日程、管理任务，并使用快捷浮窗。").foregroundStyle(.secondary)
-                    Button("连接 Google") { model.googleOperation { try await model.google.authorize() } }
+                    Button(model.googleAuthorizing ? "等待浏览器授权…" : "连接 Google") { model.connectGoogle() }.disabled(model.googleBusy)
                 }
             }
         }
@@ -240,7 +240,7 @@ struct TaskEditor: View {
             if let message = message { Text(message).font(.caption).foregroundStyle(.orange) }
             if model.googleSnapshot == nil {
                 Text("需要连接 Google 才能提交。草稿会保留。").font(.caption).foregroundStyle(.secondary)
-                Button("连接 Google") { model.googleOperation { try await model.google.authorize() } }
+                Button(model.googleAuthorizing ? "等待浏览器授权…" : "连接 Google") { model.connectGoogle() }.disabled(model.googleBusy)
             }
             HStack {
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)

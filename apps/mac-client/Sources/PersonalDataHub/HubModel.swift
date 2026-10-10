@@ -21,9 +21,21 @@ final class HubModel: ObservableObject {
     @Published var detail: RecordDetail?
     @Published var busy = false
     @Published var loadingDetail = false
+    @Published var detailError: String?
+    @Published var statusLoading = false
     @Published var downloading = false
     @Published var error: String?
     @Published var syncMessage: String?
+    @Published var collectionMessage: String?
+    @Published var collectionNeedsAuthorization = false
+    @Published var collectionBusy = false
+    @Published var networkCollection: NetworkCollectionStatus?
+    @Published var networkBusy = false
+    @Published var networkSource = ""
+    @Published var networkSummary: NetworkSummary?
+    @Published var networkLoading = false
+    @Published var networkResultKey: String?
+    var networkGeneration = 0
     @Published var refreshedAt: Date?
     @Published var loginEnabled = SMAppService.mainApp.status == .enabled
     @Published var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
@@ -38,6 +50,13 @@ final class HubModel: ObservableObject {
     @Published var timelineCursor: String?
     @Published var timelineDomain = "social,activity,recordings,reports,mail,git,notes"
     @Published var displayLoading = false
+    @Published var displayResultKey: String?
+    @Published var timelineLoading = false
+    @Published var reportMode = "daily"
+    @Published var dailyReports: [RecordCard] = []
+    @Published var dailyReportOffset: Int?
+    @Published var dailyReportLoading = false
+    @Published var googleLoading = false
     @Published var showingDetail = false
     @Published var taskEditor = false
     @Published var eventEditor = false
@@ -45,6 +64,7 @@ final class HubModel: ObservableObject {
     @Published var googleSnapshot: GoogleSnapshot?
     @Published var googleMessage: String?
     @Published var googleBusy = false
+    @Published var googleAuthorizing = false
     @Published var calendarWeek = false
     @Published var editingTask: GoogleTask?
     @Published var editingEvent: GoogleEvent?
@@ -52,6 +72,8 @@ final class HubModel: ObservableObject {
     let google = GoogleClient()
     var displayGeneration = 0
     var timelineGeneration = 0
+    var googleGeneration = 0
+    var dailyReportGeneration = 0
     private var browseGeneration = 0
     private var detailGeneration = 0
     private var statusGeneration = 0
@@ -61,26 +83,28 @@ final class HubModel: ObservableObject {
     var recordCount: Int { sources.reduce(0) { $0 + $1.count } }
 
     func start() {
-        Task { await refreshStatus(); await loadDisplay(); await refreshGoogle(); await loadTimeline() }
+        Task { await refreshStatus() }
         timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect().sink { [weak self] _ in
-            Task { await self?.refreshStatus(); await self?.loadDisplay(); await self?.refreshGoogle() }
+            Task { await self?.refreshStatus(); await self?.loadCurrentPage() }
         }
     }
 
     func refreshStatus() async {
         statusGeneration += 1
         let generation = statusGeneration
+        statusLoading = true
+        defer { if generation == statusGeneration { statusLoading = false } }
         let client = api
-        async let local = Task.detached { (LocalAgents.inspect(), LocalAgents.checkpoint()) }.value
+        async let local = Task.detached { (LocalAgents.inspect(), LocalAgents.checkpoint(), LocalAgents.networkStatus()) }.value
         do {
             let values: [SourceStatus] = try await client.get("api/v1/sources")
             if generation == statusGeneration {
                 sources = values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
                 refreshedAt = Date()
             }
-        } catch { if generation == statusGeneration { self.error = error.localizedDescription } }
+        } catch { if generation == statusGeneration && !Task.isCancelled { self.error = error.localizedDescription } }
         let localStatus = await local
-        agents = localStatus.0; checkpoint = localStatus.1
+        if generation == statusGeneration { agents = localStatus.0; checkpoint = localStatus.1; networkCollection = localStatus.2 }
     }
 
     func browse(reset: Bool) async {
@@ -115,13 +139,13 @@ final class HubModel: ObservableObject {
     func select(_ id: String?) async {
         detailGeneration += 1
         let generation = detailGeneration
-        detail = nil
+        selectedID = id; detail = nil; detailError = nil
         guard let id = id else { loadingDetail = false; return }
         loadingDetail = true
         do {
             let result = try await api.record(id)
             if generation == detailGeneration { detail = result }
-        } catch { if generation == detailGeneration { self.error = error.localizedDescription } }
+        } catch { if generation == detailGeneration { detailError = error.localizedDescription } }
         if generation == detailGeneration { loadingDetail = false }
     }
 
@@ -139,6 +163,33 @@ final class HubModel: ObservableObject {
             try value.save(token: token.isEmpty ? nil : token)
             connection = value
             await refreshStatus(); await browse(reset: true)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func configureCollection() async {
+        guard !collectionBusy else { return }
+        collectionBusy = true
+        defer { collectionBusy = false }
+        do {
+            try await Task.detached { try LocalAgents.prepareBundledIfNeeded() }.value
+            collectionNeedsAuthorization = false
+            collectionMessage = "微信和电脑活动采集已启用，后台自动同步。"
+            await refreshStatus()
+        } catch CollectionFailure.authorizationRequired {
+            collectionNeedsAuthorization = true
+            collectionMessage = CollectionFailure.authorizationRequired.localizedDescription
+        } catch {
+            collectionNeedsAuthorization = false
+            collectionMessage = error.localizedDescription
+        }
+    }
+
+    func setNetworkCollection(_ enabled: Bool) async {
+        guard !networkBusy else { return }; networkBusy = true
+        defer { networkBusy = false }
+        do {
+            try await Task.detached { try LocalAgents.configureNetwork(enabled: enabled) }.value
+            await refreshStatus()
         } catch { self.error = error.localizedDescription }
     }
 

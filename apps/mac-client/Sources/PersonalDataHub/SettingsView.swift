@@ -28,9 +28,44 @@ struct SettingsView: View {
             Text("归档凭据和 Google 授权分别保存在系统钥匙串。")
                 .font(.caption).foregroundStyle(.secondary)
             Divider()
+            Text("本机采集").font(.headline)
+            Text("读取本机微信与电脑活动，并同步至已配置的个人归档服务。只需为 Personal Data Hub 授权，无需分别授权运行工具。")
+                .font(.caption).foregroundStyle(.secondary)
+            if let message = model.collectionMessage {
+                Text(message).font(.caption).foregroundStyle(model.collectionNeedsAuthorization ? .orange : .secondary)
+            }
+            HStack {
+                if model.collectionNeedsAuthorization {
+                    Button("打开完全磁盘访问设置") { LocalAgents.openAuthorizationSettings() }
+                }
+                Button(model.collectionBusy ? "正在检查…" : "检查授权并启用采集") {
+                    Task { await model.configureCollection() }
+                }.disabled(model.collectionBusy)
+            }
+            Divider()
+            Toggle("网络流量后台采集", isOn: Binding(get: { model.networkCollection?.enabled ?? false }, set: { enabled in
+                Task { await model.setNetworkCollection(enabled) }
+            })).disabled(model.networkBusy)
+            Text("采集经过本机 Clash 的上下行、域名和路由；关闭窗口后继续采集，断网后自动补传。")
+                .font(.caption).foregroundStyle(.secondary)
+            if let value = model.networkCollection {
+                Text("最近采样：\(displayDate(value.last_sample)) · 最近上传：\(displayDate(value.last_upload))")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let pending = value.pending_records, pending > 0 { Text("待上传 \(pending) 条").font(.caption).foregroundStyle(.secondary) }
+                if let active = value.active_connections, active > 0, value.identified_applications == 0 {
+                    Text("代理尚未提供应用归属，当前显示为未知应用。")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if value.collection_error != nil || value.upload_error != nil {
+                    Text("采集或上传暂时不可用，将自动重试并保留待传数据。")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+            Divider()
             HStack {
                 Text("Google 日程与任务"); Spacer()
-                Button(model.googleSnapshot == nil ? "连接 Google" : "重新授权") { model.googleOperation { try await model.google.authorize() } }.disabled(model.googleBusy)
+                if model.googleAuthorizing { ProgressView().controlSize(.small) }
+                Button(model.googleAuthorizing ? "等待浏览器授权…" : model.googleSnapshot == nil ? "连接 Google" : "重新授权") { model.connectGoogle() }.disabled(model.googleBusy)
             }
             if let msg = model.googleMessage { Text(msg).font(.caption).foregroundStyle(.orange) }
             HStack {
@@ -62,5 +97,8 @@ struct SettingsView: View {
             }
         }.padding(26).frame(width: 480)
         .onAppear { endpoint = model.connection.endpoint }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if model.collectionNeedsAuthorization { Task { await model.configureCollection() } }
+        }
     }
 }

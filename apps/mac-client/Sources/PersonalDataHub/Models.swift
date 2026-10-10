@@ -19,7 +19,7 @@ let kindNames: [String: String] = [
     "hermes_execution_report": "执行日报", "recording_artifact": "录音历史资料",
     "legacy_review_report": "历史复盘", "legacy_source_evidence": "历史资料"
 ]
-func sourceName(_ id: String) -> String { sourceNames[id] ?? id }
+func sourceName(_ id: String) -> String { id.hasPrefix("network-mac-") ? "Mac 代理流量" : sourceNames[id] ?? id }
 func kindName(_ id: String) -> String { kindNames[id] ?? id }
 
 func archiveDate(_ value: String?) -> Date? {
@@ -80,8 +80,12 @@ struct RecordCard: Decodable, Identifiable {
         return preview.components(separatedBy: .newlines).first(where: { $0.hasPrefix(name + ":") })
             .map { String($0.dropFirst(name.count + 1)).trimmingCharacters(in: .whitespaces) }
     }
-    var displayTitle: String { summaryField("title") ?? (title == kind ? kindName(kind) : title) }
-    var displayPreview: String { summaryField("description") ?? preview }
+    var dailyReportDate: String? {
+        guard source == "memos", kind == "memo", let range = preview.range(of: "^#日报\\s+\\d{4}-\\d{2}-\\d{2}", options: .regularExpression) else { return nil }
+        return String(preview[range].suffix(10))
+    }
+    var displayTitle: String { dailyReportDate.map { "日报 · " + $0 } ?? summaryField("title") ?? (title == kind ? kindName(kind) : title) }
+    var displayPreview: String { dailyReportDate != nil ? preview.components(separatedBy: .newlines).dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines) : summaryField("description") ?? preview }
 }
 struct RecordPage: Decodable {
     let records: [RecordCard]

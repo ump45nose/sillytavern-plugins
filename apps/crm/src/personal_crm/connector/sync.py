@@ -255,6 +255,12 @@ class WeChatConnector:
                     return SyncResult(batch_id, interactions, facts, False, list(errors))
                 accepted += body.get("accepted", 0)
                 duplicates += body.get("duplicates", 0)
+            except httpx.HTTPStatusError as error:
+                # Report the status without logging private request/response bodies.
+                return SyncResult(
+                    batch_id, interactions, facts, False,
+                    [f"webhook: HTTP {error.response.status_code}"],
+                )
             except Exception as error:
                 return SyncResult(
                     batch_id, interactions, facts, False, [f"webhook: {type(error).__name__}"]

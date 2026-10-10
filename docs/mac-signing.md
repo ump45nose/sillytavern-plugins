@@ -8,7 +8,9 @@
 
 每次安装继续运行 `python3 apps/mac-client/install.py`，自动复用同一证书，校验签名后安装并保留上一版。缺少身份、钥匙串损坏或签名校验失败时停止，不退回临时签名；已经安装证书版本的 Mac 丢失签名目录时也不会自动生成新身份。
 
-统一应用 0.3.1 将采集环境作为 `Contents/Resources/collection.tar.gz` 封装并纳入外层签名；安装器先验证完整应用和资源 SHA-256，再解压到私有 Application Support 版本目录。原生读取器保持其原始字节，避免因重新签名改变微信读取行为。包内仅有固定凭据助手的代码副本和公开校验信息，不包含 Signing 私钥或任何 Keychain 凭据；本机安装继续校验并使用原获准助手，升级不替换它。登录启动使用 `SMAppService.mainApp`，Bundle ID 与指定要求保持一致。
+统一应用 0.3.2 将 Python、Node 与采集代码作为 `Contents/Resources/collection.tar.gz` 封装并纳入外层签名；安装器先验证完整应用和资源 SHA-256，再解压到私有 Application Support 版本目录。原生微信读取器保持其原始字节。两个后台任务直接运行签名客户端的固定采集模式，再由客户端启动包内运行环境，系统数据授权归属 Personal Data Hub，外部 Homebrew Python 不再是授权入口。迁移前分别检查真实后台微信与电脑活动读取；未授权时不停止旧任务。
+
+包内仅有固定凭据助手的代码副本和公开校验信息，不包含 Signing 私钥或任何 Keychain 凭据；本机继续使用原助手，升级不替换它。采集不需要调用查看端的凭据助手。首次构建先创建客户端签名身份，再安装凭据助手和打包采集环境，最后重新签名完整应用。登录启动使用 `SMAppService.mainApp`，Bundle ID 与指定要求保持一致。
 
 助手源码在 `apps/mac-client/credential-reader/main.swift`；首次编译明确使用 macOS 13.0 部署目标，安装到 `~/Library/Application Support/PersonalDataHub/Personal Data Hub Credentials.app`。身份及源码/二进制 SHA-256 保存在 `Signing/credential-reader.json`。后续构建只验证并保留原文件，不重新签名；源码、身份或二进制不一致时停止，助手本身升级须显式迁移。备份整个 Signing 目录和此助手应用，不能提交 Git 或放进公开构建产物。
 

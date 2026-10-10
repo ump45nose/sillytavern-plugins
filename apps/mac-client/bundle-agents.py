@@ -4,6 +4,7 @@ import gzip
 import hashlib
 import importlib.metadata as metadata
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -59,15 +60,11 @@ def build(app):
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(repo / "agents/mac/skysight", payload / "skysight",
                         ignore=shutil.ignore_patterns("*.plist", "__pycache__"))
-        (payload / "run-wechat.py").write_text(
-            "from pathlib import Path\nimport sys\n"
-            "sys.path.insert(0, str(Path(__file__).resolve().parent / 'packages'))\n"
-            "from personal_crm.connector.cli import main\nraise SystemExit(main())\n"
-        )
-        (payload / "launch-wechat.py").write_text(
-            "import subprocess\nimport sys\n"
-            "raise SystemExit(subprocess.run(sys.argv[1:], check=False).returncode)\n"
-        )
+        (payload / "network").mkdir()
+        shutil.copy2(repo / "agents/mac/network/collector.py", payload / "network/collector.py")
+        shutil.copy2(repo / "agents/nas/shellcrash/shellcrash_traffic.py", payload / "network/shellcrash_traffic.py")
+        for name in ["run-wechat.py", "check-activity.mjs"]:
+            shutil.copy2(root / "collection" / name, payload / name)
         # Existing pinned reader executable, never its private configuration/data.
         agent = Path.home() / "Library/LaunchAgents/com.personal-crm.wechat.plist"
         import plistlib
@@ -78,6 +75,19 @@ def build(app):
             raise RuntimeError("chatlog_checksum_mismatch")
         (payload / "bin").mkdir()
         shutil.copy2(native, payload / "bin/chatlog-keeper")
+        activity = plistlib.loads((Path.home() / "Library/LaunchAgents/com.yuwk.personal-review-skysight.plist").read_bytes())
+        arguments = activity["ProgramArguments"]
+        node = os.getenv("PDH_NODE_EXECUTABLE")
+        if not node:
+            if len(arguments) > 1 and arguments[1] == "--collect-activity":
+                receipt = json.loads((Path.home() / "Library/Application Support/PersonalDataHub/Agents/current.json").read_text())
+                node = str(Path(receipt["runtime"]) / "bin/node")
+            else:
+                index = next(i for i, value in enumerate(arguments) if Path(value).name == "sync-skysight.mjs")
+                node = arguments[index - 1]
+        node = Path(node).expanduser().resolve(strict=True)
+        shutil.copy2(node, payload / "bin/node")
+        node_hash = hashlib.sha256(node.read_bytes()).hexdigest()
         private = Path.home() / "Library/Application Support/PersonalDataHub"
         helper = private / "Personal Data Hub Credentials.app"
         shutil.copytree(helper, payload / helper.name, symlinks=True)
@@ -98,7 +108,8 @@ def build(app):
         with archive.open("rb") as source:
             archive_hash = hashlib.file_digest(source, "sha256").hexdigest()
         manifest = {"schema": 1, "archiveSHA256": archive_hash, "pythonVersion": sys.version.split()[0],
-                    "chatlogSHA256": native_hash, "credentialReader": credential_manifest,
+                    "chatlogSHA256": native_hash, "nodeSHA256": node_hash, "launcher": "client",
+                    "credentialReader": credential_manifest,
                     "distributions": {name: dist.version for name, dist in sorted(selected.items())}}
         (resources / "collection.json").write_text(json.dumps(manifest, indent=2))
     shutil.copy2(root / "install-agents.py", resources / "install-agents.py")
