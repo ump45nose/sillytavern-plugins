@@ -15,7 +15,8 @@ from .storage import display_index as idx
 DOMAINS = {"calendar_event": "agenda", "google_task": "agenda", "health_payloads": "health",
            "people": "social", "interactions": "social", "facts": "social", "computer_summary": "activity",
            "recording": "recordings", "hermes_execution_report": "reports", "email": "mail", "git_commit": "git",
-           "memo": "notes", "memory": "notes", "bill": "finance", "token_day": "usage", "traffic_hourly": "network"}
+           "memo": "notes", "memory": "notes", "bill": "finance", "token_day": "usage", "traffic_hourly": "network",
+           "recording_transcript": "recordings", "recording_daily_report": "reports", "recording_summary": "reports", "recording_processing_status": "recordings"}
 MODULES = {"agenda", "health", "social", "activity", "recordings", "reports", "mail", "git", "notes", "finance", "usage", "network"}
 
 def clean(v, size=160):
@@ -87,9 +88,12 @@ def index_value(kind, external_id, raw, n):
         p = {"title": "AI 用量 · " + clean(n.get("device")), "preview": clean(n.get("date"))}
     elif kind == "traffic_hourly":
         d = {k: number(n.get(k)) or 0 for k in ("upload_bytes", "download_bytes")}
+        d.update({k: clean(n.get(k, raw.get(k))) for k in ("device_id", "collector_id", "measurement_scope", "measurement_point", "host", "process", "category", "exit_node", "rule")})
+        p = {"title": clean(raw.get("host") or "未知域名"), "preview": clean(raw.get("process") or "未知应用") + " · " + clean(raw.get("exit_node") or "未知路由")}
     elif kind == "recording":
-        d = {"duration_ms": number(n.get("duration_ms")), "date": clean(n.get("date")), "download_state": clean(n.get("download_state"))}
-        p = {"title": "Plaud 录音", "preview": f"{int((d['duration_ms'] or 0) / 60000)} 分钟"}
+        d = {"duration_ms": number(n.get("duration_ms")), "date": clean(n.get("date")), "download_state": clean(n.get("download_state")),
+             "transcription_status": n.get("transcription_status"), "summary_status": n.get("summary_status")}
+        p = {"title": "Plaud 录音 · " + d["date"], "preview": clean(n.get("summary") or n.get("transcript"), 500) or f"{int((d['duration_ms'] or 0) / 60000)} 分钟"}
     elif kind in ("hermes_execution_report", "memo", "memory"):
         content = n.get("content", raw.get("content", ""))
         heading = re.search(r"^#\s+(.+)$", content[:5000], re.M) if isinstance(content, str) else None
@@ -204,7 +208,11 @@ class Display:
                 items = [card(r) for r in sorted(current, key=lambda r: when(r["occurred_at"]), reverse=True)[:8]]
             elif module in ("usage", "network"):
                 selected_rows = [r for r in group if r["data"].get("date") == day] if module == "usage" else current
-                fields = [("tokens", "Token", "tokens"), ("estimated_cost_usd", "估算费用", "USD")] if module == "usage" else [("upload_bytes", "上传", "bytes"), ("download_bytes", "下载", "bytes")]
+                if module == "network":
+                    # Different proxy layers can observe the same transfer.
+                    default_source = "shellcrash" if any(r["source"] == "shellcrash" for r in selected_rows) else next((r["source"] for r in selected_rows), None)
+                    selected_rows = [r for r in selected_rows if r["source"] == default_source]
+                fields = [("tokens", "Token", "tokens"), ("estimated_cost_usd", "估算费用", "USD")] if module == "usage" else [("upload_bytes", "代理上传", "bytes"), ("download_bytes", "代理下载", "bytes")]
                 for key, label, unit in fields: metric(key, label, sum(number(r["data"].get(key)) or 0 for r in selected_rows) if selected_rows else None, unit, refs=[r["record_id"] for r in selected_rows])
                 items = [card(r) for r in selected_rows[:5]] if module == "usage" else []
             else:
@@ -214,6 +222,26 @@ class Display:
             latest = max((when(r["observed_at"]) for r in group), default=None)
             result["modules"].append({"id": module, "metrics": metrics, "items": items, "updated_at": latest})
         return result
+
+    def network(self, day, tz="Asia/Shanghai", source=""):
+        start, end, _ = self.window(day, tz)
+        with self.store.engine.connect() as c:
+            known = list(c.execute(select(idx.c.source).where(idx.c.domain == "network").distinct()).scalars())
+            selected = source or ("shellcrash" if "shellcrash" in known else next(iter(sorted(known)), ""))
+            if source and source not in known: raise ValueError("unknown_network_source")
+            rows = list(c.execute(select(idx).where(idx.c.domain == "network", idx.c.source == selected, idx.c.occurred_at >= start, idx.c.occurred_at < end)).mappings())
+        totals = {key: sum(number(r["data"].get(key)) or 0 for r in rows) if rows else None for key in ("upload_bytes", "download_bytes")}
+        dimensions = {}
+        for key in ("process", "host", "exit_node", "category"):
+            groups = {}
+            for row in rows:
+                name = row["data"].get(key) or "unknown"
+                item = groups.setdefault(name, {"name": name, "upload_bytes": 0, "download_bytes": 0})
+                for field in totals: item[field] += number(row["data"].get(field)) or 0
+            dimensions[key] = sorted(groups.values(), key=lambda v: -(v["upload_bytes"] + v["download_bytes"]))[:20]
+        return {"date": day, "source": selected, "sources": sorted(known), "scope": "proxy", "totals": totals, "dimensions": dimensions,
+                "updated_at": max((r["observed_at"] for r in rows), key=when, default=None),
+                "coverage_note": "经过所选代理采集入口的流量；每秒采样可能遗漏短连接。不同采集入口分别统计。"}
 
     def trends(self, day, tz, modules, days=7):
         if days not in (7, 30): raise ValueError("invalid_days")

@@ -22,6 +22,7 @@ def main():
     p = sub.add_parser("export-source"); p.add_argument("source", choices=["google"]); p.add_argument("--cursor-stdin", action="store_true")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
     p = sub.add_parser("ack-skysight"); p.add_argument("--source", choices=["skysight-raw", "skysight-summaries"], required=True); p.add_argument("--relative", required=True); p.add_argument("--expected-hash", required=True)
+    sub.add_parser("ingest-network")
     args = parser.parse_args()
     config = configuration(args.config)
     if args.action == "export-source":
@@ -33,6 +34,11 @@ def main():
             print(canonical(asdict(batch)), flush=True)
         return
     store = store_from(config)
+    if args.action == "ingest-network":
+        from .network_ingest import ingest_network
+        body = sys.stdin.buffer.read(4 * 1024 * 1024 + 1)
+        if len(body) > 4 * 1024 * 1024: raise ValueError("network_batch_too_large")
+        print(canonical(ingest_network(store, json.loads(body)))); return
     if args.action == "backfill-display":
         print(canonical({"display_created": store.backfill_display(rebuild=args.rebuild, kind=args.kind)})); return
     if args.action == "backfill-previews":

@@ -285,6 +285,9 @@ class Store:
         amount = str(normalized.get("amount", ""))
         title = first(normalized.get("title"), normalized.get("subject"), raw.get("title"), raw.get("display_name"), raw.get("name"), kind)
         preview = first(normalized.get("content"), normalized.get("message"), raw.get("summary"), raw.get("content"), normalized.get("body"), bill.get("remark"), raw.get("path"), str(external_id))
+        if kind == "recording":
+            title = "Plaud 录音 · " + str(normalized.get("date", ""))
+            preview = first(normalized.get("summary"), normalized.get("transcript"), f"{int(normalized.get('duration_ms', 0) / 60000)} 分钟")
         if kind == "bill": preview = " ".join(x for x in [str(normalized.get("type", bill.get("type", ""))), amount, str(normalized.get("currency") or ""), preview] if x)
         return {"title": title[:160].replace("\x00", ""), "preview": preview[:500].replace("\x00", "")}
 
@@ -339,6 +342,17 @@ class Store:
                         if current == row["hash"] and not c.scalar(select(previews.c.record_id).where(previews.c.record_id == row["id"])):
                             self._put_preview(c, row["id"], row["kind"], row["external_id"], row["raw"], row["normalized"])
                             count += 1
+
+    def recording_content(self, record_id):
+        row = self.get_record(record_id)
+        if not row or row["kind"] != "recording": return None
+        n = row["normalized"]
+        daily_id = n.get("daily_report_external_id")
+        daily = self.get_record(self.identity(row["source"], daily_id)) if daily_id else None
+        return {"record_id": row["id"], "recording_id": row["external_id"], "date": n.get("date"),
+                "duration_ms": n.get("duration_ms"), **{key: n.get(key) for key in
+                ("transcript", "transcript_engine", "transcription_status", "transcript_is_draft", "transcripts", "summary", "summary_scope", "summary_status", "processing")},
+                "daily_report": {"record_id": daily["id"], **daily["normalized"]} if daily else None}
 
     def kinds(self, source=None):
         statement = select(records.c.kind, func.count().label("count")).group_by(records.c.kind).order_by(records.c.kind)

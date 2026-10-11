@@ -75,6 +75,8 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
     from zoneinfo import ZoneInfoNotFoundError
     from datetime import date
     display = Display(store)
+    from .daily_push import DailyPushData, daily_push_page
+    daily_data = DailyPushData(store)
 
     def secret(name):
         if config.get(name + "_file"):
@@ -89,6 +91,15 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         valid = [hmac.compare_digest(authorization or "", "Bearer " + token) for token in tokens]
         if not any(valid): raise HTTPException(401, "unauthorized")
 
+    @api.get("/api/v1/daily-push")
+    def daily_push(day: str | None = None, tz: str = "Asia/Taipei", offset: int = 0,
+                   limit: int = 50, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try:
+            return daily_push_page(daily_data.snapshot(day, tz), offset, limit)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise HTTPException(422, "invalid_daily_parameters") from None
+
     @api.get("/api/v1/dashboard")
     def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "agenda,health,social", authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
@@ -100,6 +111,12 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         authenticate(authorization, readonly=True)
         try: return display.trends(date, tz, modules, days)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
+
+    @api.get("/api/v1/network")
+    def network(date: str, tz: str = "Asia/Shanghai", source: str = "", authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try: return display.network(date, tz, source)
+        except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_network_parameters") from None
 
     @api.get("/api/v1/timeline")
     def timeline(domains: str = "social,activity,recordings,reports,mail,git,notes", cursor: str | None = None, limit: int = 30, query: str = "", start: datetime | None = None, end: datetime | None = None, person: str | None = None, kind: str | None = None, authorization: str | None = Header(default=None)):
@@ -137,6 +154,13 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         authenticate(authorization, readonly=True)
         result = store.get_record(record_id)
         if result is None: raise HTTPException(404, "record_not_found")
+        return result
+
+    @api.get("/api/v1/recordings/{record_id}/content")
+    def recording_content(record_id: str, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        result = store.recording_content(record_id)
+        if result is None: raise HTTPException(404, "recording_not_found")
         return result
 
     @api.get("/api/v1/assets/{asset_id}")

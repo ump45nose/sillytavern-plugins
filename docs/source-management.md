@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Personal CRM | `apps/crm`；停用业务在 `legacy/crm-business` | NAS / Mac 旧项目目录移除，微信解释器直接使用本仓库 |
 | usage-monitor-mcp | `apps/usage-monitor` | NAS 旧项目目录移除，独立 MCP 身份和数据保留 |
-| Plaud | `collectors/plaud`、`agents/nas/plaud-sync.py`；原完整项目在 `legacy/plaud` | NAS 旧项目目录移除，下载和已有作业使用本仓库路径 |
+| Plaud | `collectors/plaud` / `agents/nas/plaud-sync.py` 管理下载；`processors/plaud` / `agents/nas/plaud-process.py` 管理转录、日报和摘要；旧实验在 `legacy/plaud` | NAS 旧项目目录移除，原定时作业转发至正式处理入口，状态、缓存和凭据保留 |
 | Hermes 报告 | `legacy/hermes-reports`；当前归档适配在 `src/personal_data_hub` | 保留 GitHub 原仓库，旧本机维护目录已不再使用 |
 | NAS 个人信息脚本 | `legacy/personal-jobs` | 原 `nas-cron-jobs/hermes`、`model` 中相关文件指向本仓库 |
 | ShellCrash | `agents/nas/shellcrash` | 原运维仓库子目录指向本仓库，保持单一采集器 |

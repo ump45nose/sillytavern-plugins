@@ -236,6 +236,8 @@ class PlaudCollector:
             result = subprocess.run(self.settings["sync_command"], capture_output=True, text=True, timeout=600)
             if result.returncode: raise RuntimeError("plaud_sync_failed")
         root = Path(self.settings["path"])
+        from .plaud_content import PlaudContent
+        content = PlaudContent(root, self.settings.get("timezone", "Asia/Shanghai"))
         with snapshot(root / "state/state.db") as c:
             for row in c.execute("SELECT * FROM recordings"):
                 raw = dict(row)
@@ -244,7 +246,9 @@ class PlaudCollector:
                     p = Path(raw["local_path"])
                     if not p.is_file(): raise RuntimeError("plaud_recording_missing")
                     attachments.append(file_asset(p))
-                yield Batch(records=[Record(raw["recording_id"], "recording", raw, {"duration_ms": raw["duration_ms"], "date": raw["local_date"], "download_state": raw["remote_state"]}, instant(raw["start_at"]), instant(raw["updated_at"]), assets=attachments)])
+                normal = {"duration_ms": raw["duration_ms"], "date": raw["local_date"], "download_state": raw["remote_state"], **content.recording(raw)}
+                yield Batch(records=[Record(raw["recording_id"], "recording", raw, normal, instant(raw["start_at"]), instant(raw["updated_at"]), assets=attachments)])
+        yield from chunks(content.extra_records)
         for directory in ("raw", "work", "output", "daily-v3", "gold", "experiments"):
             if (root / directory).is_dir():
                 yield from FilesCollector({"adapter": "files", "path": str(root), "kind": "recording_artifact", "patterns": [directory + "/**/*.json", directory + "/**/*.jsonl", directory + "/**/*.md", directory + "/**/*.wav"]}).collect({})

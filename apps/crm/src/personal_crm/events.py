@@ -48,6 +48,7 @@ class ChatEventProducer:
         send_time: str = "23:00",
         poll_seconds: int = 60,
         clock=utcnow,
+        daily_data=None,
     ):
         if not owner or owner.strip() != owner:
             raise ValueError("chat event owner is required")
@@ -57,6 +58,7 @@ class ChatEventProducer:
         self.send_time = time(hour, minute)
         self.zone = ZoneInfo(timezone)
         self.repo, self.events, self.owner = repository, events, owner
+        self.daily_data = daily_data
         self.clock, self.poll_seconds = clock, max(10, poll_seconds)
         self.directory = Path(storage_path)
         if self.directory.is_symlink():
@@ -71,7 +73,10 @@ class ChatEventProducer:
         self._async_lock = asyncio.Lock()
         events.register_event(
             EVENT_NAME,
-            "每日完整微信聊天记录已就绪；按页读取原文，包含此前未收录的晚到记录。",
+            ("每日分析数据已就绪：聊天按对象分组，健康和财务仅包含本业务日。"
+             "使用事件 read_tool/read_arguments 分页读取并按对象展示；无需生成完整原文附件。"
+             if daily_data is not None else
+             "每日完整微信聊天记录已就绪；按页读取原文，包含此前未收录的晚到记录。"),
             {"type": "object", "properties": {}, "additionalProperties": False},
             {
                 "type": "object",
@@ -171,6 +176,7 @@ class ChatEventProducer:
                         "content": item.summary[len(CONTENT_PREFIX) :] if available else None,
                         "content_status": "complete" if available else "not_collected",
                         "source_type": item.source_type,
+                        "sender": (item.message or {}).get("record", {}).get("sender"),
                     }
                 )
             watermarks = [item.synced_through for item in clients]
@@ -179,7 +185,7 @@ class ChatEventProducer:
     @staticmethod
     def _version(record) -> str:
         # 人物改名不重发整段历史；原文补齐会作为补充记录再次提供。
-        return _digest({k: v for k, v in record.items() if k not in {"person_name"}})
+        return _digest({k: v for k, v in record.items() if k not in {"person_name", "sender"}})
 
     def _snapshot(self, now: datetime):
         """准备并持久化报告；有待发布报告时原样重用。"""
@@ -287,6 +293,14 @@ class ChatEventProducer:
                 "_consumed_versions": versions,
                 "_next_day": (day + timedelta(days=1)).isoformat(),
             }
+            if self.daily_data is not None:
+                report["_daily_push"] = self.daily_data.snapshot(
+                    day.isoformat(), self.zone.key, cutoff=cutoff, chats=records
+                )
+                metadata["read_tool"] = "get_daily_push_data"
+                view = report["_daily_push"]
+                metadata["empty_day"] = (not view["crm"]["total_messages"]
+                    and view["health"]["empty_day"] and view["finance"]["empty_day"])
             self._write(self.reports / (report_id + ".json"), report)
             state["pending_report"] = report_id
             self._write(self.directory / "state.json", state)
@@ -381,6 +395,30 @@ class ChatEventProducer:
             "records": output,
             "next_offset": following if following < len(source) else None,
         }
+
+    def read_daily_push(self, report_id: str, *, subject: str, offset: int = 0, limit: int = 50):
+        report = self._authorized_report(report_id, subject)
+        if self.daily_data is None:
+            raise ValueError("daily push data is not configured")
+        from personal_data_hub.daily_push import daily_push_page
+
+        snapshot = report.get("_daily_push")
+        if snapshot is None:
+            # 原报告保持不可变；升级前报告的投影视图仅在首次读取时冻结到单独文件。
+            with self._locked():
+                directory = self.directory / "daily-push"
+                directory.mkdir(exist_ok=True, mode=0o700)
+                path = directory / (report_id + ".json")
+                if path.is_symlink():
+                    raise ValueError("invalid report storage")
+                if path.exists():
+                    snapshot = json.loads(path.read_text())
+                else:
+                    metadata = report["metadata"]
+                    snapshot = self.daily_data.snapshot(metadata["business_day"], self.zone.key,
+                        cutoff=metadata["window_end"], chats=report["records"])
+                    self._write(path, snapshot)
+        return {"report_id": report_id, **daily_push_page(snapshot, offset, limit)}
 
     def read_message(
         self,

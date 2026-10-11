@@ -54,11 +54,17 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
     if runtime.chat_events_enabled:
         from personal_crm.events import ChatEventProducer
 
+        daily_data = None
+        if hub_store is not None:
+            from personal_data_hub.daily_push import DailyPushData
+            daily_data = DailyPushData(hub_store, repo)
+
         chat_reports = ChatEventProducer(
             repo, events, owner=runtime.chat_event_owner,
             storage_path=runtime.chat_event_storage_path.rstrip("/") + "/chat-reports",
             timezone=runtime.chat_event_timezone, send_time=runtime.chat_event_time,
             poll_seconds=runtime.chat_event_poll_seconds,
+            daily_data=daily_data,
         )
     if runtime.daily_review_events_enabled:
         if not runtime.codex_skylight_path or not runtime.memos_database_path:

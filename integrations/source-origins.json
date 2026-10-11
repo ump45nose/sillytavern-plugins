@@ -42,6 +42,8 @@
     "source": "/home/yuwk/code/plaud-daily",
     "managed_at": [
       "collectors/plaud",
+      "processors/plaud",
+      "agents/nas/plaud-process.py",
       "legacy/plaud"
     ],
     "version": "0.1.0",

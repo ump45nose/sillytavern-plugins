@@ -182,7 +182,7 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None,
         register_daily_review_event_tools(server, daily_review_reports, auth=read_auth)
     if hub_store is not None:
         from personal_data_hub.mcp import register_tools
-        register_tools(server, hub_store, read_auth)
+        register_tools(server, hub_store, read_auth, chat_reports=chat_reports)
     return server
 
 

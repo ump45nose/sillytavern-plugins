@@ -6,7 +6,23 @@ from zoneinfo import ZoneInfo
 from .contracts import canonical, instant
 
 
-def register_tools(server, store, auth):
+def register_tools(server, store, auth, *, chat_reports=None):
+    from .daily_push import DailyPushData, daily_push_page
+    daily_data = DailyPushData(store)
+
+    @server.tool(auth=auth, annotations={"readOnlyHint": True})
+    def get_daily_push_data(day: str | None = None, timezone: str = "Asia/Taipei",
+                            report_id: str | None = None, offset: int = 0, limit: int = 50) -> dict:
+        """读取用于每日分析的数据：CRM 聊天按对象分组（时间、方向、正文），健康不回退历史值，财务只含当天汇总及账单。默认今天；事件传 report_id 读取冻结快照。next_offset 非空需续页；超长聊天按 message_id/text_offset 拼接。不生成原文附件。"""
+        if report_id is not None:
+            if chat_reports is None:
+                raise ValueError("daily event reports are not configured")
+            if day is not None:
+                raise ValueError("report_id fixes the business day and timezone")
+            return chat_reports.read_daily_push(report_id,
+                subject=chat_reports.events.authenticated_subject(), offset=offset, limit=limit)
+        return daily_push_page(daily_data.snapshot(day, timezone), offset, limit)
+
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
     def read_data_asset(record_id: str, asset_id: str, offset_bytes: int = 0, limit_bytes: int = 65536) -> dict:
         """通过现有 MCP 授权分页读取附件原始字节；返回 base64 与完整文件 SHA-256。"""
@@ -37,6 +53,11 @@ def register_tools(server, store, auth):
     def get_data_record(record_id: str) -> dict | None:
         """读取一条完整的采集记录和原始载荷，不执行源端写入。"""
         return store.get_record(record_id)
+
+    @server.tool(auth=auth, annotations={"readOnlyHint": True})
+    def get_recording_content(record_id: str) -> dict | None:
+        """读取录音文字稿、分源转录、每日摘要和关联日报；明确区分草稿、完整稿与处理失败。"""
+        return store.recording_content(record_id)
 
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
     def get_data_asset_info(record_id: str, asset_id: str) -> dict:

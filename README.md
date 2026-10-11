@@ -2,7 +2,7 @@
 
 个人信息采集与聚合的统一仓库。第一阶段已实现公共采集基座、来源适配、统一归档和只读 MCP，并接管 NAS 上的运行入口。Mac 同步 Agent 在 `agents/mac` 管理；带信息查看界面的 Mac 客户端在 `apps/mac-client` 管理。
 
-系统只采集、归档、聚合和查询。既有提醒、自动事实、复盘、投影、ASR 和模型任务已退出当前运行链路，源码保存在 `legacy/`。
+系统采集、归档、聚合和查询个人信息。Plaud 转录、录音日报与摘要由 `processors/plaud` 管理，沿用原任务及独立运行环境；既有提醒、自动事实、个人复盘和投影源码保存在 `legacy/`。
 
 ## 架构
 
@@ -27,7 +27,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | CRM / 微信 | 保留现有 webhook，归档和 CRM 表同事务提交 | 全部本机可读单聊/群聊及源消息；保留身份和水位，推送即入库，15 分钟对账 | 显式删除及完整来源清单 |
 | Computer History / Skysight | 现有授权 Node 读取应用组，SSH/rsync 交付并取得数据库提交回执 | 已闭合原始片段、官方 10min / 6h 摘要；15 分钟 | 显式删除；缓存过期不删除 |
-| Plaud | 官方 MCP 下载的薄适配层，独立 SDK 环境 | 现有录音历史及既有产物；每小时同步最近 30 天，保留原始音频 | 源接口未提供可靠删除信号 |
+| Plaud | 官方 MCP 下载、独立转录与日报处理 | 每小时同步最近 30 天；原任务处理前一天录音；归档原音频、分源转录、融合日报与摘要 | 源接口未提供可靠删除信号 |
 | AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
 | Health | 兼容原 `/health/import` 与 `/health/recent` | 历史快照及后续推送；缺失字段不补零 | 源接口未提供删除信号 |
 | Hermes | 读取已有 cron 执行报告 | 历史完整导入；15 分钟归档新报告 | 显式删除；轮转不删除 |
@@ -51,6 +51,7 @@ flowchart LR
 - `agents/mac/`：Skysight 同步代码、launchd 安装器和原配置快照。
 - `agents/nas/`：ShellCrash 单一采集器及 Plaud 只同步入口。
 - `collectors/plaud/`：只用于下载和归档的自有代码，不运行 ASR。
+- `processors/plaud/`：录音转录、三源融合日报和每日摘要；复用既有独立环境与缓存。
 - `integrations/autoaccounting/`：官方协议版本及可选删除扩展。
 - `legacy/`：旧处理业务源码，不自动运行。
 - `deployment/`：镜像构建和 systemd 入口。
@@ -70,7 +71,9 @@ uv sync --python 3.12 --no-dev
 
 默认私有配置：`/home/yuwk/.config/personal-data-hub/config.json`；使用 `HUB_CONFIG` 或 `hub --config PATH` 指定其他配置。参考 `deployment/config.example.json`，其中没有生产凭据。`hub` 是维护 CLI；`personal-data-hub` 是 HTTP 服务入口。
 
-生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。新增只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_data_asset_info`、`read_data_asset`。联系人及日报查询继续可用，MCP 不开放数据写入。
+生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。统一只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_recording_content`、`get_data_asset_info`、`read_data_asset`。录音详情提供文字稿、分源草稿、每日摘要、处理状态和关联日报；HTTP 对应 `/api/v1/recordings/{record_id}/content`，详见 [Plaud 处理说明](processors/plaud/README.md)。联系人及日报查询继续可用，MCP 不开放数据写入。
+
+每日分析数据使用 `get_daily_push_data` / `GET /api/v1/daily-push`：CRM 聊天按对象分组，健康和财务仅取当天。既有聊天事件引导读取新接口的冻结快照，分页保留全部聊天和当日账单。日期规则、字段及事件接入见 [每日推送接口](docs/daily-push.md)。
 
 `list_data_records` 与 `GET /api/v1/records` 默认只返回 ID、来源、类型、时间、标题（最多 160 字符）和摘要（最多 500 字符），附带 `total` / `next_offset`。完整正文、原始载荷及附件按 ID 从详情工具 / 接口读取；需要原列表完整字段时显式传 `include_content=true`。来源、类型、时间筛选及原分页参数继续可用。
 
@@ -88,7 +91,7 @@ API Bearer 与既有 OAuth 分开管理。上传附件后调用 `/api/v1/ingest`
 
 归档查看凭据保存在 Mac Keychain，NAS 仅允许它读取信息。Google 编辑使用另一个 Keychain 项和独立浏览器授权，Mac 直连官方 API，NAS 按原周期归档，MCP 保持只读。全局 **⌃⌥Space** 呼出日程任务浮窗；任务日期不提供时刻或本地提醒。展示接口仅读取可重建的有界索引，不传输原始 AX 事件。安装和连接见 [客户端说明](apps/mac-client/README.md)，展示定义见 [Mac 信息展示](docs/mac-display.md)。
 
-部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md)、[列表和状态修正](docs/query-status-validation.md) 与 [展示改造验收](docs/mac-display-validation.md)。
+部署、回退和验证记录见 [部署说明](docs/deployment.md)、[第一阶段验收记录](docs/stage1-validation.md)、[第二阶段验证](docs/stage2-validation.md)、[列表和状态修正](docs/query-status-validation.md)、[展示改造验收](docs/mac-display-validation.md) 与 [Plaud 转录及日报迁移验收](docs/plaud-processing-validation.md)。
 
 ## 2026-10-08 NAS 部署说明
 
