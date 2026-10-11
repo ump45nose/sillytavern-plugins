@@ -114,7 +114,7 @@ Favsync 完整分页读取 API，正文 HTML 指纹变化时覆盖同一个稳�
 
 写入时先使用隐藏临时目录，EPUB 必须通过 ZIP CRC、mimetype 与正文长度检查才会原子替换。
 正文过短或疑似登录表单会保留为失败任务。正文内远程图片或缺失图片通过
-`status.wallabag_exports.attachment_status=incomplete` 单独报告，正文导出状态仍按实际结果记录。
+有效正文 EPUB 中未嵌入的图片按用户要求跳过：`attachment_status=skipped_unavailable`、`attachment_reason=images_not_embedded`。正文和已有图片保留，不反复告警或把缺图冒充完整；正文指纹变化仍会重新导出。导出文件损坏、正文不足、认证和限流仍按各自原因处理。
 
 手动验收：
 

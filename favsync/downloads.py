@@ -3,7 +3,7 @@ import logging
 import shutil
 
 from .accounts import ACCOUNT_ERRORS
-from .common import SyncError
+from .common import SyncError, TERMINAL_ASSET_STATES
 from .layout import paths
 from .publication import accepted_size, publish_file
 
@@ -61,7 +61,7 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
             continue
         for asset in store.assets(item):
             key = (item["platform"], account, item["item_id"], asset["number"])
-            if asset["status"] == "done" or key in attempted:
+            if asset["status"] in TERMINAL_ASSET_STATES or key in attempted:
                 continue
             if not disk_ready():
                 store.update(source, account, scan_status="paused_low_disk", error="low_disk")
@@ -79,13 +79,16 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
                 else:
                     download_item = dict(item)
                     if item['platform'] == 'x':
-                        download_item['_pending_numbers'] = [a['number'] for a in store.assets(item) if a['status'] != 'done']
+                        download_item['_pending_numbers'] = [a['number'] for a in store.assets(item) if a['status'] not in TERMINAL_ASSET_STATES]
                     downloaded = adapter.download(download_item, asset, staging)
                     size = publish_file(downloaded, final)
                 store.asset_result(asset, size=size)
                 log.info("%s: item=%s asset=%s downloaded", source, item["item_id"], asset["number"])
             except SyncError as exc:
                 store.asset_result(asset, error=exc.code)
+                if item["platform"] == "x" and exc.code == "content_unavailable":
+                    log.info("%s: item=%s asset=%s skipped_unavailable", source, item["item_id"], asset["number"])
+                    continue
                 success = False
                 log.warning("%s: item=%s asset=%s %s", source, item["item_id"], asset["number"], exc.code)
                 if exc.code in ACCOUNT_ERRORS:
@@ -98,6 +101,6 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
         except OSError:
             pass
         assets = store.assets(item)
-        if all(a['status'] == 'done' for a in assets):
+        if all(a['status'] in TERMINAL_ASSET_STATES for a in assets):
             store.text_done(item)
     return success

@@ -271,7 +271,8 @@ class Store:
           ON s.account=i.account AND s.item_id=i.item_id
           WHERE s.source=? AND i.platform=? AND i.account=? AND s.baseline=0
           AND (i.bundle_status IN ('pending','failed','paused_low_disk') OR i.text_done=0 OR EXISTS(SELECT 1 FROM assets a WHERE
-            a.platform=i.platform AND a.account=i.account AND a.item_id=i.item_id AND a.status!='done'))
+            a.platform=i.platform AND a.account=i.account AND a.item_id=i.item_id
+            AND a.status NOT IN ('done','skipped_unavailable')))
           ORDER BY i.item_id""", (source, platform, account)).fetchall()
 
     def assets(self, item):
@@ -336,11 +337,11 @@ class Store:
                             (account, entry_id, filename))
         return filename
 
-    def wallabag_export_result(self, account, entry_id, fingerprint, attachment_status):
+    def wallabag_export_result(self, account, entry_id, fingerprint, attachment_status, attachment_reason=None):
         with self.db:
-            self.db.execute("""UPDATE wallabag_exports SET fingerprint=?,attachment_status=?
+            self.db.execute("""UPDATE wallabag_exports SET fingerprint=?,attachment_status=?,attachment_reason=?
                               WHERE account=? AND entry_id=?""",
-                            (fingerprint, attachment_status, account, entry_id))
+                            (fingerprint, attachment_status, attachment_reason, account, entry_id))
 
     def eh_path(self, account, item_id, artist, title, output_dir):
         row = self.db.execute("SELECT relative_path FROM eh_names WHERE account=? AND item_id=?",
@@ -357,9 +358,11 @@ class Store:
         return Path(output_dir) / relative
 
     def asset_result(self, asset, error=None, size=None):
+        status = ("skipped_unavailable" if asset["platform"] == "x" and error == "content_unavailable"
+                  else "failed" if error else "done")
         with self.db:
             self.db.execute("UPDATE assets SET status=?,attempts=attempts+1,error=?,size=? WHERE platform=? AND account=? AND item_id=? AND number=?",
-                            ("failed" if error else "done", error, size, asset["platform"], asset["account"], asset["item_id"], asset["number"]))
+                            (status, error, size, asset["platform"], asset["account"], asset["item_id"], asset["number"]))
 
     def text_done(self, item):
         with self.db:
@@ -370,7 +373,8 @@ class Store:
         return {
             "sources": [dict(r) for r in self.db.execute("SELECT name,account,baseline_at,cursor,start_date,scan_status,scan_reason,last_scan,error FROM sources")],
             "assets": [dict(r) for r in self.db.execute("SELECT platform,account,status,count(*) AS count FROM assets GROUP BY platform,account,status")],
-            "download_errors": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM assets WHERE error IS NOT NULL GROUP BY platform,account,error")],
+            "download_errors": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM assets WHERE error IS NOT NULL AND status!='skipped_unavailable' GROUP BY platform,account,error")],
+            "download_skips": [dict(r) for r in self.db.execute("SELECT platform,account,error,count(*) AS count FROM assets WHERE status='skipped_unavailable' GROUP BY platform,account,error")],
             "bundles": [dict(r) for r in self.db.execute("SELECT platform,account,bundle_status,count(*) AS count FROM items GROUP BY platform,account,bundle_status")],
             "bundle_errors": [dict(r) for r in self.db.execute("SELECT platform,account,bundle_status,error,count(*) AS count FROM items WHERE error IS NOT NULL GROUP BY platform,account,bundle_status,error")],
             "text_pending": self.db.execute("SELECT count(*) FROM items WHERE text_done=0").fetchone()[0],
@@ -384,7 +388,7 @@ class Store:
             "execution_history": [dict(r) for r in self.db.execute(
                 "SELECT kind,started_at,finished_at,result FROM execution_history ORDER BY id DESC LIMIT 20")],
             "wallabag_exports": [dict(r) for r in self.db.execute(
-                "SELECT attachment_status,count(*) AS count FROM wallabag_exports GROUP BY attachment_status")],
+                "SELECT attachment_status,attachment_reason,count(*) AS count FROM wallabag_exports GROUP BY attachment_status,attachment_reason")],
             "xhs_fuses": {row[0].split(":", 1)[1]: json.loads(row[1])
                            for row in self.db.execute("SELECT key,value FROM settings WHERE key LIKE 'xhs_fuse:%'")},
             "xhs_observations": [json.loads(row[0]) for row in self.db.execute(

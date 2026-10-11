@@ -282,7 +282,9 @@ docker compose run --rm -T --entrypoint python favsync -m favsync.maintenance --
 
 数据库连接与版本迁移分离；写入服务启动时显式升级，`status` 使用只读连接。片单 API 只校验自身配置。B 站凭据读取由 `bili_credentials.py` 封装，仅读取已有 bili-sync SQLite。
 
-单个来源发生异常会记录失败并继续后面的来源；认证和风控异常停止同账号后续请求。小红书保留现有请求上限与熔断，已见但未完成的笔记仍可刷新访问令牌；达到页数或条目额度记录 `partial` 和具体原因。日报区分受限扫描与完整扫描，并列出 Wallabag 正文已保存但图片不完整的数量。
+单个来源发生异常会记录失败并继续后面的来源；认证和风控异常停止同账号后续请求。小红书保留现有请求上限与熔断，已见但未完成的笔记仍可刷新访问令牌；达到页数或条目额度记录 `partial` 和具体原因。X 已删除/不可用内容的附件记为 `skipped_unavailable`，保留原错误和尝试次数，退出重试队列且不使整轮同步失败。正文及仍可用的媒体保留，Markdown 不引用已跳过文件。
+
+Wallabag 已生成有效正文 EPUB 时，未嵌入的图片按用户要求记为 `skipped_unavailable`，原因 `images_not_embedded`；不把图片标为完整，也不继续异常告警。正文指纹变化仍会重新导出。认证、限流、文件损坏和文件系统错误不属于跳过范围。历史执行结果保留，`status.download_skips` 与附件原因可供检查。
 
 修复与验收记录见 [2026-09-29 repair](docs/reviews/2026-09-29-repairs.md)。
 

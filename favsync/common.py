@@ -5,6 +5,8 @@ import os
 import subprocess
 import tempfile
 
+TERMINAL_ASSET_STATES = {"done", "skipped_unavailable"}
+
 
 class SyncError(Exception):
     """Only public, non-sensitive error codes leave subprocess boundaries."""
