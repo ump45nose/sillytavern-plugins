@@ -19,6 +19,7 @@ SOURCE_LABELS = {
     "eh_favorites": "EH 收藏",
     "xhs_favorites": "小红书收藏",
     "xhs_likes": "小红书点赞",
+    "xhs_creators": "小红书作者缓存",
     "pixiv_art_public": "Pixiv 公开图片",
     "pixiv_art_private": "Pixiv 私密图片",
     "pixiv_novel_public": "Pixiv 公开小说",
@@ -32,7 +33,7 @@ KIND_LABELS = {
     "source:film_watchlist": "B 站影视片单",
 }
 NORMAL_STATES = {
-    "complete", "disabled", "awaiting_start_date", "idle", "partial"
+    "complete", "disabled", "awaiting_start_date", "idle", "partial", "cached"
 }
 SUCCESS_RESULTS = {"success", "succeeded", "complete", "completed", "ok"}
 
@@ -71,7 +72,7 @@ def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
         if finished >= since and result not in SUCCESS_RESULTS:
             kind = str(record.get("kind") or "Favsync 执行")
             platform = KIND_LABELS.get(kind, kind)
-            problems.append((platform, f"执行结果：{clean_detail(result, 'failed')}"))
+            problems.append((platform, f"{finished:%m-%d %H:%M} 执行结果：{clean_detail(result, 'failed')}"))
 
     for source in status.get("sources", []):
         scan_status = str(source.get("scan_status") or "unknown")
@@ -91,6 +92,10 @@ def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
         problems.append((platform, f"正文/附件处理失败：{detail}（{count} 条）"))
 
     for asset in status.get("download_errors", []):
+        # The user explicitly excluded unavailable X content from alerts.
+        # Keep its durable download status and execution history unchanged.
+        if asset.get("platform") == "x" and asset.get("error") == "content_unavailable":
+            continue
         platform = clean_detail(asset.get("platform"), "未知平台")
         count = asset.get("count", 0)
         detail = clean_detail(asset.get("error"), "附件失败")

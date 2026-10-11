@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, time, timedelta
 import fcntl
+from itertools import combinations
 import json
 import os
 from pathlib import Path
@@ -11,24 +12,41 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hermes"))
 from companion_runtime import PROFILE, TZ, config, database, history, operational_error, sync_materials, reconcile_responses
-from companion_planner import curate, inventory, plan_day
+from companion_planner import curate, extend_plan, inventory, plan_day
 
 REPO = Path("/home/hermes/.hermes/hermes-agent")
 PYTHON = REPO / "venv/bin/python"
+MIN_TASKS = 4
+MAX_TASKS = 6
 
 
 def slots_for(target):
     rng = random.Random(f"lingjun-companion:{target.isoformat()}")
-    count = rng.randint(2, 4)
+    count = rng.randint(MIN_TASKS, MAX_TASKS)
+    # Reserve three half-hour ticks after each pick; adjacent slots then have
+    # at least four ticks between them, without a greedy shortfall at six.
+    picks = sorted(rng.sample(range(28-3*(count-1)), count))
+    selected = [datetime.combine(target, time(9), TZ)+timedelta(minutes=30*(pick+3*i))
+                for i, pick in enumerate(picks)]
+    return [{"run_at": stamp.isoformat(), "image": rng.random() < .75} for stamp in selected]
+
+
+def fill_slots(target, held, now=None):
+    """Append enough future slots to bring an old plan to the new minimum."""
+    needed = max(0, MIN_TASKS-len(held))
+    if not needed:
+        return []
+    now = now or datetime.now(TZ)
+    reserved = [datetime.fromisoformat(slot["run_at"]) for slot in held]
     candidates = [datetime.combine(target, time(9), TZ)+timedelta(minutes=30*i) for i in range(28)]
-    rng.shuffle(candidates)
-    selected = []
-    for candidate in candidates:
-        if all(abs((candidate-x).total_seconds()) >= 7200 for x in selected):
-            selected.append(candidate)
-            if len(selected) == count:
-                break
-    return [{"run_at": stamp.isoformat(), "image": rng.random() < .75} for stamp in sorted(selected)]
+    candidates = [stamp for stamp in candidates if stamp > now+timedelta(minutes=15)
+                  and all(abs((stamp-other).total_seconds()) >= 7200 for other in reserved)]
+    selected = next((group for group in combinations(candidates, needed)
+                     if all((b-a).total_seconds() >= 7200 for a,b in zip(group,group[1:]))), None)
+    if selected is None:
+        raise ValueError("not enough remaining daily slots to reach four tasks")
+    rng = random.Random(f"lingjun-companion-fill:{target.isoformat()}")
+    return [{"run_at": stamp.isoformat(), "image": rng.random() < .75} for stamp in selected]
 
 
 def prompt(image):
@@ -86,6 +104,9 @@ def main():
                 ordered = sorted(existing.values(), key=lambda j:j["name"])
                 slots = [{"run_at": j["schedule"]["run_at"], "image": "profile_selfie" in (j.get("prompt") or "")} for j in ordered]
             plan = plan_day(db, target.isoformat(), slots, observed, cfg.get("extra_context_tokens", 12000))
+            additional = fill_slots(target, plan["slots"])
+            if additional:
+                plan = extend_plan(db, plan, additional, observed, cfg.get("extra_context_tokens", 12000))
             if "activation_at" not in plan:
                 available = [slot["run_at"] for index, slot in enumerate(plan["slots"],1)
                              if datetime.fromisoformat(slot["run_at"]) > datetime.now(TZ)
@@ -97,7 +118,11 @@ def main():
             if args.dry_run:
                 print(json.dumps({"plan": plan, "inventory": inventory(db), "history": {k:v for k,v in observed.items() if k!='messages'}}, ensure_ascii=False, indent=2))
                 return 0
-            db.execute("INSERT OR IGNORE INTO plans(day,payload) VALUES(?,?)", (target.isoformat(), json.dumps(plan, ensure_ascii=False)))
+            if any(datetime.fromisoformat(slot["run_at"]) <= datetime.now(TZ) for slot in additional):
+                raise ValueError("supplemental slots expired while planning; rerun with current time")
+            # Keep activation/progress and the old slot indices/job IDs intact.
+            db.execute("INSERT INTO plans(day,payload) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET payload=excluded.payload",
+                       (target.isoformat(), json.dumps(plan, ensure_ascii=False)))
             for key in plan.get("paused", []):
                 row = db.execute("SELECT payload FROM activities WHERE id=?", (key,)).fetchone()
                 state = json.loads(row[0]); state["status"] = "paused"
@@ -125,7 +150,8 @@ def main():
                     created += 1
                 if job:
                     db.execute("UPDATE events SET job_id=? WHERE name=?", (job["id"], name)); db.commit()
-            print(json.dumps({"date": target.isoformat(), "created": created, "updated": updated, "inventory": inventory(db)}, ensure_ascii=False))
+            print(json.dumps({"date": target.isoformat(), "task_count": len(plan["slots"]),
+                              "created": created, "updated": updated, "inventory": inventory(db)}, ensure_ascii=False))
     return 0
 
 

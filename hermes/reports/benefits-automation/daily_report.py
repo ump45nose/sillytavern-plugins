@@ -23,6 +23,10 @@ TASKS = {
 }
 REASONS = {
     "authentication_invalid": "登录失效",
+    "authentication_unconfirmed": "页面未提供可确认登录的签到凭据",
+    "cookiecloud_auth_pair_incomplete": "CookieCloud 登录 Cookie 缺少有效的配套 saltkey，需要重新登录后同步",
+    "cart_preserved": "购物车无法确认为空或仅含本次免费商品，领取已停止",
+    "full_requested_capabilities_partial": "已启用任务部分未完成",
     "human_required": "需要人工验证",
     "launcher_failed": "启动失败",
     "deadline_exceeded": "执行超时",
@@ -133,7 +137,16 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         ]
         if uncredited:
             parts.append("积分未确认：" + "、".join(uncredited[:8]))
+        if platform == "rewards":
+            unsupported = [str(item.get("name") or item.get("id")) for item in items
+                           if isinstance(item, Mapping) and item.get("reason") == "search_topic_unsupported"]
+            if unsupported:
+                parts.append("探索主题尚未支持：" + "、".join(unsupported[:8]))
         if platform == "steam":
+            token_blocked = sum(isinstance(item, Mapping) and item.get("reason") == "package_token_required"
+                                for item in items)
+            if token_blocked:
+                parts.append(f"本轮 {token_blocked} 个候选包缺少访问令牌，尚未核验")
             eligible = [str(item.get("name") or item.get("id")) for item in items
                         if isinstance(item, Mapping) and item.get("reason") == "dry_run_eligible"]
             if eligible:
@@ -147,7 +160,8 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
 
 
 def build_report(day: str | None = None) -> str:
-    report_day = day or datetime.now(TIMEZONE).date().isoformat()
+    generated_at = datetime.now(TIMEZONE)
+    report_day = day or generated_at.date().isoformat()
     date.fromisoformat(report_day)
     problems: list[tuple[str, str]] = []
     # Disabled tasks retain their old results but no longer produce missing or
@@ -172,10 +186,19 @@ def build_report(day: str | None = None) -> str:
         assert row is not None
         issue = issue_for(platform, row, report_day)
         if issue:
+            try:
+                finished_at = datetime.fromisoformat(str(row.get("finished_at") or ""))
+                if finished_at.tzinfo is None:
+                    raise ValueError("result timestamp has no timezone")
+                result_time = finished_at.astimezone(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                result_time = "未知"
+            issue += "；结果时间：" + result_time
             problems.append((label, issue))
     if not problems:
         return ""
-    lines = [f"福利任务异常告警 {report_day}"]
+    lines = [f"福利任务异常告警 {report_day}",
+             "生成时间：" + generated_at.strftime("%Y-%m-%d %H:%M:%S") + "（北京时间）"]
     lines.extend(f"问题平台：{label}；问题：{issue}" for label, issue in problems)
     return "\n".join(lines)
 

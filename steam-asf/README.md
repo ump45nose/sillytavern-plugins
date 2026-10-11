@@ -4,6 +4,14 @@ The Steam business executor lives in `benefits-automation/platforms/steam`.
 This directory owns NAS deployment and a human-run login helper. Hermes owns
 the schedule and notice-bot delivery; no separate database or queue is needed.
 
+Current discovery defaults to the regional official Steam giveaway catalog,
+verified with public StoreBrowse, package/app details and the matching store
+purchase block. Private `steam.json` uses `discovery.source: store` and
+`max_candidates: 50`. This path does not request PICS package access tokens.
+ASF identity, existing proxy, claim schedule and durable submission journal
+are retained. Historical PICS discovery files remain available for an explicit
+`source: pics` rollback; they do not determine current catalog coverage.
+
 Pinned versions: ASF 6.3.10.3, FreePackages 1.7.1.1. The Compose image is pinned
 by digest; `prepare.py` verifies the plugin's published SHA-256 before installing.
 Watchtower and ASF/plugin automatic updates are disabled for this service.
@@ -101,7 +109,7 @@ sudo -u hermes env -i PATH=/usr/bin:/bin HERMES_HOME=/home/hermes/.hermes/profil
 ```
 
 Read `benefits-runtime/delivery/steam.json` and the same run's saved result.
-Check real PICS wire schemas, bounded automatic discovery, actual official
+Check current official catalog and metadata schemas, actual official
 purchase-block evidence and owned-package results. HTTP routes existing,
 simulated tests, or a no-candidate result cannot establish successful real
 promotion verification. Start new installations without `--claim`.
@@ -117,7 +125,8 @@ The existing noon benefits notice job reads Steam
 alongside the six prior platforms. Only exceptions produce a notice. Eligible
 dry-run packages are explicitly reported as awaiting claim authorization.
 
-The first `GetChangesSince/0` required a full history update. Its state and
+Historical PICS setup (before the 2026-10-09 discovery switch): the first
+`GetChangesSince/0` required a full history update. Its state and
 adapter settings were privately backed up before setting the incremental
 baseline to the first verified cursor (`39563190`); the pending queue was kept.
 `private/discovery-window.json` records that older history is unverified.
@@ -140,6 +149,10 @@ DIRECT, reproducing CDN TLS timeouts. A persistent exact-domain rule for
 `store.steampowered.com` now uses the existing international proxy group; other
 Steam domain rules and selector choices are preserved. Account country remains
 CN, TLS remains verified, and IPC authentication never enters this proxy.
+The 2026-10-09 catalog switch also adds the exact `api.steampowered.com` domain
+to the same existing international proxy group. Its former broad Steam DIRECT
+rule caused StoreBrowse TLS timeouts. Persistent custom rules and the loaded
+rules agree; proxy selector choices are retained.
 Store transport errors and transient 5xx retry once with 10-second per-attempt
 timeouts; 429/403/redirects and license POSTs do not retry. Config/route backups
 are private. To return to read-only, remove only the Steam launcher's `--claim`.

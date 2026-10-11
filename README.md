@@ -113,6 +113,18 @@ The private deployment task also has `enabled: false`: the launcher skips it,
 the daily summary labels it disabled, and the exception report excludes it.
 Its historical result is retained.
 
+Favsync exception alerts accept the creator source's `cached` state when it
+has no error. At the user's request, X `content_unavailable` assets are excluded
+from attachment alerts; asset states and failed execution history are retained.
+Historical failures include their execution time so they can be distinguished
+from current source errors. Rewards alerts name unsupported exploration topics;
+unconfirmed login and cart checks remain visible with their actual meaning.
+Benefits exception reports include their generation time and each affected
+platform's result time in UTC+08:00. They read the current delivery receipt on
+each invocation; previously sent messages retain the snapshot from their send
+time. Successful repair runs therefore remove the platform from the next
+report, without rewriting its historical failure receipt.
+
 `welfare_monitor.py` persists per-host HTTP 429 cooldowns in its existing
 private SQLite state. It honors Retry-After, defaults to one hour when absent
 or invalid, and waits at least one minute; other feeds on that host skip their
