@@ -125,6 +125,7 @@ class WorkflowTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.journal = Journal(Path(self.tmp.name) / 'journal.json', STEAM_ID)
         self.client = FakeClient()
+        sleep = patch('platforms.steam.workflow.time.sleep'); sleep.start(); self.addCleanup(sleep.stop)
 
     def tearDown(self):
         self.tmp.cleanup()

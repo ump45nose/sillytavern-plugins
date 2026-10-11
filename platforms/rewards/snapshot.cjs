@@ -20,23 +20,30 @@ function details(raw, daily, app) {
       ["more_promotions", flyout.morePromotions]]) {
     if (!Array.isArray(rows) || rows.length > 300) { put(key, quota(null)); continue; }
     const pointRows = rows.filter(x => number(x?.pointProgressMax) > 0);
-    const eligible = pointRows.filter(x => x.complete === true || x.isCompleted === true ||
+    const currentRows = key === "more_promotions" ? applicable(pointRows) : pointRows;
+    const eligible = currentRows.filter(x => x.complete === true || x.isCompleted === true ||
       ["unlocked", "notsupported"].includes(x.exclusiveLockedFeatureStatus));
-    const known = pointRows.every(x => x.complete === true || x.isCompleted === true ||
+    const known = currentRows.every(x => x.complete === true || x.isCompleted === true ||
       ["unlocked", "notsupported", "locked"].includes(x.exclusiveLockedFeatureStatus));
     put(key, quota(known ? eligible : null));
     for (const [i, x] of pointRows.entries()) {
-      const status = group([x], {requireEligibility: true});
+      const unassigned = key === "more_promotions" && !currentRows.includes(x);
+      const status = unassigned ? "not_applicable" : group([x], {requireEligibility: true});
       locked += status === "blocked" ? 1 : 0;
       if (items.length >= 100) { omitted++; continue; }
       items.push({id: String(x.offerId || key + "_" + i).slice(0,128),
         name: String(x.title || x.name || key).replace(/[\x00-\x1f]/g, " ").slice(0,200),
-        status, reason: status === "blocked" ? "platform_locked" : "fresh_readback"});
+        status, reason: unassigned ? "platform_ineligible" : status === "blocked" ? "platform_locked" : "fresh_readback"});
     }
   }
   metrics.locked_tasks = metric("count", locked);
   metrics.omitted_items = metric("count", omitted);
   return {metrics, items};
+}
+function applicable(rows) {
+  return rows.filter(row => row.complete === true || row.isCompleted === true ||
+    !(row.exclusiveLockedFeatureStatus === "locked" || row.attributes?.promotional === "True" ||
+      (Number.isFinite(row.priority) && row.priority < 0 && row.exclusiveLockedFeatureStatus !== "unlocked")));
 }
 function counter(current, max) {
   const p = parseProgress(String(current ?? ""), String(max ?? ""));
@@ -78,7 +85,8 @@ function summarize(raw, daily, region = null) {
     explore: group(flyout.exploreOnBingPromotions, {
       requireEligibility: true,
     }),
-    promotions: group(flyout.morePromotions, { requireEligibility: true }),
+    promotions: group(Array.isArray(flyout.morePromotions) ? applicable(flyout.morePromotions) : flyout.morePromotions,
+      { requireEligibility: true }),
   };
 }
 async function run(chromium, state, options = {}, deps = common) {

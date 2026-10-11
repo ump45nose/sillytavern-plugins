@@ -50,6 +50,30 @@ test("snapshot reports bounded categories without account data", () => {
     promotions: "complete",
   });
 });
+test("unassigned promotion points are retained separately from actionable progress", () => {
+  const raw = {userInfo:{isRewardsUser:true},flyoutResult:{userStatus:{isRewardsUser:true,
+    availablePoints:100,counters:{PCSearch:[]}},exploreOnBingPromotions:[],morePromotions:[
+      {offerId:"completed",complete:true,pointProgress:15,pointProgressMax:15,
+        priority:-1,exclusiveLockedFeatureStatus:"unlocked"},
+      {offerId:"unassigned",complete:false,pointProgress:0,pointProgressMax:500,
+        priority:-1,exclusiveLockedFeatureStatus:"notsupported"},
+      {offerId:"available",complete:false,pointProgress:0,pointProgressMax:5,
+        priority:1,exclusiveLockedFeatureStatus:"notsupported"},
+    ]}};
+  const detail=snapshot.details(raw,null,null);
+  assert.equal(detail.metrics.more_promotions.current,15);
+  assert.equal(detail.metrics.more_promotions.max,20);
+  assert.equal(detail.items.find(row=>row.id==='unassigned').status,'not_applicable');
+  assert.equal(snapshot.summarize(raw,null).promotions,'incomplete');
+});
+test("server action timezone uses the current browser and the site's string format", async () => {
+  let reads=0;
+  const page={evaluate:async()=>{reads++;return -480;}};
+  assert.equal(await common.timezoneOffset(page),'-480');
+  assert.equal(await common.timezoneOffset(page,0),'0');
+  assert.equal(reads,1);
+  await assert.rejects(common.timezoneOffset(page,1000),/timezone_evidence_invalid/);
+});
 test("extras require explicit unlocked eligibility", () => {
   const offers = [
     {
@@ -120,6 +144,7 @@ test("guard never clicks login or challenge", async () => {
         url: () => "https://rewards.bing.com/dashboard",
         locator: (selector) => ({
           count: async () => (selector.includes("captcha") ? 1 : 0),
+          evaluateAll: async () => true,
         }),
       }),
     /human_required/,
@@ -248,6 +273,17 @@ test("unknown extra eligibility never submits", async () => {
   assert.equal(out.business.social, "unknown");
   assert.ok(!f.events.includes("click"));
 });
+test("completed assigned extras preserve locked detail without blocking the capability", async () => {
+  const f=fakeExtra();
+  const parser={snapshotPage:()=>({offers:[
+    {offerId:'SocialMediaFixture',title:'Complete',isCompleted:true},
+    {offerId:'SocialMediaLocked',title:'Locked',isCompleted:false,isLocked:true},
+  ]})};
+  const out=await extra.run(null,{},parser,{},f.deps);
+  assert.equal(out.business.social,'complete');
+  assert.equal(out.details.items.find(row=>row.id==='SocialMediaLocked').status,'blocked');
+  assert.equal(f.events.includes('click'),false);
+});
 test("extra challenge halts and still cleans context", async () => {
   const f = fakeExtra({ challenge: true });
   const out = await extra.run(null, {}, f.parser, {}, f.deps);
@@ -357,7 +393,10 @@ test("real snapshot warning result stops full before subsequent mutations", asyn
   const page = {
     url: () => common.DASHBOARD,
     goto: async () => {},
-    locator: () => ({ count: async () => 0 }),
+    locator: () => ({ count: async () => 0,
+      getAttribute: async name => name === "aria-valuenow" ? "0" : "3" }),
+    waitForTimeout: async () => {},
+    waitForFunction: async () => {},
     getByRole: () => ({
       waitFor: async () => {},
       getAttribute: async (name) => (name === "aria-valuenow" ? "0" : "3"),
@@ -402,7 +441,8 @@ test("future-dated real parser offer cannot become an eligible extra card", asyn
   assert.equal(parser.snapshotPage(html).offers[0].reportable, false);
   const out = await extra.run(null, {}, parser, {}, f.deps);
   assert.equal(f.events.includes("click"), false);
-  assert.equal(out.business.social, "blocked");
+  assert.equal(out.business.social, "not_applicable");
+  assert.equal(out.details.items[0].status, "blocked");
 });
 test("confirmed social result survives a later goal authorization obstacle", async () => {
   let clicked = false,

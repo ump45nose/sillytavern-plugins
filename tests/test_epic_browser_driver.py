@@ -1,8 +1,9 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from platforms.epic.browser_driver import BrowserDriver, clean_target
-from platforms.epic.workflow import Paused
+from platforms.epic.workflow import Paused, Obstacle
+from platforms.epic.native import checkout_evidence
 
 
 class OriginTests(unittest.TestCase):
@@ -23,6 +24,25 @@ class OriginTests(unittest.TestCase):
                 clean_target(url)
 
 
+class CheckoutIdentityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_current_single_offer_purchase_identity(self):
+        ns, oid = "a" * 32, "b" * 32
+        frame = SimpleNamespace(url=f"https://store.epicgames.com/purchase?offers=1-{ns}-{oid}--")
+        self.assertEqual(await checkout_evidence(frame, timeout=1),
+            {"complete": True, "offer_ids": [f"{ns}:{oid}"]})
+
+    async def test_ambiguous_or_unobserved_purchase_formats_remain_unknown(self):
+        ns, oid = "a" * 32, "b" * 32
+        for query in (
+            f"offers=1-{ns}-{oid}--&offers=1-{ns}-{'c'*32}--",
+            f"offers=2-{ns}-{oid}--", f"offers=1-{ns}-{oid}--extra",
+            f"offers=1-{ns}-{oid}--&namespace={'c'*32}",
+        ):
+            with self.subTest(query=query):
+                frame = SimpleNamespace(url="https://store.epicgames.com/purchase?" + query)
+                self.assertEqual(await checkout_evidence(frame, timeout=1), {"complete": False})
+
+
 class Controls:
     async def count(self):
         return 1
@@ -35,6 +55,36 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_current_device_warning_continues_once_to_the_price_gate(self):
+        button = SimpleNamespace(count=AsyncMock(return_value=1), is_visible=AsyncMock(return_value=True),
+            is_enabled=AsyncMock(return_value=True), click=AsyncMock())
+        dialog = SimpleNamespace(count=AsyncMock(return_value=1), is_visible=AsyncMock(return_value=True),
+            inner_text=AsyncMock(return_value="Device not supported\nThis product is not compatible with your current device\nCancel\nContinue"),
+            get_by_role=lambda *a, **k: button, wait_for=AsyncMock())
+        page = SimpleNamespace(url="https://store.epicgames.com/p/fixture",get_by_role=lambda *a, **k: dialog)
+        driver = BrowserDriver(None,page,None)
+        driver.offer = SimpleNamespace(id="fixture")
+        driver.prepared.add("fixture")
+        obstacle = Obstacle("region_layout",page.url,"fixture","checkout",
+            {"subtype":"device_modal","_container":page})
+        await driver.recover(obstacle,timeout=10)
+        button.click.assert_awaited_once()
+        self.assertIsNone(driver.checkout_button)
+        with self.assertRaises(Paused): await driver.recover(obstacle,timeout=10)
+        self.assertEqual(button.click.await_count,1)
+        dialog.inner_text.return_value += "\nAccept new terms"
+        driver.device_acknowledged.clear()
+        with self.assertRaises(Paused): await driver.recover(obstacle,timeout=10)
+        self.assertEqual(button.click.await_count,1)
+
+    async def test_checkout_hydration_waits_beyond_the_product_window(self):
+        driver = BrowserDriver(None, None, None)
+        unknown = SimpleNamespace(kind="unknown")
+        driver._observe_once = AsyncMock(side_effect=[unknown] * 12 + [None])
+        with patch("platforms.epic.browser_driver.asyncio.sleep", new=AsyncMock()):
+            self.assertIsNone(await driver.observe("checkout", timeout=30))
+        self.assertEqual(driver._observe_once.await_count, 13)
+
     async def test_visibility_without_deprecated_timeout(self):
         d = BrowserDriver(None, None, None)
         self.assertTrue(await d._visible(Controls()))
@@ -116,7 +166,8 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_page_is_not_phase_ready(self):
         page = SimpleNamespace(
             url="https://store.epicgames.com/en-US/free-games",
-            locator=lambda s: s,
+            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=0))
+            if s == 'egs-navigation[isloggedin="true"]' else s,
             get_by_role=lambda *a, **k: "button",
         )
         d = BrowserDriver(None, page, None)
@@ -127,7 +178,8 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_positive_authenticated_navigation_is_session_ready(self):
         page = SimpleNamespace(
             url="https://store.epicgames.com/en-US/free-games",
-            locator=lambda s: s,
+            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=1))
+            if s == 'egs-navigation[isloggedin="true"]' else s,
             get_by_role=lambda *a, **k: "button",
         )
         d = BrowserDriver(None, page, None)
@@ -244,7 +296,7 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         from platforms.epic.workflow import Offer
 
         offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
-        button = SimpleNamespace(inner_text=AsyncMock(return_value="In Library"))
+        button = SimpleNamespace(inner_text=AsyncMock(return_value="In Library"), wait_for=AsyncMock())
         verification = SimpleNamespace(
             url=offer.url,
             goto=AsyncMock(),
@@ -309,6 +361,7 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         d.open_offer = AsyncMock()
         d.verify = AsyncMock(return_value="not_owned")
         d.prepare_cart = AsyncMock()
+        d.checkout_uses_cart = AsyncMock(return_value=True)
         d.inspect_cart = AsyncMock(return_value="empty_confirmed")
         d.prepare_checkout = AsyncMock()
         d.checkout_total = AsyncMock(return_value="explicit_zero")

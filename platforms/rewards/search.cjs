@@ -126,6 +126,7 @@ async function runSession(
   config,
   queries,
   deps = common,
+  journal,
 ) {
   let measured = await observe(),
     stagnant = 0,
@@ -147,7 +148,11 @@ async function runSession(
     config.clusters || {},
     config.clusterSearch,
   );
-  for (const query of queue.slice(0, config.maxSearches)) {
+  for (const query of queue) {
+    if (performed >= config.maxSearches) break;
+    const queryKey = "query_" + require("node:crypto").createHash("sha256")
+      .update(normalized(query)).digest("hex");
+    if (journal?.has(queryKey)) continue;
     await deps.guard(page);
     const before = measured;
     let submitted = false;
@@ -162,7 +167,9 @@ async function runSession(
       const box = page.locator("#sb_form_q");
       await box.waitFor({ state: "visible", timeout: 15000 });
       await box.fill(query);
-      // Set before invocation: a click/Enter timeout may have reached the server.
+      // Persist before invocation: a timeout may have reached the server.
+      // The caller binds this journal to the account, device and business day.
+      if (journal) await journal.mark(queryKey, "attempted");
       submitted = true;
       await box.press("Enter");
       performed++;
@@ -173,6 +180,9 @@ async function runSession(
       await page.waitForTimeout(config.delayMs);
     } catch (error) {
       if (!submitted) throw error;
+      // Preserve real authentication/challenge obstacles, even when the
+      // search may already have reached Bing. A counter read cannot clear them.
+      if (error.details) throw error;
       measured = await observe();
       if (terminal(measured))
         return {
@@ -184,6 +194,10 @@ async function runSession(
         execution: "failed",
         reason: "search_submission_uncertain",
         business: statuses(measured),
+        details: {metrics: {}, items: [{id: device + "_search_submission",
+          name: device + " search", status: "unknown",
+          reason: error.name === "TimeoutError" ? "search_navigation_timeout"
+            : "search_browser_error"}]},
       };
     }
     for (let attempt = 0; attempt < config.readbackAttempts; attempt++) {
@@ -274,10 +288,10 @@ async function run(chromium, state, device, options = {}, deps = common) {
             0,
             1000,
           );
-        return runSession(page, observe, device, config, queries, deps);
+        return runSession(page, observe, device, config, queries, deps, options.journal);
       },
     );
-    return {...out, details: details()};
+    return {...out, details: {...details(), items: out.details?.items || []}};
   } catch (error) {
     deps.recordObstacle?.(error, {
       capability: device === "mobile" ? "mobile_search" : "desktop_search",
@@ -314,6 +328,7 @@ async function main() {
         search: config.search,
         region: config.region,
         contextOptions: device === "mobile" ? config.mobile : config.desktop,
+        journal: dailyJournal(stateDir, device, process.env.BENEFITS_BUSINESS_DATE),
       },
     );
   } catch {
@@ -326,6 +341,13 @@ async function main() {
   publish(out.execution, out.reason, out.business, out.details);
 }
 if (require.main === module) main();
+function dailyJournal(stateDir, device, businessDate) {
+  if (!["desktop", "mobile"].includes(device) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(businessDate || ""))
+    throw Error("business_date_invalid");
+  return require("./punchcards.cjs").journal(
+    path.join(stateDir, "search-" + device + "-" + businessDate + ".json"));
+}
 module.exports = {
   restricted,
   amount,
@@ -335,4 +357,5 @@ module.exports = {
   configuration,
   runSession,
   run,
+  dailyJournal,
 };

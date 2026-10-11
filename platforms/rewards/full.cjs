@@ -127,10 +127,10 @@ function deliveryDetails(snapshots, stages) {
       b?.current != null && a?.current != null ? a.current - b.current : null);
   }
   const rows = snapshots.after?.details?.items || snapshots.before?.details?.items || [];
-  const extra = stages.extra?.details?.items || [];
   const items = new Map(rows.map(row => [row.id, row]));
-  for (const row of extra) items.set(row.id, {...row,
-    name: row.name === row.id && items.has(row.id) ? items.get(row.id).name : row.name});
+  for (const stage of Object.values(stages))
+    for (const row of stage.details?.items || []) items.set(row.id, {...row,
+      name: row.name === row.id && items.has(row.id) ? items.get(row.id).name : row.name});
   return {metrics, items: [...items.values()].slice(0,100)};
 }
 async function execute(
@@ -194,9 +194,6 @@ async function execute(
         reason: "capability_binding_pending",
         business: { [capability]: "unknown" },
       };
-    else if (capability === "app_daily" && snapshots.before.business.app_daily === "complete")
-      out = {execution: "ok", reason: "app_checkin_already_confirmed",
-        business: {app_daily: "complete"}};
     else
       try {
         out = validateOutput(await bindings[capability]());
@@ -324,7 +321,7 @@ function createBindings({
           journal: journal("goal-journal.json"),
         }
       : undefined;
-  const browserSnapshot =
+  const browserSnapshot = host.browserSnapshot || (
     desktopRequired || mobileRequired
       ? () =>
           require("./snapshot.cjs").run(
@@ -336,13 +333,13 @@ function createBindings({
           execution: "ok",
           reason: "browser_snapshot_not_required",
           business: { snapshot: "not_applicable" },
-        });
+        }));
   const bindings = {
     more_promotions: () => require("./promotions.cjs").run(
       chromium, state("desktop"), parser(), {...base,
-        journal: journal("promotions-journal.json"),
+        journal: journal("promotions-" + (host.businessDate || process.env.BENEFITS_BUSINESS_DATE) + ".json"),
         businessDate: process.env.BENEFITS_BUSINESS_DATE,
-        timezoneOffset: config.timezoneOffset || 0}, "more_promotions"),
+        timezoneOffset: config.timezoneOffset}, "more_promotions"),
     claim: () => require("./promotions.cjs").run(
       chromium, state("desktop"), parser(), {...base,
         journal: journal("claim-journal.json"),
@@ -354,24 +351,28 @@ function createBindings({
         ...base,
         goal: goal(),
         journal: journal("explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json"),
-        timezoneOffset: config.timezoneOffset || 0,
+        timezoneOffset: config.timezoneOffset,
       }),
     punchcards: () =>
       require("./punchcards.cjs").run(chromium, state("desktop"), parser(), {
         ...base,
         autoClaim: config.punchcards?.autoClaim === true,
-        timezoneOffset: config.timezoneOffset ?? 0,
+        timezoneOffset: config.timezoneOffset,
         journal: journal("punchcard-journal.json"),
       }),
     desktop_search: () =>
       require("./search.cjs").run(chromium, state("desktop"), "desktop", {
         ...base,
         search: config.search,
+        journal: require("./search.cjs").dailyJournal(stateDir, "desktop",
+          host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
       }),
     mobile_search: () =>
       require("./search.cjs").run(chromium, state("mobile"), "mobile", {
         ...mobile,
         search: config.search,
+        journal: require("./search.cjs").dailyJournal(stateDir, "mobile",
+          host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
       }),
   };
   let appSession;
@@ -384,6 +385,9 @@ function createBindings({
   });
   const snapshot = async () => {
     const out = await browserSnapshot();
+    if (requested.has("app_daily") && require("./app_checkin.cjs").counter(out) === 1)
+      require("./app.cjs").checkinJournal(stateDir,
+        host.businessDate || process.env.BENEFITS_BUSINESS_DATE).confirm();
     if (out.execution === "ok" && requested.has("app_promotions")) {
       try {
         const rows = require("./app.cjs").promotions(await (await appClient()).read());
@@ -405,15 +409,20 @@ function createBindings({
       ["read_to_earn", "readToEarn"],
     ])
       bindings[capability] = async () => {
-        const client = await appClient();
+        // Recheck APP progress at its stage, even when the initial snapshot was
+        // complete. A long full run may cross a platform reset. Authenticate
+        // only when that fresh observation actually permits a submission.
+        const client = method === "submitDaily" ? appClient : await appClient();
         const app = require("./app.cjs");
         const out =
           method === "runPromotions"
             ? await app[method](client, journal("app-journal.json"))
             : await app[method](
                 client,
-                app.dailyJournal(stateDir, host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
+                (method === "submitDaily" ? app.checkinJournal : app.dailyJournal)(stateDir,
+                  host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
                 host.businessDate || process.env.BENEFITS_BUSINESS_DATE,
+                method === "submitDaily" ? {observeDaily: browserSnapshot} : {},
               );
         return {
           ...out,

@@ -372,7 +372,15 @@ async function readFlyout(context, existingPage = null) {
     if (!existingPage) await page.close();
   }
 }
+async function timezoneOffset(page, configured) {
+  const value = configured ?? await page.evaluate(() => new Date().getTimezoneOffset());
+  if (!Number.isInteger(value) || Math.abs(value) > 840)
+    throw Error("timezone_evidence_invalid");
+  // The current site's server-action payload uses the signed offset as text.
+  return String(value);
+}
 module.exports = {
+  timezoneOffset,
   restricted,
   assertAccountAvailable,
   contextOptions,

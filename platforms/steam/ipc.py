@@ -130,6 +130,9 @@ class Client:
             raise SteamError('ipc_invalid_product_response')
         packages = data[0].get('Packages')
         row = packages.get(str(package_id)) if isinstance(packages, dict) else None
+        if (isinstance(row, dict) and type(row.get('ID')) is int
+                and row['ID'] == package_id and row.get('MissingToken') is True):
+            raise SteamError('package_token_required')
         if not isinstance(row, dict) or type(row.get('ID')) is not int or row.get('ID') != package_id or row.get('MissingToken') is not False:
             raise SteamError('package_metadata_unavailable')
         tree = row.get('KeyValues')

@@ -1,10 +1,11 @@
 """Journal-first package claims. A pending attempt is reconciled, never replayed."""
 from datetime import datetime, timezone
 import json
+import time
 from pathlib import Path
 from common.model import atomic_json
 from common.details import metric
-from .candidates import validate_manifest, eligibility, verify_package, verify_app
+from .candidates import validate_manifest, eligibility, verify_package, verify_app, CATALOG_EVIDENCE_METHOD
 from .ipc import SteamError
 
 WINDOW_SECONDS = 5400
@@ -94,7 +95,7 @@ def classify_response(response):
     return 'claim_rejected'
 
 
-def run_workflow(client, manifest, region, journal, claim=False, now=None, publish=None):
+def run_workflow(client, manifest, region, journal, claim=False, now=None, publish=None, verify_offer=None):
     clock = now or (lambda: datetime.now(timezone.utc))
     rows = validate_manifest(manifest, region, clock())
     present = {row['package_id'] for row, _ in rows}
@@ -106,6 +107,15 @@ def run_workflow(client, manifest, region, journal, claim=False, now=None, publi
     items = []
     acquired = 0
     stopped = None
+
+    def owned_license(row, owned):
+        if row['package_id'] in owned:
+            return True
+        # StoreBrowse explicitly identifies the ordinary package represented by
+        # this promotion. Owning it avoids obtaining a duplicate game license.
+        return (row.get('evidence', {}).get('method') == CATALOG_EVIDENCE_METHOD
+                and type(row.get('store_base_package_id')) is int
+                and row['store_base_package_id'] in owned)
 
     def output():
         statuses = {x['status'] for x in items}
@@ -155,20 +165,27 @@ def run_workflow(client, manifest, region, journal, claim=False, now=None, publi
             add(row, 'blocked', stopped)
             continue
         try:
-            tree = client.package(pid)
-            current = clock()
-            reason = eligibility(row, region, current) or verify_package(tree, row, current, region)
+            catalog = row.get('evidence', {}).get('method') == CATALOG_EVIDENCE_METHOD
+            if catalog:
+                if verify_offer is None:
+                    add(row, 'blocked', 'official_store_verifier_required')
+                    continue
+                reason = verify_offer(row, region, clock()) or eligibility(row, region, clock())
+            else:
+                tree = client.package(pid)
+                current = clock()
+                reason = eligibility(row, region, current) or verify_package(tree, row, current, region)
             if reason:
                 add(row, 'blocked', reason)
                 continue
-            for app_id in row['app_ids']:
+            for app_id in [] if catalog else row['app_ids']:
                 reason = verify_app(client.app(app_id), app_id, region)
                 if reason:
                     break
             if reason:
                 add(row, 'blocked', reason)
                 continue
-            if pid in owned:
+            if owned_license(row, owned):
                 journal.confirm(pid)
                 add(row, 'complete', 'owned_package_verified')
                 continue
@@ -186,11 +203,14 @@ def run_workflow(client, manifest, region, journal, claim=False, now=None, publi
             # the durable intent. No sleeps/queue may defer work past the window.
             client.session()
             owned = client.owned()
-            if pid in owned:
+            if owned_license(row, owned):
                 add(row, 'complete', 'owned_package_verified')
                 continue
             current = clock()
-            reason = eligibility(row, region, current) or verify_package(tree, row, current, region)
+            if catalog:
+                reason = verify_offer(row, region, current) or eligibility(row, region, clock())
+            else:
+                reason = eligibility(row, region, current) or verify_package(tree, row, current, region)
             if reason:
                 add(row, 'blocked', reason)
                 continue
@@ -211,6 +231,14 @@ def run_workflow(client, manifest, region, journal, claim=False, now=None, publi
             try:
                 client.session()
                 owned = client.owned()
+                # Steam can accept the license before ASF's owned-package
+                # snapshot updates. Poll only readback, never repeat the POST.
+                if reason in {'submission_accepted', 'ipc_transport_uncertain', 'claim_transport_uncertain'}:
+                    for delay in (1, 2, 4):
+                        if pid in owned:
+                            break
+                        time.sleep(delay)
+                        owned = client.owned()
             except SteamError as error:
                 stopped = error.reason
                 add(row, 'unknown', 'submission_readback_unavailable')

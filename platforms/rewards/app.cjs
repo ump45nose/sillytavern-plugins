@@ -296,9 +296,11 @@ async function runPromotions(
 }
 // A type-103 ACK/balance delta has no daily attribution in this upstream response.
 // Keep an honest unknown until a dedicated fresh completion observation is available.
-async function submitDaily(client, journal, businessDate) {
+async function submitDaily(client, journal, businessDate, options = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate))
     throw Error("business_date_invalid");
+  if (options.observeDaily)
+    return require("./app_checkin.cjs").run(client, journal, options);
   await client.read();
   const key = "daily_" + businessDate;
   if (journal.has(key))
@@ -324,6 +326,7 @@ async function submitDaily(client, journal, businessDate) {
 }
 module.exports = {
   dailyJournal,
+  checkinJournal: require("./app_checkin.cjs").journal,
   createClient,
   promotions,
   runPromotions,

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import time
 import shutil
+import re
 from urllib.parse import parse_qs, urlsplit
 
 from common.model import atomic_json
@@ -46,6 +47,8 @@ async def checkout_evidence(container, *, timeout):
     """Exact identity from the active official checkout URL, never product text."""
     clean_target(container.url, checkout=True)
     query = parse_qs(urlsplit(container.url).query)
+    if any(len(query.get(key, [])) > 1 for key in ("namespace", "offers", "offerId")):
+        return {"complete": False}
     namespace = query.get("namespace", [None])[0]
     offers = query.get("offers", [None])[0]
     identities = []
@@ -60,7 +63,18 @@ async def checkout_evidence(container, *, timeout):
             if isinstance(row, dict):
                 ns, oid = row.get("namespace"), row.get("offerId") or row.get("id")
             else:
-                ns, oid = namespace, row
+                # Current /purchase uses quantity-namespace-offerId--. Bind
+                # only the observed single-unit format; extra fields/quantity
+                # remain unknown rather than silently dropping them.
+                modern = re.fullmatch(r"1-([a-f0-9]{32})-([a-f0-9]{32})--", row) if isinstance(row, str) else None
+                if modern:
+                    ns, oid = modern.groups()
+                    if namespace is not None and namespace != ns:
+                        return {"complete": False}
+                elif namespace:
+                    ns, oid = namespace, row
+                else:
+                    return {"complete": False}
             if not ns or not isinstance(oid, str) or len(oid) > 128:
                 return {"complete": False}
             identities.append(str(ns) + ":" + oid)

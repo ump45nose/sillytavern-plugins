@@ -4,6 +4,9 @@ import re
 from urllib.parse import urlsplit
 from .ipc import SteamError
 
+CATALOG_EVIDENCE_METHOD = 'official_store_catalog_free_to_keep'
+AUTOMATIC_EVIDENCE_METHODS = frozenset({'official_store_free_to_keep', CATALOG_EVIDENCE_METHOD})
+
 
 def timestamp(value):
     if not isinstance(value, str):
@@ -76,7 +79,8 @@ def eligibility(row, region, now):
                 return 'invalid_evidence_url'
         except ValueError:
             return 'invalid_evidence_url'
-    if evidence['package_url'] != f"https://steamdb.info/sub/{row['package_id']}/":
+    package_host = 'store.steampowered.com' if evidence.get('method') == CATALOG_EVIDENCE_METHOD else 'steamdb.info'
+    if evidence['package_url'] != f"https://{package_host}/sub/{row['package_id']}/":
         return 'package_evidence_mismatch'
     try:
         start, end, checked = (timestamp(row['starts_at']), timestamp(row['ends_at']), timestamp(evidence['checked_at']))

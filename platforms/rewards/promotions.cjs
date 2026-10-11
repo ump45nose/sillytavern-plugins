@@ -50,8 +50,9 @@ async function run(chromium, state, parser, options, capability) {
       }
       const rows = current.raw.flyoutResult.morePromotions;
       if (!Array.isArray(rows) || rows.length > 300) throw Error("inventory_unavailable");
-      const jobs = rows.filter(r => r.pointProgressMax > 0);
+      const jobs = rows.filter(r => r.pointProgressMax > 0 && (r.complete === true || eligible(r)));
       const results = [];
+      const timezoneOffset = await common.timezoneOffset(page, options.timezoneOffset);
       let ids;
       for (const row of jobs.slice(0, 40)) {
         if (row.complete === true) {results.push("complete"); continue;}
@@ -66,13 +67,13 @@ async function run(chromium, state, parser, options, capability) {
         if (!ids.reportActivity) throw Error("activity_action_unavailable");
         await options.journal.mark(row.offerId, "attempted");
         try {
-          await actions.request(page, "/dashboard", {method: "POST", headers: {
+          await actions.request(page, "/earn", {method: "POST", headers: {
             Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
             "Next-Action": ids.reportActivity,
-            "Next-Router-State-Tree": parser.routerStateTree("dashboard"),
+            "Next-Router-State-Tree": parser.routerStateTree("earn"),
           }, body: JSON.stringify([offer.hash, offer.activityType || 11,
             {offerid: row.offerId, isPromotional: offer.isPromotional ? true : "$undefined",
-              timezoneOffset: options.timezoneOffset || 0}])});
+              timezoneOffset}])});
         } catch {}
         let complete = false;
         for (let i = 0; i < 3; i++) {

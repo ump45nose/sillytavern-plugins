@@ -267,15 +267,21 @@ class ClaimWorkflow:
                         out.uncertain.remove(offer.id)
                         out.already_owned.append(offer.id)
                     continue
-                # Both instant checkout and cart routes are driver-supported.
-                # Existing paid/unknown cart items must remain untouched.
-                prepare_cart = getattr(self.driver, "prepare_cart", None)
-                if prepare_cart is not None:
-                    await prepare_cart(timeout=self.remaining())
-                    await self.settle("cart")
-                cart = await self.driver.inspect_cart(timeout=self.remaining())
-                if cart not in {"empty_confirmed", "only_free_confirmed"}:
-                    raise Paused("cart_preserved")
+                # Direct product checkout must still bind one exact offer and
+                # zero total below. An unrelated paid cart remains untouched.
+                # Drivers without verified route observation retain cart checks.
+                route = getattr(self.driver, "checkout_uses_cart", None)
+                uses_cart = await route(offer, timeout=self.remaining()) if route else True
+                if type(uses_cart) is not bool:
+                    raise Paused("purchase_control_unknown")
+                if uses_cart:
+                    prepare_cart = getattr(self.driver, "prepare_cart", None)
+                    if prepare_cart is not None:
+                        await prepare_cart(timeout=self.remaining())
+                        await self.settle("cart")
+                    cart = await self.driver.inspect_cart(timeout=self.remaining())
+                    if cart not in {"empty_confirmed", "only_free_confirmed"}:
+                        raise Paused("cart_preserved")
                 await self.driver.prepare_checkout(offer, timeout=self.remaining())
                 await self.settle("checkout")
                 total = await self.driver.checkout_total(timeout=self.remaining())

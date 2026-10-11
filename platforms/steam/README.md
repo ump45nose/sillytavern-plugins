@@ -1,8 +1,8 @@
 # Steam：ASF / FreePackages 一次性执行器
 
-已实现可运行的链路：PICS 变化发现 → package/app 核验 → Steam 官方商店永久赠送证据 → 已拥有核对 → 写入提交意图 → 请求免费 package → 到账读回 → common JSON 结果。只用 Python 标准库，不启动浏览器、不保存 Steam 密码、不创建 cron。
+默认链路：联网读取 Steam 当前地区限免清单 → 官方 StoreBrowse 促销、零价和期限核验 → 官方 package/app 内容与购买块核验 → 已拥有核对 → 提交前重新核验 → 持久化提交意图 → 请求免费 package → 到账读回 → common JSON 结果。只用 Python 标准库，不启动浏览器、不保存 Steam 密码、不创建 cron。
 
-2026-10-07 已完成真实登录、持久重启恢复、只读发现和通知验收。用户随后授权免费领取，实际取得 Arena of Trophies 的免费许可，owned 回查与防重复检查通过；NAS 定时入口已开启 `--claim`。该验收样本使用单 app 的免费许可接口，自动限免发现仍保留以下普通游戏、活动期限和官方永久赠送证据规则，见 [部署记录](../../docs/STEAM_DEPLOYMENT_2026-10-07.md)。发现覆盖有限，证据不足的包继续待核查。
+2026-10-07 已完成真实登录、持久重启恢复、只读发现和通知验收。用户随后授权免费领取，实际取得 Arena of Trophies 的免费许可，owned 回查与防重复检查通过；NAS 定时入口已开启 `--claim`，见 [部署记录](../../docs/STEAM_DEPLOYMENT_2026-10-07.md)。2026-10-09 将默认发现改为官方当前限免清单，保留原账号、代理、领取 journal 与历史 PICS 队列；当前限免核验不再依赖全站包枚举或包访问令牌。
 
 ## 先跑模拟流程（无需账号、完全离线）
 
@@ -41,7 +41,7 @@ python3 platforms/steam/run.py --runtime-root /absolute/private/benefits-data --
 
 公开商店请求可在私有配置中显式设置 `store_proxy_url`，例如
 `http://127.0.0.1:7890`；只接受没有认证信息的本机 HTTP 代理，未设置时直连。
-仅匿名官方商店 GET 使用该代理，保持真实账号 `cc`、TLS 校验和禁止重定向，
+仅匿名官方商店及 `api.steampowered.com` GET 使用该代理，保持真实账号 `cc`、TLS 校验和禁止重定向，
 不发送 Steam Cookie 或 IPC 认证。传输错误及 500/502/503/504 最多重试一次，
 每次超时 10 秒；429、403、重定向不重试。IPC 和领取 POST 始终不自动重试。
 代理自身的 Steam 商店路由也需实际验证，单纯指定代理不代表请求已走代理出口。
@@ -54,7 +54,26 @@ python3 platforms/steam/run.py --runtime-root /absolute/private/benefits-data --
 
 bot 必须是一个精确名字；拒绝 ASF、逗号列表、路径/空白。`/Api/Bot/{bot}` 返回必须只有这个 bot，已登录且 SteamID 匹配。ASF/Steam 登录过期或身份不符立即停止，由用户在 ASF 中恢复会话；这里不会自动登录、处理 Steam Guard 或 CAPTCHA。
 
-## 自动发现边界与安全门槛
+## 默认：官方当前限免清单
+
+配置 `discovery: {"source": "store", "max_candidates": 50}`，未指定 source 时也默认使用 store。每轮联网访问真实地区的官方商店游戏搜索，使用 `maxprice=free&specials=1&category1=998`；根据页面声明的结果总数分页，只核验清单中的 app，最多 50 个。免费基础游戏、试玩周末、Demo、DLC、Playtest 和组合包不属于该发现范围，不枚举全站 package，也不累积历史扫描队列。
+
+每个候选必须同时满足：
+
+- 公共官方 `IStoreBrowseService/GetItems/v1` 返回同一 app，成功、可见；选中的购买选项明确 `is_free_to_keep=true`，app 明确 `is_free_temporarily=true`
+- 选项最终价格为 0、正常原价大于 0、折扣 100%，有精确的 `free_to_keep_ends` epoch 且未到期；不猜商店显示日期的时区。`starts_at` 记录本轮观察到活动正在生效的时间，不冒充真实活动开始时间
+- 官方 `packagedetails` 中的 app 清单与购买选项游戏数一致，包含搜索出的 app；包最多 5 个 app，每个 app 的官方 `appdetails` 类型都为 game
+- 同一 app 的官方免费 license sub 与促销 package ID 一致、价格为 0。促销期间 `appdetails.is_free=true` 不代表常年 F2P；其汇总 `price_overview.final` 也不能替代选中购买选项的价格
+- 官方商店同一购买块内出现明确 Free to keep 说明，以及指向同一 package 的免费 license form 或 AddFreeLicense 操作
+- 领取前重新核实官方活动、package、包内容、截止时间、ASF 登录身份和已拥有状态；活动变化、来源不可用或已到期则停止。拥有促销包或官方指明的普通基础包时跳过重复领取
+
+官方页面、API 结构、身份或价格无法验证时记录具体 blocked 原因；来源故障不能当成空清单。搜索分页不完整、候选超出本轮上限或证据不足时 `business.discovery=unknown`。`complete` 仅表示本轮真实地区的官方当前游戏限免清单已核验，不代表全站历史覆盖，也不承诺发现搜索目录未公开的隐藏或账号专属活动。真实清单为空时是正常 no-op，不是新领取成功。
+
+所有公开 GET 使用已有代理且不带 Steam Cookie、API key 或 ASF IPC 密码。领取仍通过已有 ASF / FreePackages 的单 package IPC，实际入库以 `GetOwnedPackages` 回查为准。待确认提交优先只读恢复，即使新清单不可用或活动已消失也不会重发。
+
+## 可选：旧 PICS 增量发现
+
+仅在显式配置 `discovery.source="pics"` 时使用以下路径；默认 store 不读取或重写 `.discovery.json`，旧队列与历史缺口保持原样。切回 pics 需沿用匹配的 change_number 与历史文件；不得清空 journal 来重试。
 
 首次从 `GetChangesSince/0` 读取服务当前可提供的近期 PICS 变化，先原子保存游标及工作队列，再检查最多 30 个 package（配置 1–50）。后续从已保存游标读取增量，队列轮转，旧候选不会永远被最新批次挤掉。合格及证据不足的候选保留重查，已确认领取的移出；dry-run不会吃掉候选。可在 `discovery.change_number` 提供初始已知基线，已有状态不允许悄悄改基线。发现状态在共享 SteamID 目录的 `.discovery.json`，队列上限 4000 条。新增变化超限时，有持久队列就先处理旧队列，不接纳新窗口、不推进游标；没有旧队列可处理时停止并要求审核窗口/容量。不静默丢候选，也不将未接纳窗口算作已扫描。PICS 历史通常约 12 小时，ASF 启动晚或上游 full-update 标记意味着不完整；仍有待扫描队列、延期窗口或 full-update 输出 `discovery_coverage_incomplete`，`business.discovery=unknown`，不能当成“全站没有限免”。
 
@@ -71,12 +90,15 @@ bot 必须是一个精确名字；拒绝 ASF、逗号列表、路径/空白。`/
 
 发现过程中明确非 NoCost、已过期、freeweekend、beta/demo、非游戏或 isfreeapp 的条目会被排除。类型和免费游戏排除先于期限检查，因此明确不适用的包不会仅因缺 expirytime 长期占用队列；排除所需的 metadata 仍必须完整且 ID 对应。缺失 metadata 的候选保留 `blocked` 原因。有覆盖缺口或证据不全时返回退出码 3。有限窗口内没有候选且源响应正常时返回 `no_candidates`、claim=`not_applicable`，是正常 no-op，不是成功领到游戏。
 
+`GetProductInfo` 明确返回 `MissingToken=true` 时记录 `package_token_required`，与响应损坏或泛化的元数据缺失区分。FreePackages 1.7.1.1 使用 ASF 已有的 package token 缓存；2026-10-09 实机对照中已拥有包 1135007 有缓存且可读，队列样本 1866019 / 999645 无缓存且返回 MissingToken。登录和 IPC 正常不代表能读取所有 package；保持候选待核查和覆盖未知，不重置历史缺口或伪报完成。
+
 ## 状态、幂等与恢复
 
 - 复用 common 账号锁、进程总超时、原子 JSON。另按精确 SteamID 加锁并共用 journal，防止两个账号代号绕过幂等和限流
 - journal 在 `state/steam/_steam_ids/<SteamID>.json`；只存 packageID、attempt 时间、pending/confirmed、限流截止，不存凭据
 - 先原子持久化并 fsync intent，再发一次 `RequestFreeSubLicense?subID=…`。不入异步队列，不盲重 POST
 - 上游 HTTP 200/Success=true 不是入库成功；Steam EResult、PurchaseResultDetail 和 owned 读回都参与处理。已拥有不是新领取数量
+- 提交接受或传输不确定后，若初次 owned 未更新，仅以 1、2、4 秒间隔最多追加 3 次只读回查；不重发 POST。仍未确认则持久保留 pending，下一轮继续只读恢复
 - 超时/断网后只读恢复；owned 确认前保持 unknown。活动消失或过期后，仍优先恢复历史 pending。发现失败不抹掉已确认恢复结果
 - 本地最多每 10 秒一次提交、滚动 90 分钟最多 25 次，跨运行保留；服务端限流触发 90 分钟冷却。不会等待到活动过期后再提交，也不会在本次调用自动重试
 - 本地限制不包含 ASF 外部的使用量。401/403 单次即停，防止错误认证触发 ASF IP 封锁
@@ -87,7 +109,7 @@ bot 必须是一个精确名字；拒绝 ASF、逗号列表、路径/空白。`/
 
 无自动发现覆盖的活动可以准备源码外、0600 权限的审核 manifest，然后在配置中用 `candidates_path` 替代 `discovery`。它不是自动发现的必需输入。完整字段参见 `candidates.py` 与 `tests/test_steam.py: candidate()`。
 
-manifest 必须明确 package/app IDs、game 类型、四个排除标志、永久赠送、零价格与正常原价、币种、地区、带时区起止、三类证据 URL、审核时间（不超过 1 小时）。未知字段不推断。手填文件禁止 `official_store_free_to_keep` evidence method；该保留模式只能由运行中的官方页面验证器生成。
+manifest 必须明确 package/app IDs、game 类型、四个排除标志、永久赠送、零价格与正常原价、币种、地区、带时区起止、三类证据 URL、审核时间（不超过 1 小时）。未知字段不推断。手填文件禁止 `official_store_free_to_keep` 和 `official_store_catalog_free_to_keep` evidence method；这些保留模式只能由运行中的官方验证器生成。手工候选继续核验 PICS metadata。
 
 ## 已核接口与来源
 
@@ -99,4 +121,4 @@ manifest 必须明确 package/app IDs、game 类型、四个排除标志、永�
 - [SteamKit 枚举](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/enums.steamd) / [EResult](https://github.com/SteamRE/SteamKit/blob/master/Resources/SteamLanguage/eresult.steamd)
 - [历史商店购买块结构](https://github.com/moonstar-x/free-games-crawler/blob/2322f553f182d94c9a0a5b718d65ef0db55c5bd8/test/crawlers/__mocks__/steam_page_game.txt)：仅核 DOM，不代表当前活动；测试重建最小结构，不包含原页面 sessionid
 
-新代码没有复制上游实现或引入运行依赖。ASF/插件的版本升级可能改变协议；响应结构不符会停止领取。用户已授权免费领取，单个真实 F2P 游戏的官方免费证据、`RequestFreeAppLicense`、owned app/package 回查已验证；默认自动发现仍不批量收集 F2P。合格普通游戏的限时永久赠送正向分支仍需实际活动覆盖。
+新代码没有复制上游实现或引入运行依赖。官方响应结构或 ASF/插件协议不符会停止领取。默认自动发现只处理当前限时永久赠送的普通游戏，不批量收集 F2P。

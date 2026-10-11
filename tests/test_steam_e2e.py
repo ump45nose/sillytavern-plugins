@@ -128,11 +128,12 @@ class FixtureService:
 class EndToEndTests(unittest.TestCase):
     def setUp(self):
         self.service = FixtureService()
+        sleep = patch('platforms.steam.workflow.time.sleep'); sleep.start(); self.addCleanup(sleep.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.settings = self.root / 'config.json'
         self.settings.write_text(json.dumps({'ipc_url': self.service.url, 'ipc_password': 'fixture-only-password',
-            'bot': 'Bot1', 'steam_id': STEAM_ID, 'region': 'US'}))
+            'bot': 'Bot1', 'steam_id': STEAM_ID, 'region': 'US', 'discovery': {'source': 'pics'}}))
         self.settings.chmod(0o600)
         self.state = self.root / 'state' / 'steam' / 'account1'
         self.state.mkdir(parents=True)
@@ -243,7 +244,7 @@ with patch.object(adapter, 'StoreClient', store):
         for app_type in ['Demo', 'Beta', 'DLC']:
             self.service.app_type = app_type
             out = self.run_adapter()
-            self.assertEqual(out['business']['discovery'], 'unknown')
+            self.assertEqual(out['business'], {'claim': 'not_applicable', 'discovery': 'complete'})
             self.assertEqual(self.service.posts, [])
         self.service.app_type = 'Game'; self.service.html = HTML.replace('Free to keep when you get it before', 'Play for free until')
         out = self.run_adapter()
@@ -264,6 +265,7 @@ with patch.object(adapter, 'StoreClient', store):
         journal.save()
         manifest = self.root / 'manifest.json'; manifest.write_text('{"schema_version":1,"candidates":[]}'); manifest.chmod(0o600)
         settings = json.loads(self.settings.read_text()); settings['candidates_path'] = str(manifest)
+        settings.pop('discovery', None)
         self.settings.write_text(json.dumps(settings))
         def payload(start, end):
             return {'execution': 'ok', 'reason': 'claims_verified', 'business': {'claim': 'complete'},

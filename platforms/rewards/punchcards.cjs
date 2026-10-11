@@ -240,7 +240,8 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           },
           wait: () => page.waitForTimeout(3000),
         };
-        const out = await execute(driver, options);
+        const out = await execute(driver, {...options,
+          timezoneOffset: Number(await common.timezoneOffset(page, options.timezoneOffset))});
         return {
           execution: "ok",
           reason: out.reason,
@@ -278,7 +279,7 @@ async function main() {
       {
         proxy: process.env.REWARDS_PROXY,
         autoClaim: config.punchcards?.autoClaim === true,
-        timezoneOffset: config.timezoneOffset ?? 0,
+        timezoneOffset: config.timezoneOffset,
         journal: journal(path.join(dir, "punchcard-journal.json")),
       },
     );

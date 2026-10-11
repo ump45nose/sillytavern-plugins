@@ -5,7 +5,7 @@
   "steam_id": "76561198000000001",
   "region": "US",
   "discovery": {
-    "change_number": 0,
-    "max_packages": 30
+    "source": "store",
+    "max_candidates": 50
   }
 }

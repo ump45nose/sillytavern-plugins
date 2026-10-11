@@ -21,6 +21,15 @@ async function request(
   { method = "GET", headers = {}, body } = {},
 ) {
   safePath(route);
+  if (method === "POST" && !Object.keys(headers).some(key => key.toLowerCase() === "x-deployment-id")) {
+    // React binds server actions to the current site deployment. Use the same
+    // bounded page evidence as action discovery; never a saved deployment ID.
+    const html = await require("./browser_common.cjs").boundedHtml(page);
+    const deployment = require("./parser_loader.cjs").loadParser().buildId(html);
+    if (typeof deployment !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(deployment))
+      throw Error("deployment_evidence_unavailable");
+    headers = {...headers, "X-Deployment-Id": deployment};
+  }
   return page.evaluate(
     async ({ url, method, headers, body }) => {
       const controller = new AbortController();
@@ -149,7 +158,7 @@ async function submit(
     body: JSON.stringify([
       child.hash,
       11,
-      { offerid: child.offerId, isPromotional: "$undefined", timezoneOffset },
+      { offerid: child.offerId, isPromotional: "$undefined", timezoneOffset: String(timezoneOffset) },
     ]),
   });
 }

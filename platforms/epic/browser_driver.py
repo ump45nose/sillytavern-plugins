@@ -75,6 +75,7 @@ class BrowserDriver:
         self.cart_evidence = cart_evidence
         self.current_offer_ids = set()
         self.observation_session = uuid.uuid4().hex
+        self.device_acknowledged = set()
 
     async def _visible(self, locator):
         try:
@@ -208,7 +209,8 @@ class BrowserDriver:
     async def observe(self, phase, *, timeout):
         # DOMContentLoaded precedes the store's hydrated purchase controls.
         # Re-probe without navigation or interaction before declaring a layout gap.
-        for attempt in range(8):
+        attempts = 20 if phase in {"checkout", "post_submit"} else 8
+        for attempt in range(attempts):
             state = await self._observe_once(phase, timeout=timeout)
             if state is None or state.kind != "unknown":
                 return state
@@ -219,9 +221,9 @@ class BrowserDriver:
                 except Exception as error:
                     if not _is_playwright_timeout(error):
                         raise
-            if attempt == 7:
+            if attempt == attempts - 1:
                 return state
-            await asyncio.sleep(min(1, timeout / 8))
+            await asyncio.sleep(min(1, timeout / attempts))
 
     async def _observe_once(self, phase, *, timeout):
         observations = []
@@ -346,6 +348,29 @@ class BrowserDriver:
             await self._goto(obstacle.target, timeout)
             await old.close()
             return
+        if (obstacle.kind == "region_layout" and obstacle.phase == "checkout"
+                and (obstacle.payload or {}).get("subtype") == "device_modal"
+                and (obstacle.payload or {}).get("_container") is self.page
+                and self.offer is not None and self.offer.id in self.prepared
+                and urlsplit(self.page.url).hostname == "store.epicgames.com"
+                and obstacle.target == clean_target(self.page.url)):
+            dialog = self.page.get_by_role("dialog")
+            expected = "Device not supported This product is not compatible with your current device Cancel Continue"
+            if (await dialog.count() != 1 or not await dialog.is_visible()
+                    or " ".join((await dialog.inner_text()).split()) != expected):
+                raise Paused("device_modal_unconfirmed")
+            button = dialog.get_by_role("button", name="Continue", exact=True)
+            if (await button.count() != 1 or not await button.is_visible()
+                    or not await button.is_enabled()):
+                raise Paused("device_modal_unconfirmed")
+            if self.offer.id in self.device_acknowledged:
+                raise Paused("device_modal_stagnant")
+            # This dialog only warns that the NAS cannot run a Windows game.
+            # Continue to the existing exact-offer/zero-price gate, once.
+            self.device_acknowledged.add(self.offer.id)
+            await button.click(timeout=min(5000, int(timeout * 1000)))
+            await dialog.wait_for(state="hidden", timeout=min(10000, int(timeout * 1000)))
+            return
         # Remembered-account selection, SSO and device warnings need explicit
         # binding/context; never click a generic Yes/Continue here.
         raise Paused("recovery_binding_pending")
@@ -441,6 +466,18 @@ class BrowserDriver:
 
     async def prepare_cart(self, *, timeout):
         await self._goto(STORE + "/cart", timeout)
+
+    async def checkout_uses_cart(self, offer, *, timeout):
+        """Observe the current product route before touching an existing cart."""
+        if self.offer is None or self.offer.id != offer.id:
+            raise Paused("purchase_control_unknown")
+        button = self.page.locator('[data-testid="purchase-cta-button"]').first
+        text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip().casefold()
+        if text in {"add to cart", "加入购物车"}:
+            return True
+        if text in {"get", "free", "buy now", "获取", "免费"}:
+            return False
+        raise Paused("purchase_control_unknown")
 
     async def inspect_cart(self, *, timeout):
         cards = self.page.locator('[data-testid="offer-card-layout-wrapper"]')

@@ -4,77 +4,8 @@ const common = require("./browser_common.cjs");
 const { publish } = require("../../common/result.cjs");
 const { loadParser } = require("./parser_loader.cjs");
 const actions = require("./server_actions.cjs");
-const QUERIES = {
-  // Curated examples from v4.3.2 bing-search-activity-queries.json (GPL-3.0-or-later).
-  creditreport: [
-    "how to raise credit score quickly",
-    "how to improve my credit score",
-    "check my credit score for free",
-    "what is a good credit score",
-    "why did my credit score drop",
-    "how to build credit history",
-    "free credit report",
-    "credit utilisation explained",
-    "fastest way to raise credit score",
-    "how does credit score work",
-  ],
-  health: [
-    "check symptoms for flu",
-    "symptoms of the flu",
-    "common cold symptoms in adults",
-    "why do I have a headache",
-    "symptoms of dehydration",
-    "sore throat remedies",
-    "symptoms of a sinus infection",
-    "food poisoning symptoms and duration",
-    "what causes a migraine",
-    "signs of low iron",
-  ],
-  recipe: [
-    "how to make pancakes",
-    "easy pasta recipe",
-    "how to cook salmon",
-    "homemade pizza recipe",
-    "quick dinner ideas",
-    "how to make fried rice",
-    "best chocolate chip cookies recipe",
-    "vegetarian dinner recipes",
-    "how to cook a steak",
-    "easy soup recipes",
-  ],
-  videogames: [
-    "video games",
-    "favorite video games",
-    "cyberpunk 2077",
-    "video game",
-    "grand theft auto game play learn",
-    "Minecraft explained",
-    "Halo Infinite review",
-    "Forza Horizon 5 review",
-    "Starfield review",
-    "best Xbox Series X games",
-  ],
-  dictionary: ["meaning of serendipity", "dictionary definition of resilience"],
-  timezonedates: ["time zones around the world", "current time in London"],
-  financemarket: ["stock market indices explained", "financial market news"],
-  mattress: ["how to choose a mattress", "mattress types compared"],
-  beautyproducts: [
-    "best moisturiser for sensitive skin",
-    "haircare products for dry hair",
-  ],
-  cellphoneplans: ["best cell phone plans", "compare mobile phone plans"],
-  cruises: ["Alaska cruise deals", "Caribbean cruise destinations"],
-  internetproviders: [
-    "internet providers near me",
-    "compare home broadband plans",
-  ],
-  bankaccounts: ["compare checking accounts", "high yield savings accounts"],
-  airportparking: ["airport parking options", "compare airport parking prices"],
-  allinclusiveresorts: ["all inclusive resort holidays", "compare all inclusive resorts"],
-  concerttickets: ["concert tickets near me", "upcoming live music concerts"],
-  lyrics: ["Shake It Off song lyrics", "Bohemian Rhapsody lyrics"],
-  rentalcars: ["car rental deals", "compare airport car rentals"],
-};
+const topics = require("./topic_queries.cjs");
+const { QUERIES } = topics;
 function kind(offerId) {
   if (typeof offerId !== "string") return null;
   if (offerId === "10XMSRewards_a30081646") return "goal";
@@ -153,6 +84,21 @@ async function run(chromium, state, parser, options = {}, deps = common) {
         const mainPage = page;
         const verificationPage = await context.newPage();
         let currentHtml, actionIds;
+        async function guardTarget(target) {
+          try {
+            await deps.guard(target);
+          } catch (error) {
+            // A navigation can destroy the DOM while the read-only guard is
+            // counting elements. Recheck once after it settles; authentication
+            // and CAPTCHA obstacles must still stop immediately.
+            if (error.details || !/Execution context was destroyed|Cannot find context with specified id/.test(error.message || ""))
+              throw error;
+            options.onError?.(error);
+            await target.waitForLoadState("domcontentloaded", {timeout: 15000}).catch(() => {});
+            await target.waitForTimeout(1000);
+            await deps.guard(target);
+          }
+        }
         async function read(page = mainPage) {
           await page.goto(deps.EARN, {
             waitUntil: "domcontentloaded",
@@ -227,7 +173,9 @@ async function run(chromium, state, parser, options = {}, deps = common) {
         }
         function updateBusiness() {
           for (const key of Object.keys(business)) {
-            const rows = outcomes.filter((o) => o.kind === key);
+            const assigned = new Set(jobs.filter(job => job.kind === key && job.status !== "blocked")
+              .map(job => job.offerId));
+            const rows = outcomes.filter((o) => o.kind === key && assigned.has(o.offerId));
             business[key] = !rows.length
               ? "not_applicable"
               : rows.every((o) => o.status === "complete")
@@ -295,13 +243,11 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               await target
                 .waitForLoadState("domcontentloaded", { timeout: 20000 })
                 .catch(() => {});
-              await deps.guard(target);
+              await guardTarget(target);
               await target.waitForTimeout(4000);
             } else {
-              const key = Object.keys(QUERIES).find((k) =>
-                job.offerId.includes("_" + k + "_"),
-              );
-              if (!key) {
+              const queries = topics.resolve(job);
+              if (!queries) {
                 record(job, "unknown", "search_topic_unsupported");
                 continue;
               }
@@ -311,6 +257,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               if (!offer?.reportable || !offer.hash || !options.journal)
                 throw Error("activation_evidence_unavailable");
               if (!options.journal.has(job.offerId)) {
+                const timezoneOffset = await common.timezoneOffset(page, options.timezoneOffset);
                 actionIds ||= await actions.discover(page, parser, currentHtml);
                 if (!actionIds.reportActivity) throw Error("activity_action_unavailable");
                 await options.journal.mark(job.offerId, "attempted");
@@ -320,7 +267,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                     "Next-Action": actionIds.reportActivity,
                     "Next-Router-State-Tree": parser.routerStateTree("earn"),
                   }, body: JSON.stringify([offer.hash, 11, {offerid: job.offerId,
-                    isPromotional: "$undefined", timezoneOffset: options.timezoneOffset || 0}])});
+                    isPromotional: "$undefined", timezoneOffset}])});
                   outcomes.find(o => o.offerId === job.offerId).activation =
                     response.status === 200 && /^\d+:true\s*$/m.test(response.text)
                       ? "acknowledged" : "not_acknowledged";
@@ -336,11 +283,11 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               await target
                 .waitForLoadState("domcontentloaded", { timeout: 20000 })
                 .catch(() => {});
-              await deps.guard(target);
+              await guardTarget(target);
               if (new URL(target.url()).hostname !== "www.bing.com")
                 throw Error("region_redirect");
-              for (const query of QUERIES[key]) {
-                await deps.guard(target);
+              for (const query of queries) {
+                await guardTarget(target);
                 const box = target.locator("#sb_form_q");
                 await box.waitFor({ state: "visible", timeout: 15000 });
                 const queryKey = "query_" + require("node:crypto").createHash("sha256")
@@ -352,7 +299,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 await target
                   .waitForLoadState("domcontentloaded", { timeout: 15000 })
                   .catch(() => {});
-                await deps.guard(target);
+                await guardTarget(target);
                 await target.waitForTimeout(10000);
                 if (await confirmed(job.offerId, true)) break;
               }
@@ -422,7 +369,7 @@ async function main() {
         goal: config.goal?.url ? { url: config.goal.url } : undefined,
         journal: require("./punchcards.cjs").journal(path.join(process.env.BENEFITS_STATE_DIR,
           "explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json")),
-        timezoneOffset: config.timezoneOffset || 0,
+        timezoneOffset: config.timezoneOffset,
       },
     );
   } catch (error) {

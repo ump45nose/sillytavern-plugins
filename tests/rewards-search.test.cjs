@@ -120,6 +120,45 @@ test("uncertain Enter without confirmation never repeats", async () => {
   );
   assert.equal(out.reason, "search_submission_uncertain");
   assert.equal(f.presses(), 1);
+  assert.equal(out.details.items[0].reason, "search_browser_error");
+});
+test("a resumed search skips a previously uncertain query in the daily journal", async () => {
+  const rows = new Set();
+  const journal = {has: id => rows.has(id), mark: async id => rows.add(id)};
+  const first = fixture([0, 0], {pressFails: true});
+  await search.runSession(first.page, first.observe, "desktop",
+    search.configuration({delayMs: 0}), ["q", "q2"], first.deps, journal);
+  assert.equal(rows.size, 1);
+  const resumed = fixture([0, 9]);
+  const filled = [];
+  const locator = resumed.page.locator;
+  resumed.page.locator = () => ({...locator(), fill: async text => filled.push(text)});
+  const out = await search.runSession(resumed.page, resumed.observe, "desktop",
+    search.configuration({delayMs: 0, maxSearches: 1}), ["Q", "q2"], resumed.deps, journal);
+  assert.equal(out.reason, "search_quota_confirmed");
+  assert.deepEqual(filled, ["q2"]);
+});
+test("search journal separates devices and permits the same query on the next day", async () => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-search-journal-"));
+  try {
+    const today = search.dailyJournal(dir, "desktop", "2026-10-09");
+    await today.mark("query_fixture", "attempted");
+    assert.equal(search.dailyJournal(dir, "desktop", "2026-10-09").has("query_fixture"), true);
+    assert.equal(search.dailyJournal(dir, "mobile", "2026-10-09").has("query_fixture"), false);
+    assert.equal(search.dailyJournal(dir, "desktop", "2026-10-10").has("query_fixture"), false);
+    assert.throws(() => search.dailyJournal(dir, "desktop", "../invalid"));
+  } finally {fs.rmSync(dir, {recursive: true, force: true});}
+});
+test("a CAPTCHA after submission remains an obstacle even with a full quota", async () => {
+  const f = fixture([0, 9]);
+  const obstacle = new Error("captcha");
+  obstacle.details = {code: "captcha", kind: "captcha"};
+  let guards = 0;
+  f.deps.guard = async () => { if (++guards === 2) throw obstacle; };
+  await assert.rejects(search.runSession(f.page, f.observe, "desktop",
+    search.configuration({delayMs: 0}), ["q"], f.deps), error => error === obstacle);
+  assert.equal(f.presses(), 1);
 });
 test("stagnation stops bounded work rather than completing", async () => {
   const f = fixture([0]);

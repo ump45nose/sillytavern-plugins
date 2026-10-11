@@ -105,6 +105,22 @@ test("unsafe server routes rejected", () => {
   ])
     assert.throws(() => a.safePath(path));
 });
+test("server action binds the deployment from the current page before submission", async () => {
+  const calls=[];
+  const page={evaluate:async (_fn,args)=>{
+    if(typeof args==='number')return '<script src="/_next/static/chunks/current.js?dpl=dpl_fixture_20261009"></script>';
+    calls.push(args);return {status:200,text:'1:true'};
+  }};
+  await a.request(page,'/earn',{method:'POST',headers:{'Next-Action':'a'.repeat(40)},body:'[]'});
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].headers['X-Deployment-Id'],'dpl_fixture_20261009');
+  assert.equal(calls[0].body,'[]');
+  const absent={evaluate:async (_fn,args)=>{
+    if(typeof args==='number')return '<main>Loading</main>';
+    throw Error('unexpected_submission');
+  }};
+  await assert.rejects(a.request(absent,'/earn',{method:'POST',body:'[]'}),/deployment_evidence_unavailable/);
+});
 test("bounded sequential action discovery rejects conflicting action IDs", async () => {
   let calls = 0;
   const parser = {
@@ -142,7 +158,7 @@ test("real server action binding sends exact source payload once", async () => {
   assert.deepEqual(JSON.parse(sent.args.body), [
     "livehash",
     11,
-    { offerid: id, isPromotional: "$undefined", timezoneOffset: -480 },
+    { offerid: id, isPromotional: "$undefined", timezoneOffset: "-480" },
   ]);
   assert.equal(sent.route, "/earn/quest/" + p.PARENT);
 });
@@ -158,6 +174,8 @@ test("real vendored parser through native fake-browser binding confirms parent",
     url: () => url,
     waitForTimeout: async () => {},
     evaluate: async (_fn, args) => {
+      if (args === undefined) return -480;
+      if (typeof args === "number") return html().replace("fixture.js", "fixture.js?dpl=dpl_fixture_20261009");
       if (args.method === "POST") {
         posted++;
         return { status: 200, text: "1:true" };
@@ -216,6 +234,8 @@ function nativeFixture({
     goto: async () => {},
     waitForTimeout: async () => {},
     evaluate: async (_fn, args) => {
+      if (args === undefined) return -480;
+      if (typeof args === "number") return (await deps.boundedHtml()).replace("fixture.js", "fixture.js?dpl=dpl_fixture_20261009");
       if (args.method === "POST") {
         posted++;
         return { status: 200, text: "1:true" };

@@ -49,6 +49,12 @@ EPIC_CONFIG=/absolute/private/epic.json \
 
 公开入口绑定已授权的普通登录、验证码和账号链接处理，不要求每次由 Hermes 建立额外批准回调。缺少真实 MFA 数据或新增协议/年龄/账号设置时返回具体未完成原因，不虚构信息。
 
-已有付费或无法识别的购物车不清空。订单必须匹配当前商品身份且明确零价；发送前持久化 `claim-journal.json`。提交不明确时只读查所有权，不再次下单。当前促销已在库的只读轮询通过；本次未遇到新订单或 hCaptcha，真实下单/挑战仍需后续促销验证。具体见 [验收记录](../../docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md)。
+已有付费或无法识别的购物车不清空。商品页的直接领取使用该商品的独立结算，不因另一购物车里有付费商品而中断；加入购物车的路径仍检查整车。两种路径的订单都必须匹配当前商品身份且明确零价；发送前持久化 `claim-journal.json`。提交不明确时只读查所有权，不再次下单。具体见 [验收记录](../../docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md)。
+
+结算身份兼容已观察到的 `/purchase?offers=1-namespace-offerId--` 格式。数量变化、额外参数和重复身份参数仍不予确认；结算窗口有独立的有限加载等待，期间持续检查登录、验证码和账号提示。
+
+NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当前商品、官方商店的结算阶段，且弹窗完整文字和按钮精确匹配时点击一次 Continue，随后仍重新核对商品身份和零价。新增协议、年龄、账号设置或其他 Continue 提示不复用此处理。
+
+2026-10-09 原 Hermes 入口实跑成功，run ID 为 `78d5a00f-76ab-4b77-a834-67b095fc846d`。当期 Out of Sight 和 TerraScape 两款均确认在库；正式任务记录一款已在库、一款新领、零项未确认。已有付费购物车未被修改。
 
 业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。

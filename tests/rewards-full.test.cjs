@@ -66,6 +66,15 @@ test("snapshot success cannot erase partial task or missing enabled capability",
   assert.equal(out.execution, "failed");
   assert.equal(out.report.stages.claim.reason, "capability_binding_pending");
 });
+test("delivery preserves search obstacle details across the final snapshot", async () => {
+  const diagnostic = {id: "desktop_search_submission", name: "desktop search",
+    status: "unknown", reason: "search_navigation_timeout"};
+  const out = await full.execute(manifest(["desktop_search"]), {
+    desktop_search: async () => ({...ok({desktop_search: "incomplete"}),
+      details: {metrics: {}, items: [diagnostic]}}),
+  }, {snapshot: async () => ({...ok(), details: {metrics: {}, items: []}})});
+  assert.deepEqual(out.details.items, [diagnostic]);
+});
 test("completed narrow manifest does not claim unrequested capabilities ran", async () => {
   const out = await full.execute(manifest(["daily"]), {
     daily: async () => ok({ daily: "complete" }),
@@ -275,7 +284,7 @@ test("successful browser state handoff closes resources; failed stage cannot rep
   assert.equal(preserved, 1);
   assert.deepEqual(events, ["context", "browser", "context", "browser"]);
 });
-test("native bindings inherit refreshed desktop state without writing credentials", async () => {
+test("native bindings persist and inherit verified desktop state", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-"));
   const initial = { cookies: [], origins: [] },
     next = {
@@ -305,7 +314,7 @@ test("native bindings inherit refreshed desktop state without writing credential
     });
     await native.bindings.daily();
     await native.snapshot();
-    assert.deepEqual(JSON.parse(fs.readFileSync(file)), initial);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file)), next);
   } finally {
     daily.run = savedDaily;
     snapshot.run = savedSnapshot;
@@ -375,8 +384,8 @@ test("APP-only trusted bindings need no browser state, Chromium, or parser", asy
       out.report.snapshots.after.reason,
       "browser_snapshot_not_required",
     );
-    assert.equal(clients, 1);
-    assert.equal(reads, 1);
+    assert.equal(clients, 3);
+    assert.equal(reads, 3);
   } finally {
     common.readState = savedState;
     common.dependency = savedDependency;
@@ -391,8 +400,9 @@ test("APP authentication stops later APP mutations without any desktop dependenc
   try {
     const native = full.createBindings({
       stateDir: dir,
-      enabled: ["app_daily", "app_promotions"],
+      enabled: ["app_daily", "app_promotions", "read_to_earn"],
       host: {
+        businessDate: "2026-10-10",
         appClient: async () => {
           calls++;
           throw Error("app_token_missing");
@@ -400,26 +410,27 @@ test("APP authentication stops later APP mutations without any desktop dependenc
       },
     });
     const out = await full.execute(
-      manifest(["app_daily", "app_promotions"]),
+      manifest(["app_daily", "app_promotions", "read_to_earn"]),
       native.bindings,
       native,
     );
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
     assert.equal(out.reason, "full_intervention_pending");
     assert.deepEqual(out.business, {
       app_daily: "unknown",
-      app_promotions: "blocked",
+      app_promotions: "unknown",
+      read_to_earn: "blocked",
     });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("APP day-scoped actions use the daily journal, promotions retain their lifetime journal", async () => {
+test("APP check-in uses its cycle journal, reading and promotions retain their journals", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-"));
   const app = require("../platforms/rewards/app.cjs");
   const saved = Object.fromEntries(
-    ["dailyJournal", "submitDaily", "readToEarn", "runPromotions"].map(
+    ["dailyJournal", "checkinJournal", "submitDaily", "readToEarn", "runPromotions"].map(
       (key) => [key, app[key]],
     ),
   );
@@ -427,6 +438,12 @@ test("APP day-scoped actions use the daily journal, promotions retain their life
     client = {},
     calls = [];
   try {
+    const checkinJournal = {checkin: true};
+    app.checkinJournal = (stateDir, date) => {
+      assert.equal(stateDir, dir);
+      assert.equal(date, "2026-10-02");
+      return checkinJournal;
+    };
     app.dailyJournal = (stateDir, date) => {
       assert.equal(stateDir, dir);
       assert.equal(date, "2026-10-02");
@@ -434,8 +451,8 @@ test("APP day-scoped actions use the daily journal, promotions retain their life
     };
     for (const method of ["submitDaily", "readToEarn"])
       app[method] = async (value, journal, date) => {
-        assert.equal(value, client);
-        assert.equal(journal, dailyJournal);
+        assert.equal(typeof value === "function" ? await value() : value, client);
+        assert.equal(journal, method === "submitDaily" ? checkinJournal : dailyJournal);
         assert.equal(date, "2026-10-02");
         calls.push(method);
         return { business: { task: "complete" } };
@@ -510,6 +527,7 @@ test("mobile-only requests preflight and snapshot only the mobile account", asyn
       stateDir: dir,
       enabled: ["mobile_search"],
       config: { mobile: { isMobile: true }, region: "US" },
+      host: {businessDate: "2026-10-09"},
     });
     const out = await full.execute(
       manifest(["mobile_search"]),
@@ -633,7 +651,7 @@ const browserFixture = `
   require("./platforms/rewards/parser_loader.cjs").loadParser = () => { throw Error("unexpected_parser"); };
 `;
 
-test("CLI APP-only requests remain pending and ignore JSON client or authorization callbacks", () => {
+test("CLI APP-only requests ignore JSON client or authorization callbacks", () => {
   const { child, result, report } = entryFixture(
     ["app_daily", "app_promotions", "read_to_earn"],
     {
@@ -652,16 +670,17 @@ test("CLI APP-only requests remain pending and ignore JSON client or authorizati
     app_promotions: "unknown",
     read_to_earn: "unknown",
   });
-  for (const stage of Object.values(report.stages))
-    assert.equal(stage.reason, "capability_binding_pending");
+  assert.equal(report.stages.app_daily.reason, "app_checkin_progress_unavailable");
+  for (const key of ["app_promotions", "read_to_earn"])
+    assert.equal(report.stages[key].reason, "capability_failed");
   assert.equal(report.snapshots.before.reason, "browser_snapshot_not_required");
 });
 
 test("unimplemented-only CLI capability stays honestly pending without browser prerequisites", () => {
-  const { child, result, report } = entryFixture(["claim"], { cli: true });
+  const { child, result, report } = entryFixture(["visual_search"], { cli: true });
   assert.equal(child.status, 1, child.stderr);
-  assert.deepEqual(result.business, { claim: "unknown" });
-  assert.equal(report.stages.claim.reason, "capability_binding_pending");
+  assert.deepEqual(result.business, { visual_search: "unknown" });
+  assert.equal(report.stages.visual_search.reason, "capability_binding_pending");
 });
 
 test("CLI missing required browser session stays a preflight error", () => {
@@ -780,7 +799,7 @@ test("entry final report failure keeps the complete stage result", () => {
   assert.deepEqual(result.business, { daily: "complete" });
 });
 
-test("trusted full APP daily binding deduplicates one day and allows the next day", async () => {
+test("trusted full APP daily binding preserves an uncertain submission across local midnight", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-app-days-"));
   let submits = 0;
   const client = {
@@ -801,7 +820,9 @@ test("trusted full APP daily binding deduplicates one day and allows the next da
       const native = full.createBindings({
         stateDir: dir,
         enabled: ["app_daily"],
-        host: { appClient: async () => client, businessDate: date },
+        host: { appClient: async () => client, businessDate: date,
+          browserSnapshot: async () => ({...ok({app_daily: "incomplete"}),
+            details: {metrics: {app_daily: {unit: "count", current: 0, max: 1}}, items: []}}) },
       });
       const out = await full.execute(
         manifest(["app_daily"]),
@@ -811,15 +832,47 @@ test("trusted full APP daily binding deduplicates one day and allows the next da
       assert.equal(out.execution, "ok");
       assert.equal(out.business.app_daily, "unknown");
     }
-    assert.equal(submits, 2);
+    assert.equal(submits, 1);
     const saved = JSON.parse(
-      fs.readFileSync(path.join(dir, "app-daily-journal.json")),
+      fs.readFileSync(path.join(dir, "app-checkin-journal.json")),
     );
-    assert.equal(saved.business_date, "2026-10-03");
-    assert.deepEqual(saved.entries, { "daily_2026-10-03": "attempted" });
+    assert.equal(saved.status, "attempted");
+    assert.equal(saved.generation, 0);
     assert.equal(fs.existsSync(path.join(dir, "app-journal.json")), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("full snapshots persist completion and the regular binding handles reset after the initial snapshot", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-reset-"));
+  let complete = true, submits = 0, initialComplete = false;
+  const client = {read: async () => ({}), submit: async () => {submits++; complete = true;}};
+  const host = {appClient: async () => client, businessDate: "2026-10-10",
+    browserSnapshot: async () => {
+      const current = initialComplete || complete ? 1 : 0;
+      initialComplete = false;
+      return {...ok({app_daily: current ? "complete" : "incomplete"}),
+        details: {metrics: {app_daily: {unit: "count", current, max: 1}}, items: []}};
+    }};
+  try {
+    const run = async () => {
+      const native = full.createBindings({stateDir: dir, enabled: ["app_daily"], host});
+      return full.execute(manifest(["app_daily"]), native.bindings, native);
+    };
+    assert.equal((await run()).business.app_daily, "complete");
+    assert.equal(submits, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "app-checkin-journal.json"))).status, "confirmed");
+    complete = false;
+    initialComplete = true;
+    assert.equal((await run()).reason, "full_requested_capabilities_complete");
+    await run();
+    assert.equal(submits, 1);
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "app-checkin-journal.json")));
+    assert.equal(saved.generation, 1);
+    assert.equal(saved.status, "confirmed");
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
   }
 });
 

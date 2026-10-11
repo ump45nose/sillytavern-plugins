@@ -9,6 +9,8 @@ from common.locks import Lease, Busy
 from common.model import atomic_json, result
 from common.details import metric
 from platforms.steam.discovery import discover, StoreClient, DiscoveryState, validate_store_proxy
+from platforms.steam.store_discovery import CatalogClient, discover_current
+from platforms.steam.candidates import AUTOMATIC_EVIDENCE_METHODS
 from platforms.steam.ipc import Client, SteamError
 from platforms.steam.workflow import Journal, run_workflow
 
@@ -43,7 +45,10 @@ def config(value):
     if 'candidates_path' in value and 'discovery' in value:
         raise SteamError('choose_one_candidate_source')
     discovery = value.get('discovery', {})
-    if (not isinstance(discovery, dict) or set(discovery) - {'change_number', 'max_packages'}
+    if (not isinstance(discovery, dict) or set(discovery) - {'source', 'max_candidates', 'change_number', 'max_packages'}
+            or not isinstance(discovery.get('source', 'store'), str)
+            or discovery.get('source', 'store') not in {'store', 'pics'}
+            or type(discovery.get('max_candidates', 50)) is not int or not 1 <= discovery.get('max_candidates', 50) <= 50
             or type(discovery.get('change_number', 0)) is not int or not 0 <= discovery.get('change_number', 0) < 2**32
             or type(discovery.get('max_packages', 30)) is not int or not 1 <= discovery.get('max_packages', 30) <= 50):
         raise SteamError('invalid_discovery_config')
@@ -77,7 +82,7 @@ def main():
         manifest = read_private_json(settings['candidates_path']) if 'candidates_path' in settings else None
         if manifest is not None and isinstance(manifest, dict):
             for row in manifest.get('candidates', []):
-                if isinstance(row, dict) and isinstance(row.get('evidence'), dict) and row['evidence'].get('method') == 'official_store_free_to_keep':
+                if isinstance(row, dict) and isinstance(row.get('evidence'), dict) and row['evidence'].get('method') in AUTOMATIC_EVIDENCE_METHODS:
                     raise SteamError('reserved_automatic_evidence_method')
         state = Path(os.environ['BENEFITS_STATE_DIR'])
         # Shared across account aliases: two aliases targeting one Steam ID must
@@ -93,6 +98,7 @@ def main():
             journal = Journal(shared / (settings['steam_id'] + '.json'), settings['steam_id'])
             client = Client(settings['ipc_url'], settings['ipc_password'], settings['bot'], settings['steam_id'])
             discovery_report = None
+            verify_offer = None
             recovery_items = []
             automatic = manifest is None
 
@@ -114,12 +120,20 @@ def main():
             if manifest is None:
                 client.session()
                 discovery_settings = settings.get('discovery', {})
-                discovery_state = DiscoveryState(shared / (settings['steam_id'] + '.discovery.json'),
-                                                 discovery_settings.get('change_number', 0))
                 store_options = {'proxy_url': settings['store_proxy_url']} if 'store_proxy_url' in settings else {}
-                manifest, discovery_report = discover(client, StoreClient(**store_options), settings['region'],
-                    state=discovery_state, confirmed={int(pid) for pid, entry in journal.entries.items() if entry['state'] == 'confirmed'},
-                    **discovery_settings)
+                if discovery_settings.get('source', 'store') == 'store':
+                    store = CatalogClient(**store_options)
+                    manifest, discovery_report = discover_current(store, settings['region'],
+                        max_candidates=discovery_settings.get('max_candidates', 50))
+                    verify_offer = store.verify
+                else:
+                    discovery_state = DiscoveryState(shared / (settings['steam_id'] + '.discovery.json'),
+                                                     discovery_settings.get('change_number', 0))
+                    manifest, discovery_report = discover(client, StoreClient(**store_options), settings['region'],
+                        state=discovery_state,
+                        confirmed={int(pid) for pid, entry in journal.entries.items() if entry['state'] == 'confirmed'},
+                        change_number=discovery_settings.get('change_number', 0),
+                        max_packages=discovery_settings.get('max_packages', 30))
 
             def deliver(payload):
                 payload = {**payload, 'business': dict(payload['business']),
@@ -142,6 +156,13 @@ def main():
                                               if item['id'] not in {row['id'] for row in payload['details']['items']}]}
                     payload['details']['metrics']['discovered_packages'] = metric('count', current=len(manifest['candidates']))
                     payload['details']['metrics']['scanned_packages'] = metric('count', current=discovery_report['scanned'])
+                    if discovery_report.get('source') == 'steam_store_current_catalog':
+                        complete = payload['business']['discovery'] == 'complete'
+                        payload['details']['metrics']['catalog_results'] = metric('count', current=discovery_report['catalog_total'])
+                        payload['details']['items'].append({'id': 'source/steam_store',
+                            'name': 'Steam 当前地区限免清单', 'status': 'complete' if complete else 'unknown',
+                            'reason': 'current_catalog_verified' if complete else 'current_catalog_incomplete',
+                            'url': 'https://store.steampowered.com/search/'})
                     if discovery_report['coverage_incomplete']:
                         payload['reason'] = 'discovery_coverage_incomplete'
                     elif discovery_report['rejected']:
@@ -149,7 +170,7 @@ def main():
                 publish(payload)
 
             deliver(run_workflow(client, manifest, settings['region'], journal,
-                                 claim='--claim' in sys.argv[1:], publish=deliver))
+                                 claim='--claim' in sys.argv[1:], publish=deliver, verify_offer=verify_offer))
     except Busy:
         atomic_json(destination, result(context, 'busy', 'steam_account_lock_busy', {'claim': 'blocked'}))
     except SteamError as error:

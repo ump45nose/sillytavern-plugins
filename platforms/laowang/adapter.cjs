@@ -42,6 +42,7 @@ async function run(
   } = {},
 ) {
   let context;
+  let cookiecloudAuthIncomplete = false;
   try {
     context = await firefox.launchPersistentContext(profile, {
       headless: true,
@@ -56,7 +57,15 @@ async function run(
       const bytes = require("node:child_process").execFileSync(process.env.BENEFITS_PYTHON,
         ["-c", script, path.resolve(__dirname, "../.."), process.env.COOKIECLOUD_CONFIG],
         {timeout: 35000, maxBuffer: 65536, stdio: ["ignore", "pipe", "ignore"]});
-      await context.addCookies(JSON.parse(bytes));
+      const cookies = JSON.parse(bytes);
+      // Discuz derives its auth key from saltkey. Import the login pair
+      // together, so a partial sync cannot overwrite a working profile.
+      const auth = cookies.filter(cookie => cookie.name.endsWith("_auth") && cookie.value);
+      const complete = auth.length > 0 && auth.every(cookie => cookies.some(salt =>
+        salt.name === cookie.name.slice(0, -4) + "saltkey" && salt.value &&
+        salt.domain === cookie.domain && salt.path === cookie.path));
+      if (complete) await context.addCookies(cookies);
+      else cookiecloudAuthIncomplete = true;
     }
     await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 45000 });
     challenge.safeTarget(page);
@@ -69,6 +78,9 @@ async function run(
       details: status.details,
     });
     if (status.signed) return result(true, "already_signed");
+    if (statusOnly && cookiecloudAuthIncomplete && status.details.days === null)
+      return { execution: "failed", reason: "cookiecloud_auth_pair_incomplete",
+        checkin: "blocked", details: status.details };
     if (statusOnly)
       return {
         execution: "ok",
@@ -145,7 +157,8 @@ async function run(
       if (!hash)
         return {
           execution: "failed",
-          reason: "authentication_unconfirmed",
+          reason: cookiecloudAuthIncomplete
+            ? "cookiecloud_auth_pair_incomplete" : "authentication_unconfirmed",
           checkin: "blocked",
           details: status.details,
         };

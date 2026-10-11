@@ -79,6 +79,36 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(d.submitted, ["a"])
         self.assertEqual(d.journal.states["a"], "confirmed")
 
+    async def test_direct_zero_checkout_preserves_unrelated_paid_cart(self):
+        d = Driver()
+        d.cart = "paid_or_unknown"
+        d.checkout_uses_cart = AsyncMock(return_value=False)
+        d.inspect_cart = AsyncMock(return_value=d.cart)
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "complete")
+        self.assertEqual(d.submitted, ["a"])
+        d.inspect_cart.assert_not_awaited()
+        self.assertEqual(d.cart, "paid_or_unknown")
+
+    async def test_direct_route_still_requires_explicit_zero_checkout(self):
+        d = Driver()
+        d.cart = "paid_or_unknown"
+        d.checkout_uses_cart = AsyncMock(return_value=False)
+        d.total = "unknown"
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "checkout_price_unconfirmed")
+        self.assertEqual(d.submitted, [])
+
+    async def test_cart_route_preserves_paid_cart_before_prepare(self):
+        d = Driver()
+        d.cart = "paid_or_unknown"
+        d.checkout_uses_cart = AsyncMock(return_value=True)
+        d.prepare_checkout = AsyncMock()
+        r = await self.engine(d).run()
+        self.assertEqual(r.reason, "cart_preserved")
+        self.assertEqual(d.submitted, [])
+        d.prepare_checkout.assert_not_awaited()
+
     async def test_delayed_ownership_reconciled_without_repeat(self):
         d = Driver()
         d.verify = AsyncMock(side_effect=["not_owned", "unknown", "not_owned", "owned"])
