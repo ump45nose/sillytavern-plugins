@@ -4,6 +4,7 @@
 // Version-bound Rewards Next server-action binding. See rewards v4.3.2 BrowserFunc.
 // No upstream application import, parallel chunk fetch, or automatic POST retry.
 const ORIGIN = "https://rewards.bing.com";
+const trace = require("./telemetry.cjs");
 function safePath(value) {
   if (
     typeof value !== "string" ||
@@ -30,7 +31,7 @@ async function request(
       throw Error("deployment_evidence_unavailable");
     headers = {...headers, "X-Deployment-Id": deployment};
   }
-  return page.evaluate(
+  return trace.span("server_action.request", {method, route: trace.route(ORIGIN + route)}, () => page.evaluate(
     async ({ url, method, headers, body }) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20000);
@@ -66,7 +67,7 @@ async function request(
       }
     },
     { url: ORIGIN + route, method, headers, body },
-  );
+  ));
 }
 function chunkPaths(text) {
   const found = new Set();

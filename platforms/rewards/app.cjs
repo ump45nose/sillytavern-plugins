@@ -5,6 +5,7 @@ const { randomUUID, randomBytes } = require("node:crypto");
 const fs = require("node:fs"),
   path = require("node:path");
 const { boundedJson } = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
 // Daily/read actions expire with their business day. Keep just one bounded day;
 // multi-day promotions continue to use their separate reconciliation journal.
 function dailyJournal(stateDir, businessDate) {
@@ -108,6 +109,7 @@ function createClient({
   )
     throw Error("app_locale_invalid");
   async function send(route, body) {
+    return trace.span("app.request", {route: trace.route(ORIGIN + route), method: body ? "POST" : "GET"}, async () => {
     const controller = new AbortController(),
       timer = setTimeout(() => controller.abort(), 20000);
     try {
@@ -134,6 +136,7 @@ function createClient({
         redirect: "error",
         signal: controller.signal,
       });
+      trace.emit("app.request", {route: trace.route(ORIGIN + route), method: body ? "POST" : "GET", status: response.status});
       if (response.status === 401 || response.status === 403)
         throw new AuthenticationRequired("app_token_expired_or_scope_changed");
       if (response.status === 429) throw Error("app_rate_limited");
@@ -159,6 +162,7 @@ function createClient({
     } finally {
       clearTimeout(timer);
     }
+    });
   }
   return {
     read: () => send("/dapi/me?channel=SAIOS&options=613"),
@@ -210,6 +214,8 @@ function promotions(raw) {
     (p) => p?.attributes?.type === "sapphire",
   );
   if (selected.length > 40) throw Error("app_inventory_limit");
+  trace.emit("app.inventory", {count: selected.length,
+    current: selected.filter(p => String(p.attributes.complete).toLowerCase() === "true").length});
   const ids = new Set();
   return selected.map((p) => {
     const a = p.attributes,
@@ -237,7 +243,7 @@ function promotions(raw) {
 async function runPromotions(
   client,
   journal,
-  { wait = () => new Promise((resolve) => setTimeout(resolve, 5000)) } = {},
+  { wait = () => new Promise((resolve) => setTimeout(resolve, 5000)), beforeSubmit = async () => {} } = {},
 ) {
   const rows = promotions(await client.read()),
     results = [];
@@ -247,14 +253,18 @@ async function runPromotions(
       continue;
     }
     if (row.complete !== false || journal.has(row.id)) {
+      trace.emit("app.offer", {offer_ref: trace.reference(row.id), complete: row.complete === true, state: "unknown"});
       results.push("unknown");
       continue;
     }
+    await beforeSubmit();
     await journal.mark(row.id, "attempted");
+    trace.emit("journal.intent", {capability: "app_promotions", offer_ref: trace.reference(row.id), state: "attempted"});
     let uncertain = false;
     try {
       await client.submit("promotion", row.id);
     } catch (error) {
+      trace.failure("app.offer", error, {offer_ref: trace.reference(row.id)});
       if (
         error instanceof AuthenticationRequired ||
         error.message === "app_rate_limited"
@@ -269,6 +279,7 @@ async function runPromotions(
           promotions(await client.read()).find((p) => p.id === row.id)
             ?.complete === true;
       } catch (error) {
+        trace.failure("app.offer", error, {offer_ref: trace.reference(row.id), attempt: i + 1});
         if (
           error instanceof AuthenticationRequired ||
           error.message === "app_rate_limited"
@@ -279,6 +290,7 @@ async function runPromotions(
       if (i < 2) await wait();
     }
     if (complete) await journal.mark(row.id, "confirmed");
+    trace.emit("app.offer", {offer_ref: trace.reference(row.id), complete, state: complete ? "confirmed" : "unknown"});
     results.push(complete ? "complete" : "unknown");
     if (uncertain && !complete) break;
   }
@@ -308,10 +320,13 @@ async function submitDaily(client, journal, businessDate, options = {}) {
       business: { app_daily: "unknown" },
       reason: "previous_daily_submission_requires_reconciliation",
     };
+  await options.beforeSubmit?.();
   await journal.mark(key, "attempted");
+  trace.emit("journal.intent", {capability: "app_daily", state: "attempted"});
   try {
     await client.submit("daily");
   } catch (error) {
+    trace.failure("app.checkin", error);
     if (
       error instanceof AuthenticationRequired ||
       error.message === "app_rate_limited"
@@ -343,6 +358,7 @@ async function readToEarn(
   {
     maxArticles = 10,
     wait = () => new Promise((r) => setTimeout(r, 30000)),
+    beforeSubmit = async () => {},
   } = {},
 ) {
   if (
@@ -386,12 +402,15 @@ async function readToEarn(
         submitted,
         reason: "previous_article_requires_reconciliation",
       };
+    await beforeSubmit();
     await journal.mark(key, "attempted");
+    trace.emit("journal.intent", {capability: "read_to_earn", attempt: i + 1, state: "attempted"});
     let uncertain = false;
     try {
       await client.submit("read", offer);
       submitted++;
     } catch (error) {
+      trace.failure("app.offer", error, {capability: "read_to_earn", attempt: i + 1});
       if (
         error instanceof AuthenticationRequired ||
         error.message === "app_rate_limited"

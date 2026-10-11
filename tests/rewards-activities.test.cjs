@@ -96,8 +96,9 @@ function fixture({
     close: async () => {},
     url: () =>
       login ? "https://login.live.com/" : "https://rewards.bing.com/dashboard",
-    locator: (selector) => ({
+    locator: (selector) => selector.includes("progressbar") ? bar : ({
       count: async () => (challenge && selector.includes("captcha") ? 1 : 0),
+      evaluateAll: async () => challenge && selector.includes("iframe"),
     }),
     goto: async () => {
       state.visits++;
@@ -105,6 +106,7 @@ function fixture({
     },
     getByRole: (role) => (role === "progressbar" ? bar : control),
     waitForEvent: async () => popup,
+    waitForFunction: async () => {},
     waitForTimeout: async () => {},
   };
   const context = {

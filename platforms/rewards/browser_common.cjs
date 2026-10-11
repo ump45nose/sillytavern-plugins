@@ -9,6 +9,7 @@ const MAX_STATE = 1024 * 1024,
   MAX_HTML = 2 * 1024 * 1024;
 const MAX_FLYOUT = 4 * 1024 * 1024;
 const obstacles = require("./obstacles.cjs");
+const trace = require("./telemetry.cjs");
 function restricted(raw) {
   const counters = raw?.flyoutResult?.userStatus?.counters;
   const attrs = raw?.userInfo?.profile?.attributes;
@@ -261,19 +262,25 @@ function contextOptions(value = {}) {
 }
 async function withBrowser(chromium, state, options, work) {
   let browser, context;
+  const lifecycle = {closing: false};
   try {
-    browser = await chromium.launch({
+    browser = await trace.span("browser.launch", {proxy_configured: Boolean(options.proxy),
+      timeout_ms: 60000, ...trace.resources()}, () => chromium.launch({
       headless: true,
       chromiumSandbox: true,
+      timeout: 60000,
       ...(options.proxy
         ? { proxy: { server: options.proxy, bypass: "r.bing.com" } }
         : {}),
-    });
-    context = await browser.newContext({
+    }));
+    context = await trace.span("browser.context", {}, () => browser.newContext({
       ...contextOptions(options.contextOptions),
       storageState: state,
       ignoreHTTPSErrors: false,
-    });
+    }));
+    trace.instrumentRequest(context.request);
+    const newPage = context.newPage.bind(context);
+    context.newPage = async (...args) => trace.instrumentPage(await trace.span("browser.page", {}, () => newPage(...args)), lifecycle);
     const output = await work(context, await context.newPage());
     if (
       output?.execution === "ok" &&
@@ -292,10 +299,11 @@ async function withBrowser(chromium, state, options, work) {
     }
     return output;
   } finally {
+    lifecycle.closing = true;
     try {
-      if (context) await context.close();
+      if (context) await trace.span("browser.context_close", {}, () => context.close());
     } finally {
-      if (browser) await browser.close();
+      if (browser) await trace.span("browser.close", trace.resources(), () => browser.close());
     }
   }
 }
@@ -310,9 +318,10 @@ async function readFlyout(context, existingPage = null) {
           timeout: 20000, maxRedirects: 0,
         });
         break;
-      } catch {
+      } catch (error) {
         // A bounded retry of this read-only request handles observed proxy TLS
         // drops. Transport exceptions may include the entire Cookie header.
+        trace.failure("http.get", error, {route: "bing_flyout", attempt: attempt + 1});
         if (attempt === 1) throw Error("flyout_request_failed");
         await new Promise(resolve => setTimeout(resolve, 1000));
       }

@@ -2,6 +2,7 @@
 // Compact read-only replacement for the GPL snapshot source retained in upstream/.
 const { publish } = require("../../common/result.cjs");
 const common = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
 const { parseProgress, progress } = require("./activities.cjs");
 const {metric, number} = require("../../common/details.cjs");
 function details(raw, daily, app) {
@@ -116,6 +117,7 @@ async function run(chromium, state, options = {}, deps = common) {
       },
     );
   } catch (error) {
+    trace.failure("snapshot", error);
     common.recordObstacle(error, { capability: "snapshot", phase: "readback" });
     return {
       execution: "failed",
@@ -141,7 +143,8 @@ async function main() {
       common.readState(process.env.BENEFITS_STATE_DIR),
       { proxy: process.env.REWARDS_PROXY },
     );
-  } catch {
+  } catch (error) {
+    trace.failure("run", error, {capability: "snapshot"});
     out = {
       execution: "failed",
       reason: "dependency_or_session_unavailable",

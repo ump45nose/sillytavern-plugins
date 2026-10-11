@@ -2,6 +2,8 @@
 // Independent sequential quota search; source behavior mapped in docs/REWARDS_PARITY.md.
 const path = require("node:path");
 const common = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 const { publish } = require("../../common/result.cjs");
 const {metric} = require("../../common/details.cjs");
 function amount(value) {
@@ -127,10 +129,12 @@ async function runSession(
   queries,
   deps = common,
   journal,
+  pacing = interaction.create(),
 ) {
   let measured = await observe(),
     stagnant = 0,
     performed = 0;
+  trace.emit("search.readback", {device, current: total(measured), max: Object.values(measured).reduce((n,q) => n + q.max,0)});
   if (Object.values(measured).some((q) => q.status === "unknown"))
     return {
       execution: "failed",
@@ -152,8 +156,9 @@ async function runSession(
     if (performed >= config.maxSearches) break;
     const queryKey = "query_" + require("node:crypto").createHash("sha256")
       .update(normalized(query)).digest("hex");
-    if (journal?.has(queryKey)) continue;
+    if (journal?.has(queryKey)) { trace.emit("search.skip", {device, offer_ref: trace.reference(queryKey)}); continue; }
     await deps.guard(page);
+    await pacing.rest(page, performed);
     const before = measured;
     let submitted = false;
     try {
@@ -166,24 +171,29 @@ async function runSession(
       }
       const box = page.locator("#sb_form_q");
       await box.waitFor({ state: "visible", timeout: 15000 });
-      await box.fill(query);
+      await pacing.type(page, box, query);
+      await deps.guard(page);
       // Persist before invocation: a timeout may have reached the server.
       // The caller binds this journal to the account, device and business day.
       if (journal) await journal.mark(queryKey, "attempted");
+      trace.emit("journal.intent", {device, offer_ref: trace.reference(queryKey), state: "attempted"});
       submitted = true;
-      await box.press("Enter");
+      await trace.span("search.submit", {device, count: performed + 1, offer_ref: trace.reference(queryKey)}, () => box.press("Enter"));
       performed++;
       await page
         .waitForLoadState("domcontentloaded", { timeout: 15000 })
         .catch(() => {});
+      await pacing.pause(page, "settle");
       await deps.guard(page);
-      await page.waitForTimeout(config.delayMs);
+      await pacing.cooldown(page, config.delayMs);
     } catch (error) {
+      trace.failure("search.submit", error, {device, count: performed});
       if (!submitted) throw error;
       // Preserve real authentication/challenge obstacles, even when the
       // search may already have reached Bing. A counter read cannot clear them.
       if (error.details) throw error;
       measured = await observe();
+      trace.emit("search.readback", {device, reconciled: true, current: total(measured)});
       if (terminal(measured))
         return {
           execution: "ok",
@@ -202,6 +212,7 @@ async function runSession(
     }
     for (let attempt = 0; attempt < config.readbackAttempts; attempt++) {
       measured = await observe();
+      trace.emit("search.readback", {device, attempt: attempt + 1, current: total(measured)});
       if (Object.values(measured).some((q) => q.status === "unknown"))
         return {
           execution: "failed",
@@ -288,11 +299,13 @@ async function run(chromium, state, device, options = {}, deps = common) {
             0,
             1000,
           );
-        return runSession(page, observe, device, config, queries, deps, options.journal);
+        return runSession(page, observe, device, config, queries, deps, options.journal,
+          options.pacing || interaction.create(options.interaction));
       },
     );
     return {...out, details: {...details(), items: out.details?.items || []}};
   } catch (error) {
+    trace.failure("search.submit", error, {device});
     deps.recordObstacle?.(error, {
       capability: device === "mobile" ? "mobile_search" : "desktop_search",
       phase: "search",
@@ -326,12 +339,14 @@ async function main() {
       {
         proxy: process.env.REWARDS_PROXY,
         search: config.search,
+        interaction: config.interaction,
         region: config.region,
         contextOptions: device === "mobile" ? config.mobile : config.desktop,
         journal: dailyJournal(stateDir, device, process.env.BENEFITS_BUSINESS_DATE),
       },
     );
-  } catch {
+  } catch (error) {
+    trace.failure("run", error, {capability: device + "_search"});
     out = {
       execution: "failed",
       reason: "dependency_session_or_config_unavailable",

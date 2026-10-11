@@ -1,6 +1,8 @@
 "use strict";
 // Extra activities from the owner's private adapter; goal changes use an exact trusted authorization boundary.
 const common = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 const { publish } = require("../../common/result.cjs");
 const { loadParser } = require("./parser_loader.cjs");
 const actions = require("./server_actions.cjs");
@@ -73,6 +75,7 @@ function plan(offers, metadata) {
   }));
 }
 async function run(chromium, state, parser, options = {}, deps = common) {
+  const pacing = options.pacing || interaction.create(options.interaction);
   const business = { social: "unknown", explore: "unknown", goal: "unknown" };
   let confirmedDetails;
   try {
@@ -186,6 +189,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
           }
         }
         function record(job, status, reason = status === "unknown" ? "offer_not_credited" : status) {
+          trace.emit("promotion.readback", {capability: job.kind, offer_ref: trace.reference(job.offerId), state: status});
           Object.assign(outcomes.find((o) => o.offerId === job.offerId), {status, reason});
           updateBusiness();
           saveStatus();
@@ -238,13 +242,13 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               popupPromise = page
                 .waitForEvent("popup", { timeout: 15000 })
                 .catch(() => null);
-              await link.click({ timeout: 15000 });
+              await pacing.click(page, link, { timeout: 15000 });
               target = (await popupPromise) || page;
               await target
                 .waitForLoadState("domcontentloaded", { timeout: 20000 })
                 .catch(() => {});
               await guardTarget(target);
-              await target.waitForTimeout(4000);
+              await pacing.review(target, 4000);
             } else {
               const queries = topics.resolve(job);
               if (!queries) {
@@ -260,7 +264,10 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 const timezoneOffset = await common.timezoneOffset(page, options.timezoneOffset);
                 actionIds ||= await actions.discover(page, parser, currentHtml);
                 if (!actionIds.reportActivity) throw Error("activity_action_unavailable");
+                await pacing.pause(page, "action");
+                await deps.guard(page);
                 await options.journal.mark(job.offerId, "attempted");
+                trace.emit("journal.intent", {capability: "explore", offer_ref: trace.reference(job.offerId), state: "attempted"});
                 try {
                   const response = await actions.request(page, "/earn", {method: "POST", headers: {
                     Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
@@ -271,7 +278,10 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                   outcomes.find(o => o.offerId === job.offerId).activation =
                     response.status === 200 && /^\d+:true\s*$/m.test(response.text)
                       ? "acknowledged" : "not_acknowledged";
-                } catch { outcomes.find(o => o.offerId === job.offerId).activation = "response_lost"; }
+                } catch (error) {
+                  trace.failure("promotion.submit", error, {offer_ref: trace.reference(job.offerId)});
+                  outcomes.find(o => o.offerId === job.offerId).activation = "response_lost";
+                }
               } else {
                 outcomes.find(o => o.offerId === job.offerId).activation = "previously_attempted";
               }
@@ -286,6 +296,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               await guardTarget(target);
               if (new URL(target.url()).hostname !== "www.bing.com")
                 throw Error("region_redirect");
+              let performed = 0;
               for (const query of queries) {
                 await guardTarget(target);
                 const box = target.locator("#sb_form_q");
@@ -293,14 +304,18 @@ async function run(chromium, state, parser, options = {}, deps = common) {
                 const queryKey = "query_" + require("node:crypto").createHash("sha256")
                   .update(job.offerId + "\0" + query).digest("hex");
                 if (options.journal.has(queryKey)) continue;
-                await box.fill(query);
+                await pacing.rest(target, performed);
+                await pacing.type(target, box, query);
+                await guardTarget(target);
                 await options.journal.mark(queryKey, "attempted");
-                await box.press("Enter");
+                trace.emit("journal.intent", {capability: "explore", offer_ref: trace.reference(queryKey), state: "attempted"});
+                await trace.span("search.submit", {capability: "explore", offer_ref: trace.reference(queryKey)}, () => box.press("Enter"));
+                performed++;
                 await target
                   .waitForLoadState("domcontentloaded", { timeout: 15000 })
                   .catch(() => {});
                 await guardTarget(target);
-                await target.waitForTimeout(10000);
+                await pacing.cooldown(target);
                 if (await confirmed(job.offerId, true)) break;
               }
             }
@@ -308,6 +323,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
             if (complete && job.kind === "explore") await options.journal.mark(job.offerId, "confirmed");
             record(job, complete ? "complete" : "unknown");
           } catch (error) {
+            trace.failure("promotion.submit", error, {capability: job.kind, offer_ref: trace.reference(job.offerId)});
             if (error.message === "human_required" || error.details)
               throw error;
             options.onError?.(error);
@@ -332,6 +348,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
       },
     );
   } catch (error) {
+    trace.failure("promotion.submit", error, {capability: "extra"});
     common.recordObstacle(error, {
       capability: error.capability === "goal" ? "goal" : "extra",
       phase: "extra_cards",
@@ -370,9 +387,11 @@ async function main() {
         journal: require("./punchcards.cjs").journal(path.join(process.env.BENEFITS_STATE_DIR,
           "explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json")),
         timezoneOffset: config.timezoneOffset,
+        interaction: config.interaction,
       },
     );
   } catch (error) {
+    trace.failure("run", error, {capability: "extra"});
     out = {
       execution: "failed",
       reason: [

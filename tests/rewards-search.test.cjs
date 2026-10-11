@@ -154,8 +154,7 @@ test("a CAPTCHA after submission remains an obstacle even with a full quota", as
   const f = fixture([0, 9]);
   const obstacle = new Error("captcha");
   obstacle.details = {code: "captcha", kind: "captcha"};
-  let guards = 0;
-  f.deps.guard = async () => { if (++guards === 2) throw obstacle; };
+  f.deps.guard = async () => { if (f.presses() > 0) throw obstacle; };
   await assert.rejects(search.runSession(f.page, f.observe, "desktop",
     search.configuration({delayMs: 0}), ["q"], f.deps), error => error === obstacle);
   assert.equal(f.presses(), 1);

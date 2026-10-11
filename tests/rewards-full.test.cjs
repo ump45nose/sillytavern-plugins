@@ -426,6 +426,25 @@ test("APP authentication stops later APP mutations without any desktop dependenc
   }
 });
 
+test("production APP authorization failures are shared across snapshots and stages", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-auth-"));
+  const auth = require("../platforms/rewards/app_auth.cjs"), saved = auth.create;
+  let attempts = 0;
+  try {
+    auth.create = async () => { attempts++; throw Error("app_authorization_timeout"); };
+    const native = full.createBindings({stateDir: dir, enabled: ["app_promotions"]});
+    const out = await full.execute(manifest(["app_promotions"]), native.bindings, native);
+    assert.equal(attempts, 1);
+    assert.equal(out.execution, "failed");
+    assert.equal(out.report.stages.app_promotions.reason, "app_authorization_timeout");
+    assert.equal(out.business.app_promotions, "unknown");
+    await native.close();
+  } finally {
+    auth.create = saved;
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 test("APP check-in uses its cycle journal, reading and promotions retain their journals", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-"));
   const app = require("../platforms/rewards/app.cjs");
@@ -589,10 +608,9 @@ function entryFixture(
       path.join(dir, "capabilities.json"),
       JSON.stringify(manifest(enabled)),
     );
-    if (config !== undefined)
-      fs.writeFileSync(
+    fs.writeFileSync(
         path.join(dir, "native-config.json"),
-        JSON.stringify(config),
+        JSON.stringify({interaction: {enabled: false}, ...config}),
       );
     if (browserState)
       fs.writeFileSync(

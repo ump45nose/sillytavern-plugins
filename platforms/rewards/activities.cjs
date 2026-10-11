@@ -1,6 +1,8 @@
 "use strict";
 // Adapted from the owner's private daily-activities.cjs; no upstream full runner.
 const common = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
 const {metric} = require("../../common/details.cjs");
@@ -69,6 +71,7 @@ function outcome(complete, reason, observed = null) {
   };
 }
 async function run(chromium, storageState, options = {}, deps = common) {
+  const pacing = options.pacing || interaction.create(options.interaction);
   try {
     return await deps.withBrowser(
       chromium,
@@ -117,14 +120,17 @@ async function run(chromium, storageState, options = {}, deps = common) {
           try {
             // Once per visible card. A timeout does not trigger another click.
             await deps.guard(page);
-            await link.click({ timeout: 15000 });
+            await pacing.pause(page, "action");
+            await deps.guard(page);
+            await trace.span("activity.click", {offer_ref: trace.reference(card.href)}, () =>
+              link.click({ timeout: 15000, delay: 120 }));
             popup = await popupPromise;
             if (popup) {
               await popup
                 .waitForLoadState("domcontentloaded", { timeout: 30000 })
                 .catch(() => {});
               await deps.guard(popup);
-              await popup.waitForTimeout(10000);
+              await pacing.review(popup, 10000);
             }
             for (let i = 0; i < 10; i++) {
               await page.goto(DASHBOARD, {
@@ -148,6 +154,7 @@ async function run(chromium, storageState, options = {}, deps = common) {
       },
     );
   } catch (error) {
+    trace.failure("activity.click", error);
     common.recordObstacle(error, { capability: "daily", phase: "daily_cards" });
     return outcome(
       false,
@@ -195,7 +202,8 @@ async function main() {
       common.readState(process.env.BENEFITS_STATE_DIR),
       { proxy: process.env.REWARDS_PROXY },
     );
-  } catch {
+  } catch (error) {
+    trace.failure("run", error, {capability: "daily"});
     output = outcome(false, "dependency_session_or_browser_unavailable");
   }
   return publish(output.execution, output.reason, output.business, output.details);

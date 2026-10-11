@@ -2,6 +2,7 @@
 // Account-scoped check-in reconciliation. Local midnight never clears intent.
 const fs = require("node:fs"), path = require("node:path");
 const { boundedJson } = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
 function validDate(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -79,12 +80,13 @@ function counter(snapshot) {
   if (snapshot.business?.app_daily !== (value.current === 1 ? "complete" : "incomplete")) return null;
   return value.current;
 }
-async function run(client, journal, {observeDaily, wait = () => new Promise(r => setTimeout(r, 3000))}) {
+async function run(client, journal, {observeDaily, wait = () => new Promise(r => setTimeout(r, 3000)), beforeSubmit = async () => {}}) {
   const unknown = reason => ({business: {app_daily: "unknown"}, reason});
   const complete = () => ({business: {app_daily: "complete"}, reason: "app_checkin_confirmed_by_fresh_snapshot"});
   let snapshot = await observeDaily();
   if (snapshot.execution !== "ok") return {...snapshot, business: {app_daily: "unknown"}};
   let current = counter(snapshot);
+  trace.emit("app.checkin", {current, max: 1, state: journal.status()});
   if (current === 1) { journal.confirm(); return complete(); }
   if (current !== 0) return unknown("app_checkin_progress_unavailable");
   if (journal.status() === "confirmed") {
@@ -102,9 +104,12 @@ async function run(client, journal, {observeDaily, wait = () => new Promise(r =>
     return unknown("previous_daily_submission_requires_reconciliation");
   client = typeof client === "function" ? await client() : client;
   await client.read();
+  await beforeSubmit();
   journal.attempt();
+  trace.emit("journal.intent", {capability: "app_daily", state: "attempted"});
   try { await client.submit("daily"); }
   catch (error) {
+    trace.failure("app.checkin", error);
     if (error.name === "AppAuthenticationRequired" || error.message === "app_rate_limited") throw error;
   }
   snapshot = await observeDaily();

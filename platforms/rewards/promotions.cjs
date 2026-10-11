@@ -3,6 +3,8 @@
 // GPL-3.0-or-later; source commit and license retained in vendor/rewards-parser.
 const common = require("./browser_common.cjs");
 const actions = require("./server_actions.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 
 function eligible(row) {
   return row && row.pointProgressMax > 0 && row.complete !== true &&
@@ -11,6 +13,7 @@ function eligible(row) {
     row.attributes?.promotional !== "True";
 }
 async function run(chromium, state, parser, options, capability) {
+  const pacing = options.pacing || interaction.create(options.interaction);
   try {
     return await common.withBrowser(chromium, state, options, async (context, page) => {
       async function read() {
@@ -33,14 +36,17 @@ async function run(chromium, state, parser, options, capability) {
           return {execution: "ok", reason: "previous_claim_unconfirmed", business: {claim: "unknown"}};
         const ids = await actions.discover(page, parser, current.html);
         if (!ids.reportClaimAllPoints) throw Error("claim_action_unavailable");
+        await pacing.pause(page, "action");
+        await common.guard(page);
         await options.journal.mark(key, "attempted");
+        trace.emit("journal.intent", {capability, state: "attempted"});
         try {
           await actions.request(page, "/earn", {method: "POST", headers: {
             Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
             "Next-Action": ids.reportClaimAllPoints,
             "Next-Router-State-Tree": parser.routerStateTree("earn"),
           }, body: "[]"});
-        } catch {} // Read back an uncertain request without replaying it.
+        } catch (error) { trace.failure("promotion.submit", error, {capability}); } // Reconcile without replay.
         current = await read();
         const after = current.raw.flyoutResult.pointClaimCardPromotion;
         const complete = after?.complete === true;
@@ -65,7 +71,10 @@ async function run(chromium, state, parser, options, capability) {
         }
         ids ||= await actions.discover(page, parser, current.html);
         if (!ids.reportActivity) throw Error("activity_action_unavailable");
+        await pacing.pause(page, "action");
+        await common.guard(page);
         await options.journal.mark(row.offerId, "attempted");
+        trace.emit("journal.intent", {capability, offer_ref: trace.reference(row.offerId), state: "attempted"});
         try {
           await actions.request(page, "/earn", {method: "POST", headers: {
             Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
@@ -74,7 +83,7 @@ async function run(chromium, state, parser, options, capability) {
           }, body: JSON.stringify([offer.hash, offer.activityType || 11,
             {offerid: row.offerId, isPromotional: offer.isPromotional ? true : "$undefined",
               timezoneOffset}])});
-        } catch {}
+        } catch (error) { trace.failure("promotion.submit", error, {capability, offer_ref: trace.reference(row.offerId)}); }
         let complete = false;
         for (let i = 0; i < 3; i++) {
           await page.waitForTimeout(3000);
@@ -83,6 +92,7 @@ async function run(chromium, state, parser, options, capability) {
           if (complete) break;
         }
         if (complete) await options.journal.mark(row.offerId, "confirmed");
+        trace.emit("promotion.readback", {capability, offer_ref: trace.reference(row.offerId), complete});
         results.push(complete ? "complete" : "unknown");
       }
       const status = !jobs.length ? "not_applicable" :
@@ -92,6 +102,7 @@ async function run(chromium, state, parser, options, capability) {
         business: {more_promotions: status}};
     });
   } catch (error) {
+    trace.failure("promotion.submit", error, {capability});
     options.onError?.(error);
     common.recordObstacle(error, {capability, phase: "promotions"});
     return {execution: "failed", reason: error.details?.code ||

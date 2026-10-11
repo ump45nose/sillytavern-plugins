@@ -3,6 +3,8 @@
 const fs = require("node:fs"),
   path = require("node:path");
 const common = require("./browser_common.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 const { publish } = require("../../common/result.cjs");
 const {metric, validateDetails} = require("../../common/details.cjs");
 const ORDER = Object.freeze([
@@ -45,6 +47,8 @@ const STOP = new Set([
   "app_token_expired_or_scope_changed",
   "app_rate_limited",
   "app_authorization_unavailable",
+  "app_authorization_timeout",
+  "app_authorization_navigation_failed",
 ]);
 const PUBLIC_FAILURES = new Set([
   ...STOP, "app_token_invalid", "app_token_exchange_failed",
@@ -136,7 +140,7 @@ function deliveryDetails(snapshots, stages) {
 async function execute(
   value,
   bindings,
-  { snapshot, onProgress = async () => {} } = {},
+  { snapshot, onProgress = async () => {}, betweenStages = async () => {} } = {},
 ) {
   const enabled = manifest(value),
     stages = {},
@@ -156,6 +160,7 @@ async function execute(
     }
   }
   async function observe(phase) {
+    trace.emit("snapshot", {phase, ...trace.resources()}, "start");
     if (!snapshot) {
       snapshots[phase] = {
         execution: "failed",
@@ -165,18 +170,24 @@ async function execute(
       return;
     }
     try {
-      snapshots[phase] = validateOutput(await snapshot());
-    } catch {
+      snapshots[phase] = validateOutput(await trace.withPhase(phase, snapshot));
+    } catch (error) {
+      trace.failure("snapshot", error, {phase});
       snapshots[phase] = {
         execution: "failed",
         reason: "snapshot_unavailable",
         business: { snapshot: "unknown" },
       };
     }
+    trace.emit("snapshot", {phase, execution: snapshots[phase].execution,
+      reason: snapshots[phase].reason, business: snapshots[phase].business}, "finish");
   }
   await observe("before");
   checkStop(snapshots.before);
   for (const capability of enabled) {
+    if (!stopped && Object.keys(stages).length) await trace.withPhase(capability, betweenStages);
+    const stageStart = performance.now();
+    trace.emit("stage", {capability, ...trace.resources()}, "start");
     let out;
     if (stopped && ["complete", "not_applicable"].includes(
       snapshots.before.business[capability]))
@@ -196,15 +207,20 @@ async function execute(
       };
     else
       try {
-        out = validateOutput(await bindings[capability]());
+        out = validateOutput(await trace.withPhase(capability, bindings[capability]));
       } catch (error) {
+        trace.failure("stage", error, {capability});
         out = {
           execution: "failed",
           reason: PUBLIC_FAILURES.has(error.message) ? error.message : "capability_failed",
           business: { [capability]: "unknown" },
+          details: {metrics: {}, items: [{id: capability + "_diagnostic", name: capability,
+            status: "unknown", reason: PUBLIC_FAILURES.has(error.message) ? error.message : "capability_failed"}]},
         };
       }
     stages[capability] = out;
+    trace.emit("stage", {capability, execution: out.execution, reason: out.reason,
+      business: out.business, duration_ms: Math.round(performance.now()-stageStart), ...trace.resources()}, "finish");
     business[capability] = overall(out);
     failed ||= out.execution !== "ok";
     checkStop(out);
@@ -262,6 +278,7 @@ function createBindings({
   enabled,
 }) {
   const requested = new Set(manifest({ schema_version: 1, enabled }));
+  const pacing = interaction.create(config.interaction);
   const desktopRequired = [
     "daily",
     "extra",
@@ -302,12 +319,14 @@ function createBindings({
     region: config.region,
     contextOptions: config.desktop,
     onVerifiedState: preserve("desktop"),
+    pacing,
   };
   const mobile = {
     proxy,
     region: config.region,
     contextOptions: config.mobile,
     onVerifiedState: preserve("mobile"),
+    pacing,
   };
   const journal = (name) =>
     require("./punchcards.cjs").journal(path.join(stateDir, name));
@@ -375,12 +394,14 @@ function createBindings({
           host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
       }),
   };
-  let appSession;
+  let appSession, appSessionPromise;
   const appClient = host.appClient || (async () => {
-    appSession ||= await require("./app_auth.cjs").create({
+    // Share even a rejected authorization attempt within this invocation. A
+    // snapshot failure must not launch the same OAuth flow again at each stage.
+    appSession = await (appSessionPromise ||= require("./app_auth.cjs").create({
       stateDir, proxy, state: state("desktop"), chromium, config,
       onVerifiedState: preserve("desktop"),
-    });
+    }));
     return appSession.client;
   });
   const snapshot = async () => {
@@ -396,7 +417,8 @@ function createBindings({
         out.details ||= {metrics: {}, items: []};
         out.details.metrics.app_promotions = metric("count",
           rows.filter(row => row.complete === true).length, rows.length);
-      } catch {
+      } catch (error) {
+        trace.failure("app.snapshot", error);
         out.business.app_promotions = "unknown";
       }
     }
@@ -416,13 +438,16 @@ function createBindings({
         const app = require("./app.cjs");
         const out =
           method === "runPromotions"
-            ? await app[method](client, journal("app-journal.json"))
+            ? await app[method](client, journal("app-journal.json"), {beforeSubmit: () => pacing.pause(null, "action")})
             : await app[method](
                 client,
                 (method === "submitDaily" ? app.checkinJournal : app.dailyJournal)(stateDir,
                   host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
                 host.businessDate || process.env.BENEFITS_BUSINESS_DATE,
-                method === "submitDaily" ? {observeDaily: browserSnapshot} : {},
+                method === "submitDaily" ? {observeDaily: browserSnapshot,
+                  beforeSubmit: () => pacing.pause(null, "action")} : {
+                    beforeSubmit: () => pacing.pause(null, "action"),
+                    wait: () => pacing.pause(null, "reading", 30000)},
               );
         return {
           ...out,
@@ -435,6 +460,7 @@ function createBindings({
       Object.entries(bindings).filter(([key]) => requested.has(key)),
     ),
     snapshot,
+    betweenStages: () => pacing.pause(null, "stage"),
     close: async () => { if (appSession) await appSession.close(); },
   };
 }
@@ -447,6 +473,8 @@ function writeReport(file, value, max = 65536) {
 }
 async function main() {
   let out, confirmedBusiness, confirmedDetails;
+  const start = performance.now();
+  trace.emit("run", {...trace.resources()}, "start");
   try {
     const stateDir = process.env.BENEFITS_STATE_DIR;
     let requested;
@@ -482,6 +510,7 @@ async function main() {
     );
     try { out = await execute(requested, native.bindings, {
       snapshot: native.snapshot,
+      betweenStages: native.betweenStages,
       onProgress: (value) => {
         // Publish the existing protocol first: the runner can recover confirmed
         // same-run business even if a later stage or report write never returns.
@@ -493,6 +522,7 @@ async function main() {
     }); } finally { await native.close(); }
     writeReport(reportPath, out.report);
   } catch (error) {
+    trace.failure("run", error);
     out = {
       execution: "failed",
       reason: [
@@ -510,6 +540,9 @@ async function main() {
     };
   }
   publish(out.execution, out.reason, out.business, out.details);
+  trace.emit("run", {execution: out.execution, reason: out.reason, business: out.business,
+    duration_ms: Math.round(performance.now()-start), ...trace.resources()}, "finish");
+  trace.close();
 }
 if (require.main === module) main();
 module.exports = {

@@ -5,6 +5,8 @@ const fs = require("node:fs"),
   path = require("node:path");
 const common = require("./browser_common.cjs"),
   actions = require("./server_actions.cjs");
+const trace = require("./telemetry.cjs");
+const interaction = require("./interaction.cjs");
 const { loadParser } = require("./parser_loader.cjs");
 const { publish } = require("../../common/result.cjs");
 const PARENT = "WW_pcparent_redesign_existinguser_onboarding_offer_punchcard";
@@ -111,9 +113,11 @@ async function execute(driver, { autoClaim = false, timezoneOffset = 0 } = {}) {
     // Deterministic preflight failures must not create uncertain-write evidence.
     await driver.prepare?.(child, timezoneOffset);
     await driver.journal.mark(child.offerId, "attempted");
+    trace.emit("journal.intent", {capability: "punchcards", offer_ref: trace.reference(child.offerId), state: "attempted"});
     try {
       await driver.submit(child, timezoneOffset);
     } catch (error) {
+      trace.failure("promotion.submit", error, {capability: "punchcards", offer_ref: trace.reference(child.offerId)});
       if (error.message === "human_required") throw error;
     } // Reconcile timeout/ACK alike.
     let complete = false;
@@ -126,12 +130,14 @@ async function execute(driver, { autoClaim = false, timezoneOffset = 0 } = {}) {
           fresh.filter((c) => c.offerId === child.offerId).length === 1 &&
           fresh.find((c) => c.offerId === child.offerId)?.isCompleted === true;
       } catch (error) {
+        trace.failure("promotion.readback", error, {capability: "punchcards", offer_ref: trace.reference(child.offerId), attempt: i + 1});
         if (error.message === "human_required") throw error;
       }
       if (complete) break;
       if (i < 2) await driver.wait();
     }
     if (complete) await driver.journal.mark(child.offerId, "confirmed");
+    trace.emit("promotion.readback", {capability: "punchcards", offer_ref: trace.reference(child.offerId), complete});
     outcomes.push(complete ? "complete" : "unknown");
   }
   const current = await driver.inventory();
@@ -149,6 +155,7 @@ async function execute(driver, { autoClaim = false, timezoneOffset = 0 } = {}) {
   };
 }
 async function run(chromium, state, parser, options = {}, deps = common) {
+  const pacing = options.pacing || interaction.create(options.interaction);
   try {
     return await deps.withBrowser(
       chromium,
@@ -226,6 +233,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
               child,
               offset,
             );
+            await pacing.pause(page, "action");
             await deps.guard(page);
           },
           async submit(child, offset) {
@@ -250,6 +258,7 @@ async function run(chromium, state, parser, options = {}, deps = common) {
       },
     );
   } catch (error) {
+    trace.failure("promotion.submit", error, {capability: "punchcards"});
     deps.recordObstacle(error, {
       capability: "punchcards",
       phase: "onboarding",
@@ -280,10 +289,12 @@ async function main() {
         proxy: process.env.REWARDS_PROXY,
         autoClaim: config.punchcards?.autoClaim === true,
         timezoneOffset: config.timezoneOffset,
+        interaction: config.interaction,
         journal: journal(path.join(dir, "punchcard-journal.json")),
       },
     );
-  } catch {
+  } catch (error) {
+    trace.failure("run", error, {capability: "punchcards"});
     out = {
       execution: "failed",
       reason: "punchcard_configuration_unavailable",
