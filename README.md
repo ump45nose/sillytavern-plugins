@@ -35,6 +35,12 @@
 
 1.1.2 用仅含兼容清单的 ZIP 通过网页上传原 ID，刷新后仍显示默认图标；1.1.3 恢复两份同步清单，保留官方 PNG 和原 App 映射。两种格式均未解决安装后的图标回退。
 
+## 文档评论现状
+
+官方独立的[钉钉文档互动服务](https://aihub.dingtalk.com/#/mcp-market/detail?mcpId=9784&detailType=marketMcpDetail)（`doc-comment`）提供评论读取工具。2026-10-10 经 MCPHub 完成授权后，用户实测两份文档均返回 `CLI_ORG_NOT_AUTHORIZED`，提示组织尚未开启 CLI 调用权限。这项组织检查也适用于直接 MCP 调用；同一组织改用 CLI 仍需管理员开启权限。评论尚未读到，不能判断内容或数量；正文中的批注锚点也不等于完整评论。
+
+已按要求移除新增的 `dingtalk-doc-comment` 服务及本地接入配置。原十个钉钉服务、北向 OAuth 和 App 身份保留。
+
 ## NAS Tunnel 接入
 
 公网 MCP 地址仍为 `https://mcphub-home.172906573.xyz/mcp`。`mcp.app.yaml` 使用公共基座 existing 模式：共享 Cloudflare Tunnel 直接转发至现有 MCPHub，不替换官方钉钉服务或北向 OAuth，不移动 `/opt/mcphub/data`，不重建账号授权。
