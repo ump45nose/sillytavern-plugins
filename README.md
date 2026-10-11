@@ -4,7 +4,7 @@ ump45nose 的个人技能，供 Codex 和 Claude Code 使用。
 
 | Skill | 用途 |
 | --- | --- |
-| [figma-make](skills/figma-make/SKILL.md) | 内置浏览器提交 Figma Make 预填提示词，经 MCP 接回代码与资源 |
+| [figma-make](skills/figma-make/SKILL.md) | 优先用 Browser Relay 提交 Make 提示词，桌面应用后备，经 MCP 接回代码与资源；附实测接口 |
 | [github-pr-contributor](skills/github-pr-contributor/SKILL.md) | 检索、准备、验证并提交 GitHub Pull Request |
 | [mcp-member-contributor](skills/mcp-member-contributor/SKILL.md) | 筛选、准备并提交 MCP 官方社区贡献 |
 

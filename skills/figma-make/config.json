@@ -7,6 +7,11 @@
     "backend": "macos-keychain",
     "service": "codex.skill.figma-make"
   },
+  "browser": {
+    "preferred": "browser-relay",
+    "fallback": "figma-desktop",
+    "relayUrl": "http://127.0.0.1:18795"
+  },
   "mcp": {
     "url": "https://mcp.figma.com/mcp",
     "authentication": "existing-oauth"
