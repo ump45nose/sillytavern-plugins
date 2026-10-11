@@ -3,14 +3,14 @@ import SwiftUI
 
 extension HubModel {
     var displayRequestKey: String { [dayKey(displayDate), displayModules.joined(separator: ","), String(trendDays)].joined(separator: "|") }
-    var pageRequestKey: String { [section, overviewMode, displayRequestKey, timelineDomain, reportMode, networkSource].joined(separator: "|") }
-    var isDailyReportPage: Bool { section == "reports" && reportMode == "daily" }
-    var isTimelinePage: Bool { section == "archive" || section == "recordings" || (section == "reports" && reportMode == "execution") || (section == "overview" && overviewMode == "recent") }
+    var pageRequestKey: String { [section, overviewMode, displayRequestKey, timelineDomain, reportMode, networkSource, documentSource, isDocumentPage ? query : ""].joined(separator: "|") }
+    var isDocumentPage: Bool { ["notes", "reports", "documents"].contains(section) }
+    var isTimelinePage: Bool { section == "archive" || section == "recordings" || (section == "overview" && overviewMode == "recent") }
     var dashboardMatchesPage: Bool { dashboard != nil && displayResultKey == displayRequestKey }
     var pageLoading: Bool {
         if section == "network" { return networkLoading }
         if section == "status" { return statusLoading }
-        if isDailyReportPage { return dailyReportLoading }
+        if isDocumentPage { return documents.loading }
         if isTimelinePage { return timelineLoading }
         if section == "agenda" { return googleLoading }
         return displayLoading
@@ -18,23 +18,27 @@ extension HubModel {
     var pageHasContent: Bool {
         if section == "network" { return networkMatchesPage }
         if section == "status" { return !sources.isEmpty || !agents.isEmpty }
-        if isDailyReportPage { return !dailyReports.isEmpty }
+        if isDocumentPage { return !documents.items.isEmpty }
         if isTimelinePage { return !timeline.isEmpty }
         if section == "agenda" { return googleSnapshot != nil }
         return dashboardMatchesPage
     }
     var pageLoadingMessage: String {
         if section == "status" { return "正在检查采集与来源状态…" }
-        if isDailyReportPage { return "正在读取已归档的日报正文…" }
+        if isDocumentPage { return "正在读取文档列表…" }
         if isTimelinePage { return timeline.isEmpty ? "正在读取归档内容…" : "正在加载更多内容…" }
         if section == "agenda" { return "正在同步日程与任务…" }
         return "正在加载你的信息…"
     }
     func loadCurrentPage() async {
         error = nil
-        if section == "status" { await refreshStatus() }
+        if section == "status" {
+            async let collection: Void = refreshStatus()
+            async let processing: Void = refreshProcessing()
+            _ = await (collection, processing)
+        }
         else if section == "network" { await loadNetwork() }
-        else if isDailyReportPage { await loadDailyReports() }
+        else if isDocumentPage { await loadDocuments() }
         else if isTimelinePage { await loadTimeline() }
         else if section == "agenda" { await refreshGoogle() }
         else {
@@ -102,26 +106,6 @@ extension HubModel {
             timeline = reset ? page.items : timeline + page.items
             timelineCursor = page.next_cursor
         } catch { if generation == timelineGeneration && !Task.isCancelled { self.error = error.localizedDescription } }
-    }
-    func loadDailyReports(reset: Bool = true) async {
-        dailyReportGeneration += 1
-        let generation = dailyReportGeneration
-        let offset = reset ? 0 : dailyReportOffset
-        guard let offset else { return }
-        dailyReportLoading = true
-        defer { if generation == dailyReportGeneration { dailyReportLoading = false } }
-        if reset { dailyReports = []; dailyReportOffset = nil }
-        do {
-            // Existing archive API and original memo records; no source writes or migration.
-            let page: RecordPage = try await api.get("api/v1/browse", query: [
-                URLQueryItem(name: "source", value: "memos"), URLQueryItem(name: "kind", value: "memo"),
-                URLQueryItem(name: "query", value: "#日报"), URLQueryItem(name: "limit", value: "100"),
-                URLQueryItem(name: "offset", value: String(offset))])
-            guard generation == dailyReportGeneration else { return }
-            let reports = page.records.filter { $0.dailyReportDate != nil }
-            dailyReports = reset ? reports : dailyReports + reports
-            dailyReportOffset = page.next_offset
-        } catch { if generation == dailyReportGeneration && !Task.isCancelled { self.error = error.localizedDescription } }
     }
     func refreshGoogle() async {
         googleGeneration += 1

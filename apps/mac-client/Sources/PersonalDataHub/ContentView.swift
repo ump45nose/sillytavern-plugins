@@ -19,11 +19,13 @@ struct ContentView: View {
     @State private var settings = false
     @State private var customize = false
     @State private var search = false
+    @State private var readingSearch = true
     @State private var contacts: [DisplayCard] = []
     @FocusState private var searchFocused: Bool
     private let navigation = [("overview", "概览", "square.grid.2x2"), ("agenda", "日程与任务", "calendar"),
                               ("health", "健康", "heart"), ("social", "社交", "person.2"),
-                              ("reports", "日报", "doc.text"), ("recordings", "录音", "waveform"),
+                              ("notes", "Memos 笔记", "note.text"), ("reports", "日报", "doc.text"),
+                              ("documents", "全文阅读", "book"), ("recordings", "录音", "waveform"),
                               ("archive", "内容档案", "tray.full"), ("network", "网络流量", "network"), ("finance", "财务与用量", "chart.bar")]
     var body: some View {
         HStack(spacing: 0) {
@@ -36,9 +38,10 @@ struct ContentView: View {
                 if search {
                     HStack {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("搜索归档标题与内容摘要", text: $model.query).focused($searchFocused)
-                            .textFieldStyle(.plain).onSubmit { model.section = "archive"; Task { await model.loadTimeline() } }
-                        Button("搜索") { model.section = "archive"; Task { await model.loadTimeline() } }
+                        Picker("搜索范围", selection: $readingSearch) { Text("全文阅读").tag(true); Text("归档摘要").tag(false) }.frame(width: 130)
+                        TextField(readingSearch ? "搜索完整正文" : "搜索归档标题与摘要", text: $model.query).focused($searchFocused)
+                            .textFieldStyle(.plain).onSubmit { submitSearch() }
+                        Button("搜索") { submitSearch() }
                         Button { search = false; model.query = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
                     }.padding(16).background(.regularMaterial)
                 }
@@ -48,7 +51,7 @@ struct ContentView: View {
                         else if model.section == "status" { statusPage }
                         else if model.section == "agenda" { AgendaView(model: model) }
                         else if model.section == "network" { NetworkView(model: model) }
-                        else if model.section == "reports" { reportsPage }
+                        else if model.isDocumentPage { DocumentListView(model: model, list: model.documents) }
                         else if model.section == "recordings" { timelinePage }
                         else if model.section == "archive" || (model.section == "overview" && model.overviewMode == "recent") { timelinePage }
                         else if model.section == "overview" && model.overviewMode == "trends" { trendsPage }
@@ -66,11 +69,18 @@ struct ContentView: View {
         .sheet(isPresented: $settings) { SettingsView(model: model) }
         .sheet(isPresented: $customize) { CustomizeView(model: model) }
         .sheet(isPresented: $model.showingDetail) { ReadableDetailView(model: model) }
+        .sheet(item: $model.readingSelection) { selection in DocumentReaderView(model: model, selection: selection) }
         .sheet(isPresented: $model.taskEditor) { TaskEditor(model: model) }
         .sheet(isPresented: $model.eventEditor) { EventEditor(model: model) }
         .task(id: model.pageRequestKey) { await model.loadCurrentPage() }
         .onReceive(NotificationCenter.default.publisher(for: .hubSearch)) { _ in search = true; searchFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .hubSettings)) { _ in settings = true }
+    }
+    private func submitSearch() {
+        if readingSearch {
+            if !model.isDocumentPage { model.section = "documents" }
+            Task { await model.loadDocuments() }
+        } else { model.section = "archive"; Task { await model.loadTimeline() } }
     }
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -81,8 +91,9 @@ struct ContentView: View {
                     Text("你的信息，尽在此处").font(.caption).foregroundStyle(.secondary)
                 }
             }.padding(.horizontal, 20).padding(.top, 28).padding(.bottom, 28)
-            ForEach(navigation, id: \.0) { item in nav(item.0, item.1, item.2) }
-            Spacer()
+            ScrollView {
+                VStack(spacing: 0) { ForEach(navigation, id: \.0) { item in nav(item.0, item.1, item.2) } }
+            }
             Divider().padding(.horizontal, 16).padding(.bottom, 12)
             nav("status", "采集状态", "arrow.triangle.2.circlepath")
             if model.collectionNeedsAuthorization {
@@ -119,7 +130,7 @@ struct ContentView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer()
-            if !["archive", "status", "reports", "recordings"].contains(model.section) {
+            if !["archive", "status", "reports", "notes", "documents", "recordings"].contains(model.section) {
                 DatePicker("", selection: $model.displayDate, displayedComponents: .date).labelsHidden().frame(width: 120)
                 Button("今天") { model.displayDate = Date() }
             }
@@ -305,38 +316,6 @@ struct ContentView: View {
             }
         }
     }
-    private var reportsPage: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Picker("报告类型", selection: $model.reportMode) {
-                Text("日报正文").tag("daily")
-                Text("执行记录").tag("execution")
-            }.pickerStyle(.segmented).frame(width: 260)
-            if model.reportMode == "execution" {
-                Text("定时任务的运行日志；部分源文件仅记录执行状态。").font(.caption).foregroundStyle(.secondary)
-                timelinePage
-            } else {
-                Text("读取已归档的 Memos 日报，打开可查看完整正文。").font(.caption).foregroundStyle(.secondary)
-                if let latest = model.dailyReports.compactMap(\.dailyReportDate).max() {
-                    Text("最新已归档日报：\(latest)").font(.caption).foregroundStyle(.secondary)
-                }
-                if model.dailyReports.isEmpty && !model.dailyReportLoading { empty("尚无已归档的日报正文", "doc.text") }
-                ForEach(model.dailyReports) { report in
-                    Button { model.selectedID = report.id; model.showingDetail = true; Task { await model.select(report.id) } } label: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(report.displayTitle).font(.headline)
-                            Text(report.displayPreview).font(.subheadline).foregroundStyle(.secondary).lineLimit(4)
-                            Label("Memos · 查看完整正文", systemImage: "doc.text").font(.caption).foregroundStyle(.indigo)
-                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-                    }.buttonStyle(.plain)
-                }
-                if model.dailyReportOffset != nil {
-                    Button(model.dailyReportLoading ? "正在加载…" : "查看更多日报") { Task { await model.loadDailyReports(reset: false) } }
-                        .disabled(model.dailyReportLoading).frame(maxWidth: .infinity)
-                }
-            }
-        }
-    }
     private var statusPage: some View {
         VStack(spacing: 16) {
             HubCard(title: "本机采集", icon: "desktopcomputer") {
@@ -354,6 +333,7 @@ struct ContentView: View {
                     }.padding(.vertical, 6)
                 }
             }
+            ProcessingStatusView(status: model.processingStatus, error: model.processingError)
         }
     }
     private func empty(_ text: String, _ icon: String) -> some View {

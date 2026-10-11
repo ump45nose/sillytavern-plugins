@@ -53,9 +53,11 @@ final class HubModel: ObservableObject {
     @Published var displayResultKey: String?
     @Published var timelineLoading = false
     @Published var reportMode = "daily"
-    @Published var dailyReports: [RecordCard] = []
-    @Published var dailyReportOffset: Int?
-    @Published var dailyReportLoading = false
+    @Published var documentSource = ""
+    @Published var readingSelection: DocumentSelection?
+    @Published var processingStatus: ProcessingStatus?
+    @Published var processingError: String?
+    let documents = DocumentListModel()
     @Published var googleLoading = false
     @Published var showingDetail = false
     @Published var taskEditor = false
@@ -73,14 +75,38 @@ final class HubModel: ObservableObject {
     var displayGeneration = 0
     var timelineGeneration = 0
     var googleGeneration = 0
-    var dailyReportGeneration = 0
+    private var processingGeneration = 0
     private var browseGeneration = 0
     private var detailGeneration = 0
     private var statusGeneration = 0
     private var timer: AnyCancellable?
+    private var documentsSubscription: AnyCancellable?
+
+    init() {
+        documentsSubscription = documents.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    }
 
     var api: HubAPI { HubAPI(connection) }
     var recordCount: Int { sources.reduce(0) { $0 + $1.count } }
+
+    var documentFilter: DocumentFilter {
+        if section == "notes" { return DocumentFilter(source: "memos", variant: "note", query: query) }
+        if section == "reports" { return DocumentFilter(variant: reportMode == "execution" ? "execution_log" : "daily_review", query: query) }
+        return DocumentFilter(source: documentSource, query: query)
+    }
+    func loadDocuments(reset: Bool = true) async {
+        await documents.load(api: api, filter: documentFilter, reset: reset)
+    }
+    func refreshProcessing() async {
+        processingGeneration += 1; let ticket = processingGeneration
+        do {
+            let status: ProcessingStatus = try await api.get("api/v1/processing/status")
+            guard ticket == processingGeneration, !Task.isCancelled else { return }
+            processingStatus = status; processingError = nil
+        } catch {
+            if ticket == processingGeneration, !Task.isCancelled { processingError = error.localizedDescription }
+        }
+    }
 
     func start() {
         Task { await refreshStatus() }

@@ -48,6 +48,7 @@ struct Connection: Codable {
 
 enum HubError: LocalizedError {
     case invalidEndpoint, credentials, keychain, http(Int), response, integrity, redirect, readTimeout, network
+    case contentChanged, contentRemoved
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint: return "请输入有效的 HTTPS 服务地址。"
@@ -55,6 +56,8 @@ enum HubError: LocalizedError {
         case .keychain: return "无法保存到系统钥匙串。"
         case .http(401): return "访问凭据无效，请检查连接设置。"
         case .http(404): return "这条信息或附件已被删除。"
+        case .contentChanged: return "正文已更新，请重新读取当前版本。"
+        case .contentRemoved: return "这份内容已被删除。"
         case .http(let code): return "服务暂时无法完成请求（\(code)）。"
         case .response: return "服务返回了无法读取的数据。"
         case .integrity: return "附件校验失败，未保存文件。"
@@ -79,8 +82,12 @@ struct HubAPI {
         config.timeoutIntervalForResource = 600
         return URLSession(configuration: config, delegate: NoRedirect(), delegateQueue: nil)
     }()
-    var session: URLSession { Self.sharedSession }
-    init(_ connection: Connection) { self.connection = connection }
+    let session: URLSession
+    private let tokenProvider: () throws -> String
+    init(_ connection: Connection, session: URLSession = Self.sharedSession,
+         tokenProvider: @escaping () throws -> String = Connection.token) {
+        self.connection = connection; self.session = session; self.tokenProvider = tokenProvider
+    }
 
     func request(_ path: String, query: [URLQueryItem] = []) throws -> URLRequest {
         let base = try connection.baseURL()
@@ -89,7 +96,8 @@ struct HubAPI {
         if !query.isEmpty { components.queryItems = query }
         guard let endpoint = components.url else { throw HubError.invalidEndpoint }
         var request = URLRequest(url: endpoint)
-        request.setValue("Bearer " + (try Connection.token()), forHTTPHeaderField: "Authorization")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Bearer " + (try tokenProvider()), forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         return request
     }
@@ -104,6 +112,11 @@ struct HubAPI {
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await session.data(for: request(path, query: query)) }
         catch { throw Self.readError(error) }
+        if let http = response as? HTTPURLResponse,
+           let detail = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            if http.statusCode == 409, detail["detail"] as? String == "content_changed" { throw HubError.contentChanged }
+            if http.statusCode == 404, detail["detail"] as? String == "content_removed" { throw HubError.contentRemoved }
+        }
         try check(response)
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw HubError.response }
