@@ -16,6 +16,20 @@
 
 首次切换失败时脚本恢复旧容器及本次共享配置和 DNS；新版数据与 OAuth 不覆盖原目录。正式投入使用后禁止重新执行首次迁移或用 1.4.1 打开 v5。常规代码回滚使用兼容 v5 的镜像，保留当前业务数据和 OAuth 状态；数据恢复单独处理，不能自动倒灌旧库。
 
+## 收件人策略
+
+2026-10-09 已通过上游 CLI 将 managed 策略的 `allowed_recipients` 设置为 `["*"]`（策略修订 5 → 6），允许向所有有效邮件地址发送；同一策略也用于转发，以及草稿、保存邮件中的收件人、抄送和密送检查。四个既有邮箱均有发信能力，其他策略保持原值。策略保存在 `email-mcp-data` 业务卷中，每次调用读取当前值，无需重建镜像或重启服务。
+
+检查当前修订后再更新，`*` 必须用引号避免 shell 展开：
+
+```bash
+docker exec mcp-platform-email-mcp-1 mcp-email-server config policy --json
+docker exec mcp-platform-email-mcp-1 mcp-email-server config update-policy \
+  --expected-revision <当前修订号> --allowed-recipients '*' --json
+```
+
+空收件人列表表示禁止所有收件人。后续收窄策略应使用当前修订和所需地址或 glob 模式调用同一 CLI；只更新收件人字段，不恢复整个数据库。此次变更前后策略和验证结果保存在仓库外的私有 runtime `email-mcp/policy-changes/` 下，身份、密钥、业务数据和 OAuth 状态沿用现有配置。
+
 ## GPT Web
 
 在已登录的 ChatGPT 网页 Plugins 页面，使用“添加 → 创建自定义 MCP 服务器”，填写正式清单中的展示名称“邮件”、描述、`https://email-home.172906573.xyz/mcp`，身份验证选择 OAuth。禁止使用 Plugin Creator，不能用 ZIP 保存结果代替网页注册。没有复用其他 App，也不生成占位身份。

@@ -9,6 +9,21 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
+DEFAULT_CLIENT_REDIRECT_URIS = (
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+    "https://chatgpt.com/*",
+    "https://grok.com/*",
+    "https://*.grok.com/*",
+    "grokbot://mcp/oauth/callback",
+    "https://www.cursor.com/agents/mcp/oauth/callback",
+    "https://cursor.com/agents/mcp/oauth/callback",
+    "cursor://anysphere.cursor-mcp/oauth/callback",
+    "cursor://anysphere.cursor-mcp/oauth/return",
+    "https://claude.ai/api/mcp/auth_callback",
+    "https://claude.com/api/mcp/auth_callback",
+)
+
 
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -31,9 +46,9 @@ class RuntimeConfig(BaseModel):
     authorized_usernames: set[str] = Field(default_factory=set)
     read_only_usernames: set[str] = Field(default_factory=set)
     execute_usernames: set[str] = Field(default_factory=set)
-    client_redirect_uris: list[str] = Field(default_factory=lambda: [
-        "http://localhost:*", "http://127.0.0.1:*", "https://chatgpt.com/*",
-    ])
+    client_redirect_uris: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_CLIENT_REDIRECT_URIS)
+    )
     allowed_hosts: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
     allowed_origins: list[str] = Field(default_factory=lambda: ["https://chatgpt.com"])
     proxy_sni_compatibility: bool = False

@@ -41,6 +41,30 @@ app = create_http_app(server, config)
 
 权限 `read`、`write`、`execute` 是业务权限，来自已验证的上游用户名；不是客户端自行声明的身份，也不会改变现有 OIDC identity scopes。执行权限需额外填写 `OIDC_EXECUTE_USERNAMES`，只读用户不能写入或执行。
 
+## 客户端 OAuth 回调
+
+公共运行时默认允许 ChatGPT、Grok、Grok Bot 使用的 Grok 域名、Cursor 和 Claude 回调。客户端连接现有公网 `/mcp` 地址，继续经过原有 OIDC 登录、用户授权和业务权限校验。
+
+| 客户端 | 默认允许的回调 |
+| --- | --- |
+| ChatGPT | `https://chatgpt.com/*` |
+| Grok | `https://grok.com/*`、`https://*.grok.com/*` |
+| Grok Bot | 用户本轮实际回调 `http://localhost:8787/callback`，以及包内的 `grokbot://mcp/oauth/callback`；浏览器流程也覆盖 Grok 域名及 Cursor 网页回调 |
+| Cursor 网页 / Agents | `https://www.cursor.com/agents/mcp/oauth/callback`、同路径的 `cursor.com` 地址 |
+| Cursor 桌面 | 本机回环地址，以及 `cursor://anysphere.cursor-mcp/oauth/callback`、`cursor://anysphere.cursor-mcp/oauth/return` |
+| Claude 网页 / Desktop / Cowork | `https://claude.ai/api/mcp/auth_callback`、`https://claude.com/api/mcp/auth_callback` |
+| Claude Code 等本机客户端 | `http://localhost:*`、`http://127.0.0.1:*` |
+
+Cursor 的网页和本机地址见[官方 MCP 文档](https://cursor.com/docs/context/mcp#static-redirect-url)，Claude 地址见[官方认证文档](https://claude.com/docs/connectors/building/authentication)。Grok 的允许项按域名匹配，不固定具体回调路径。Grok Bot 深链及 Cursor `/oauth/return` 已从 Mac 安装的 Grok Bot 0.68.1 的 `app.asar` 中确认；只放行相应协议主机和路径。
+
+`ALLOWED_CLIENT_REDIRECT_URIS` 为逗号分隔的显式覆盖，**替换整份默认列表**。已有服务设置了此变量时，需要在原私有 env 中补入所需回调；保留原有条目。远程工作台的独立网关沿用原 `CLIENT_REDIRECT_URIS`。这些是客户端返回地址，Authelia 的服务端 `/auth/callback` 无需修改。
+
+仅放行回调不代表各客户端已完成登录或工具发现。默认校验继续拒绝其他域名、HTTP 公网回调和错误的 Cursor 协议主机；PKCE、CIMD 和 JWT 校验仍由原 OAuth 提供方处理。
+
+2026-10-09 已将列表同步到 NAS 的 CRM、邮件、用量统计、Media OAuth 网关和远程工作台的原私有 env，保留既有回调条目。仅更新前四个 Compose 服务和远程网关进程，镜像、挂载、权限及 OAuth 状态保持原配置；远程执行器继续运行。健康、匿名 initialize 401、OAuth 发现、运行时回调匹配及已有授权只读调用通过；26 项针对性测试通过。启动检查为 `missing=[]`、`active_unplanned=[]`、`stopped_planned=[]`。
+
+最新私有变更／回退记录位于 `/vol2/1000/Docker/stacks/mcp-platform/runtime/_client-redirect-policy/20261009-grokbot-confirmed/journal.json`，其 `previous_journal` 指向首轮域名／回调扩展记录，其中含原 env，仅供宿主机管理员读取。完整回退须在共享部署锁内从最新记录向前按摘要比较恢复本次 env，再只重载对应入口；不恢复 OAuth 状态。新增平台尚未逐一完成真实登录验收。
+
 ## NAS 目标初始化
 
 目标文件默认位于 `~/.config/mcp-platform/targets.yaml`，凭据引用独立的 600 权限 env 文件，目录权限 700。`sudo` 下使用原登录用户的默认路径，也可通过全局 `--targets` 指定。
