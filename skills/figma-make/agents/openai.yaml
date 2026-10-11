@@ -1,0 +1,11 @@
+interface:
+  display_name: "Figma Make"
+  short_description: "用内置浏览器交给 Figma Make 生成，再经 MCP 接回代码和资源"
+  default_prompt: "用 $figma-make 整理需求，在 Figma Make 生成并接回项目实现。"
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "figma"
+      description: "Figma remote MCP for Make code and resources"
+      transport: "streamable_http"
+      url: "https://mcp.figma.com/mcp"

@@ -1,0 +1,14 @@
+{
+  "account": {
+    "email": "ywk13656817536@gmail.com",
+    "handle": "UMP45NOSE"
+  },
+  "credential": {
+    "backend": "macos-keychain",
+    "service": "codex.skill.figma-make"
+  },
+  "mcp": {
+    "url": "https://mcp.figma.com/mcp",
+    "authentication": "existing-oauth"
+  }
+}
