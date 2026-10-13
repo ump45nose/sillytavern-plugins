@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Recover named gateways whose Telegram adapters exhausted retries while the
+# parent process stayed alive. The system timer runs as root so it can read the
+# journal, while user-unit operations are explicitly executed as hermes.
+set -euo pipefail
+
+gateway_user="hermes"
+gateway_uid="$(id -u "$gateway_user")"
+gateway_runtime="/run/user/$gateway_uid"
+state_dir="/run/hermes-telegram-recovery"
+install -d -m 0700 "$state_dir"
+
+userctl() {
+  runuser -u "$gateway_user" -- env XDG_RUNTIME_DIR="$gateway_runtime" \
+    systemctl --user "$@"
+}
+
+for unit in hermes-gateway-lingjun.service hermes-gateway-companion.service; do
+  [[ "$(userctl is-active "$unit" 2>/dev/null)" == "active" ]] || continue
+  cursor_file="$state_dir/${unit}.cursor"
+
+  # Establish a current baseline on first run. Never replay old fatal records.
+  if [[ ! -s "$cursor_file" ]]; then
+    journalctl _UID="$gateway_uid" _SYSTEMD_USER_UNIT="$unit" \
+      -n 1 --show-cursor --no-pager 2>/dev/null \
+      | sed -n 's/^-- cursor: //p' >"$cursor_file.tmp" || true
+    [[ -s "$cursor_file.tmp" ]] && mv "$cursor_file.tmp" "$cursor_file"
+    rm -f "$cursor_file.tmp"
+    continue
+  fi
+
+  journal=$(journalctl _UID="$gateway_uid" _SYSTEMD_USER_UNIT="$unit" \
+    --no-pager -o cat \
+    --after-cursor "$(<"$cursor_file")" 2>/dev/null || true)
+  journalctl _UID="$gateway_uid" _SYSTEMD_USER_UNIT="$unit" \
+    -n 1 --show-cursor --no-pager 2>/dev/null \
+    | sed -n 's/^-- cursor: //p' >"$cursor_file.tmp" || true
+  [[ -s "$cursor_file.tmp" ]] && mv "$cursor_file.tmp" "$cursor_file"
+  rm -f "$cursor_file.tmp"
+
+  if grep -Fq 'Fatal telegram adapter error (telegram_network_error)' <<<"$journal"; then
+    logger -t hermes-telegram-recovery \
+      "Telegram adapter exhausted reconnect attempts; restarting $unit"
+    userctl restart "$unit"
+  fi
+done

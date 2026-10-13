@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically renew qBittorrent UPnP peer-port mapping
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=qbittorrent-portmap-renew.service
+
+[Install]
+WantedBy=timers.target

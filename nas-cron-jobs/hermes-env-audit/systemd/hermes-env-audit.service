@@ -1,0 +1,12 @@
+[Unit]
+Description=Audit Hermes profile env files for shared secrets
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+ExecStart=/usr/bin/python3 /home/yuwk/cron/scripts/hermes-env-audit.py
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true

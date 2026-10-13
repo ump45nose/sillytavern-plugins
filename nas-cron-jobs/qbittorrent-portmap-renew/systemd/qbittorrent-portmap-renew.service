@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew qBittorrent UPnP peer-port mapping
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/yuwk/cron/scripts/qbittorrent-portmap-renew

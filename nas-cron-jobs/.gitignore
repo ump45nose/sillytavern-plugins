@@ -1,0 +1,23 @@
+.env
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.json.partial
+ai-summary.json
+report.html
+__pycache__/
+*.pyc
+
+# Deployment-only credentials, identities, scheduler state and reports.
+.env.*
+*.local.json
+env/
+logs/
+backups/
+**/migration-backups/
+**/mcp-tokens/
+**/auth.json
+**/jobs.json
+**/output/

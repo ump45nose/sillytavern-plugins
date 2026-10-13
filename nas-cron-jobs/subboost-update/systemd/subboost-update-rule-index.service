@@ -1,0 +1,15 @@
+[Unit]
+Description=SubBoost rule-index refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yuwk
+Group=Users
+EnvironmentFile=/home/yuwk/cron/env/subboost-cron.env
+ExecStart=/home/yuwk/cron/scripts/subboost-cron rule-index
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only

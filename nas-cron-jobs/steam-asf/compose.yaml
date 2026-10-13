@@ -1,0 +1,39 @@
+name: automation
+services:
+  asf:
+    image: ghcr.io/justarchinet/archisteamfarm:6.3.10.3@sha256:446ef7f44cb7eba3aaa8b954fc62791f3bdd1a79c441d4cb39f59cac8a6986b9
+    container_name: benefits-steam-asf
+    user: 988:984
+    entrypoint:
+    - /bin/sh
+    - -c
+    - umask 077; exec dotnet /asf/ArchiSteamFarm.dll --no-restart --no-config-migrate
+    restart: unless-stopped
+    init: true
+    ports:
+    - 127.0.0.1:1242:1242
+    volumes:
+    - /vol2/1000/Docker/benefits-automation/steam-asf/config:/app/config
+    - /vol2/1000/Docker/benefits-automation/steam-asf/plugins:/app/plugins:ro
+    - /vol2/1000/Docker/benefits-automation/steam-asf/logs:/app/logs
+    environment:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      DOTNET_EnableDiagnostics: '0'
+      DOTNET_NOLOGO: 'true'
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: local
+      options:
+        max-size: 2m
+        max-file: '3'
+    labels:
+      com.centurylinklabs.watchtower.enable: 'false'
+networks:
+  default:
+    name: benefits-steam_default
+    external: true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SubBoost subscription refresh every 6 minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/6:00
+AccuracySec=15s
+Persistent=true
+Unit=subboost-update-subscriptions.service
+
+[Install]
+WantedBy=timers.target

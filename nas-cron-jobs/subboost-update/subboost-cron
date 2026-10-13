@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+  subscriptions)
+    path="/api/cron/update-subscriptions"
+    ;;
+  rule-index)
+    path="/api/cron/update-rule-index"
+    ;;
+  *)
+    echo "usage: subboost-cron {subscriptions|rule-index}" >&2
+    exit 64
+    ;;
+esac
+exec /usr/bin/curl \
+  --fail-with-body \
+  --silent \
+  --show-error \
+  --max-time 300 \
+  --request POST \
+  --header "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:13000${path}"

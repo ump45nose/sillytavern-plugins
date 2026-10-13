@@ -1,0 +1,11 @@
+[Unit]
+Description=Rotate rsyslog files every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00
+AccuracySec=1min
+Persistent=true
+Unit=rsyslog-logrotate.service
+
+[Install]
+WantedBy=timers.target

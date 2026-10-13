@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+name=apisix
+running="$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo false)"
+[ "$running" = "true" ] || exit 0
+started="$(docker inspect -f '{{.State.StartedAt}}' "$name")"
+started_epoch="$(date -d "$started" +%s)"
+now="$(date +%s)"
+age=$((now - started_epoch))
+[ "$age" -ge 3600 ] || exit 0
+printf '%s stopping %s after %ss uptime\n' "$(date -Is)" "$name" "$age"
+docker stop "$name"
