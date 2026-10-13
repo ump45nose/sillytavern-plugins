@@ -1,0 +1,1 @@
+{"exit_code": 0, "result": {"schema_version": 1, "run_id": "b584afa3-ab43-48c1-a08b-c8ea0732fb62", "platform": "v2ex", "account": "default", "business_date": "2026-10-03", "execution_status": "ok", "reason": "reward_confirmed", "business": {"checkin": "complete", "reward": "complete"}}}

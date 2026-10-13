@@ -1,0 +1,13 @@
+{
+  "package": "dailycheckin",
+  "version": "25.12.9",
+  "wheel_sha256": "3eb56d2e7e27d63f676963a2bfa827cf9f3102f9f1f608eb0f9401fd4a623846",
+  "original_module": "dailycheckin/v2ex/main.py",
+  "original_module_sha256": "24b94d2edda9dacaf343bcbd3593a82ad8110f1fb005eadaada6a43c50f47b26",
+  "changes": [
+    "Extracted only V2ex.sign; removed CheckIn inheritance and package-wide discovery",
+    "Enforced TLS certificate verification",
+    "Added optional read-only reconciliation and pre-redeem intent callback",
+    "Added balance confirmation callback before optional trailing daily-page read; default sign output and request sequence retain fake-session parity"
+  ]
+}
