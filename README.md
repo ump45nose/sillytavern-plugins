@@ -2,7 +2,7 @@
 
 `/home/yuwk/code` 就是跨项目开发入口。12 个自有项目通过 Git subtree 纳入普通子目录，统一查看 Git diff、提交和创建 worktree；项目提交仍可拆分回各自原 GitHub 仓库。
 
-项目职责和 LLM 开发约定见 [AGENTS.md](AGENTS.md)，远端与默认分支见 [projects.json](projects.json)。`contrib-agents/`、`OFIQ-Project/` 和 `face-quality-reference/` 保持独立，未纳入聚合 Git。
+项目职责和 LLM 开发约定见 [AGENTS.md](AGENTS.md)，远端与默认分支见 [projects.json](projects.json)。`contrib-agents/`、`OFIQ-Project/`、`face-quality-reference/` 和 `token-monitor-upstream/` 保持独立，未纳入聚合 Git。
 
 ## Codex 开发
 

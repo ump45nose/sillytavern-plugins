@@ -2,6 +2,7 @@
 /contrib-agents/
 /OFIQ-Project/
 /face-quality-reference/
+/token-monitor-upstream/
 
 # 本机依赖和缓存
 .venv/
