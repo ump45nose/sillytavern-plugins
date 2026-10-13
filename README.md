@@ -67,4 +67,4 @@ git --git-dir=.git/project-origins/favsync.git log --oneline -10
 
 `face-baseline` 和 `hermes-authoring` 暂无 GitHub 远端，同步工具以各自归档 Git 作为本机来源，可推送新任务分支。这些归档和迁移状态属于本机 Git 元数据，不随普通 clone 分发；将这两个项目配置为远程仓库后，更新 `projects.json` 并重新登记远端。
 
-项目目录内不再保留独立 `.git` 标记。原 Git 归档只供查看历史、维护既有独立 worktree及接收本机项目分支，当前源码以聚合提交为准。
+项目目录内不再保留独立 `.git` 标记。原 Git 归档只供查看历史、维护既有独立 worktree 及接收本机项目分支，当前源码以聚合提交为准。

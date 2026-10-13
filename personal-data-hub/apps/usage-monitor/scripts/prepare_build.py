@@ -31,10 +31,11 @@ def source_changes(baseline, revision):
     """Compare the original package tree with its current monorepo location."""
     prefix = command("git", "rev-parse", "--show-prefix")
     paths = ("src/usage_monitor_mcp", "pyproject.toml", "uv.lock")
-    old_prefix = prefix if subprocess.run(
-        ["git", "cat-file", "-e", baseline + ":" + prefix + "pyproject.toml"],
-        cwd=ROOT, capture_output=True,
-    ).returncode == 0 else ""
+    old_prefix = next(candidate for candidate in (prefix, "apps/usage-monitor/", "")
+                      if subprocess.run(
+                          ["git", "cat-file", "-e", baseline + ":" + candidate + "pyproject.toml"],
+                          cwd=ROOT, capture_output=True,
+                      ).returncode == 0)
     return [path for path in paths if command(
         "git", "rev-parse", baseline + ":" + old_prefix + path
     ) != command("git", "rev-parse", revision + ":" + prefix + path)]

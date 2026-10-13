@@ -24,6 +24,8 @@ uv run my-service-server
 
 修改生成项目的 `mcp.app.yaml`，填写域名、宿主端口、Authelia 策略、凭据需求和业务卷；提交 `uv.lock`。SDK 的 Git 来源使用 `v0.1.3`，锁文件记录实际提交，不跟随 main。
 
+在 `/home/yuwk/code` 聚合仓库及其 worktree 中，`platform_repo` 继续指向平台源码目录。构建从该目录定位公共 Git 数据库，再检出业务 `uv.lock` 中锁定的平台提交；保留原项目完整历史，不将聚合根目录当作平台 wheel 源码。
+
 ```python
 from mcp_platform import RuntimeConfig, authorize, create_server, create_http_app
 

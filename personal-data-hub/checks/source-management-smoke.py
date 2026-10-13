@@ -37,12 +37,23 @@ def build_guard():
         module.ROOT = target
         assert module.source_changes(baseline, moved) == []
         assert module.source_changes(moved, moved) == []
+        (repo / "personal-data-hub").mkdir()
+        (repo / "apps").rename(repo / "personal-data-hub/apps")
+        git("add", "-A")
+        git("commit", "-qm", "Move project into aggregate repository")
+        aggregated = git("rev-parse", "HEAD")
+        target = repo / "personal-data-hub/apps/usage-monitor"
+        module.ROOT = target
+        assert module.source_changes(baseline, aggregated) == []
+        assert module.source_changes(moved, aggregated) == []
+        assert module.source_changes(aggregated, aggregated) == []
         (target / "src/usage_monitor_mcp/__init__.py").write_text("version = 2\n")
         git("add", "-A")
         git("commit", "-qm", "Change package")
         changed = git("rev-parse", "HEAD")
         assert module.source_changes(baseline, changed) == ["src/usage_monitor_mcp"]
         assert module.source_changes(moved, changed) == ["src/usage_monitor_mcp"]
+        assert module.source_changes(aggregated, changed) == ["src/usage_monitor_mcp"]
     print("monorepo_build_guard_ok standalone_and_prefixed_baselines=true stale_wheel_rejected=true")
 
 
