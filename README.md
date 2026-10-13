@@ -43,7 +43,7 @@ python3 scripts/project.py push nas-cron-jobs codex/update-favorites
 
 在原项目分别创建 PR，合并后分别 `pull` 回聚合分支。`split` 和 `push` 只包含所选项目目录，根指引及其他项目不会进入该远端。拉取可用 `--branch` 指定原项目分支。
 
-已有未提交源码和未忽略的新文件用独立聚合提交保留。首次推送某项目时，这些已有改动也会进入拆分结果，应一并审阅。初始来源见 [导入记录](docs/import-2026-10-13.md)。本次仅建立本机聚合 Git，没有推送 GitHub 或部署服务。
+已有未提交源码和未忽略的新文件用独立聚合提交保留。首次推送某项目时，这些已有改动也会进入拆分结果，应一并审阅。初始来源见 [导入记录](docs/import-2026-10-13.md)。根配置快照维护在 [app-configs/codex-workspace](app-configs/codex-workspace/README.md)，通过 app-configs 原仓库独立同步；服务部署按各项目流程处理。
 
 ## 独立源码 checkout
 

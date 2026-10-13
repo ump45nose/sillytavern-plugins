@@ -1,0 +1,74 @@
+[
+  {
+    "name": "agent-skills",
+    "path": "agent-skills",
+    "remote_url": "https://github.com/ump45nose/agent-skills.git",
+    "branch": "main"
+  },
+  {
+    "name": "app-configs",
+    "path": "app-configs",
+    "remote_url": "https://github.com/ump45nose/app-configs.git",
+    "branch": "main"
+  },
+  {
+    "name": "benefits-automation",
+    "path": "benefits-automation",
+    "remote_url": "https://github.com/ump45nose/benefits-automation.git",
+    "branch": "main"
+  },
+  {
+    "name": "face-baseline",
+    "path": "face-baseline",
+    "remote_url": null,
+    "branch": "codex/faceqnet-default"
+  },
+  {
+    "name": "favsync",
+    "path": "favsync",
+    "remote_url": "https://github.com/ump45nose/favsync.git",
+    "branch": "main"
+  },
+  {
+    "name": "hermes-authoring",
+    "path": "hermes-authoring",
+    "remote_url": null,
+    "branch": "main"
+  },
+  {
+    "name": "mcp-platform",
+    "path": "mcp-platform",
+    "remote_url": "https://github.com/ump45nose/mcp-platform.git",
+    "branch": "main"
+  },
+  {
+    "name": "media-automation",
+    "path": "media-automation",
+    "remote_url": "https://github.com/ump45nose/media-automation.git",
+    "branch": "main"
+  },
+  {
+    "name": "nas-cron-jobs",
+    "path": "nas-cron-jobs",
+    "remote_url": "https://github.com/ump45nose/nas-cron-jobs.git",
+    "branch": "main"
+  },
+  {
+    "name": "personal-data-hub",
+    "path": "personal-data-hub",
+    "remote_url": "https://github.com/ump45nose/personal-data-hub.git",
+    "branch": "main"
+  },
+  {
+    "name": "sillytavern-workbench",
+    "path": "sillytavern-workbench",
+    "remote_url": "https://github.com/ump45nose/sillytavern-workbench.git",
+    "branch": "main"
+  },
+  {
+    "name": "dingtalk-workspace-plugin",
+    "path": "mcp/dingtalk-workspace-plugin",
+    "remote_url": "https://github.com/ump45nose/dingtalk-workspace-plugin.git",
+    "branch": "main"
+  }
+]

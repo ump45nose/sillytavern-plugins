@@ -1,0 +1,69 @@
+{
+  "snapshot_date": "2026-10-13",
+  "workspace_path": "/home/yuwk/code",
+  "source_revision": "a8abaad2d1149cc48610ef526e7cf09fd3246456",
+  "files": [
+    {
+      "source": "AGENTS.md",
+      "stored_at": "root/AGENTS.md",
+      "sha256": "f5313162fb56deb29fec0df21cc9943e41b3a3ab9d3709ad37dbb79f516d5f2f"
+    },
+    {
+      "source": "README.md",
+      "stored_at": "root/README.md",
+      "sha256": "9c5e0f4a322ac5d8408467d5224d9bf44e8504438d1f6c8511a37ae1ecba3aca"
+    },
+    {
+      "source": ".gitignore",
+      "stored_at": "root/.gitignore",
+      "sha256": "a7f8dcf9d031b6a13dd33e8129909bcb6032e5f2280133adecaa9875bae6388f"
+    },
+    {
+      "source": "projects.json",
+      "stored_at": "root/projects.json",
+      "sha256": "e7b2fcad02ca7cfd1bc3f5ac07012975caafa7703da3a3fc2b88e1ab2ffe2ef4"
+    },
+    {
+      "source": "scripts/project.py",
+      "stored_at": "root/scripts/project.py",
+      "sha256": "ef8d517db5e87bea68286f7d28c4b111130e3aac2de49ce7a974f3805a690b97"
+    },
+    {
+      "source": "docs/import-2026-10-13.md",
+      "stored_at": "root/docs/import-2026-10-13.md",
+      "sha256": "a9e5cfb726c5666b2711c803ee1ff199c1e44e99f9fd76fbc0750a026f17cb9a"
+    }
+  ],
+  "integration_patch": {
+    "stored_at": "integration.patch",
+    "sha256": "9315a2a39be91e7ef75c04caf65ad887ef0bfe97e783198c687818fae24dac44",
+    "source_files": [
+      "mcp-platform/src/mcp_platform/deploy.py",
+      "mcp-platform/README.md",
+      "personal-data-hub/apps/usage-monitor/scripts/prepare_build.py",
+      "personal-data-hub/checks/source-management-smoke.py"
+    ],
+    "relative_source_links": [
+      "nas-cron-jobs/hermes/daily_health_summary.py",
+      "nas-cron-jobs/hermes/email_mcp_auth.py",
+      "nas-cron-jobs/hermes/health-data-freshness.py",
+      "nas-cron-jobs/hermes/health_data.py",
+      "nas-cron-jobs/hermes/personal-review-attachments-worker.sh",
+      "nas-cron-jobs/hermes/personal-review-crm-input.sh",
+      "nas-cron-jobs/hermes/personal-review-daily-ack.py",
+      "nas-cron-jobs/hermes/personal-review-daily-ack.sh",
+      "nas-cron-jobs/hermes/personal-review-daily-dry-run.py",
+      "nas-cron-jobs/hermes/personal-review-daily-dry-run.sh",
+      "nas-cron-jobs/hermes/personal-review-email-input.py",
+      "nas-cron-jobs/hermes/personal-review-email-input.sh",
+      "nas-cron-jobs/hermes/personal-review-google-input.py",
+      "nas-cron-jobs/hermes/personal-review-google-input.sh",
+      "nas-cron-jobs/hermes/personal-review-health-source.py",
+      "nas-cron-jobs/hermes/personal-review-retention.sh",
+      "nas-cron-jobs/hermes/personal-review-weekly-dry-run.py",
+      "nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh",
+      "nas-cron-jobs/model/plaud-daily.sh",
+      "nas-cron-jobs/shellcrash-traffic"
+    ]
+  }
+}

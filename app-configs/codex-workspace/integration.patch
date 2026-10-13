@@ -1,0 +1,256 @@
+diff --git a/mcp-platform/README.md b/mcp-platform/README.md
+index 3a48b13..2189b8f 100644
+--- a/mcp-platform/README.md
++++ b/mcp-platform/README.md
+@@ -24,6 +24,8 @@ uv run my-service-server
+ 
+ 修改生成项目的 `mcp.app.yaml`，填写域名、宿主端口、Authelia 策略、凭据需求和业务卷；提交 `uv.lock`。SDK 的 Git 来源使用 `v0.1.3`，锁文件记录实际提交，不跟随 main。
+ 
++在 `/home/yuwk/code` 聚合仓库及其 worktree 中，`platform_repo` 继续指向平台源码目录。构建从该目录定位公共 Git 数据库，再检出业务 `uv.lock` 中锁定的平台提交；保留原项目完整历史，不将聚合根目录当作平台 wheel 源码。
++
+ ```python
+ from mcp_platform import RuntimeConfig, authorize, create_server, create_http_app
+ 
+diff --git a/mcp-platform/src/mcp_platform/deploy.py b/mcp-platform/src/mcp_platform/deploy.py
+index acd70b1..21c8d9b 100644
+--- a/mcp-platform/src/mcp_platform/deploy.py
++++ b/mcp-platform/src/mcp_platform/deploy.py
+@@ -181,7 +181,9 @@ def build_bundle(app, source, target, destination):
+     core_sha = core["source"]["git"].split("#")[-1]
+     # 使用已认证的宿主机检出锁定提交；不把 .git 或凭据复制进容器。
+     staging = destination / "platform-source"
+-    run(["git", "clone", "--no-checkout", target.platform_repo, staging], user=target.build_user)
++    platform_git = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
++                       cwd=target.platform_repo, user=target.build_user).strip()
++    run(["git", "clone", "--no-checkout", platform_git, staging], user=target.build_user)
+     run(["git", "checkout", "--detach", core_sha], cwd=staging, user=target.build_user)
+     wheels = destination / "wheels"
+     run([target.uv, "build", "--wheel", "--out-dir", wheels], cwd=staging, user=target.build_user)
+diff --git a/personal-data-hub/apps/usage-monitor/scripts/prepare_build.py b/personal-data-hub/apps/usage-monitor/scripts/prepare_build.py
+index c286e1e..7f702b3 100644
+--- a/personal-data-hub/apps/usage-monitor/scripts/prepare_build.py
++++ b/personal-data-hub/apps/usage-monitor/scripts/prepare_build.py
+@@ -31,10 +31,11 @@ def source_changes(baseline, revision):
+     """Compare the original package tree with its current monorepo location."""
+     prefix = command("git", "rev-parse", "--show-prefix")
+     paths = ("src/usage_monitor_mcp", "pyproject.toml", "uv.lock")
+-    old_prefix = prefix if subprocess.run(
+-        ["git", "cat-file", "-e", baseline + ":" + prefix + "pyproject.toml"],
+-        cwd=ROOT, capture_output=True,
+-    ).returncode == 0 else ""
++    old_prefix = next(candidate for candidate in (prefix, "apps/usage-monitor/", "")
++                      if subprocess.run(
++                          ["git", "cat-file", "-e", baseline + ":" + candidate + "pyproject.toml"],
++                          cwd=ROOT, capture_output=True,
++                      ).returncode == 0)
+     return [path for path in paths if command(
+         "git", "rev-parse", baseline + ":" + old_prefix + path
+     ) != command("git", "rev-parse", revision + ":" + prefix + path)]
+diff --git a/personal-data-hub/checks/source-management-smoke.py b/personal-data-hub/checks/source-management-smoke.py
+index fb63b9c..83560ce 100644
+--- a/personal-data-hub/checks/source-management-smoke.py
++++ b/personal-data-hub/checks/source-management-smoke.py
+@@ -37,12 +37,23 @@ def build_guard():
+         module.ROOT = target
+         assert module.source_changes(baseline, moved) == []
+         assert module.source_changes(moved, moved) == []
++        (repo / "personal-data-hub").mkdir()
++        (repo / "apps").rename(repo / "personal-data-hub/apps")
++        git("add", "-A")
++        git("commit", "-qm", "Move project into aggregate repository")
++        aggregated = git("rev-parse", "HEAD")
++        target = repo / "personal-data-hub/apps/usage-monitor"
++        module.ROOT = target
++        assert module.source_changes(baseline, aggregated) == []
++        assert module.source_changes(moved, aggregated) == []
++        assert module.source_changes(aggregated, aggregated) == []
+         (target / "src/usage_monitor_mcp/__init__.py").write_text("version = 2\n")
+         git("add", "-A")
+         git("commit", "-qm", "Change package")
+         changed = git("rev-parse", "HEAD")
+         assert module.source_changes(baseline, changed) == ["src/usage_monitor_mcp"]
+         assert module.source_changes(moved, changed) == ["src/usage_monitor_mcp"]
++        assert module.source_changes(aggregated, changed) == ["src/usage_monitor_mcp"]
+     print("monorepo_build_guard_ok standalone_and_prefixed_baselines=true stale_wheel_rejected=true")
+ 
+ 
+diff --git a/nas-cron-jobs/hermes/daily_health_summary.py b/nas-cron-jobs/hermes/daily_health_summary.py
+index 03426bc..9919ba0 120000
+--- a/nas-cron-jobs/hermes/daily_health_summary.py
++++ b/nas-cron-jobs/hermes/daily_health_summary.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/daily_health_summary.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/daily_health_summary.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/email_mcp_auth.py b/nas-cron-jobs/hermes/email_mcp_auth.py
+index 7435244..8b1b1f8 120000
+--- a/nas-cron-jobs/hermes/email_mcp_auth.py
++++ b/nas-cron-jobs/hermes/email_mcp_auth.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/email_mcp_auth.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/email_mcp_auth.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/health-data-freshness.py b/nas-cron-jobs/hermes/health-data-freshness.py
+index be77965..97ff847 120000
+--- a/nas-cron-jobs/hermes/health-data-freshness.py
++++ b/nas-cron-jobs/hermes/health-data-freshness.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/health-data-freshness.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/health-data-freshness.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/health_data.py b/nas-cron-jobs/hermes/health_data.py
+index 0774552..147a0c8 120000
+--- a/nas-cron-jobs/hermes/health_data.py
++++ b/nas-cron-jobs/hermes/health_data.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/health_data.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/health_data.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-attachments-worker.sh b/nas-cron-jobs/hermes/personal-review-attachments-worker.sh
+index 2c49884..c351b89 120000
+--- a/nas-cron-jobs/hermes/personal-review-attachments-worker.sh
++++ b/nas-cron-jobs/hermes/personal-review-attachments-worker.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-attachments-worker.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-attachments-worker.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-crm-input.sh b/nas-cron-jobs/hermes/personal-review-crm-input.sh
+index 0cdfbd0..46239c4 120000
+--- a/nas-cron-jobs/hermes/personal-review-crm-input.sh
++++ b/nas-cron-jobs/hermes/personal-review-crm-input.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-crm-input.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-crm-input.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-daily-ack.py b/nas-cron-jobs/hermes/personal-review-daily-ack.py
+index 7676c17..4765ca8 120000
+--- a/nas-cron-jobs/hermes/personal-review-daily-ack.py
++++ b/nas-cron-jobs/hermes/personal-review-daily-ack.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-daily-ack.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-daily-ack.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-daily-ack.sh b/nas-cron-jobs/hermes/personal-review-daily-ack.sh
+index f479c51..1301a39 120000
+--- a/nas-cron-jobs/hermes/personal-review-daily-ack.sh
++++ b/nas-cron-jobs/hermes/personal-review-daily-ack.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-daily-ack.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-daily-ack.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-daily-dry-run.py b/nas-cron-jobs/hermes/personal-review-daily-dry-run.py
+index 570b762..e2d7d6d 120000
+--- a/nas-cron-jobs/hermes/personal-review-daily-dry-run.py
++++ b/nas-cron-jobs/hermes/personal-review-daily-dry-run.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-daily-dry-run.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-daily-dry-run.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-daily-dry-run.sh b/nas-cron-jobs/hermes/personal-review-daily-dry-run.sh
+index d965b89..e8f7642 120000
+--- a/nas-cron-jobs/hermes/personal-review-daily-dry-run.sh
++++ b/nas-cron-jobs/hermes/personal-review-daily-dry-run.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-daily-dry-run.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-daily-dry-run.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-email-input.py b/nas-cron-jobs/hermes/personal-review-email-input.py
+index e4a6a32..b36b9bf 120000
+--- a/nas-cron-jobs/hermes/personal-review-email-input.py
++++ b/nas-cron-jobs/hermes/personal-review-email-input.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-email-input.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-email-input.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-email-input.sh b/nas-cron-jobs/hermes/personal-review-email-input.sh
+index d1b010e..feab261 120000
+--- a/nas-cron-jobs/hermes/personal-review-email-input.sh
++++ b/nas-cron-jobs/hermes/personal-review-email-input.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-email-input.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-email-input.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-google-input.py b/nas-cron-jobs/hermes/personal-review-google-input.py
+index 7cc88f0..a204654 120000
+--- a/nas-cron-jobs/hermes/personal-review-google-input.py
++++ b/nas-cron-jobs/hermes/personal-review-google-input.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-google-input.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-google-input.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-google-input.sh b/nas-cron-jobs/hermes/personal-review-google-input.sh
+index 39139e1..9e0156a 120000
+--- a/nas-cron-jobs/hermes/personal-review-google-input.sh
++++ b/nas-cron-jobs/hermes/personal-review-google-input.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-google-input.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-google-input.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-health-source.py b/nas-cron-jobs/hermes/personal-review-health-source.py
+index f7507b1..c0c8266 120000
+--- a/nas-cron-jobs/hermes/personal-review-health-source.py
++++ b/nas-cron-jobs/hermes/personal-review-health-source.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-health-source.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-health-source.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-retention.sh b/nas-cron-jobs/hermes/personal-review-retention.sh
+index 0a255bf..7bf9f8f 120000
+--- a/nas-cron-jobs/hermes/personal-review-retention.sh
++++ b/nas-cron-jobs/hermes/personal-review-retention.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-retention.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-retention.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-weekly-dry-run.py b/nas-cron-jobs/hermes/personal-review-weekly-dry-run.py
+index 652c63b..4463e20 120000
+--- a/nas-cron-jobs/hermes/personal-review-weekly-dry-run.py
++++ b/nas-cron-jobs/hermes/personal-review-weekly-dry-run.py
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-weekly-dry-run.py
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-weekly-dry-run.py
+\ No newline at end of file
+diff --git a/nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh b/nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh
+index d1d402e..2bd70f7 120000
+--- a/nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh
++++ b/nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-weekly-dry-run.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/personal-review-weekly-dry-run.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/model/plaud-daily.sh b/nas-cron-jobs/model/plaud-daily.sh
+index b186de7..4fbfeec 120000
+--- a/nas-cron-jobs/model/plaud-daily.sh
++++ b/nas-cron-jobs/model/plaud-daily.sh
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/plaud-daily.sh
+\ No newline at end of file
++../../personal-data-hub/legacy/personal-jobs/plaud-daily.sh
+\ No newline at end of file
+diff --git a/nas-cron-jobs/shellcrash-traffic b/nas-cron-jobs/shellcrash-traffic
+index 88ead8c..6a459d5 120000
+--- a/nas-cron-jobs/shellcrash-traffic
++++ b/nas-cron-jobs/shellcrash-traffic
+@@ -1 +1 @@
+-/vol1/1000/Code/personal-data-hub/agents/nas/shellcrash
+\ No newline at end of file
++../personal-data-hub/agents/nas/shellcrash
+\ No newline at end of file

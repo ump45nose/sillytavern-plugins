@@ -1,0 +1,29 @@
+# 本次聚合范围外的独立仓库
+/contrib-agents/
+/OFIQ-Project/
+/face-quality-reference/
+/token-monitor-upstream/
+
+# 本机依赖和缓存
+.venv/
+.venv-*/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# 私有配置和运行数据；项目自己的忽略规则继续生效
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.sqlite*
+*.db
+*.db-*
+*.log
+/runtime/
+/data/
+/worktrees/
