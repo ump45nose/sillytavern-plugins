@@ -1,0 +1,48 @@
+schema_version: 1
+id: media-download-mcp
+name: Media Download MCP
+deployment_mode: existing
+authentication: oauth
+public_url: https://media-download-home.172906573.xyz
+port: 8092
+host_port: 8092
+bind_address: 127.0.0.1
+health_path: /healthz
+mcp_path: /mcp
+expected_tools:
+- search_resources
+- download_media
+- check_media
+- get_download_status
+auth:
+  client_id: media-download-mcp
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+  authorization_policy: smartsearch_yuwk
+  claims_policy: smartsearch_identity
+  secret_env: OIDC_CLIENT_SECRET
+  generated_secret_envs:
+  - OAUTH_JWT_SIGNING_KEY
+  - OAUTH_STORAGE_ENCRYPTION_KEY
+  usernames_env: OIDC_AUTHORIZED_USERNAMES
+  scopes:
+  - openid
+  - profile
+  - offline_access
+environment:
+  MEDIA_BACKEND_URL: http://127.0.0.1:8091/mcp
+  MEDIA_BACKEND_HOST: media-download-home.172906573.xyz
+  MEDIA_BACKEND_TOKEN_FILE: /secrets/backend.token
+  MEDIA_LEGACY_BEARER_USERNAME: yuwk
+plugin:
+  name: media-download-mcp
+  version: 0.1.0
+  description: 检索媒体信息、提交下载并查询进度。
+  display_name: Media Tool
+  app_binding: dev-6ac288ae39908191a239ef999f71fa54
+  app_id: asdk_app_6ac288ae39908191a239ef999f71fa54
+  short_description: 检索媒体信息、提交下载并查询进度。
+  logo: assets/plugin/moviepilot.png
+  keywords:
+  - MoviePilot
+  - 影视
+  - 下载

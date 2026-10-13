@@ -1,0 +1,1 @@
+"""Independent download MCP entrypoint."""

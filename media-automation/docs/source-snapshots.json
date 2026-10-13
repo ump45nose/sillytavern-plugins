@@ -1,0 +1,18 @@
+{
+  "filmwatchlist": {
+    "repository": "ump45nose/moviepilot-film-watchlist",
+    "commit": "446ec9f81490a3555feefd8742e9ec9933feba1b"
+  },
+  "emby-theme-worker": {
+    "repository": "ump45nose/emby-theme-worker",
+    "commit": "c3155718ba01a2493394308345b424abf2c431cb"
+  },
+  "shared_downloads": {
+    "repository": "ump45nose/favsync",
+    "commit": "d9f3ea93ed4f0e6f2fe96f8d05e38b57bd8d2a8e",
+    "package_path": "packages/downloads",
+    "version": "0.1.0",
+    "wheel": "favsync_downloads-0.1.0-py3-none-any.whl",
+    "sha256": "b6ba27b88ade61403059741fac52d681d5682f9b00455ee25bddbc8427a82c25"
+  }
+}

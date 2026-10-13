@@ -1,0 +1,17 @@
+{
+  "name": "media-tools-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:archive": "MEDIA_TOOL_PLUGIN=MediaArchive vite build",
+    "build:remux": "MEDIA_TOOL_PLUGIN=DiscRemux vite build",
+    "build": "npm run build:archive && npm run build:remux"
+  },
+  "dependencies": {"vue": "3.5.13"},
+  "devDependencies": {
+    "vite": "6.1.0",
+    "@vitejs/plugin-vue": "5.2.1",
+    "@originjs/vite-plugin-federation": "1.4.1"
+  }
+}
