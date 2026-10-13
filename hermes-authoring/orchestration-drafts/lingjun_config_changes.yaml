@@ -1,0 +1,81 @@
+# lingjun config.yaml 历史改动草稿（未部署，仅供追溯）
+# 目标文件：/home/hermes/.hermes/profiles/lingjun/config.yaml
+# 说明：下面记录的是旧方案，不是当前运行配置，也不得作为部署输入。
+# 当前事实以 /home/hermes/.hermes/CLUSTER.md 和实际 config.yaml 为准；
+# 当前 auto_decompose=true，本草稿中的方案 A 没有落地。
+
+# ── 1) plugins：删掉 delegate-enforcer 引用（插件目录另行 rm） ──
+plugins:
+  enabled:
+    # - "delegate-enforcer"      ← 删除这一行
+    - "hermes-chat-upload"
+    - "hermes-pwa"
+    - "observability/langfuse"
+  disabled: []
+
+# ── 2) reasoning：改 high + 预留 per-model 覆盖位 ──
+agent:
+  max_turns: 25
+  verify_on_stop: false
+  reasoning_effort: "high"       # 新增（原无此键，默认 medium）
+  reasoning_overrides: {}        # 预留：如 { "grok-4.5": "medium" } 给 fast 降档
+  # 注意：reasoning_effort 官方注释主要面向 OpenRouter/Nous。
+  #       custom chat_completions provider(newapi/cpa) 是否透传需落地后实测一次。
+
+# ── 3) model_aliases：/model fast|normal|pro 的目标（新增顶层块） ──
+# provider 用 custom:<name> 复用现有 custom_providers 的 base_url+key，
+# 与当前生效的主模型 provider: custom:newapi-local 同款写法。
+model_aliases:
+  fast:
+    model: "grok-4.5"
+    provider: "custom:cpa-local"        # :8317 已确认提供 grok-4.5
+  normal:
+    model: "gpt-5.6-sol"
+    provider: "custom:newapi-local"     # 维持当前默认；:8317 也有，如需可换 cpa-local
+  pro:
+    model: "claude-opus-4-8"            # :3000 已确认提供（另有 claude-opus-4.8-thinking 变体）
+    provider: "custom:newapi-local"
+
+# ── 4) quick_commands：/fast /normal /pro 三个 alias（新增顶层块） ──
+quick_commands:
+  fast:
+    type: alias
+    target: "/model fast"
+  normal:
+    type: alias
+    target: "/model normal"
+  pro:
+    type: alias
+    target: "/model pro"
+
+# ── 5) kanban：历史方案 A（未落地）—— 关自动拆解，显式派 ──
+# 当前 lingjun 的派活规则常驻 SOUL，不依赖额外 orchestration skill。
+kanban:
+  auto_decompose: false             # 历史提案；当前实际为 true
+  orchestrator_profile: "lingjun"
+  auto_decompose_per_tick: 3        # 保留（auto_decompose 关了后不生效）
+  default_assignee: ""              # 由 "lingjun" 清空：不再有"未路由子任务甩回自己"
+
+# =====================================================================
+# NOTES — kanban 那块的决策
+# =====================================================================
+# 当时现状：auto_decompose=true 每 tick 自动把父任务拆成子任务；default_assignee
+#      是"拆出来的子任务没指定 assignee 时的兜底"。现在兜底=lingjun，
+#      等于未路由的子任务默认甩回自己 → 自执行。这正是要修的点。
+#
+# 但直接把 default_assignee 清空(""）有副作用：auto_decompose 拆出来的、
+# 又没被显式指派的子任务会变成"无 assignee" → 调度器不 spawn（assignee 必填）
+# → 子任务卡住不执行。所以不能只是简单清空。
+#
+# 两个自洽方案（二选一）：
+#
+#   A. 关掉机械自动拆解，改由 lingjun 按新 orchestration skill 显式 kanban_create
+#      auto_decompose: false
+#      default_assignee: ""          # 基本不再触发
+#      → 每个子任务由 lingjun 显式建、显式指定 assignee=ops/research/xp。
+#        确定性最强，和新纪律完全对齐。推荐。
+#
+#   B. 保留自动拆解，但兜底不再是自己
+#      auto_decompose: true
+#      default_assignee: "research"  # 或其它"最常见兜底 worker"
+#      → 省事，但"未路由子任务全归某一个 worker"本身也不准，只是不再自执行。

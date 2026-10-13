@@ -1,0 +1,32 @@
+[Unit]
+Description=Persist read-write hermes and yuwk access to the Hermes runtime
+Documentation=file:/home/hermes/.hermes/CLUSTER.md
+After=local-fs.target
+ConditionPathIsDirectory=/home/hermes/.hermes
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/hermes-yuwk-access --daemon --ready-file /run/hermes-yuwk-access/ready
+Restart=always
+RestartSec=2s
+RuntimeDirectory=hermes-yuwk-access
+RuntimeDirectoryMode=0755
+UMask=0077
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateNetwork=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/home/hermes /run/hermes-yuwk-access
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
