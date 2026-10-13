@@ -1,0 +1,6 @@
+interface:
+  display_name: "GitHub PR Contributor"
+  short_description: "主动检索、验证并提交 GitHub Pull Request"
+  default_prompt: "使用 $github-pr-contributor 主动检索、验证并提交 GitHub Pull Request。"
+policy:
+  allow_implicit_invocation: true
