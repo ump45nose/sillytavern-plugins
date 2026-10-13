@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "checkedOn": "2026-10-06",
+  "upstream": {
+    "repository": "https://github.com/SillyTavern/SillyTavern.git",
+    "release": "1.19.0",
+    "commit": "7e8663cd9c184a550b37238218bdd32c6efc68e9",
+    "releaseUrl": "https://github.com/SillyTavern/SillyTavern/releases/tag/1.19.0"
+  },
+  "image": {
+    "reference": "ghcr.io/sillytavern/sillytavern@sha256:b712eb8609f2d9b9f820b581fecfc7cd400c50a6c6533287cbbd368c4fb1d060",
+    "id": "sha256:8effce944d48cd6001d764555385540acd4d266a2ef3325fd8c900d0e4f172d9"
+  },
+  "helper": {
+    "source": "/vol2/1000/Docker/sillytavern/extensions/JS-Slash-Runner",
+    "version": "4.8.18",
+    "provenance": "Snapshot of installed deployment assets; not asserted to be a clean upstream checkout.",
+    "snapshotSha256": "2308b75dacd410ea236e21631a18692af5cd7a532541e371f90531e1308168b3",
+    "assetSha256": {
+      "manifest.json": "284ef95936768fca1838d203f245e6e10f5fcbf2e76cb736bd42204b846f7ea4",
+      "dist/index.js": "4e35d9f2584a24255c2b02b562410d2ad985a465dc91f1da4cbae9247a64ed25",
+      "dist/index.css": "453a71fa4848a95b82388b8be8c929e32fc78a974b51e8b0d1c0982913093dca"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+/* Only tune selected surfaces; solid circle indicators keep the approved primitives. */
+.wb-ui {
+ --wb-selection-line:color-mix(in srgb,var(--wb-accent) 20%,var(--wb-line));
+ --wb-selection-fill:color-mix(in srgb,var(--wb-selected) 85%,var(--wb-surface));
+}
+.wb-ui :is(.wb-quick-row,.wb-resource-choice,.wb-manager-row,.wb-prompt-row,.wb-entry-row,.wb-row,.wb-book-row,.wb-floor-list > button,.wb-group-choice,.wb-persona-manager > aside > button,.wb-chat-file) {
+ border:1px solid transparent; border-radius:7px; box-shadow:none;
+ transition:background-color 180ms,border-color 180ms,color 180ms;
+}
+.wb-ui :is(.wb-quick-row.is-active,.wb-resource-choice.is-active,.wb-manager-row.is-editing,.wb-manager-row.is-selected,.wb-prompt-row.is-active,.wb-entry-row.is-active,.wb-row.is-active,.wb-book-row.is-active,.wb-floor-list > button.is-current,.wb-group-choice[aria-pressed=true],.wb-persona-manager > aside > button[aria-pressed=true],.wb-chat-file.is-active) {
+ background:var(--wb-selection-fill); border-color:var(--wb-selection-line); box-shadow:none;
+}
+.wb-ui :is(.wb-quick-row.is-active,.wb-resource-choice.is-active,.wb-manager-row.is-editing,.wb-manager-row.is-selected,.wb-prompt-row.is-active,.wb-entry-row.is-active,.wb-row.is-active,.wb-book-row.is-active,.wb-floor-list > button.is-current,.wb-group-choice[aria-pressed=true],.wb-persona-manager > aside > button[aria-pressed=true],.wb-chat-file.is-active):hover {
+ background:color-mix(in srgb,var(--wb-selection-fill) 82%,var(--wb-selected));
+}
+/* Compact floor rows keep their existing height; draw the same line inside. */
+.wb-ui .wb-information .wb-floor-list > button { border:0; }
+.wb-ui .wb-information .wb-floor-list > button.is-current { box-shadow:inset 0 0 0 1px var(--wb-selection-line); }
+.wb-ui :is(.wb-resource-choice,.wb-quick-row) strong { font-weight:500; }
+.wb-ui :is(.wb-selector.is-active,.wb-character-card.is-active,.wb-character-card.is-selected,.wb-settings-nav > button[aria-pressed=true],.wb-current-chat) {
+ background:var(--wb-selection-fill); border-color:var(--wb-selection-line); box-shadow:none;
+}
+.wb-ui .wb-character-card.is-active .wb-portrait { box-shadow:none; border-color:var(--wb-line); }
+.wb-ui .wb-character-list .wb-character-card { border:1px solid transparent; border-radius:7px; padding:9px 8px; }
+.wb-ui .wb-character-list .wb-character-card.is-active { border-color:var(--wb-selection-line); }
+.wb-ui .wb-favorites .is-active .wb-portrait { border-color:var(--wb-selection-line); }
+body.wb-active .wb-ui .wb-fold-toggle[aria-expanded=true] { background:var(--wb-selection-fill) !important; border-color:var(--wb-selection-line) !important; }
+.wb-ui :is(.wb-font-choices,.wb-meta-choices,.wb-pop-tabs,.wb-world-scope) button[aria-pressed=true] {
+ background:var(--wb-selection-fill); box-shadow:inset 0 0 0 1px var(--wb-selection-line); border-color:transparent;
+}
+.wb-ui.wb-select-menu > button { border:1px solid transparent; }
+.wb-ui.wb-select-menu > button.is-selected { background:var(--wb-selection-fill); border-color:var(--wb-selection-line); }
+.wb-ui :is(.wb-panel-tabs > button.is-active,.wb-library-filters > button.is-active) {
+ background:var(--wb-selection-fill) !important; box-shadow:inset 0 0 0 1px var(--wb-selection-line);
+}
+.wb-ui :is(.wb-designed-actions > button[aria-pressed=true],#bg_tabs .bg_tab_button.ui-tabs-active) {
+ background:var(--wb-selection-fill); box-shadow:inset 0 0 0 1px var(--wb-selection-line);
+}
+.wb-ui .bg_example.selected-background { outline:none; border-color:var(--wb-selection-line); }
+.wb-ui .wb-designed-gallery .wb-background-preview.is-current { outline:1px solid var(--wb-selection-line); outline-offset:-1px; }

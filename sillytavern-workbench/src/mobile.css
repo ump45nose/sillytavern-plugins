@@ -1,0 +1,215 @@
+/* PWA layouts use the actual visible viewport. No mock phone frame or status bar. */
+body.wb-active.wb-mobile { --wb-header:58px; --wb-left:0px; --wb-right:0px; --wb-mobile-lower:0px; --wb-safe-top:env(safe-area-inset-top,0px); --wb-safe-bottom:env(safe-area-inset-bottom,0px); width:100%; overflow:hidden; overscroll-behavior:none; }
+body.wb-active.wb-mobile #sheld { inset:auto 0 auto 0 !important; top:calc(var(--wb-mobile-top,0px) + var(--wb-safe-top) + 58px + var(--wb-mobile-lower)) !important; height:calc(var(--wb-mobile-height,100dvh) - var(--wb-safe-top) - 58px - var(--wb-mobile-lower)) !important; width:100% !important; min-height:0 !important; transition:top 240ms cubic-bezier(.22,.8,.3,1),height 240ms cubic-bezier(.22,.8,.3,1),border-radius 240ms; }
+body.wb-mobile .wb-mobile-header { position:fixed; top:calc(var(--wb-mobile-top,0px) + var(--wb-safe-top)); left:0; right:0; height:58px; display:flex; align-items:center; gap:6px; padding:4px 10px; border-bottom:1px solid var(--wb-line); background:var(--wb-paper); z-index:5; transition:transform 240ms cubic-bezier(.22,.8,.3,1),border-radius 240ms; }
+.wb-mobile-header>button { height:44px; min-height:44px; border:0; background:transparent; padding:0; flex:none; }
+.wb-mobile-header .wb-mobile-nav,.wb-mobile-header .wb-mobile-management { width:44px; justify-content:center; }
+.wb-mobile-header .wb-mobile-person { flex:1; min-width:0; gap:9px; justify-content:flex-start; text-align:left; }
+.wb-mobile-person img,.wb-mobile-person .wb-avatar-fallback { width:34px; height:34px; border-radius:50%; object-fit:cover; flex:none; }
+.wb-mobile-person>span:not(.wb-avatar-fallback) { min-width:0; flex:1; }
+.wb-mobile-person strong { font-size:14px; font-weight:500; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wb-mobile-person small { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:var(--wb-muted); }
+body.wb-active.wb-mobile #chat { padding:18px clamp(18px,6vw,40px) 22px !important; touch-action:pan-y; overscroll-behavior-y:contain; scrollbar-width:none; scroll-behavior:smooth; }
+body.wb-active.wb-mobile #chat .mes { max-width:730px; padding:10px 0 26px !important; margin:0 auto 14px !important; }
+body.wb-active.wb-mobile #chat .mes_block { padding:0 !important; }
+body.wb-active.wb-mobile #chat .mes_text { font-size:var(--wb-reading-size,17px) !important; line-height:var(--wb-reading-leading,1.95) !important; padding:0 !important; }
+body.wb-mobile #chat .wb-reading-meta { font-size:10px; }
+body.wb-mobile #chat .mes .ch_name { margin-bottom:10px; }
+body.wb-mobile #chat .mes_buttons { opacity:1 !important; gap:0; }
+body.wb-mobile #chat .mes .mes_buttons>.mes_button,body.wb-mobile #chat .wb-image-message-button { min-width:36px; min-height:36px; align-items:center; justify-content:center; }
+body.wb-active.wb-mobile #chat .swipe_left,body.wb-active.wb-mobile #chat .swipeRightBlock { bottom:0; }
+body.wb-active.wb-mobile #chat .swipe_left { left:0; }
+body.wb-active.wb-mobile #chat .swipeRightBlock { right:0; }
+body.wb-active.wb-mobile #chat :is(.swipe_left,.swipe_right) { width:36px; height:36px; }
+body.wb-mobile #chat .swipes-counter { display:none; }
+body.wb-active.wb-mobile #form_sheld { position:relative !important; inset:auto !important; flex:none; width:100% !important; padding:0 12px max(8px,var(--wb-safe-bottom)) !important; background:var(--wb-paper) !important; z-index:4; }
+body.wb-active.wb-mobile #send_form { display:flex !important; flex-direction:column; height:auto !important; min-height:0 !important; max-height:none !important; padding:28px 8px 8px !important; border-radius:23px !important; box-shadow:0 -9px 18px var(--wb-paper) !important; gap:0 !important; }
+body.wb-active.wb-mobile #nonQRFormItems { width:100%; height:auto; flex:none; display:grid !important; grid-template-columns:88px minmax(0,1fr) 44px; grid-template-rows:auto 66px 44px; gap:4px 0; align-items:center; }
+body.wb-active.wb-mobile #send_textarea { grid-column:1/-1; grid-row:2; height:66px !important; min-height:0 !important; max-height:none !important; padding:0 8px !important; margin:0 !important; border:0 !important; background:transparent !important; font:16px/1.8 system-ui,sans-serif !important; field-sizing:fixed; }
+body.wb-active.wb-mobile #leftSendForm { grid-column:1; grid-row:3; width:88px !important; height:44px !important; gap:0; }
+body.wb-active.wb-mobile :is(#options_button,#extensionsMenuButton) { width:44px; height:44px; }
+body.wb-active.wb-mobile .wb-composer-actions { grid-row:3; grid-column:2; gap:0; }
+body.wb-mobile .wb-composer-actions button { width:38px; min-width:38px; height:44px; min-height:44px; padding:8px !important; }
+body.wb-active.wb-mobile #rightSendForm { grid-row:3; grid-column:3; height:44px; width:auto; gap:0; }
+body.wb-active.wb-mobile :is(#send_but,#mes_stop) { width:44px !important; height:44px !important; line-height:44px !important; }
+body.wb-active.wb-mobile .wb-input-grip { inset:0 0 auto !important; height:28px !important; min-height:28px !important; width:88px !important; }
+body.wb-mobile .wb-input-grip span { width:34px; height:3px; }
+.wb-mobile-config { grid-row:1; grid-column:1/-1; display:flex; align-items:center; min-width:0; margin:0 3px 4px; border-bottom:1px solid var(--wb-line); padding-bottom:4px; }
+.wb-mobile-config>div { flex:1; min-width:0; }
+body.wb-mobile .wb-contexts { display:flex; gap:2px; overflow:auto; scrollbar-width:none; width:100%; min-width:0; transform:none; }
+body.wb-mobile .wb-selector { flex:1 0 104px; height:44px; max-width:none; background:transparent; border:0; border-radius:9px; }
+body.wb-mobile .wb-selector>.wb-selector-detail { width:26px; height:44px; min-height:44px; }
+body.wb-mobile .wb-selector>.wb-selector-value { font-size:11px; gap:2px; min-height:44px; }
+body.wb-mobile .wb-selector>.wb-icon { width:26px; height:44px; min-height:44px; }
+body.wb-mobile .wb-selector-detail svg { width:15px; }
+body.wb-mobile .wb-mobile-summary { flex:1; min-width:0; display:flex; justify-content:flex-start; gap:8px; height:44px; padding:0 8px; font-size:12px; border:0; background:transparent; }
+.wb-mobile-summary>span { min-width:0; max-width:55%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wb-mobile-summary small { color:var(--wb-muted); font-size:11px; }
+.wb-mobile-config .wb-mobile-config-fold { width:44px; height:44px; min-height:44px; border:0; padding:0; background:transparent; }
+.wb-mobile-config-fold svg { transition:transform 180ms; }
+.wb-mobile-config-fold[aria-expanded=true] svg { transform:rotate(180deg); }
+body.wb-active.wb-mobile #wb-layout-root { display:none; }
+.wb-mobile-shade,.wb-mobile-sheet-shade { position:fixed; inset:var(--wb-mobile-top,0px) 0 auto; height:var(--wb-mobile-height,100dvh); border:0; background:#342a2338; z-index:24; padding:0; }
+body.wb-mobile .wb-left,body.wb-mobile .wb-right { position:fixed; top:var(--wb-mobile-top,0px); bottom:auto; height:var(--wb-mobile-height,100dvh); max-height:none; z-index:26; margin:0; width:min(88vw,360px); padding-top:calc(var(--wb-safe-top) + 44px); padding-bottom:var(--wb-safe-bottom); transition:transform 220ms cubic-bezier(.22,.8,.3,1),visibility 220ms; box-shadow:8px 0 30px #34291e16; }
+body.wb-mobile .wb-left { left:0; transform:translateX(-100%); }
+body.wb-mobile .wb-right { right:0; left:auto; width:min(100%,520px); transform:translateX(100%); background:var(--wb-paper); }
+body.wb-mobile :is(.wb-left,.wb-right).is-open { transform:none; }
+body.wb-mobile .wb-right .wb-panel-content { min-width:0; padding:12px; }
+body.wb-mobile .wb-panel-header-row { height:44px; min-height:44px; }
+body.wb-mobile .wb-resource-rail { display:none; }
+body.wb-mobile .wb-mobile-drawer-close { position:fixed; top:calc(var(--wb-mobile-top,0px) + var(--wb-safe-top)); right:8px; width:44px; height:44px; display:grid; place-items:center; background:var(--wb-paper); color:var(--wb-control-ink); padding:0; border:0; border-radius:50%; z-index:27; }
+body.wb-mobile.wb-left-open .wb-mobile-drawer-close { right:auto; left:min(calc(88vw - 50px),310px); }
+body.wb-mobile .wb-panel-tabs { flex-wrap:wrap; gap:4px; }
+body.wb-mobile .wb-panel-tabs>button { min-height:40px; }
+body.wb-mobile .wb-mobile-sheet-shade { z-index:10020; animation:wb-mobile-shade-in 180ms ease both; }
+.wb-mobile-sheet { position:fixed; left:0; right:0; bottom:calc(100% - var(--wb-mobile-top,0px) - var(--wb-mobile-height,100dvh)); max-height:calc(var(--wb-mobile-height,100dvh) - var(--wb-safe-top) - 24px); z-index:10021; background:var(--wb-paper); padding:8px 16px max(16px,var(--wb-safe-bottom)); border:1px solid var(--wb-line); border-radius:22px 22px 0 0; overflow:auto; overscroll-behavior:contain; animation:wb-mobile-sheet-in 220ms cubic-bezier(.22,.8,.3,1) both; }
+.wb-mobile-sheet>header { display:flex; align-items:center; justify-content:space-between; min-height:48px; margin-bottom:8px; }
+.wb-mobile-sheet>header strong { font-size:15px; font-weight:500; }
+.wb-mobile-sheet>header button { width:44px; height:44px; border:0; padding:0; background:transparent; }
+.wb-mobile-sheet-list { display:flex; flex-direction:column; }
+.wb-mobile-sheet-list>button { min-height:48px; border:0; background:transparent; justify-content:flex-start; padding:10px 8px; gap:12px; }
+.wb-mobile-mode-row { display:flex; gap:6px; padding:4px 0 12px; border-bottom:1px solid var(--wb-line); margin-bottom:8px; }
+.wb-mobile-mode-row>button { flex:1; min-height:44px; background:transparent; border:1px solid transparent; }
+.wb-mobile-mode-row>button[aria-pressed=true] { border-color:color-mix(in srgb,var(--wb-accent) 32%,var(--wb-line)); background:var(--wb-selected); color:var(--wb-accent); }
+.wb-mobile-tool-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px 2px; padding:8px 0; }
+.wb-mobile-tool-grid>button { display:flex; flex-direction:column; gap:8px; min-height:72px; border:0; padding:10px 3px; background:transparent; font-size:11px; }
+.wb-mobile-tool-config { border-bottom:1px solid var(--wb-line); padding-bottom:8px; }
+.wb-mobile-candidates { display:flex; gap:8px; padding:8px 0; }
+.wb-mobile-candidates>button { flex:1; min-height:44px; background:var(--wb-soft); border-color:var(--wb-line); }
+body.wb-mobile .wb-popover,body.wb-mobile .wb-resource-menu:not(.is-rail) { position:fixed !important; top:auto !important; left:8px !important; right:8px; bottom:calc(100% - var(--wb-mobile-top,0px) - var(--wb-mobile-height,100dvh) + var(--wb-safe-bottom) + 8px); width:auto !important; max-width:none; min-width:0; max-height:calc(var(--wb-mobile-height,100dvh) - var(--wb-safe-top) - 28px) !important; z-index:10030; border-radius:17px; overflow:auto; }
+body.wb-mobile .wb-pop-dismiss { z-index:10029; }
+body.wb-mobile .wb-popover :is(.wb-quick-row,.wb-pop-row) { min-height:48px; }
+body.wb-mobile .wb-popover header { min-height:44px; }
+body.wb-mobile .wb-popover header button { min-height:44px; }
+body.wb-mobile .wb-mobile-editor-heading,body.wb-mobile .wb-mobile-editor-tools { display:none; }
+body.wb-active.wb-mobile.wb-mobile-editor #sheld { top:var(--wb-mobile-top,0px) !important; height:var(--wb-mobile-height,100dvh) !important; }
+body.wb-mobile-editor #chat,body.wb-mobile-editor .wb-mobile-header { visibility:hidden; pointer-events:none; }
+body.wb-active.wb-mobile.wb-mobile-editor #form_sheld { height:100% !important; padding:var(--wb-safe-top) 0 var(--wb-safe-bottom) !important; }
+body.wb-active.wb-mobile.wb-mobile-editor #send_form { height:100% !important; border:0 !important; border-radius:0 !important; padding:0 12px 12px !important; }
+body.wb-active.wb-mobile.wb-mobile-editor #nonQRFormItems { flex:1; min-height:0; grid-template-rows:minmax(0,1fr) 44px; }
+body.wb-active.wb-mobile.wb-mobile-editor #send_textarea { grid-row:1; height:100% !important; line-height:2 !important; padding:16px 8px !important; }
+body.wb-mobile-editor :is(.wb-mobile-config,.wb-input-grip) { display:none !important; }
+body.wb-active.wb-mobile.wb-mobile-editor :is(#leftSendForm,.wb-composer-actions,#rightSendForm) { grid-row:2; }
+body.wb-mobile-editor .wb-mobile-editor-heading { display:flex; flex:none; align-items:center; gap:8px; height:58px; border-bottom:1px solid var(--wb-line); }
+.wb-mobile-editor-heading>button { min-height:44px; background:transparent; border:0; padding:0 8px; gap:6px; }
+.wb-mobile-editor-heading strong { font-weight:500; font-size:14px; flex:1; }
+.wb-mobile-editor-heading small { color:var(--wb-muted); font-size:11px; }
+body.wb-mobile-keyboard.wb-mobile-rp { --wb-mobile-lower:0px !important; }
+body.wb-mobile-keyboard .wb-mobile-header { transform:none !important; }
+body.wb-mobile-keyboard .wb-mobile-scene { visibility:hidden; }
+/* RP keeps a chronological native chat. The actor is behind a movable foreground sheet. */
+body.wb-mobile-rp { --wb-reading-size:15px; --wb-reading-leading:1.8; }
+body.wb-mobile-rp .wb-mobile-header { touch-action:none; user-select:none; }
+.wb-mobile-scene { position:fixed; inset:0; z-index:1; background:var(--wb-soft); overflow:hidden; }
+.wb-mobile-scene img { height:100%; width:100%; object-fit:contain; object-position:center top; }
+.wb-mobile-no-portrait { position:absolute; top:18%; left:0; right:0; text-align:center; color:var(--wb-muted); font-size:13px; }
+body.wb-mobile-rp.wb-mobile-lowered .wb-mobile-header { border-radius:22px 22px 0 0; box-shadow:0 -8px 24px #43362815; }
+body.wb-mobile-dragging #sheld,body.wb-mobile-dragging .wb-mobile-header { transition:none !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat { padding:12px 12px 18px !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes { border:0 !important; background:transparent !important; border-radius:0 !important; display:flex !important; flex-direction:row; align-items:flex-end; gap:8px; width:100%; max-width:650px; padding:0 !important; margin:0 auto 16px !important; }
+body.wb-mobile-rp #chat .mes>.avatar { display:block !important; width:30px !important; height:30px !important; flex:none; margin:0 0 2px !important; }
+body.wb-mobile-rp #chat .mes>.avatar img { width:30px !important; height:30px !important; min-width:0 !important; border-radius:50%; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes_block { min-width:0; flex:none; width:auto; max-width:calc(100% - 52px); padding:12px 14px !important; border-radius:17px 17px 17px 4px; background:var(--wb-surface); }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes_text { font:15px/1.85 system-ui,sans-serif !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes[is_user=true] { flex-direction:row-reverse; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes[is_user=true] .mes_block { background:var(--wb-selected); border-radius:17px 17px 4px 17px; }
+body.wb-mobile-rp #chat .mes :is(.wb-user-heading,.ch_name,.mes_buttons,.swipe_left,.swipeRightBlock,.swipe_right,.swipes-counter) { display:none !important; }
+body.wb-mobile-rp #chat .mes:has(.edit_textarea) .mes_buttons,body.wb-mobile-rp #chat .mes:has(.edit_textarea) .ch_name { display:flex !important; }
+body.wb-mobile-rp #chat .mes:has(.edit_textarea) .mes_block { width:calc(100% - 38px); max-width:none; }
+body.wb-mobile-rp #chat .edit_textarea { min-height:160px; width:100%; font-size:16px; }
+body.wb-active.wb-mobile.wb-mobile-rp #form_sheld { padding:8px 10px max(8px,var(--wb-safe-bottom)) !important; border-top:1px solid var(--wb-line); }
+body.wb-active.wb-mobile.wb-mobile-rp #send_form { background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important; border-radius:0 !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #nonQRFormItems { grid-template-columns:44px minmax(0,1fr) 44px; grid-template-rows:minmax(44px,auto); gap:8px; }
+body.wb-active.wb-mobile.wb-mobile-rp #send_textarea { grid-row:1; grid-column:2; height:44px !important; border:1px solid var(--wb-line) !important; border-radius:22px !important; background:var(--wb-surface) !important; padding:7px 12px !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #rightSendForm { grid-row:1; grid-column:3; }
+body.wb-mobile-rp :is(#leftSendForm,.wb-composer-actions,.wb-input-grip) { display:none !important; }
+body.wb-mobile .wb-mobile-plus { grid-row:1; grid-column:1; display:grid; place-items:center; width:44px; height:44px; border-radius:50%; border:0; padding:0; background:var(--wb-surface); }
+body.wb-mobile-rp.wb-mobile-editor .wb-mobile-plus { display:none; }
+body.wb-active.wb-mobile.wb-mobile-rp.wb-mobile-editor #form_sheld { padding:var(--wb-safe-top) 0 var(--wb-safe-bottom) !important; border-top:0; }
+body.wb-active.wb-mobile.wb-mobile-rp.wb-mobile-editor #send_form { padding:0 12px 12px !important; }
+body.wb-active.wb-mobile.wb-mobile-rp.wb-mobile-editor #nonQRFormItems { grid-template-rows:minmax(0,1fr) 44px; }
+body.wb-active.wb-mobile.wb-mobile-rp.wb-mobile-editor #send_textarea { grid-row:1; grid-column:1/-1; background:transparent !important; border:0 !important; border-radius:0 !important; }
+body.wb-active.wb-mobile.wb-mobile-rp.wb-mobile-editor #rightSendForm { grid-row:2; }
+body.wb-mobile-rp.wb-mobile-editor .wb-mobile-editor-tools { display:grid; position:absolute; bottom:12px; left:12px; width:44px; height:44px; border:0; background:var(--wb-soft); padding:0; place-items:center; border-radius:50%; }
+/* Existing editors and dialogs stack on phones, retaining their controls and handlers. */
+body.wb-mobile .wb-settings-workspace { top:var(--wb-mobile-top,0px); bottom:auto; height:var(--wb-mobile-height,100dvh); padding-top:var(--wb-safe-top); padding-bottom:var(--wb-safe-bottom); }
+body.wb-mobile .wb-settings-header { gap:5px; padding:6px 8px; height:auto; min-height:52px; flex-wrap:wrap; }
+body.wb-mobile .wb-settings-header>small,body.wb-mobile .wb-settings-footer { display:none; }
+body.wb-mobile .wb-settings-header>button { min-height:40px; padding:6px; font-size:11px; }
+body.wb-mobile .wb-settings-header>strong { font-size:13px; }
+body.wb-mobile .wb-settings-layout { display:flex; flex-direction:column; }
+body.wb-mobile .wb-settings-nav { display:flex; flex-direction:row; flex:none; overflow-x:auto; padding:4px 8px; gap:3px; border-bottom:1px solid var(--wb-line); }
+body.wb-mobile .wb-settings-nav>button { flex:none; min-height:44px; padding:6px 9px; white-space:nowrap; width:auto; font-size:11px; }
+body.wb-mobile .wb-settings-nav footer { display:none; }
+body.wb-mobile .wb-settings-layout>main { flex:1; min-height:0; }
+body.wb-mobile .wb-settings-subnav { padding:0 12px; gap:16px; }
+body.wb-mobile :is(.wb-manager-grid,.wb-persona-manager,.wb-world-grid,.wb-manager-editor .wb-world-grid,.wb-outline-editor-grid,.wb-params-grid,.wb-settings-grid,.wb-image-settings-grid,.wb-background-config) { grid-template-columns:minmax(0,1fr) !important; }
+body.wb-mobile :is(.wb-manager-grid,.wb-persona-manager) { display:flex; flex-direction:column; overflow:auto; }
+body.wb-mobile :is(.wb-manager-list,.wb-persona-list) { max-height:230px; flex:none; }
+body.wb-mobile :is(.wb-manager-editor,.wb-persona-editor) { min-height:350px; overflow:visible; }
+body.wb-mobile :is(.wb-control-grid,.wb-parameters) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+body.wb-mobile :is(.wb-character-grid,.wb-background-grid) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+body.wb-mobile :is(.wb-resource-v2,.wb-resource-detail,.wb-resources) { min-width:0; }
+body.wb-mobile .wb-addon-editor { top:var(--wb-mobile-top,0px); height:var(--wb-mobile-height,100dvh); padding-top:var(--wb-safe-top); }
+body.wb-mobile .wb-addon-editor>header { min-height:48px; height:auto; padding:8px 12px; }
+body.wb-mobile .wb-addon-editor>header strong { font-size:13px; }
+body.wb-mobile .wb-addon-editor>header button { min-height:44px; }
+body.wb-mobile .wb-dialog { max-width:calc(100vw - 16px); max-height:calc(var(--wb-mobile-height,100dvh) - 16px); min-width:0; }
+body.wb-mobile .wb-dialog-body { padding:12px; }
+body.wb-mobile .wb-toast { left:12px; right:12px; top:calc(var(--wb-mobile-top,0px) + var(--wb-safe-top) + 64px); bottom:auto; z-index:10040; }
+body.wb-mobile .wb-addon-task-strip { left:12px; right:12px; bottom:calc(100% - var(--wb-mobile-top,0px) - var(--wb-mobile-height,100dvh) + 230px); }
+/* Manual image mode stays inside the native composer, including reference uploads. */
+body.wb-active.wb-mobile.wb-image-input-mode #nonQRFormItems { grid-template-columns:minmax(0,1fr) 44px; grid-template-rows:66px auto; }
+body.wb-active.wb-mobile.wb-image-input-mode #send_textarea { grid-row:1; grid-column:1/-1; height:66px !important; }
+body.wb-mobile.wb-image-input-mode :is(.wb-mobile-config,.wb-mobile-plus) { display:none !important; }
+body.wb-active.wb-mobile.wb-image-input-mode #rightSendForm { grid-row:2; grid-column:2; align-self:end; }
+body.wb-mobile .wb-image-input-anchor { grid-row:2; grid-column:1; min-width:0; flex-wrap:wrap; gap:3px; padding:0 3px; }
+body.wb-mobile .wb-image-input-label { min-height:40px; }
+body.wb-mobile .wb-image-references { flex:1; min-width:34px; }
+body.wb-mobile .wb-image-input-actions { margin-left:0; }
+body.wb-mobile.wb-mobile-rp.wb-image-input-mode #send_form { background:var(--wb-surface) !important; border:1px solid var(--wb-line) !important; padding:10px 8px !important; border-radius:20px !important; }
+body.wb-mobile.wb-mobile-rp.wb-image-input-mode #send_textarea { background:transparent !important; border:0 !important; border-radius:0 !important; padding:0 8px !important; }
+@keyframes wb-mobile-sheet-in { from { opacity:0; transform:translateY(100%); } to { opacity:1; transform:none; } }
+@keyframes wb-mobile-sheet-out { to { opacity:0; transform:translateY(100%); } }
+@keyframes wb-mobile-shade-in { from { opacity:0; } to { opacity:1; } }
+body.wb-mobile .wb-mobile-sheet[data-wb-exiting=true] { animation:wb-mobile-sheet-out 200ms ease both; }
+body.wb-mobile .wb-mobile-sheet-shade[data-wb-exiting=true] { opacity:0; transition:opacity 200ms; }
+@media(prefers-reduced-motion:reduce) { body.wb-mobile *,body.wb-mobile #sheld { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+body.wb-mobile.reduced-motion *,body.wb-mobile.reduced-motion #sheld { animation:none !important; transition:none !important; }
+body.wb-mobile #wb-root { contain:paint; overflow:clip; }
+body.wb-active.wb-mobile:not(.wb-native-panel) #top-settings-holder { display:none !important; }
+body.wb-active.wb-mobile:not(.wb-mobile-busy) #send_but { display:flex !important; align-items:center; justify-content:center; }
+body.wb-mobile-offline #send_but { opacity:.45; }
+body.wb-mobile-busy #send_but { display:none !important; }
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name { position:static !important; display:flex; align-items:center; min-height:36px; margin-bottom:6px; }
+body.wb-mobile #wb-root { width:100vw; height:100dvh; }
+body.wb-active.wb-mobile #form_sheld { container-type:normal; }
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .mes_block { display:flex !important; flex-direction:column; }
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name { order:-1; }
+body.wb-mobile .wb-mobile-resource-popup .wb-pop-dismiss { inset:var(--wb-mobile-top,0px) 0 auto !important; width:100vw !important; height:var(--wb-mobile-height,100dvh) !important; padding:0; z-index:10029; background:#342a2326 !important; }
+body.wb-mobile .wb-mobile-resource-popup .wb-section-title { gap:5px; }
+body.wb-mobile .wb-mobile-resource-popup .wb-section-title button { min-width:44px; min-height:44px; }
+@media(max-width:1023px) {
+ body:not(.wb-active) .wb-layout-switcher { top:max(8px,env(safe-area-inset-top)); right:8px; }
+ body:not(.wb-active) .wb-layout-controls { height:48px; width:136px; }
+ body:not(.wb-active) .wb-layout-controls>button { min-height:44px !important; height:44px !important; }
+ body:not(.wb-active) .wb-layout-controls>.wb-layout-step,body:not(.wb-active) .wb-layout-controls>.wb-layout-trigger { width:44px; }
+}
+body.wb-active.wb-mobile.wb-mobile-editor #chat { display:none !important; }
+body.wb-mobile .wb-mobile-scene { width:100vw; height:100dvh; pointer-events:none !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes>.avatar { display:block !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mesAvatarWrapper { display:flex !important; flex-direction:column; width:30px; min-width:30px; flex:none; align-self:flex-end; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mesAvatarWrapper>.avatar { display:block !important; width:30px !important; height:30px !important; margin:0 !important; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mesAvatarWrapper>.avatar img { width:30px !important; height:30px !important; border-radius:50%; }
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mesAvatarWrapper>:not(.avatar) { display:none !important; }
+body.wb-active.wb-mobile.wb-image-input-mode .wb-image-input-anchor { grid-column:1; height:auto; min-height:44px; gap:3px; }
+body.wb-mobile .wb-image-input-actions>button,body.wb-mobile .wb-image-references.is-compact>button { height:44px; min-height:44px; width:36px; }
+body.wb-mobile .wb-image-references.is-compact figure>button { width:24px; height:24px; top:-6px; right:-5px; }
+body.wb-mobile .wb-ot-editor-layout { flex-direction:column; gap:12px; }
+body.wb-mobile .wb-ot-editor-layout>aside { width:100%; border-right:0; border-bottom:1px solid var(--wb-line); padding-right:0; padding-bottom:8px; }
+body.wb-mobile .is-editor .wb-ot-tree { max-height:200px; }
+body.wb-mobile .wb-addon-editor .wb-addon-view { padding:12px; }
+body.wb-mobile .wb-image-config-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+body.wb-mobile .wb-addon-task-strip { top:auto; transform:none; max-width:calc(100vw - 24px); }
+body.wb-mobile-rp .wb-addon-task-strip { bottom:calc(100% - var(--wb-mobile-top,0px) - var(--wb-mobile-height,100dvh) + 84px); }
+body.wb-mobile-editor .wb-addon-task-strip { bottom:calc(100% - var(--wb-mobile-top,0px) - var(--wb-mobile-height,100dvh) + 68px); }

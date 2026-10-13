@@ -1,0 +1,254 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {launch} from './browser.mjs';
+
+const dir='artifacts/interaction-design';
+fs.mkdirSync(dir,{recursive:true});
+const browser=await launch(),checks=[],errors=[];
+const pass=label=>{checks.push(label);console.log('PASS',label);};
+try {
+  const page=await browser.newPage({viewport:{width:736,height:1000}});
+  page.on('pageerror',e=>errors.push(e.message));
+  const iconCache=path.join(dir,'lucide-test-cache.js');
+  if(fs.existsSync(iconCache))await page.route('**/lucide@*/dist/umd/lucide.js',route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync(iconCache)}));
+  const capture=async(root,name)=>{await page.waitForTimeout(220);const height=Math.ceil((await root.boundingBox()).height)+50;await page.setViewportSize({width:page.viewportSize().width,height});await root.screenshot({path:dir+'/'+name+'.png'});};
+  await page.goto('file://'+path.resolve('docs/design/novel-desktop/rework/reading-interactions.html'),{waitUntil:'domcontentloaded'});
+  const f=page.frameLocator('iframe');
+  await f.locator('#noval-reading-study .rs-prose').first().waitFor();
+  const root=f.locator('#noval-reading-study');
+  await root.locator('svg').first().waitFor({timeout:30000});
+  assert.equal(await f.locator('[data-outline-toggle]').getAttribute('aria-expanded'),'false');
+  assert.equal(await f.locator('[data-floors-toggle]').getAttribute('aria-expanded'),'true');
+  assert.equal(await f.locator('.rs-floor-list button').count(),5);
+  assert.equal(await f.locator('.rs-settings-links button').count(),9);
+  const ratio=await f.locator('.rs-chats').evaluate(e=>e.querySelector('.rs-information').offsetHeight/e.clientHeight);
+  assert(Math.abs(ratio-2/3)<.03,'sidebar info area ratio '+ratio);
+  await capture(root,'reading');
+  await f.locator('[data-outline-toggle]').click();await page.waitForTimeout(240);
+  assert.equal(await f.locator('#rs-outline-content').evaluate(e=>e.inert),false);
+  await f.locator('[data-outline-toggle]').click();
+  pass('chat management leads a two-thirds information area, outline folded, five floors and nine settings entries');
+  assert.equal(await f.locator('.rs-user-toggle').getAttribute('aria-expanded'),'false');
+  assert.equal(await f.locator('.rs-user-body').isVisible(),false);
+  await f.locator('.rs-user-toggle').click();
+  await f.getByRole('button',{name:'阅读设置',exact:true}).click();
+  assert(await f.getByRole('checkbox',{name:'默认折叠用户输入',exact:true}).isChecked());
+  await page.keyboard.press('Escape');await f.locator('.rs-user-toggle').click();
+  assert.equal(await f.locator('.rs-meta').first().evaluate(e=>getComputedStyle(e).opacity),'0');
+  await f.getByRole('button',{name:'编辑第 26 层',exact:true}).focus();
+  await page.waitForTimeout(180);
+  assert.equal(await f.locator('.rs-meta').first().evaluate(e=>getComputedStyle(e).opacity),'1');
+  assert.equal(await f.locator('.rs-reading img,.rs-reading .avatar,.rs-reading .name').count(),0);
+  pass('default collapsed user input, identity-free prose and focus-visible metadata');
+
+  for(const [name,kind] of [['聊天菜单','menu'],['扩展工具','tools'],['快速回复','quick']]){
+    await f.getByRole('button',{name,exact:true}).click();
+    const pop=f.getByRole('dialog',{name,exact:true});
+    assert(await pop.isVisible());
+    assert.equal(await f.locator('.rs-popover').count(),1);
+    assert.equal(await pop.getAttribute('aria-modal'),'false');
+    const bounds=await root.evaluate(e=>{const r=e.getBoundingClientRect(),p=e.querySelector('.rs-popover').getBoundingClientRect();return p.left>=r.left&&p.right<=r.right&&p.top>=r.top&&p.bottom<=r.bottom;});
+    assert(bounds,kind+' bounds');
+    await capture(root,kind+'-popover');
+    await page.keyboard.press('Escape');assert(!(await pop.isVisible()));
+  }
+  pass('three matching anchored popovers fit and close with Escape');
+  const qr=f.getByRole('button',{name:'快速回复',exact:true});
+  await qr.click();await f.getByRole('button',{name:'克制地继续 插入',exact:true}).click();
+  assert((await f.getByRole('textbox',{name:'消息输入',exact:true}).inputValue()).includes('保持克制'));
+  assert.equal(await f.locator('.rs-overlay').isVisible(),false);
+  await qr.click();await f.getByRole('textbox',{name:'搜索快速回复'}).fill('人物');
+  assert.equal(await f.locator('.rs-qr-row').count(),1);
+  await page.keyboard.press('Escape');
+  const alignment=await f.locator('.rs-compose-tools').evaluate(e=>{
+    const q=e.querySelector('[data-open=quick]').getBoundingClientRect(),a=e.querySelector('[data-generate=impersonate]').getBoundingClientRect();return {next:a.left>=q.right,row:Math.abs(a.top-q.top)<2};
+  });assert(alignment.next&&alignment.row);
+  await f.getByRole('button',{name:'AI 帮答',exact:true}).click();
+  assert((await f.getByRole('textbox',{name:'消息输入'}).inputValue()).includes('接过信'));
+  pass('Quick Reply search/insertion and AI-help position next to it');
+
+  await f.getByRole('button',{name:'阅读设置',exact:true}).click();
+  await f.getByRole('slider',{name:'阅读字号'}).fill('20');
+  assert.equal(await root.evaluate(e=>e.style.getPropertyValue('--nr-font')),'20px');
+  await f.getByRole('button',{name:'黑体 · 清晰',exact:true}).click();
+  await f.getByRole('button',{name:'始终显示',exact:true}).click();
+  assert.equal(await root.getAttribute('data-meta'),'always');
+  await f.getByRole('checkbox',{name:'默认折叠用户输入',exact:true}).uncheck();
+  assert(await f.locator('.rs-user-body').isVisible());
+  await page.keyboard.press('Escape');
+  await f.getByRole('button',{name:'编辑第 27 层',exact:true}).click();
+  const original='**Markdown**\n<story>{{user}} & {{char}}</story>\n<script>fixture only</script>';
+  await f.getByRole('textbox',{name:'消息原文',exact:true}).fill(original);
+  await f.getByRole('button',{name:'保存编辑',exact:true}).click();
+  await f.getByRole('button',{name:'编辑第 27 层',exact:true}).click();
+  assert.equal(await f.getByRole('textbox',{name:'消息原文',exact:true}).inputValue(),original);
+  await f.getByRole('textbox',{name:'消息原文',exact:true}).fill('丢弃草稿');
+  await f.getByRole('button',{name:'取消编辑',exact:true}).click();
+  await f.getByRole('button',{name:'编辑第 27 层',exact:true}).click();
+  assert.equal(await f.getByRole('textbox',{name:'消息原文',exact:true}).inputValue(),original);
+  await capture(root,'raw-editor');await page.keyboard.press('Escape');
+  pass('font preferences update prose and editing preserves exact XML/macros across save/cancel');
+
+  await f.getByRole('button',{name:'聊天管理操作',exact:true}).click();
+  for(const name of ['群聊','删除消息','关闭当前对话'])assert(await f.getByRole('dialog',{name:'聊天管理',exact:true}).getByRole('button',{name,exact:true}).isVisible());
+  for(const name of ['开始新对话','管理聊天文件'])assert.equal(await f.getByRole('dialog',{name:'聊天管理',exact:true}).getByRole('button',{name,exact:true}).count(),0);
+  await page.keyboard.press('Escape');
+  assert(await f.locator('.rs-chat-shortcuts').getByRole('button',{name:'开始新对话',exact:true}).isVisible());
+  await f.getByRole('button',{name:'管理聊天文件',exact:true}).click();
+  assert.equal(await f.locator('.rs-file-row').count(),4);await page.keyboard.press('Escape');
+  await f.getByRole('button',{name:'重命名',exact:true}).click();
+  await f.getByRole('textbox',{name:'对话名称',exact:true}).fill('雾港来信 · 更长的章节标题');
+  await f.getByRole('button',{name:'保存名称',exact:true}).click();
+  assert.equal(await f.locator('.rs-title').textContent(),'雾港来信 · 更长的章节标题');
+  await f.locator('[data-history]').click();assert.equal(await f.locator('.rs-history-item').count(),3);
+  await f.getByRole('button',{name:'聊天管理操作',exact:true}).click();
+  await f.getByRole('dialog',{name:'聊天管理',exact:true}).getByRole('button',{name:'删除消息',exact:true}).click();
+  assert(await f.getByRole('button',{name:'删除所选',exact:true}).isDisabled());
+  await f.getByRole('checkbox',{name:'全选',exact:true}).check();
+  assert.equal(await f.locator('[data-delete-count]').textContent(),'3 条已选');
+  await f.getByRole('button',{name:'删除所选',exact:true}).click();
+  assert(await f.getByRole('button',{name:'确认删除',exact:true}).isVisible());
+  await f.getByRole('dialog',{name:'操作',exact:true}).getByRole('button',{name:'取消',exact:true}).click();
+  await f.locator('.rs-delete-strip').getByRole('button',{name:'取消',exact:true}).click();
+  assert.equal(await f.locator('.rs-delete-strip').isVisible(),false);
+  pass('current chat stays expanded and chat-file/history actions have their own location');
+
+  for(const width of [320,460,736]){
+    await page.setViewportSize({width,height:1500});
+    assert(await root.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'reading overflow '+width);
+    for(const name of ['聊天菜单','扩展工具','快速回复','阅读设置']){
+      await f.getByRole('button',{name,exact:true}).click();
+      assert(await root.evaluate(e=>{const r=e.getBoundingClientRect(),p=e.querySelector('.rs-popover').getBoundingClientRect();return p.left>=r.left&&p.right<=r.right+.5;}),name+' '+width);
+      await page.keyboard.press('Escape');
+    }
+  }
+  pass('reading and popovers fit 320, 460 and 736px preview containers');
+  await page.setViewportSize({width:736,height:1000});
+  await page.goto('file://'+path.resolve('docs/design/novel-desktop/rework/reading-interactions.html'),{waitUntil:'domcontentloaded'});
+  await root.waitFor();await root.locator('svg').first().waitFor();await capture(root,'reading-expanded');
+
+  await page.setViewportSize({width:1024,height:1200});
+  await page.goto('file://'+path.resolve('docs/design/novel-desktop/rework/settings-workspace.html'),{waitUntil:'domcontentloaded'});
+  const s=page.frameLocator('iframe'),sr=s.locator('#noval-settings-study');
+  await s.locator('.ss-nav button').first().waitFor();assert.equal(await s.locator('.ss-nav button').count(),9);
+  await sr.locator('svg').first().waitFor();
+  await capture(sr,'settings-resources');
+  for(const [module,label,navName,fieldName] of [['generation','预设','生成配置','最大回复 Token'],['connection','连接','连接','连接名称'],['world','世界书','世界书','条目正文']]){
+    await s.locator('.ss-nav').getByRole('button',{name:navName,exact:true}).click();
+    const rail=s.locator('.ss-manager-list');
+    assert.equal(await rail.locator('[data-resource-select]').count(),3);
+    assert(await s.getByRole('button',{name:'外部编辑器，后续联动入口预留',exact:true}).isDisabled());
+    assert(await s.locator('[data-batch=copy]').isDisabled());
+    const names=await rail.locator('strong').allTextContents();
+    const draft=module==='generation'?'3001':module==='connection'?'雾港·本地草稿':'<story>{{char}} · 独立草稿</story>';
+    const draftField=s.getByRole(module==='generation'?'spinbutton':'textbox',{name:fieldName,exact:true});
+    await draftField.fill(draft);
+    await rail.getByRole('checkbox',{name:'选择 '+names[0],exact:true}).check();
+    assert.equal(await rail.locator('button[aria-pressed=true]').getAttribute('data-resource'),'0');
+    assert.equal(await s.locator('[data-batch-count]').textContent(),'已选 1 / 3');
+    assert(await s.getByRole('checkbox',{name:'全选'+label,exact:true}).evaluate(e=>e.indeterminate));
+    await rail.getByRole('checkbox',{name:'选择 '+names[1],exact:true}).check();
+    await rail.getByRole('button',{name:'编辑 '+names[1],exact:true}).click();
+    await rail.getByRole('button',{name:'编辑 '+names[0],exact:true}).click();
+    assert.equal(await draftField.inputValue(),draft);
+    assert.equal(await s.locator('[data-batch-count]').textContent(),'已选 2 / 3');
+    await capture(sr,'settings-'+module+'-batch');
+    await s.locator('[data-batch=copy]').click();
+    assert.equal(await rail.locator('[data-resource-select]').count(),5);
+    assert.equal(await s.locator('[data-batch-count]').textContent(),'已选 2 / 5');
+    await rail.getByRole('button',{name:'编辑 '+names[0]+' · 副本',exact:true}).click();
+    assert.equal(await draftField.inputValue(),draft);
+    await draftField.fill(module==='generation'?'6002':'副本草稿');
+    await rail.getByRole('button',{name:'编辑 '+names[0],exact:true}).click();
+    assert.equal(await draftField.inputValue(),draft);
+    await s.locator('[data-batch=delete]').click();
+    assert(await s.getByRole('dialog',{name:'删除所选 2 个'+label+'？',exact:true}).isVisible());
+    await page.keyboard.press('Escape');
+    assert.equal(await rail.locator('[data-resource-select]').count(),5);
+    await s.locator('[data-batch=delete]').click();
+    await s.getByRole('button',{name:'确认删除',exact:true}).click();
+    assert.equal(await rail.locator('[data-resource-select]').count(),3);
+    assert.equal(await s.locator('[data-batch-count]').textContent(),'已选 0 / 3');
+    assert.equal(await draftField.inputValue(),draft);
+    await s.getByRole('checkbox',{name:'全选'+label,exact:true}).check();
+    await s.locator('[data-batch=delete]').click();await s.getByRole('button',{name:'确认删除',exact:true}).click();
+    assert(await s.getByRole('button',{name:'新建'+label,exact:true}).isVisible());
+    assert(await s.getByRole('checkbox',{name:'全选'+label,exact:true}).isDisabled());
+    await s.getByRole('button',{name:'新建'+label,exact:true}).click();
+    assert.equal(await rail.locator('[data-resource-select]').count(),1);
+  }
+  pass('preset/connection/world multi-select, draft-preserving copies, confirmed deletion, empty state and editor placeholder');
+  await s.locator('.ss-nav').getByRole('button',{name:'生成配置',exact:true}).click();
+  const checkbox=s.locator('[data-resource-select]').first();
+  assert((await checkbox.evaluate(e=>getComputedStyle(e).transitionDuration)).includes('0.18s'));
+  await checkbox.check();
+  assert(await checkbox.evaluate(e=>e.getAnimations().length>0),'checkbox change animation');
+  await s.locator('.ss-manager-list').evaluate(e=>window.__originalResourceRail=e);
+  await s.locator('.ss-subnav').getByRole('button',{name:'提示词',exact:true}).click();
+  assert(await s.locator('.ss-manager-list').evaluate(e=>e===window.__originalResourceRail),'resource rail retains nodes for actual transitions');
+  assert(await checkbox.isChecked());
+  await s.locator('.ss-nav').getByRole('button',{name:'连接',exact:true}).click();
+  await s.locator('.ss-nav').getByRole('button',{name:'生成配置',exact:true}).click();
+  assert(await checkbox.isChecked(),'selection persists across modules');
+  await s.locator('.ss-subnav').getByRole('button',{name:'高级参数',exact:true}).click();
+  await s.getByRole('combobox',{name:'推理力度',exact:true}).click();
+  const valueAnimation=await s.getByRole('option',{name:'高',exact:true}).evaluate(e=>{e.click();return document.querySelector('[aria-label="推理力度"] span').getAnimations().map(a=>a.effect.getTiming().duration);});
+  assert(valueAnimation.includes(180),'dropdown value animation');
+  const detail=s.locator('details').first();
+  await detail.locator('summary').click();await page.waitForTimeout(240);
+  const closedHeight=await detail.evaluate(e=>e.offsetHeight);
+  await detail.locator('summary').click();await page.waitForTimeout(240);
+  assert((await detail.evaluate(e=>e.offsetHeight))>closedHeight+100,'details animated open/close');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await checkbox.uncheck();
+  assert.equal(await checkbox.evaluate(e=>e.getAnimations().length),0);
+  assert.equal(await checkbox.evaluate(e=>getComputedStyle(e).transitionDuration),'0s');
+  await s.getByRole('combobox',{name:'推理力度',exact:true}).click();
+  const reducedAnimation=await s.getByRole('option',{name:'低',exact:true}).evaluate(e=>{e.click();return document.querySelector('[aria-label="推理力度"] span').getAnimations().length;});
+  assert.equal(reducedAnimation,0);
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  pass('checkbox/dropdown/list/group/fold transitions, selection retention and reduced-motion preference');
+  const categories=await s.locator('.ss-nav button').allTextContents();
+  for(const name of categories){
+    await s.getByRole('button',{name,exact:true}).first().click();
+    assert((await s.locator('.ss-content').innerText()).trim().length>20);
+    const groups=await s.locator('.ss-subnav button').allTextContents();
+    for(const group of groups){await s.locator('.ss-subnav').getByRole('button',{name:group,exact:true}).click();assert((await s.locator('.ss-content').innerText()).trim().length>15);}
+  }
+  pass('all nine independent settings categories and all their groups render');
+  await s.locator('.ss-nav').getByRole('button',{name:'用户设置',exact:true}).click();
+  await s.getByRole('combobox',{name:'正文字体',exact:true}).click();
+  await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  assert.equal(await s.getByRole('combobox',{name:'正文字体',exact:true}).innerText(),'黑体 · 清晰');
+  await s.getByRole('slider',{name:'字号',exact:true}).fill('21');
+  assert.equal(await s.locator('[data-range-output=reading-size]').textContent(),'21 px');
+  await s.getByRole('checkbox',{name:'默认折叠用户输入',exact:true}).uncheck();
+  await s.getByRole('button',{name:'保存',exact:true}).click();assert.equal(await s.locator('.ss-header-status').textContent(),'已保存');
+  await capture(sr,'settings-appearance');
+  await s.locator('.ss-nav').getByRole('button',{name:'回复格式',exact:true}).click();
+  await s.getByRole('textbox',{name:'故事字符串',exact:true}).fill(original);
+  await s.locator('.ss-subnav').getByRole('button',{name:'推理格式',exact:true}).click();
+  await s.locator('.ss-subnav').getByRole('button',{name:'上下文',exact:true}).click();
+  assert.equal(await s.getByRole('textbox',{name:'故事字符串',exact:true}).inputValue(),original);
+  await capture(sr,'settings-format');
+  pass('paper dropdown keyboard selection, live range values and draft retention across groups');
+  await s.locator('.ss-nav').getByRole('button',{name:'扩展',exact:true}).click();
+  await s.getByRole('textbox',{name:'搜索扩展',exact:true}).fill('正则');
+  assert.equal(await s.locator('.ss-ext-row:visible').count(),1);
+  await s.locator('.ss-ext-row:visible').getByRole('button',{name:'设置',exact:true}).click();
+  assert(await s.getByRole('textbox',{name:'查找表达式',exact:true}).isVisible());
+  await capture(sr,'settings-regex');
+  await s.locator('.ss-subnav').getByRole('button',{name:'快捷回复',exact:true}).click();
+  assert(await s.getByRole('checkbox',{name:'仅插入输入框',exact:true}).isVisible());
+  await capture(sr,'settings-quick-reply');
+  pass('extension search and dedicated regex/Quick Reply settings layouts');
+  for(const width of [320,736,1024]){
+    await page.setViewportSize({width,height:1500});
+    for(const name of categories){await s.locator('.ss-nav').getByRole('button',{name,exact:true}).click();assert(await sr.evaluate(e=>e.scrollWidth<=e.clientWidth+1),name+' overflow '+width);}
+  }
+  pass('all settings pages fit 320, 736 and 1024px preview containers');
+  assert.deepEqual(errors,[]);
+  fs.writeFileSync(dir+'/verification.json',JSON.stringify({checks,errors,scope:'Local visual previews; no runtime data or model calls'},null,2));
+} catch(error){console.error(error);process.exitCode=1;}
+finally{await browser.close();}

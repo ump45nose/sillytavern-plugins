@@ -1,0 +1,138 @@
+{
+  "source": "http://192.168.31.201:32012",
+  "checks": [
+    {
+      "name": "dialogue",
+      "sprites": [
+        {
+          "x": 701.46875,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        },
+        {
+          "x": 192.828125,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        }
+      ],
+      "portraitCount": 0,
+      "viewport": {
+        "width": 1496,
+        "height": 817
+      }
+    },
+    {
+      "name": "input",
+      "sprites": [
+        {
+          "x": 701.46875,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        },
+        {
+          "x": 192.828125,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        }
+      ],
+      "portraitCount": 0,
+      "viewport": {
+        "width": 1496,
+        "height": 817
+      }
+    },
+    {
+      "name": "expanded",
+      "sprites": [
+        {
+          "x": 701.46875,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        },
+        {
+          "x": 192.828125,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        }
+      ],
+      "portraitCount": 0,
+      "viewport": {
+        "width": 1496,
+        "height": 817
+      }
+    },
+    {
+      "name": "stage-only",
+      "sprites": [
+        {
+          "x": 701.46875,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        },
+        {
+          "x": 192.828125,
+          "y": 94,
+          "width": 482,
+          "height": 723,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        }
+      ],
+      "portraitCount": 0,
+      "viewport": {
+        "width": 1496,
+        "height": 817
+      }
+    },
+    {
+      "name": "compact",
+      "sprites": [
+        {
+          "x": 635.9140625,
+          "y": 94,
+          "width": 449.328125,
+          "height": 674,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        },
+        {
+          "x": 171.4609375,
+          "y": 94,
+          "width": 449.328125,
+          "height": 674,
+          "naturalWidth": 1024,
+          "naturalHeight": 1536
+        }
+      ],
+      "portraitCount": 0,
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    }
+  ],
+  "speakingStates": true,
+  "portraitFallback": true,
+  "errors": []
+}

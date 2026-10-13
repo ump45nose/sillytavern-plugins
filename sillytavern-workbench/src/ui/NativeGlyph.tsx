@@ -1,0 +1,14 @@
+import {ArrowRightLeft,Copy,Download,FilePlus,Folder,FolderPlus,KeyRound,Link,Minus,PencilLine,Plus,RefreshCw,RotateCcw,Save,Scissors,Settings,Tag,Trash2,Upload,WandSparkles,type LucideIcon} from "lucide-react";
+
+/** Decorate the existing native action, keeping its node, handlers and local owner. */
+export const nativeGlyphs:Record<string,LucideIcon>={
+ "fa-plus":Plus,"fa-minus":Minus,"fa-pencil":PencilLine,"fa-pen":PencilLine,"fa-pen-to-square":PencilLine,
+ "fa-trash":Trash2,"fa-trash-can":Trash2,"fa-copy":Copy,"fa-clone":Copy,"fa-truck-arrow-right":ArrowRightLeft,"fa-scissors":Scissors,
+ "fa-file-import":Upload,"fa-upload":Upload,"fa-file-arrow-up":Upload,
+ "fa-file-export":Download,"fa-download":Download,"fa-file-arrow-down":Download,
+ "fa-floppy-disk":Save,"fa-save":Save,"fa-file-circle-plus":FilePlus,"fa-folder-plus":FolderPlus,"fa-folder":Folder,
+ "fa-rotate":RefreshCw,"fa-arrows-rotate":RefreshCw,"fa-sync":RefreshCw,
+ "fa-clock-rotate-left":RotateCcw,"fa-rotate-left":RotateCcw,"fa-undo":RotateCcw,"fa-recycle":RotateCcw,
+ "fa-link":Link,"fa-key":KeyRound,"fa-gear":Settings,"fa-cog":Settings,"fa-tags":Tag,
+ "fa-wand-magic":WandSparkles,"fa-wand-magic-sparkles":WandSparkles,"fa-right-left":ArrowRightLeft,
+};

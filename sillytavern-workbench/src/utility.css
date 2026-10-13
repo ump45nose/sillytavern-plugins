@@ -1,0 +1,65 @@
+/* Shared paper surfaces for tool configuration, add-on management and startup diagnostics. */
+.wb-utility-heading { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.wb-utility-heading>div { flex:1; min-width:0; }
+.wb-utility-heading h3 { margin:0; font:22px/1.4 serif; color:var(--wb-ink); }
+.wb-utility-heading p { margin:4px 0 0; font:12px/1.6 system-ui; color:var(--wb-muted); }
+.wb-utility-heading>button { gap:7px; font-size:12px; white-space:nowrap; }
+.wb-tool-settings,.wb-startup-diagnostics { padding:24px 28px; max-width:1600px; margin:0 auto; width:100%; }
+.wb-tools-preview { display:flex; gap:12px; align-items:center; min-height:48px; padding:8px 14px; border:1px solid var(--wb-line); border-radius:10px; background:var(--wb-surface); margin-bottom:18px; flex-wrap:wrap; }
+.wb-tools-preview>small { color:var(--wb-muted); margin-right:8px; }
+.wb-tools-preview>span { display:flex; padding:7px; background:var(--wb-soft); border-radius:6px; }
+.wb-tools-configuration { display:grid; grid-template-columns:270px minmax(0,1fr); gap:24px; }
+.wb-tools-order h4 { margin:0 0 12px; font-size:12px; font-weight:500; color:var(--wb-muted); }
+.wb-tool-ordered { display:flex; align-items:center; gap:7px; border-bottom:1px solid var(--wb-line); min-height:48px; }
+.wb-tool-ordered>span { flex:1; min-width:0; font-size:12px; }
+.wb-tool-ordered small { display:block; font-size:10px; line-height:1.5; color:var(--wb-muted); }
+.wb-tool-ordered .wb-icon { width:24px; min-width:24px; padding:4px; min-height:28px; }
+.wb-tool-ordered.is-unavailable { color:var(--wb-muted); }
+.wb-tools-catalog>.wb-search { margin-bottom:12px; }
+.wb-tools-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.wb-tool-choice { display:flex; align-items:center; gap:10px; padding:12px; min-height:72px; border:1px solid var(--wb-line); border-radius:10px; background:var(--wb-surface); transition:background 160ms,border-color 160ms; }
+.wb-tool-choice.is-selected { background:var(--wb-selected); border-color:color-mix(in srgb,var(--wb-accent) 34%,var(--wb-line)); }
+.wb-tool-choice>span { min-width:0; flex:1; font-size:12px; overflow-wrap:anywhere; }
+.wb-tool-choice>span>small { display:block; margin-top:4px; font-size:10px; color:var(--wb-muted); }
+.wb-tool-choice { cursor:pointer; }
+.wb-tool-choice input[type=checkbox] { width:15px; height:15px; flex:none; }
+.wb-addon-settings { padding:24px 28px; max-width:1600px; margin:0 auto; width:100%; }
+.wb-addon-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.wb-addon-card { background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:12px; padding:18px; transition:border-color 160ms,background 160ms; }
+.wb-addon-card.is-enabled { border-color:color-mix(in srgb,var(--wb-accent) 30%,var(--wb-line)); }
+.wb-addon-card>header { display:flex; align-items:center; gap:12px; }
+.wb-addon-card strong { flex:1; font:17px/1.5 serif; }
+.wb-addon-card strong>small { display:block; color:var(--wb-muted); font:10px/1.6 system-ui; }
+.wb-addon-card .wb-check { font-size:11px; gap:6px; white-space:nowrap; }
+.wb-addon-card>p { margin:14px 0; color:var(--wb-muted); font-size:12px; line-height:1.8; }
+.wb-addon-card>footer { display:flex; justify-content:space-between; gap:12px; font-size:10px; color:var(--wb-muted); padding-top:12px; border-top:1px solid var(--wb-line); }
+.wb-addon-card.is-enabled>footer>span { color:var(--wb-accent); }
+.wb-addon-message { padding:20px; }
+.wb-addon-message>button { font-size:12px; gap:6px; }
+@media(max-width:1100px) { .wb-addon-settings { padding:18px; } .wb-addon-grid { grid-template-columns:1fr; } }
+@media(prefers-reduced-motion:reduce) { .wb-addon-card { transition:none; } }
+.wb-startup-table code { background:transparent; color:inherit; border:0; padding:0; }
+.wb-startup-diagnostics>.wb-select { width:300px; max-width:100%; margin-bottom:16px; }
+.wb-startup-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:24px; }
+.wb-startup-cards>div { border:1px solid var(--wb-line); padding:14px 18px; border-radius:10px; background:var(--wb-surface); }
+.wb-startup-cards small { display:block; font-size:12px; color:var(--wb-muted); }
+.wb-startup-cards strong { display:block; font:24px/1.5 serif; margin-top:4px; }
+.wb-startup-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:36px; }
+.wb-startup-columns h4 { font:15px/1.5 serif; margin:0 0 8px; }
+.wb-startup-columns p,.wb-startup-columns li { font-size:12px; line-height:1.8; color:var(--wb-muted); }
+.wb-startup-columns ul { padding-left:20px; margin:10px 0 18px; }
+.wb-startup-stages { margin:16px 0 26px; }
+.wb-startup-stages>div { display:grid; grid-template-columns:88px 1fr 64px; align-items:center; gap:10px; min-height:36px; font-size:12px; }
+.wb-startup-stages i { height:5px; background:var(--wb-soft); border-radius:4px; overflow:hidden; }
+.wb-startup-stages i>span { display:block; height:100%; border-radius:4px; background:color-mix(in srgb,var(--wb-accent) 65%,var(--wb-line)); }
+.wb-startup-stages output { text-align:right; font-size:11px; }
+.wb-startup-table { margin-bottom:24px; }
+.wb-startup-table>div { display:grid; grid-template-columns:minmax(0,1fr) 56px 94px; gap:10px; padding:8px 0; border-bottom:1px solid var(--wb-line); font-size:11px; }
+.wb-startup-table code { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.wb-startup-table small { color:var(--wb-muted); text-align:right; font-size:10px; }
+.wb-startup-long-tasks { display:flex; flex-wrap:wrap; gap:8px; }
+.wb-startup-long-tasks>span { background:var(--wb-soft); border:1px solid var(--wb-line); border-radius:6px; padding:5px 8px; font-size:11px; }
+@media(max-width:1500px) { .wb-tools-configuration { grid-template-columns:230px minmax(0,1fr); gap:18px; } }
+@media(max-width:1350px) { .wb-tools-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:1100px) { .wb-tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .wb-startup-columns { grid-template-columns:1fr; gap:20px; } .wb-tool-settings,.wb-startup-diagnostics { padding:18px; } }
+@media(prefers-reduced-motion:reduce) { .wb-tool-choice { transition:none; } }

@@ -1,0 +1,11 @@
+{
+  "id": "image-gen",
+  "apiVersion": 2,
+  "version": "1.0.0",
+  "entry": "../../dist/addons/image-gen/index.js",
+  "css": "../../dist/addons/image-gen/index.css",
+  "loading": "on-demand",
+  "requires": [
+    "workbench"
+  ]
+}
