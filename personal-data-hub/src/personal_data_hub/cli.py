@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from datetime import timedelta
 
 from .contracts import canonical, instant, utcnow
+from .collection_errors import error_detail
 from .runner import configuration, run, store_from
 
 
@@ -17,6 +17,12 @@ def main():
     for action in ("collect", "backfill", "reconcile", "import-legacy"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
     sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
+    sub.add_parser("processing-status")
+    p = sub.add_parser("process-pending"); p.add_argument("--limit", type=int, default=50); p.add_argument('--lane', choices=('reading', 'model'), default='reading')
+    p = sub.add_parser("rebuild-content"); p.add_argument("--source"); p.add_argument("--force", action="store_true"); p.add_argument("--after"); p.add_argument("--limit", type=int, default=250, help="每个事务的扫描条数"); p.add_argument("--one-page", action="store_true")
+    p.add_argument('--background-page', action='store_true', help='后台单页回填；在同一事务保存进度')
+    from .processing.registry import PROFILES
+    p.add_argument('--processor', choices=sorted(PROFILES))
     p = sub.add_parser("backfill-display"); p.add_argument("--rebuild", action="store_true"); p.add_argument("--kind")
     p = sub.add_parser("import-crm"); p.add_argument("path")
     p = sub.add_parser("export-source"); p.add_argument("source", choices=["google"]); p.add_argument("--cursor-stdin", action="store_true")
@@ -29,11 +35,33 @@ def main():
         from dataclasses import asdict
         from .runner import adapter
         request = json.load(sys.stdin) if args.cursor_stdin else {}
-        for batch in adapter(config["sources"][args.source]).collect(request.get("cursor", {}), instant(request.get("since"))):
-            if any(r.assets for r in batch.records): raise ValueError("isolated_source_assets_unsupported")
-            print(canonical(asdict(batch)), flush=True)
+        try:
+            for batch in adapter(config["sources"][args.source]).collect(request.get("cursor", {}), instant(request.get("since"))):
+                if any(r.assets for r in batch.records): raise ValueError("isolated_source_assets_unsupported")
+                print(canonical(asdict(batch)), flush=True)
+        except Exception as exc:
+            print(canonical({"collection_error": error_detail(exc)}), file=sys.stderr)
+            raise SystemExit(1) from None
         return
     store = store_from(config)
+    if args.action == "process-pending":
+        from .processing.worker import drain
+        result = drain(store, args.limit, lane=args.lane, config=config)
+        print(canonical(result))
+        if result['failed']: raise SystemExit(1)
+        return
+    if args.action in ("processing-status", "rebuild-content"):
+        from .processing.repository import ProcessingRepository
+        repository = ProcessingRepository(store)
+        if args.action == "processing-status":
+            print(canonical(repository.status())); return
+        after = args.after
+        while True:
+            result = repository.rebuild(args.source, args.force, after, args.limit, processor=args.processor, background_page=args.background_page)
+            print(canonical(result), flush=True)
+            if args.one_page or args.background_page or result['next_after'] is None: break
+            after = result['next_after']
+        return
     if args.action == "ingest-network":
         from .network_ingest import ingest_network
         body = sys.stdin.buffer.read(4 * 1024 * 1024 + 1)
@@ -73,15 +101,9 @@ def main():
         from .migration import import_crm
         print(canonical(import_crm(store, args.path))); return
     if args.action == "serve-collectors":
-        deadlines = {}
-        while True:
-            now = time.monotonic()
-            for source, settings in config["sources"].items():
-                if not settings.get("enabled", True) or now < deadlines.get(source, 0): continue
-                try: print(canonical(run(store, source, settings)), flush=True)
-                except Exception as e: print(canonical({"source": source, "status": "failed", "error": type(e).__name__}), flush=True)
-                deadlines[source] = time.monotonic() + int(settings.get("interval_seconds", 3600))
-            time.sleep(5)
+        from .scheduler import serve
+        serve(store, config, args.config)
+        return
     selected = list(config["sources"]) if args.source == "all" else [args.source]
     failed = False
     for source in selected:
@@ -91,7 +113,10 @@ def main():
             settings["force_full"] = True
         if not settings.get("enabled", True): continue
         since = instant(args.since) if args.since else (utcnow() - timedelta(days=30) if args.action == "backfill" else None)
-        try: print(canonical(run(store, source, settings, since)))
+        try:
+            result = run(store, source, settings, since)
+            print(canonical(result))
+            failed = failed or bool(result.get('invalid'))
         except Exception as e:
-            failed = True; print(canonical({"source": source, "status": "failed", "error": type(e).__name__}), file=sys.stderr)
+            failed = True; print(canonical({"source": source, "status": "failed", "error": error_detail(e)}), file=sys.stderr)
     if failed: raise SystemExit(1)

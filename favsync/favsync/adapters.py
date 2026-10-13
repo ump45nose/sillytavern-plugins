@@ -16,6 +16,13 @@ from .config import proxy_url
 from .sources import ScanResult
 
 
+# gallery-dl can still enumerate a tweet whose author's profile is withheld.
+X_AUTHOR_POLICY_WARNING = re.compile(
+    r"\[twitter\]\[warning\] u[0-9]+: '@[A-Za-z0-9_]+ is temporarily unavailable "
+    r"because it violates the X Adult Content or Violent Content policy\.'"
+)
+
+
 def timestamp(value):
     if not value:
         return None
@@ -107,7 +114,8 @@ class XAdapter:
             url = "https://x.com/i/bookmarks"
         with self.config_file() as config, tempfile.TemporaryFile() as result:
             command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
-                    self.cfg["command_timeout_seconds"], result)
+                    self.cfg["command_timeout_seconds"], result,
+                    allowed_warning_patterns=(X_AUTHOR_POLICY_WARNING,))
             result.seek(0)
             try:
                 # DataJob returns zero on extraction errors: parse -1 events too.

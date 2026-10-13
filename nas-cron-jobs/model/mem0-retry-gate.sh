@@ -14,4 +14,4 @@ fi
 
 HERMES_HOME=/home/hermes/.hermes/profiles/lingjun \
   /home/hermes/.hermes/hermes-agent/venv/bin/hermes cron run "$job_id" >/dev/null
-printf 'Mem0 22:00 主任务未成功，22:30 重试已排队。\n'
+printf '%s\n' '- Mem0：同步未成功，已安排重试'

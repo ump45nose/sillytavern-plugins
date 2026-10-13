@@ -1,6 +1,6 @@
 interface:
   display_name: "Figma Make"
-  short_description: "用内置浏览器交给 Figma Make 生成，再经 MCP 接回代码和资源"
+  short_description: "用可控浏览器操作 Figma Make，默认最强 Claude，并接回源码"
   default_prompt: "用 $figma-make 整理需求，在 Figma Make 生成并接回项目实现。"
 dependencies:
   tools:

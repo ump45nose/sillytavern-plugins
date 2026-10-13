@@ -14,7 +14,7 @@ from .storage import display_index as idx
 
 DOMAINS = {"calendar_event": "agenda", "google_task": "agenda", "health_payloads": "health",
            "people": "social", "interactions": "social", "facts": "social", "computer_summary": "activity",
-           "recording": "recordings", "hermes_execution_report": "reports", "email": "mail", "git_commit": "git",
+           "recording": "recordings", "hermes_execution_report": "reports", "email": "mail", "git_commit": "git", "git_pull_request": "git", "media_playback_snapshot": "activity", "music_playback_event": "activity",
            "memo": "notes", "memory": "notes", "bill": "finance", "token_day": "usage", "traffic_hourly": "network",
            "recording_transcript": "recordings", "recording_daily_report": "reports", "recording_summary": "reports", "recording_processing_status": "recordings"}
 MODULES = {"agenda", "health", "social", "activity", "recordings", "reports", "mail", "git", "notes", "finance", "usage", "network"}
@@ -22,18 +22,7 @@ MODULES = {"agenda", "health", "social", "activity", "recordings", "reports", "m
 def clean(v, size=160):
     return str(v or "").replace("\x00", "")[:size]
 
-def when(v):
-    if isinstance(v, datetime): return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
-    try:
-        x = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
-        return x if x.tzinfo else x.replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError): return None
-
-def number(v):
-    try:
-        x = float(v)
-        return x if not isinstance(v, bool) and math.isfinite(x) else None
-    except (ValueError, TypeError): return None
+from .metric_rules import when, number, health_samples, health_value, finance_totals, sum_field
 
 def index_value(kind, external_id, raw, n):
     from .storage import Store
@@ -47,6 +36,12 @@ def index_value(kind, external_id, raw, n):
         p["title"] = (front("title") or "电脑活动摘要")[:160]
         p["preview"] = front("description") or clean(content, 500)
         d = {"interval": n.get("interval")}
+    elif kind in ('media_playback_snapshot', 'music_playback_event'):
+        d = {key:n.get(key) for key in ('service','instance_id','source_user_id','item_id','title','artist','album','player','device','paused','position_seconds','observed_at','time_basis','capture','link')}
+        p = {'title':clean(n.get('title')), 'preview':clean(' · '.join(str(n[key]) for key in ('artist','album','player','device') if n.get(key)), 500)}
+    elif kind == 'git_pull_request':
+        d = {key:n.get(key) for key in ('repo','number','state','draft','merged','updated_at','url')}
+        p = {'title':clean(n.get('title')), 'preview':clean(n.get('body'), 500)}
     elif kind == "google_task":
         tl = raw.get("tasklist", {})
         d = {k: clean(raw.get(k), 200) for k in ("status", "due", "completed", "parent", "position", "webViewLink")}
@@ -58,25 +53,8 @@ def index_value(kind, external_id, raw, n):
         if kind == "interactions": p["title"] = "交流记录"
     elif kind == "health_payloads":
         payload = n.get("payload", raw.get("payload_json", {}))
-        if isinstance(payload, str):
-            try: payload = json.loads(payload)
-            except ValueError: payload = {}
-        for metric, field, keys in [("steps", "count", ("end_time", "start_time")), ("sleep", "duration_seconds", ("session_end_time",)), ("resting_heart_rate", "bpm", ("time",)), ("heart_rate", "bpm", ("time",)), ("active_calories", "calories", ("end_time", "start_time"))]:
-            samples = []
-            source_samples = payload.get(metric, []) if isinstance(payload, dict) else []
-            if not isinstance(source_samples, list):
-                # Older exports may use scalar metrics. Only use an explicit source timestamp.
-                source_samples = [{field: source_samples, keys[0]: payload.get("timestamp")}] if number(source_samples) is not None else []
-            for s in source_samples:
-                if not isinstance(s, dict): continue
-                value = number(s.get(field)); t = next((when(s.get(k)) for k in keys if when(s.get(k))), None)
-                if value is None or t is None: continue
-                meta = s.get("metadata") if isinstance(s.get("metadata"), dict) else {}
-                sample = {"time": t.isoformat(), "value": value, "origin": clean(meta.get("data_origin")), "device": clean(meta.get("device"))}
-                if metric in ("steps", "active_calories") and when(s.get("start_time")) and when(s["start_time"]) <= t:
-                    sample["day_time"] = when(s["start_time"]).isoformat()
-                samples.append(sample)
-            d[metric] = samples
+        d = {key: [sample for _, sample in values] for key, values in
+             health_samples(payload, ('steps','sleep','resting_heart_rate','heart_rate','active_calories')).items()}
         p = {"title": "健康同步", "preview": "步数、睡眠与心率记录"}
     elif kind == "bill":
         bill = raw.get("bill", raw.get("payload", raw))
@@ -162,18 +140,7 @@ class Display:
                         sample_day = max(sample_date(s) for s, _ in samples.values() if sample_date(s) <= day)
                         chosen = [(s, rid) for s, rid in samples.values() if sample_date(s) == sample_day]
                     # Daily cumulative snapshots use their valid maximum. Sleep is a set of sessions.
-                    value = None
-                    if chosen:
-                        if key == "sleep":
-                            intervals = sorted((when(s["time"]) - timedelta(seconds=s["value"]), when(s["time"])) for s, _ in chosen if 0 < s["value"] <= 86400)
-                            merged = []
-                            for a, b in intervals:
-                                if merged and a <= merged[-1][1]: merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
-                                else: merged.append((a, b))
-                            value = sum((b-a).total_seconds() for a, b in merged) if merged else None
-                        else:
-                            value = max(s["value"] for s, _ in chosen) if key in ("steps", "active_calories") else max(chosen, key=lambda x: when(x[0]["time"]))[0]["value"]
-                        if value is not None: value = round(value * factor, 2)
+                    value = health_value(key, [sample for sample, _ in chosen])
                     metric(key, label, value, unit, sample_day, [rid for _, rid in chosen])
             elif module == "social":
                 interactions = sorted([r for r in group if r["kind"] == "interactions" and (not r["occurred_at"] or when(r["occurred_at"]) < end)], key=lambda r: when(r["occurred_at"]) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
@@ -190,18 +157,8 @@ class Display:
                     if len(items) == 5: break
             elif module == "finance":
                 for currency in sorted({r["data"].get("currency") or "未知币种" for r in current}):
-                    totals = {"expense": Decimal(0), "income": Decimal(0), "transfer": Decimal(0)}
-                    pending = 0
-                    for r in current:
-                        d = r["data"]
-                        if (d.get("currency") or "未知币种") != currency: continue
-                        if d.get("state") == "Wait2Edit": pending += 1; continue
-                        try: amount = Decimal(d.get("amount", ""))
-                        except InvalidOperation: continue
-                        if not amount.is_finite(): continue
-                        typ = d.get("type", "")
-                        bucket = "transfer" if typ == "Transfer" else "expense" if typ.startswith("Expend") else "income"
-                        totals[bucket] += amount
+                    totals = finance_totals([r['data'] for r in current if (r['data'].get('currency') or '未知币种') == currency])[0]
+                    pending = totals['pending_count']
                     refs = [r["record_id"] for r in current if (r["data"].get("currency") or "未知币种") == currency]
                     for k, label in [("expense", "支出"), ("income", "收入"), ("transfer", "转账")]: metric(k+":"+currency, label, str(totals[k]), currency, refs=refs)
                     metric("pending:"+currency, "待确认", pending, "笔", refs=refs)
@@ -213,7 +170,7 @@ class Display:
                     default_source = "shellcrash" if any(r["source"] == "shellcrash" for r in selected_rows) else next((r["source"] for r in selected_rows), None)
                     selected_rows = [r for r in selected_rows if r["source"] == default_source]
                 fields = [("tokens", "Token", "tokens"), ("estimated_cost_usd", "估算费用", "USD")] if module == "usage" else [("upload_bytes", "代理上传", "bytes"), ("download_bytes", "代理下载", "bytes")]
-                for key, label, unit in fields: metric(key, label, sum(number(r["data"].get(key)) or 0 for r in selected_rows) if selected_rows else None, unit, refs=[r["record_id"] for r in selected_rows])
+                for key, label, unit in fields: metric(key, label, sum_field([r["data"] for r in selected_rows], key), unit, refs=[r["record_id"] for r in selected_rows])
                 items = [card(r) for r in selected_rows[:5]] if module == "usage" else []
             else:
                 metric("count", "今日记录", len(current) if any(r["occurred_at"] for r in group) else None, "条", refs=[r["record_id"] for r in current])
@@ -230,7 +187,7 @@ class Display:
             selected = source or ("shellcrash" if "shellcrash" in known else next(iter(sorted(known)), ""))
             if source and source not in known: raise ValueError("unknown_network_source")
             rows = list(c.execute(select(idx).where(idx.c.domain == "network", idx.c.source == selected, idx.c.occurred_at >= start, idx.c.occurred_at < end)).mappings())
-        totals = {key: sum(number(r["data"].get(key)) or 0 for r in rows) if rows else None for key in ("upload_bytes", "download_bytes")}
+        totals = {key: sum_field([r["data"] for r in rows], key) for key in ("upload_bytes", "download_bytes")}
         dimensions = {}
         for key in ("process", "host", "exit_node", "category"):
             groups = {}

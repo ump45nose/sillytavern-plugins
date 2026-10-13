@@ -287,26 +287,16 @@ def format_alert(
     received: int,
     expected: int,
 ) -> str:
-    lines = ["【跨境 ETF 低溢价提醒】", ""]
+    lines = ["**ETF 低溢价**"]
     if not complete:
-        lines.extend([f"数据覆盖：{received}/{expected}（本轮不完整）", ""])
+        lines.append(f"- 行情不完整：{received}/{expected}")
     for item in matches:
         tier = premium_tier(float(item["premium_pct"]), task_cfg)
         suffix = f"（{tier}）" if tier else ""
-        lines.extend(
-            [
-                f"{item['code']} {item['name']}",
-                f"估算溢价率：{item['premium_pct']:+.2f}%{suffix}",
-                f"成交额：{format_amount(float(item['amount_yuan']))}",
-                (
-                    "数据时间："
-                    f"行情 {item.get('quote_time') or '-'}；"
-                    f"估值 {item.get('estimate_time') or '-'}"
-                ),
-                "",
-            ]
-        )
-    lines.append("提示：估算净值不是基金官方收盘净值；下单前请在券商终端复核。")
+        lines.append(f"- {item['code']} {item['name']}：估算溢价 {item['premium_pct']:+.2f}%{suffix}；"
+                     f"成交 {format_amount(float(item['amount_yuan']))}；"
+                     f"行情 {item.get('quote_time') or '-'} / 估值 {item.get('estimate_time') or '-'}")
+    lines.append("估算值，交易前请复核。")
     return "\n".join(lines)
 
 
@@ -422,7 +412,6 @@ def watchdog(config: dict[str, Any], now: datetime) -> int:
         except json.JSONDecodeError:
             pass
 
-    attempts = len(state_values(f"etf_attempt:{date_key}:"))
     received = int(latest.get("received") or 0)
     expected = int(
         latest.get("expected")
@@ -437,16 +426,13 @@ def watchdog(config: dict[str, Any], now: datetime) -> int:
     errors = latest.get("errors") if isinstance(latest.get("errors"), list) else []
 
     if received:
-        title = "【gold-alert 数据不完整】"
-        summary = f"14:40–14:44 仅取得 {received}/{expected} 个 ETF 的有效数据。"
+        summary = f"有效行情仅 {received}/{expected}，无法完整判断溢价"
     else:
-        title = "【gold-alert 无有效行情】"
-        summary = "14:40–14:44 未取得任何有效 ETF 行情，不能判断是否存在低溢价机会。"
+        summary = "未取得有效行情，无法判断溢价"
 
-    lines = [title, "", summary, f"调度尝试：{attempts} 次"]
+    lines = ["**ETF 采集异常**", "- " + summary]
     if errors:
-        lines.extend(["", "最近错误：", *[f"- {error}" for error in errors[:4]]])
-    lines.extend(["", "该状态不是“没有机会”，而是数据链路异常。"])
+        lines.extend(f"- {error}" for error in dict.fromkeys(compact_errors(errors, 4)))
     print("\n".join(lines))
     state_set(emitted_key, "1")
     return 0

@@ -126,6 +126,7 @@ class FilesCollector:
         adapter = self.settings["adapter"]
         fingerprints = dict(cursor.get("files", {}))
         invalid_ids = set(cursor.get("invalid_ids", []))
+        revalidate = cursor.get("segment_validator_version") != 3
         patterns = self.settings.get("patterns", ["**/*.json", "**/*.md", "**/*.jsonl"])
         paths = sorted({p for pattern in patterns for p in root.glob(pattern) if p.is_file() and not p.name.startswith(".")})
         for p in paths:
@@ -137,7 +138,7 @@ class FilesCollector:
                     for extra in sorted(p.parent.glob("*")):
                         if extra.is_file():
                             x = extra.stat(); fingerprint.extend([extra.name, x.st_size, x.st_mtime_ns])
-                if fingerprints.get(relative) == fingerprint: continue
+                if fingerprints.get(relative) == fingerprint and not (revalidate and relative in invalid_ids): continue
                 content = p.read_bytes()
             except FileNotFoundError:
                 continue  # 执行报告可能在枚举后轮转；已有归档保留。
@@ -151,7 +152,9 @@ class FilesCollector:
                     raw.update(json.loads(p.read_text()))
                     if raw.get("endedAt") is None: continue
                     if not events.is_file(): raise ValueError("events_missing")
-                    rows = [json.loads(x) for x in events.read_text().splitlines() if x.strip()]
+                    # JSON strings may legally contain Unicode line separators.
+                    # JSONL records are delimited only by LF, not splitlines().
+                    rows = [json.loads(x) for x in events.read_text().split("\n") if x.strip()]
                     if raw.get("eventCount") is not None and raw["eventCount"] != len(rows): raise ValueError("event_count_mismatch")
                     normal = {"events": rows, "source_ref": relative, "closed": True}
                     occurred = instant(raw.get("startedAt"))
@@ -159,7 +162,8 @@ class FilesCollector:
                     invalid_ids.discard(relative)
                 except (ValueError, OSError) as error:
                     # 历史 NAS 副本不全时保留原始文件与异常标记；不阻断其余已闭合片段。
-                    normal = {"validation_error": type(error).__name__, "source_ref": relative}
+                    reason = str(error) if str(error) in {'events_missing', 'event_count_mismatch'} else type(error).__name__
+                    normal = {"validation_error": reason, "source_ref": relative}
                     record_kind = "computer_segment_invalid"
                     invalid_ids.add(relative)
             else:
@@ -182,7 +186,7 @@ class FilesCollector:
             # mtime 是可变附件的版本元数据；事件时间缺失保持为空。
             yield Batch(records=[Record(eid, record_kind, raw, normal, occurred, instant(stat.st_mtime), assets=attachments)])
         # NAS/Mac 的缓存轮转不意味着源删除，只有显式删除事件才清理。
-        yield Batch(next_cursor={"collected_at": utcnow().isoformat(), "files": fingerprints, "invalid_ids": sorted(invalid_ids)})
+        yield Batch(next_cursor={"collected_at": utcnow().isoformat(), "files": fingerprints, "invalid_ids": sorted(invalid_ids), "segment_validator_version": 3})
 
 
 class BillsCollector:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json, os
+import json, os, time
 
 from pathlib import Path
 
@@ -11,6 +11,21 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
 from urllib.request import Request, urlopen
+
+
+def _open(request, timeout):
+    """Retry transient transport/server failures, never invalid credentials."""
+    for attempt in range(3):
+        try:
+            return urlopen(request, timeout=timeout)
+        except HTTPError as exc:
+            if exc.code not in (408, 429, 500, 502, 503, 504) or attempt == 2:
+                raise
+            exc.close()
+        except (URLError, TimeoutError):
+            if attempt == 2:
+                raise
+        time.sleep(2 ** attempt)
 
 class GoogleReadError(RuntimeError):
     """表示 Google 只读采集失败，消息不得包含凭据或响应正文。"""
@@ -48,7 +63,7 @@ class GoogleReadClient:
         request = Request(str(self.values["token_uri"]), data=payload, method="POST")
         request.add_header("Content-Type", "application/x-www-form-urlencoded")
         try:
-            with urlopen(request, timeout=20) as response:
+            with _open(request, timeout=20) as response:
                 result = json.loads(response.read())
         except HTTPError as exc:
             # 只识别 OAuth 标准错误码，不把响应正文或凭据写入日志。
@@ -73,7 +88,7 @@ class GoogleReadClient:
         request.add_header("Authorization", f"Bearer {self.access_token}")
         request.add_header("Accept", "application/json")
         try:
-            with urlopen(request, timeout=30) as response:
+            with _open(request, timeout=30) as response:
                 result = json.loads(response.read())
         except HTTPError as exc:
             raise GoogleReadError(f"Google API 读取失败：HTTP {exc.code}") from exc

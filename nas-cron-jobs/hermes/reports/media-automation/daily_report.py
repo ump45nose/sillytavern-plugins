@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Read MoviePilot databases, plugin job APIs, and theme-worker data."""
+"""Prepare changes since the last delivered report; source stores stay read-only."""
 
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import sqlite3
+import tempfile
+import time
 import urllib.error
 import urllib.request
 from contextlib import closing
@@ -21,7 +24,7 @@ HERMES_ENV = Path("/home/hermes/.hermes/.env")
 MOVIEPILOT_API_BASE = "http://127.0.0.1:28300/api/v1"
 MOVIEPILOT_TOKEN_ENV_KEY = "AUXILIARY_MEDIA_AUTOMATION_API_KEY"
 MOVIEPILOT_PLUGINS = ("MediaArchive", "DiscRemux")
-MAX_PLUGIN_JOB_DETAILS = 30
+CHECKPOINT = Path("/home/hermes/.hermes/profiles/lingjun/cron/report-state/media-automation.json")
 
 TASK_STAGE_LABELS = {
     "ANALYZING": "分析中",
@@ -32,6 +35,7 @@ TASK_STAGE_LABELS = {
     "DONE": "已完成",
     "FAILED": "失败",
     "MIGRATING": "迁移中",
+    "MANUAL": "需要人工处理",
     "PREPARING": "准备中",
     "PREVIEW": "预检中",
     "SEED_WAIT": "等待做种",
@@ -157,12 +161,10 @@ def moviepilot_job_snapshots() -> tuple[dict[str, list[dict] | None], list[str],
             snapshots[plugin] = None
             issues.append(f"{plugin} /jobs 返回结构无效，缺少 jobs 对象")
             continue
-        if payload.get("busy") is True:
-            issues.append(f"{plugin} 当前 busy，任务快照可能不完整")
-        if payload.get("error"):
-            issues.append(f"{plugin} 响应包含 error，任务快照可能不完整")
-        if payload.get("scan_error"):
-            issues.append(f"{plugin} 扫描发生异常，任务快照可能不完整")
+        if payload.get("error") or payload.get("scan_error"):
+            snapshots[plugin] = None
+            issues.append(f"{plugin}：" + _safe_api_text(payload.get("error") or payload["scan_error"], token))
+            continue
 
         records = _job_records(payload.get("jobs"))
         if records is None:
@@ -208,61 +210,50 @@ def _collection_size(value: object) -> int | None:
     return None
 
 
-def _plugin_job_lines(plugin: str, jobs: list[dict], token: str) -> list[str]:
-    lines = [f"{plugin} 任务当前状态（{len(jobs)}）"]
-    if not jobs:
-        lines.append("- 当前无任务记录")
-        return lines
-
-    stage_counts: dict[str, int] = {}
+def plugin_snapshot(plugin: str, jobs: list[dict], token: str) -> dict[str, dict]:
+    result = {}
     for job in jobs:
-        stage = _safe_api_text(job.get("stage") or "状态未知", token, 60)
-        stage_counts[stage] = stage_counts.get(stage, 0) + 1
-    summaries = [
-        f"{TASK_STAGE_LABELS.get(stage, stage)} ×{count}"
-        for stage, count in sorted(stage_counts.items())
-    ]
-    lines.append("阶段汇总：" + "；".join(summaries))
+        identity = job.get("id") or (job.get("unit") or {}).get("key")
+        if not identity:
+            identity = hashlib.sha256(json.dumps(job.get("request") or {}, sort_keys=True).encode()).hexdigest()
+        cleanup = job.get("cleanup") or {}
+        result[str(identity)] = {
+            "title": _api_title(job, plugin, token),
+            "stage": _safe_api_text(job.get("stage") or "状态未知", token, 60),
+            "reason": _safe_api_text(job.get("reason"), token),
+            "cleanup": cleanup.get("complete") if isinstance(cleanup, dict) else None,
+            "assets": _collection_size(job.get("assets")),
+            "outputs": _collection_size(job.get("outputs")),
+        }
+    return result
 
-    shown = jobs[:MAX_PLUGIN_JOB_DETAILS]
-    for job in shown:
-        title = _api_title(job, plugin, token)
-        media = wrapped_title(title or "媒体名称缺失")
-        stage = _safe_api_text(job.get("stage") or "状态未知", token, 60)
-        label = TASK_STAGE_LABELS.get(stage, "状态未知")
-        detail = f"- {media}：{label}（{stage}）"
-        if not title:
-            detail += "；任务记录未提供影视名称"
 
-        if plugin == "MediaArchive":
-            cleanup = job.get("cleanup")
-            if isinstance(cleanup, dict) and isinstance(cleanup.get("complete"), bool):
-                detail += "；清理已完成" if cleanup["complete"] else "；清理未完成"
-            asset_count = _collection_size(job.get("assets"))
-            if asset_count is not None:
-                detail += f"；资产 {asset_count} 项"
+def plugin_changes(plugin: str, previous: dict | None, current: dict) -> list[str]:
+    # The APIs have no event time. An initial snapshot is a baseline, not new work.
+    if previous is None:
+        return []
+    lines = []
+    for key, job in current.items():
+        old = previous.get(key)
+        if old == job:
+            continue
+        stage = TASK_STAGE_LABELS.get(job["stage"], job["stage"])
+        if old is None:
+            detail = "新增，" + stage
+        elif old["stage"] != job["stage"]:
+            detail = TASK_STAGE_LABELS.get(old["stage"], old["stage"]) + " → " + stage
         else:
-            output_count = _collection_size(job.get("outputs"))
-            if output_count is not None:
-                detail += f"；产物 {output_count} 项"
-            title_count = _collection_size(job.get("titles"))
-            if title_count is not None:
-                detail += f"；解析条目 {title_count} 项"
-
-        reason = _safe_api_text(job.get("reason"), token)
-        if reason:
-            detail += f"；说明：{reason}"
-        elif stage not in {"DONE", "状态未知"} and not title:
-            detail += "；异常原因和影视名称均未提供"
-        elif stage not in {"DONE", "状态未知"}:
-            detail += "；记录未提供阶段说明"
-        lines.append(detail)
-
-    if len(jobs) > len(shown):
-        lines.append(
-            f"数据不足：另有 {len(jobs) - len(shown)} 条任务未展开；"
-            "接口记录没有更新时间，无法识别过去24小时内变更的记录。"
-        )
+            detail = stage
+        if job["reason"]:
+            detail += "；" + job["reason"]
+        if old is not None and job["cleanup"] is True and old.get("cleanup") is not True:
+            detail += "；清理完成"
+        if old is not None and job["outputs"] is not None and old.get("outputs") != job["outputs"]:
+            detail += f"；产物 {job['outputs']} 项"
+        lines.append(f"- {plugin} {wrapped_title(job['title'])}：{detail}")
+    for key, job in previous.items():
+        if key not in current:
+            lines.append(f"- {plugin} {wrapped_title(job['title'])}：任务记录移除")
     return lines
 
 
@@ -333,6 +324,16 @@ def moviepilot_rows() -> tuple[list[dict], list[dict]]:
 
 
 def theme_worker_rows() -> list[dict]:
+    for attempt in range(3):
+        try:
+            return _theme_worker_rows_once()
+        except (RuntimeError, sqlite3.OperationalError):
+            if attempt == 2:
+                raise
+            time.sleep(0.2)
+
+
+def _theme_worker_rows_once() -> list[dict]:
     # Use SQLite's read-only WAL support when its worker-created sidecars are
     # present. When the worker has checkpointed and removed them, use immutable
     # mode because normal read-only SQLite tries to create a missing SHM file.
@@ -370,7 +371,7 @@ def theme_worker_rows() -> list[dict]:
     with closing(open_readonly(THEME_WORKER_DB, immutable=immutable)) as connection:
         rows = [
             dict(row) for row in connection.execute(
-                "SELECT name, status, source_provider, updated_at FROM items"
+                "SELECT emby_id, name, status, source_provider, updated_at FROM items"
             )
         ]
     if (
@@ -389,12 +390,8 @@ def wrapped_title(value: object) -> str:
     return f"《{title or '未命名影视'}》"
 
 
-def display_time(value: datetime | None) -> str:
-    return value.strftime("%m-%d %H:%M") if value else "时间未知"
-
-
 def recent_rows(
-    rows: list[dict], time_field: str, cutoff: datetime
+    rows: list[dict], time_field: str, cutoff: datetime, now: datetime
 ) -> tuple[list[dict], int]:
     recent: list[dict] = []
     invalid = 0
@@ -403,10 +400,10 @@ def recent_rows(
         parsed = parse_time(value)
         if parsed is None:
             raw_date = str(value or "").strip()[:10]
-            if raw_date >= cutoff.date().isoformat():
+            if cutoff.date().isoformat() <= raw_date <= now.date().isoformat():
                 invalid += 1
             continue
-        if parsed >= cutoff:
+        if cutoff < parsed <= now:
             row["_parsed_time"] = parsed
             recent.append(row)
     return recent, invalid
@@ -426,94 +423,125 @@ def watchlist_records(records: list[dict]) -> dict[str, dict]:
     return by_hash
 
 
-def build_report(now: datetime) -> tuple[str, int]:
-    cutoff = now - timedelta(hours=24)
+def changed_rows(rows, recent, previous, time_field, now, fields, identity_fields, *, initial_events=False):
+    fingerprints = {}
+    selected = []
+    for row in rows:
+        timestamp = parse_time(row.get(time_field))
+        if timestamp is None or timestamp > now:
+            continue
+        identity = [row.get(field) for field in identity_fields]
+        key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+        detail = {field: row.get(field) for field in fields}
+        fingerprint = hashlib.sha256(json.dumps(detail, sort_keys=True).encode()).hexdigest()
+        fingerprints[key] = fingerprint
+        if row in recent and ((previous is None and initial_events)
+                              or (previous is not None and previous.get(key) != fingerprint)):
+            selected.append(row)
+    return selected, fingerprints
+
+
+def load_checkpoint(path: Path = CHECKPOINT) -> dict | None:
+    try:
+        with path.open("rb") as stream:
+            raw = stream.read(5 * 1024 * 1024 + 1)
+    except FileNotFoundError:
+        return None
+    if len(raw) > 5 * 1024 * 1024:
+        raise ValueError("media checkpoint exceeds read limit")
+    value = json.loads(raw)
+    if (not isinstance(value, dict) or value.get("schema") != 1
+            or not isinstance(value.get("plugins"), dict) or parse_time(value.get("checked_at")) is None):
+        raise ValueError("invalid media checkpoint")
+    return value
+
+
+def save_checkpoint(value: dict, path: Path = CHECKPOINT):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".media-report-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(value, stream, ensure_ascii=False, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def prepare_report(now: datetime, previous: dict | None = None) -> tuple[str, int, dict]:
+    cutoff = parse_time(previous["checked_at"]) if previous else now - timedelta(hours=24)
+    if cutoff > now:
+        raise ValueError("media checkpoint is in the future")
     downloads, records = moviepilot_rows()
     theme_items = theme_worker_rows()
     plugin_jobs, plugin_issues, api_token = moviepilot_job_snapshots()
-    recent_downloads, invalid_downloads = recent_rows(downloads, "date", cutoff)
-    recent_records, invalid_records = recent_rows(records, "updated_at", cutoff)
-    recent_theme, invalid_theme = recent_rows(theme_items, "updated_at", cutoff)
-    status_by_hash = watchlist_records(records)
+    recent_downloads, invalid_downloads = recent_rows(downloads, "date", cutoff, now)
+    recent_records, invalid_records = recent_rows(records, "updated_at", cutoff, now)
+    recent_theme, invalid_theme = recent_rows(theme_items, "updated_at", cutoff, now)
+    old_records = previous.get("records", {}) if previous else {}
+    recent_downloads, download_baseline = changed_rows(downloads, recent_downloads, old_records.get("downloads"),
+        "date", now, ("title", "download_hash", "date"), ("download_hash", "title", "date"), initial_events=True)
+    recent_records, watchlist_baseline = changed_rows(records, recent_records, old_records.get("watchlist"),
+        "updated_at", now, ("title", "status", "download_hash"), ("film_id", "title"))
+    recent_theme, theme_baseline = changed_rows(theme_items, recent_theme, old_records.get("themes"),
+        "updated_at", now, ("name", "status", "source_provider"), ("emby_id", "name"))
+    status_by_hash = watchlist_records(recent_records)
 
-    lines = [f"影视自动化日报 {now:%Y-%m-%d %H:%M}（过去24小时）"]
-    lines.append(f"下载提交（{len(recent_downloads)}）")
+    lines = []
     linked_hashes: set[str] = set()
     for row in sorted(recent_downloads, key=lambda item: item["_parsed_time"]):
         title = wrapped_title(row.get("title"))
-        source = str(row.get("username") or "来源未知").strip()
         download_hash = str(row.get("download_hash") or "").strip()
-        record = status_by_hash.get(download_hash) if source == "FilmWatchlist" else None
-        lines.append(f"- {title}：提交时间 {display_time(row['_parsed_time'])}；来源 {source}")
-        if source == "FilmWatchlist":
-            if record is not None:
-                linked_hashes.add(download_hash)
-                status = str(record.get("status") or "状态未知").strip()
-                lines.append(f"  片单处理状态：{status}")
-            else:
-                lines.append("  片单处理状态：未找到匹配记录")
-        release = str(row.get("torrent_name") or "").strip()
-        if release:
-            lines.append(f"  下载格式：{release}")
+        record = status_by_hash.get(download_hash)
+        detail = "已提交" + ("；" + str(record.get("status") or "状态未知") if record else "")
+        lines.append(f"- 下载 {title}：{detail}")
+        if record:
+            linked_hashes.add(download_hash)
 
     independent_records = [
         row for row in recent_records
         if str(row.get("download_hash") or "").strip() not in linked_hashes
     ]
-    lines.append(f"片单状态更新（{len(independent_records)}）")
     for row in sorted(independent_records, key=lambda item: item["_parsed_time"]):
         status = str(row.get("status") or "状态未知").strip()
-        lines.append(
-            f"- {wrapped_title(row.get('title'))}：片单处理状态 {status}；"
-            f"更新时间 {display_time(row['_parsed_time'])}"
-        )
-        release = str(row.get("torrent_title") or "").strip()
-        if release:
-            lines.append(f"  下载格式：{release}")
+        lines.append(f"- 片单 {wrapped_title(row.get('title'))}：{status}")
 
-    lines.append(f"主题曲任务（{len(recent_theme)}）")
     for row in sorted(recent_theme, key=lambda item: item["_parsed_time"]):
         status = str(row.get("status") or "状态未知").strip()
-        provider = str(row.get("source_provider") or "来源未知").strip()
-        lines.append(
-            f"- {wrapped_title(row.get('name'))}：{status}；来源 {provider}；"
-            f"更新时间 {display_time(row['_parsed_time'])}"
-        )
+        lines.append(f"- 主题曲 {wrapped_title(row.get('name'))}：{status}")
 
-    lines.append(
-        "MoviePilot 插件任务当前快照（接口未提供任务更新时间，"
-        "不代表过去24小时新增或变更）"
-    )
+    next_plugins = dict(previous["plugins"]) if previous else {}
     for plugin in MOVIEPILOT_PLUGINS:
         jobs = plugin_jobs.get(plugin)
-        if jobs is None:
-            lines.append(f"{plugin}：当前状态不可用")
-        else:
-            lines.extend(_plugin_job_lines(plugin, jobs, api_token))
-    if plugin_issues:
-        lines.append("任务数据提示：" + "；".join(plugin_issues))
+        if jobs is not None:
+            current = plugin_snapshot(plugin, jobs, api_token)
+            lines.extend(plugin_changes(plugin, next_plugins.get(plugin), current))
+            next_plugins[plugin] = current
+    old_issues = previous.get("issues", []) if previous else []
+    lines.extend("- 数据源：" + issue for issue in plugin_issues if issue not in old_issues)
 
     invalid = invalid_downloads + invalid_records + invalid_theme
     if invalid:
-        lines.append(f"数据提示：{invalid} 条记录的时间字段无法解析，报告可能不完整。")
-    if (
-        not recent_downloads and not independent_records and not recent_theme
-        and not invalid and not any(plugin_jobs.get(plugin) for plugin in MOVIEPILOT_PLUGINS)
-        and not plugin_issues
-    ):
-        lines.append("过去24小时无新增下载、片单状态更新或主题曲处理记录。")
-    return "\n".join(lines), invalid + len(plugin_issues)
+        lines.append(f"- 时间字段：{invalid} 条记录无法识别变更时间")
+    report = "\n".join([f"**影视变更 · {now:%m-%d}**", *lines]) if lines else ""
+    checkpoint = {"schema": 1, "checked_at": now.isoformat(), "plugins": next_plugins, "issues": plugin_issues,
+                  "records": {"downloads": download_baseline, "watchlist": watchlist_baseline, "themes": theme_baseline}}
+    return report, invalid + len(plugin_issues), checkpoint
+
+
+def build_report(now: datetime) -> tuple[str, int]:
+    report, invalid, _checkpoint = prepare_report(now, load_checkpoint())
+    return report, invalid
 
 
 def main() -> int:
     now = datetime.now(TIMEZONE)
     try:
         report, _invalid = build_report(now)
-    except (OSError, sqlite3.Error, ValueError) as exc:
-        print(
-            f"影视自动化日报失败：只读数据库查询异常"
-            f"（{type(exc).__name__}: {str(exc).splitlines()[0][:220]}）"
-        )
+    except (OSError, sqlite3.Error, ValueError, RuntimeError, TypeError, KeyError):
+        print("- 影视日报：无法读取变更记录")
         return 1
     print(report)
     return 0

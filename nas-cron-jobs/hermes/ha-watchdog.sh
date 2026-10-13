@@ -202,7 +202,7 @@ if probe; then
     FAIL_COUNT=0
     LAST_STATUS=ok
     save_state
-    echo "HA recovered: http=$HTTP_CODE rss=${HA_RSS_MB}MB cpu=${HA_CPU}% container=$CONTAINER_STATUS"
+    echo "- Home Assistant：已恢复"
     exit 0
   fi
   FAIL_COUNT=0
@@ -239,25 +239,13 @@ log "DUMP $dump_path alert=$should_alert"
 if [ "$should_alert" -eq 1 ]; then
   LAST_ALERT_EPOCH=$now_epoch
   save_state
-  cat <<MSG
-HA unhealthy snapshot
-
-time: $(ts)
-http: $HTTP_CODE
-container: $CONTAINER ($CONTAINER_STATUS)
-started: $STARTED_AT
-pid: ${HA_PID:-none}
-cpu: ${HA_CPU}%
-rss: ${HA_RSS_MB}MB
-stat: ${HA_STAT}
-zombie_like: $ZOMBIE_LIKE
-fail_count: $FAIL_COUNT
-
-dump: $dump_path
-log: $LOG_FILE
-
-hint: 这是抓现场，不会自动重启。需要救活再说一声。
-MSG
+  if [ "$CONTAINER_STATUS" != "running" ]; then
+    echo "- Home Assistant：容器未运行（$CONTAINER_STATUS）"
+  elif [ "$ZOMBIE_LIKE" -eq 1 ]; then
+    echo "- Home Assistant：进程无响应（HTTP $HTTP_CODE）"
+  else
+    echo "- Home Assistant：访问失败（HTTP $HTTP_CODE）"
+  fi
   exit 0
 fi
 

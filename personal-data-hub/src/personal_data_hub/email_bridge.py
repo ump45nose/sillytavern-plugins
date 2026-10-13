@@ -23,7 +23,14 @@ async def main():
             doc = value.model_dump(mode="json", by_alias=True, exclude_none=True)
             if "content" not in doc: doc = {"content": [], "structuredContent": doc}
         except Exception as error:
-            doc = {"content": [{"type":"text", "text":type(error).__name__}], "isError": True}
+            # Carry a safe cause across the container boundary, never raw
+            # IMAP/server messages that can contain accounts or credentials.
+            text = str(error).lower()
+            code = ("auth" if any(x in text for x in ("authenticationfailed", "authentication failed", "login failed"))
+                    else "timeout" if isinstance(error, TimeoutError)
+                    else "network" if isinstance(error, (ConnectionError, OSError)) else "read")
+            detail = {"error_type": type(error).__name__, "error_code": code}
+            doc = {"content": [{"type":"text", "text":json.dumps(detail)}], "isError": True}
         sys.__stdout__.write(json.dumps(doc, ensure_ascii=False) + "\n")
         sys.__stdout__.flush()
 asyncio.run(main())

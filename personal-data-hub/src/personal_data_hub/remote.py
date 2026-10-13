@@ -57,18 +57,37 @@ async def mcp_session(name, settings):
         values.update({k: os.environ[k] for k in required if k in os.environ})
         for k, value in server.get("headers", {}).items():
             headers[k] = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", lambda m: values[m[1]], str(value))
-    # NAS 的既有 MCP 不经外网代理；OAuth 不打开交互浏览器。
-    async with httpx.AsyncClient(auth=auth, headers=headers, timeout=60, trust_env=False) as http:
+    # External MCPs need the same configured egress as the Google collector.
+    # Local business MCPs retain their direct route and credentials.
+    proxy = None
+    if name in {'github', 'mem0'}:
+        env_path = Path(settings.get('proxy_env', str(profile / '.env')))
+        if env_path.is_file():
+            _load_proxy_environment(env_path)
+        proxy = os.environ.get('https_proxy') or os.environ.get('HTTPS_PROXY')
+    async with httpx.AsyncClient(auth=auth, headers=headers, timeout=60, trust_env=False, proxy=proxy) as http:
         url = server["url"].rstrip("/") + "/" if name == "mem0" else server["url"]
         async with streamable_http_client(url, http_client=http) as streams:
             async with ClientSession(streams[0], streams[1]) as session:
-                await session.initialize()
+                await asyncio.wait_for(session.initialize(), timeout=60)
                 yield session
 
 
 async def call(session, name, args):
-    response = await session.call_tool(name, args)
-    if response.isError: raise RuntimeError("upstream_mcp_error")
+    response = await asyncio.wait_for(session.call_tool(name, args), timeout=180)
+    if response.isError:
+        from .collection_errors import IsolatedSourceError
+        reasons = {'auth': '邮件来源认证失败', 'timeout': '邮件来源请求超时',
+                   'network': '邮件来源网络连接失败', 'read': '邮件来源读取失败'}
+        for content in response.content:
+            try:
+                detail = json.loads(getattr(content, 'text', ''))
+            except (ValueError, TypeError):
+                continue
+            if (isinstance(detail, dict) and detail.get('error_code') in reasons
+                    and re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,79}', str(detail.get('error_type', '')))):
+                raise IsolatedSourceError({'type': detail['error_type'], 'reason': reasons[detail['error_code']]})
+        raise RuntimeError("upstream_mcp_error")
     if response.structuredContent:
         return response.structuredContent
     for content in response.content:
@@ -213,26 +232,5 @@ class GitCollector:
     def collect(self, cursor, since=None): yield from asyncio.run(self._collect(cursor, since))
 
     async def _collect(self, cursor, since):
-        start = since or instant(cursor.get("window_start")) or utcnow() - timedelta(days=30)
-        result = []; signatures = set()
-        async with mcp_session("github", self.settings) as session:
-            me = await call(session, "get_me", {})
-            login = me.get("login", (me.get("user") or {}).get("login"))
-            if not login: raise RuntimeError("github_identity_missing")
-            for page in range(1, 1001):
-                doc = await call(session, "search_commits", {"query": f"author:{login} committer-date:>={start.date().isoformat()}", "page": page, "perPage": 100, "sort": "committer-date", "order": "desc"})
-                if doc.get("incomplete_results"): raise RuntimeError("github_search_incomplete")
-                rows = doc.get("items", [])
-                if not rows: break
-                sig = digest([x["sha"] for x in rows])
-                if sig in signatures: raise RuntimeError("github_pagination_stalled")
-                signatures.add(sig)
-                for row in rows:
-                    repo = row.get("repository", {}).get("full_name", "unknown")
-                    event = ((row.get("commit") or {}).get("committer") or {}).get("date")
-                    result.append(Batch(records=[Record(repo + ":" + row["sha"], "git_commit", row, {"repo": repo, "sha": row["sha"], "message": row.get("commit", {}).get("message")}, instant(event))]))
-                if page * 100 >= doc.get("total_count", 0): break
-                if page == 10: raise RuntimeError("github_search_limit_requires_smaller_window")
-            else: raise RuntimeError("github_pagination_incomplete")
-        result.append(Batch(next_cursor={"window_start": start.isoformat(), "collected_at": utcnow().isoformat()}))
-        return result
+        from .git_activity import collect
+        return await collect(self.settings, cursor, since)

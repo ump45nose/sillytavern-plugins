@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -54,8 +55,11 @@ def write_once(path: Path, contents: str) -> None:
         if path.read_text() != contents:
             raise RuntimeError(f"Existing artifact differs; will not overwrite: {path}")
         return
-    temporary = path.with_name(path.name + ".part")
-    with temporary.open("x", encoding="utf-8") as stream:
+    # A killed writer may leave its staging file. A unique staging name lets
+    # the next unattended run resume without deleting that diagnostic file.
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=path.name + ".", suffix=".part",
+                                     mode="w", encoding="utf-8", delete=False) as stream:
+        temporary = Path(stream.name)
         os.chmod(temporary, 0o600)
         stream.write(contents)
         stream.flush()

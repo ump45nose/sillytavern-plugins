@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from .contracts import canonical, instant, utcnow
 from .display import Display, when
+from .metric_rules import bill_kind, finance_totals, health_value
 from .storage import display_index, records
 
 TEXT_CHARS = 4000
@@ -110,7 +111,7 @@ class DailyPushData:
             values = [s["value"] for s in heart.values()]
             metrics.append({"metric": "heart_rate", "label": "心率", "unit": "次/分",
                             "min": min(values), "max": max(values),
-                            "average": round(sum(values) / len(values), 2), "sample_count": len(values),
+                            "average": health_value('heart_rate', list(heart.values())), "sample_count": len(values),
                             "measured_at": max(when(s["time"]) for s in heart.values()).astimezone(zone).isoformat()})
         else:
             missing.append("heart_rate")
@@ -122,7 +123,7 @@ class DailyPushData:
                     .where(records.c.kind == "bill", records.c.occurred_at >= instant(start),
                            records.c.occurred_at < instant(finish))
                     .order_by(records.c.occurred_at, records.c.id)).mappings().all()
-        bills, totals = [], {}
+        bills, amounts = [], []
         for row in rows:
             raw = row["raw"]
             bill = raw.get("bill", raw.get("payload", raw))
@@ -130,25 +131,13 @@ class DailyPushData:
             currency = bill.get("currency") or normal.get("currency") or "未知币种"
             amount = str(bill.get("money", bill.get("amount", normal.get("amount", ""))))
             typ, state = str(bill.get("type", "")), str(bill.get("state", ""))
-            kind = "transfer" if typ == "Transfer" else "expense" if typ.startswith("Expend") else "income" if typ.startswith("Income") else "unknown"
-            values = totals.setdefault(currency, {"currency": currency, "expense": Decimal(0),
-                "income": Decimal(0), "transfer": Decimal(0), "pending_count": 0, "unclassified_count": 0})
-            try:
-                value = Decimal(amount)
-            except InvalidOperation:
-                value = Decimal("NaN")
-            if state == "Wait2Edit":
-                values["pending_count"] += 1
-            elif kind == "unknown" or not value.is_finite():
-                values["unclassified_count"] += 1
-            else:
-                values[kind] += value
+            kind = bill_kind(typ)
+            amounts.append(dict(currency=currency, amount=amount, type=typ, state=state))
             bills.append({"time": instant(row["occurred_at"]).astimezone(zone).isoformat(),
                           "type": kind, "amount": amount, "currency": currency,
                           "category": bill.get("cateName", ""), "merchant": bill.get("shopName", ""),
                           "note": bill.get("remark", ""), "state": state})
-        return {"totals": [{k: str(v) if isinstance(v, Decimal) else v for k, v in values.items()}
-                           for _, values in sorted(totals.items())],
+        return {"totals": finance_totals(amounts),
                 "bills": bills, "total_bills": len(bills), "empty_day": not bills}
 
 

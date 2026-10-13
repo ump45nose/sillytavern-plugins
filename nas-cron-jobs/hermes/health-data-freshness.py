@@ -1,1 +1,1 @@
-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/health-data-freshness.py
+../../personal-data-hub/legacy/personal-jobs/health-data-freshness.py

@@ -58,11 +58,88 @@ the application itself:
 
 See `INVENTORY.md` for the current scheduler map.
 
+## Hub collection exception report
+
+`hermes/hub_collection_notice_daily.py` runs daily at 09:20 (Asia/Taipei) in
+the existing Hermes profile, with `no_agent=true` and `deliver=local`. It sends
+only non-empty reports through the existing notice bot's `hub-collection`
+topic in the private `cron/notice_topics.json` routing file. Hermes records
+the run locally; the shared sender verifies the bot and returned chat/topic.
+
+`hub_collection_report.py` checks the host collector service and passes
+`hub_collection_probe.py` to the existing `personal-crm-crm-1` container. The
+probe uses the container's existing Hub configuration and a bounded PostgreSQL
+read-only transaction to read run metadata. It never initializes Hub storage,
+reads personal record contents, or exports credentials. Keep the host and
+container source schedules consistent when changing collection configuration.
+
+Alerts cover only currently unresolved failed/partial runs, missing runs,
+and stalled/long-running collection beyond `max(3 * interval_seconds, 3600)`.
+Each task appears once with a short reason. A successful completed run clears
+its failure; a retry still in progress retains the last completed failure.
+History and safe structured failure details remain in Hub's existing run
+records; counts, recovered failures and history are omitted from notifications.
+Disabled and push-only sources are excluded; zero new
+records and historical quality warnings alone are normal. This monitors Hub's
+periodic archive runs; upstream device inactivity and Plaud model processing
+have separate status mechanisms and are not inferred from record freshness.
+
+Deploy only these three files with repeatable `deploy-hermes.py --only`:
+`hermes/hub_collection_probe.py`, `hermes/hub_collection_report.py`, and
+`hermes/hub_collection_notice_daily.py`. This installs the trusted profile
+wrapper declared in `hermes/manifest.json`; scheduler registration remains a
+separate operation. Run `python3 -m unittest discover -s checks -p 'test_hub_collection.py'`
+for the report checks.
+
 ## Deploy Hermes cron code
 
 Run `python3 deploy-hermes.py` for the Hermes source migration alone. This
 does not restart gateways, run business jobs or change their schedules.
 `deploy.sh` also installs these sources during a full host deployment.
+
+### Notification presentation
+
+Human-facing notifications use Markdown short headings and bullet lists, without
+execution narration, debug paths, repeated labels, empty sections or full state
+dumps. Notice-bot messages reuse Hermes' installed Telegram MarkdownV2 formatter
+and UTF-16-aware splitter; bot identity and topic receipt verification remain
+mandatory. Error codes, links and code spans retain their literal contents.
+
+Favsync emits only `- platform: problem` for current issues, grouped and
+deduplicated by platform. Execution history remains in its source state and is
+not repeated after recovery. Hub and benefits remain exception-only reports.
+Disabled tasks stay disabled, including Aliyun.
+
+The media report includes download events and watchlist/theme business changes
+since its previous successful report. Download submissions use their event times
+(24 hours on first run); refreshed timestamps alone do not prove a state change.
+State records and plugin APIs use an observed business-field baseline, so the
+first observation does not call old tasks new. Unchanged tasks, empty categories, release filenames and full plugin
+snapshots are omitted. No changes means no message. The private checkpoint is
+`~hermes/.hermes/profiles/lingjun/cron/report-state/media-automation.json`, using
+the profile's existing private ACL and runtime identity;
+only confirmed delivery, or a successful empty baseline run, advances it.
+Failed API reads retain that plugin's prior baseline. Intermediate transitions
+between observations cannot be reconstructed and are not invented. Running
+`media_automation_daily_report.py` previews without advancing the checkpoint.
+
+Episode details remain in its private `cron/output/episode-daily-latest.json`;
+the notification contains results, pending work and failures. `--json` retains
+machine-readable diagnostics. Learning candidates retain their exact approval
+and rejection commands and delivery receipts. Monthly container updates keep
+the existing target selection and update command, write detailed logs locally,
+and notify only changed images or failures.
+
+`model/notification-policy.json` defines concise presentation for existing
+model-generated reports. Apply explicitly as the Hermes runtime identity using
+`hermes/apply_notification_policy.py --apply`; without the flag it previews.
+Only prompts of named recurring jobs change, preserving IDs, delivery routes,
+schedules, paused state, report facts and confirmation protocols. Prior prompts
+are backed up in the private profile; rerunning is idempotent. Companion photos
+already use a single sentence and keep their image delivery contract.
+
+Run the notification regression checks with the existing Hermes Python runtime:
+`PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks`.
 
 Hermes restricts executable cron paths to each profile's `scripts/` directory.
 The installer preserves that boundary with small Python/Bash entrypoints which
@@ -116,11 +193,11 @@ Its historical result is retained.
 Favsync exception alerts accept the creator source's `cached` state when it
 has no error. At the user's request, X `content_unavailable` assets are excluded
 from attachment alerts; asset states and failed execution history are retained.
-Historical failures include their execution time so they can be distinguished
-from current source errors. Rewards alerts name unsupported exploration topics;
+Execution history stays in Favsync rather than its notifications.
+Rewards alerts name unsupported exploration topics;
 unconfirmed login and cart checks remain visible with their actual meaning.
-Benefits exception reports include their generation time and each affected
-platform's result time in UTC+08:00. They read the current delivery receipt on
+Benefits exception reports show only each affected platform and its problem.
+Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on
 each invocation; previously sent messages retain the snapshot from their send
 time. Successful repair runs therefore remove the platform from the next
 report, without rewriting its historical failure receipt.
@@ -144,3 +221,9 @@ fence. Apply it to the existing Hermes checkout when restoring this deployment;
 the source migration installer does not automatically patch the framework.
 
 嘉颖陪伴 cron 的素材来源、连续生活状态、30 天历史与选择性部署说明见 [hermes/COMPANION.md](hermes/COMPANION.md)。
+
+## Face baseline
+
+Scheduled scanning was removed at the user's request. The resident service only
+scans on manual web/API requests. No face-baseline cron entry or wrapper is
+installed; its former logs are retained. See `face-baseline/README.md`.

@@ -1,1 +1,1 @@
-/vol1/1000/Code/personal-data-hub/legacy/personal-jobs/personal-review-email-input.sh
+../../personal-data-hub/legacy/personal-jobs/personal-review-email-input.sh

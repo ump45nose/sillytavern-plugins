@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import subprocess
+import sqlite3
 import time
 import urllib.error
 import urllib.request
@@ -39,6 +40,7 @@ def settings(path: str) -> tuple[dict, dict]:
     if workflow.get("fusion_mode") not in {"review_required", "auto_validated"}:
         raise RuntimeError("Invalid fusion mode")
     config = load_config(workflow["base_config"])
+    config['archive_data_root'] = config['data_root']
     config["data_root"] = workflow["data_root"]
     config["timezone"] = workflow["timezone"]
     config["plaud_mcp"]["token_file"] = workflow["plaud_token_file"]
@@ -182,10 +184,10 @@ def run_date(workflow: dict, config: dict, day: str, *, skip_sync: bool = False,
         if fence.is_file():
             prior = json.loads(fence.read_text())
             previous = Path(prior.get("run", str(run))).resolve()
-            if prior.get("status") == "complete" and previous.is_relative_to((root / "runs").resolve()) and (previous / "transcript-v3.md").is_file():
+            if previous.is_relative_to((root / "runs").resolve()) and (previous / "run-inputs.json").is_file():
                 before = json.loads((previous / "run-inputs.json").read_text())
                 current = json.loads((run / "run-inputs.json").read_text())
-                for key in ("runner_code", "prepare_code"):
+                for key in ("runner_code", "prepare_code") if prior.get('status') == 'complete' else ('runner_code',):
                     before.pop(key, None); current.pop(key, None)
                 if before == current:
                     run = previous
@@ -203,7 +205,7 @@ def run_date(workflow: dict, config: dict, day: str, *, skip_sync: bool = False,
                 trial.cloud("groq", chunks, root=run)
                 if any(not (run / chunk / "groq-whisper-large-v3-summary.json").is_file() for chunk in chunks):
                     atomic_bytes(run / "prepare.log", capture.getvalue().encode())
-                    return {"date": day, "status": "source_failed_no_retry", "engine": "groq", "run": str(run)}
+                    return {"date": day, "status": "source_retry_pending", "engine": "groq", "run": str(run)}
                 trial.cloud("gemini", chunks, root=run)
                 gemini_missing = any(not (run / chunk / "gemini-summary.json").is_file() for chunk in chunks)
                 if gemini_missing:
@@ -211,12 +213,12 @@ def run_date(workflow: dict, config: dict, day: str, *, skip_sync: bool = False,
                 trial.sensevoice(config, chunks, root=run)
                 if gemini_missing:
                     atomic_bytes(run / "prepare.log", capture.getvalue().encode())
-                    return {"date": day, "status": "source_failed_no_retry", "engine": "gemini", "run": str(run), "summary": summary,
+                    return {"date": day, "status": "source_retry_pending", "engine": "gemini", "run": str(run), "summary": summary,
                             "recordings": len(rows), "blocks": len(chunks), "draft": True}
                 needed = ("groq-whisper-large-v3-summary.json", "gemini-summary.json", "sensevoice-summary.json")
                 if any(not (run / chunk / name).is_file() for chunk in chunks for name in needed):
                     atomic_bytes(run / "prepare.log", capture.getvalue().encode())
-                    return {"date": day, "status": "source_failed_no_retry", "run": str(run)}
+                    return {"date": day, "status": "source_retry_pending", "run": str(run)}
                 report = trial.prepare_input(root=run, days=chunks)
             atomic_bytes(run / "prepare.log", capture.getvalue().encode())
         final = run / "transcript-v3.md"
@@ -225,10 +227,6 @@ def run_date(workflow: dict, config: dict, day: str, *, skip_sync: bool = False,
             return {"date": day, "status": "source_quality_blocked", "run": str(run), "summary": draft_summary,
                     "recordings": len(rows), "blocks": len(chunks), "draft": True}
         if not final.exists() and report["eligible_for_submission"] and workflow["fusion_mode"] == "auto_validated" and finalize:
-            sent = root / "submissions" / f"{day}.json"
-            if sent.exists():
-                return {"date": day, "status": "daily_submission_already_attempted", "run": str(run),
-                        "detail": "Changed input or interrupted previous request; no automatic second fusion"}
             submit_approved(workflow, run, report["input_sha256"], automatic=True, day=day)
         summary = None
         if final.exists():
@@ -245,6 +243,16 @@ def run_date(workflow: dict, config: dict, day: str, *, skip_sync: bool = False,
         state.close()
 
 
+FUSED_TIME = r'\d{1,3}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?'
+FUSED_PREFIX = r'^\s*(?:[-*]\s+)?(?:\*\*)?\[?(' + FUSED_TIME + r')\]?(?:\*\*)?\s+'
+
+
+def normalize_fused_response(answer: str) -> str:
+    """A missing speaker is explicitly unknown; never infer an identity."""
+    return re.sub('(' + FUSED_PREFIX + r')(?!\s*Speaker\b)(.+)$',
+                  lambda m: m[1] + 'Speaker ?: ' + m[3], answer, flags=re.M)
+
+
 def validate_fused_response(answer: str, inventory: list[dict]) -> None:
     if "【他人?】" in answer:
         raise RuntimeError("Output has invalid identity")
@@ -255,21 +263,99 @@ def validate_fused_response(answer: str, inventory: list[dict]) -> None:
             raise RuntimeError("Output omitted or duplicated a recording heading")
         # 接受正文的 [MM:SS]、[HH:MM:SS] 或 **HH:MM:SS Speaker ...**，
         # 不把标题中的起始日期时间当成话轮。
-        found = re.findall(r"^\s*(?:[-*]\s+)?(?:\*\*)?\[?(\d{2,3}:\d{2}(?::\d{2})?)\]?\s+Speaker\b", matching[0], re.M)
+        found = re.findall(FUSED_PREFIX + r'Speaker\b', matching[0], re.M)
         if not found:
             raise RuntimeError("Output lacks speaker timestamps")
         times = []
         for value in found:
-            parts = [int(p) for p in value.split(":")]
-            if parts[-1] >= 60 or (len(parts) == 3 and parts[1] >= 60):
+            try:
+                seconds = trial.gemini_seconds(value)
+            except ValueError:
                 raise RuntimeError("Output has invalid time components")
-            seconds = parts[0] * 60 + parts[1] if len(parts) == 2 else parts[0] * 3600 + parts[1] * 60 + parts[2]
             times.append(seconds)
         if any(t >= recording["duration_ms"] / 1000 for t in times) or times != sorted(times):
             raise RuntimeError("Output speaker times are out of range or backwards")
 
 
+def pending_dates(config, workflow, today=None):
+    """Detect late arrivals by input identity, even after a day was complete."""
+    today = today or datetime.now(ZoneInfo(workflow['timezone'])).date()
+    since = (today - timedelta(days=int(workflow.get('backfill_days', 7)))).isoformat()
+    root = Path(config['data_root'])
+    state = State(root)
+    try:
+        # Bound new processing to the configured calendar window. Previously
+        # queued dates stay eligible across that boundary until complete.
+        days = [r[0] for r in state.conn.execute('SELECT DISTINCT local_date FROM recordings WHERE local_date<? ORDER BY local_date', (today.isoformat(),))]
+        pending = []
+        for day in days:
+            rows = [dict(r) for r in state.recordings_for_date(day)]
+            path = root / 'status' / f'{day}.json'
+            status = json.loads(path.read_text()) if path.exists() else {}
+            if status.get('status') == 'outside_backfill_scope' or (day < since and not path.exists()):
+                continue
+            inventory = []
+            if status.get('run'):
+                inputs = Path(status['run']) / 'run-inputs.json'
+                if inputs.is_file():
+                    inventory = json.loads(inputs.read_text()).get('recordings', [])
+            current = [{"id":r['recording_id'],"audio":r['sha256'],"duration_ms":r['duration_ms']} for r in sorted(rows,key=lambda r:(r['start_at'],r['recording_id'])) if r['remote_state']=='downloaded']
+            if status.get('status')!='complete' or inventory!=current or len(current)!=len(rows):
+                pending.append((status.get('checked_at',''), day))
+        return [day for _,day in sorted(pending)]
+    finally:
+        state.close()
+
+
+def reuse_archive(workflow, config, state):
+    archive = Path(config.get('archive_data_root', config['data_root']))
+    if archive == Path(config['data_root']) or not (archive / 'state/state.db').is_file():
+        return 'not_applicable'
+    since = (datetime.now(ZoneInfo(workflow['timezone'])).date() -
+             timedelta(days=int(workflow.get('backfill_days', 7)))).isoformat()
+    try:
+        with sqlite3.connect('file:' + str(archive / 'state/state.db') + '?mode=ro', uri=True) as original:
+            original.row_factory = sqlite3.Row
+            for row in original.execute("SELECT * FROM recordings WHERE local_date>=? AND remote_state='downloaded'", (since,)):
+                previous = state.get_recording(row['recording_id'])
+                if previous and previous['remote_state'] == 'downloaded' and previous['sha256'] == row['sha256']:
+                    continue
+                audio = Path(row['local_path'] or '/nonexistent')
+                if audio.is_file() and trial.sha256_file(audio) == row['sha256']:
+                    state.upsert_recording(dict(row))
+        return 'checked'
+    except (sqlite3.Error, OSError):
+        # A protected download archive must not stop the runtime account.
+        # Use its already-authorized Plaud connection without widening access.
+        return 'unavailable_use_upstream'
+
+
+def run_pending(workflow, config):
+    # One complete upstream sync discovers all dates; individual dates then
+    # reuse downloaded audio. Failed dates rotate by last attempt, not age.
+    state = State(Path(config['data_root']))
+    try:
+        archive_reuse = reuse_archive(workflow, config, state)
+        config = {**config, 'plaud_mcp': {**config['plaud_mcp'], 'lookback_days':
+                  max(int(config['plaud_mcp']['lookback_days']), int(workflow.get('backfill_days', 7))+1)}}
+        synced = sync_local_dir(config,state) if config['sync_provider']=='local_dir' else asyncio.run(sync_plaud(config,state))
+    finally:
+        state.close()
+    days = pending_dates(config, workflow)
+    if not days:
+        return {'status':'idle','pending_dates':[], 'sync':synced, 'archive_reuse':archive_reuse}
+    for queued in days:
+        path = Path(config['data_root']) / 'status' / f'{queued}.json'
+        if not path.exists():
+            atomic_bytes(path,json.dumps({'date':queued,'status':'queued','checked_at':''}).encode())
+    day = days[0]
+    result = run_date(workflow,config,day,skip_sync=True,finalize=True)
+    return {**result, 'pending_dates':days, 'sync':synced, 'archive_reuse':archive_reuse}
+
+
 def submit_approved(workflow: dict, run: Path, approved: str, *, automatic: bool = False, day: str | None = None) -> dict:
+    if automatic and not day:
+        raise RuntimeError('Date required for automatic daily submission')
     run = run.resolve()
     if not run.is_relative_to((Path(workflow["data_root"]) / "runs").resolve()):
         raise RuntimeError("Run must reside in the configured daily-v3 run directory")
@@ -288,25 +374,46 @@ def submit_approved(workflow: dict, run: Path, approved: str, *, automatic: bool
     sentinel = run / "submission-attempt.json"
     body = {"model": workflow["fusion_model"], "temperature": 0, "max_tokens": 48000,
             "messages": [{"role": "user", "content": contents}]}
-    status = {"approved_sha256": approved, "model": workflow["fusion_model"], "status": "attempted_once",
-              "approval_kind": "automatic_source_validation" if automatic else "explicit_hash_approval"}
+    from .retries import begin, finish, preserve
+    if (run / "transcript-v3.md").is_file():
+        return {"status": "complete", "final": str(run / "transcript-v3.md"), "input_sha256": approved}
+    inventory = json.loads((run / 'run-inputs.json').read_text())['recordings']
+    def publish(answer, response_model, usage, elapsed):
+        normalized = normalize_fused_response(answer)
+        validate_fused_response(normalized, inventory)
+        note = '\n缺失说话人标签明确标为 `Speaker ?`，不推断身份；原始融合响应另存。\n' if normalized != answer else ''
+        footer = f"\n\n---\n输入 SHA-256：`{approved}`；模型：`{response_model}`；用量：`{json.dumps(usage, ensure_ascii=False)}`；耗时：{elapsed:.1f} 秒。\n" + note
+        trial.write_once(run / 'transcript-v3.md', normalized.rstrip() + footer)
+    if sentinel.is_file():
+        previous = json.loads(sentinel.read_text())
+        saved = run / f"response-unvalidated-{previous.get('attempts', 1)}.md"
+        if (previous.get('approved_sha256') == approved and previous.get('model') == workflow['fusion_model'] and saved.is_file()):
+            try:
+                publish(saved.read_text(), previous.get('response_model', workflow['fusion_model']),
+                        previous.get('response_usage'), previous.get('elapsed_seconds', 0))
+            except RuntimeError:
+                pass  # A genuinely invalid saved answer still needs retry.
+            else:
+                preserve(sentinel, previous)
+                finish(sentinel, previous, True, revalidated_saved_response=True)
+                if automatic:
+                    fence = Path(workflow['data_root'])/'submissions'/f'{day}.json'
+                    fence.parent.mkdir(parents=True,exist_ok=True,mode=0o750)
+                    trial.write_status(fence, {**previous, 'run':str(run)})
+                atomic_bytes(Path(workflow['data_root'])/'output'/f'{day or run.parent.name}.md', (run/'transcript-v3.md').read_bytes())
+                return {'status':'complete','final':str(run/'transcript-v3.md'),'input_sha256':approved,'revalidated_saved_response':True}
+    status = begin(sentinel, {"approved_sha256": approved, "model": workflow["fusion_model"],
+              "approval_kind": "automatic_source_validation" if automatic else "explicit_hash_approval"}, artifact_present=False)
+    if status is None:
+        return {"status": "fusion_retry_backoff"}
     if automatic:
         if not day:
             raise RuntimeError("Date required for automatic daily submission")
         fence = Path(workflow["data_root"]) / "submissions" / f"{day}.json"
         fence.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-        with fence.open("x") as stream:
-            os.chmod(fence, 0o600)
-            json.dump({**status, "run": str(run)}, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
-    # O_EXCL is the process-safe at-most-one request fence; a timeout is never
-    # treated as permission to submit a second time.
-    with sentinel.open("x") as stream:
-        os.chmod(sentinel, 0o600)
-        json.dump(status, stream)
-        stream.flush()
-        os.fsync(stream.fileno())
+        if fence.exists():
+            preserve(fence, json.loads(fence.read_text()))
+        trial.write_status(fence, {**status, "run": str(run)})
     request = urllib.request.Request(workflow["cpa_url"], data=json.dumps(body, ensure_ascii=False).encode(),
                                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
     started = time.monotonic()
@@ -317,19 +424,16 @@ def submit_approved(workflow: dict, run: Path, approved: str, *, automatic: bool
         answer = choice["message"]["content"]
         if choice.get("finish_reason") != "stop" or not isinstance(answer, str) or not answer.strip():
             raise RuntimeError("Incomplete response")
-        trial.write_once(run / "response-unvalidated.md", answer.rstrip() + "\n")
-        inventory = json.loads((run / "run-inputs.json").read_text())["recordings"]
-        validate_fused_response(answer, inventory)
-        footer = f"\n\n---\n输入 SHA-256：`{approved}`；模型：`{result.get('model', workflow['fusion_model'])}`；用量：`{json.dumps(result.get('usage'), ensure_ascii=False)}`；耗时：{time.monotonic()-started:.1f} 秒。\n"
-        trial.write_once(run / "transcript-v3.md", answer.rstrip() + footer)
-        status.update(status="complete", usage=result.get("usage"), elapsed_seconds=round(time.monotonic()-started, 2))
+        trial.write_once(run / f"response-unvalidated-{status['attempts']}.md", answer.rstrip() + "\n")
+        status.update(response_model=result.get('model',workflow['fusion_model']), response_usage=result.get('usage'), elapsed_seconds=round(time.monotonic()-started,2))
+        publish(answer, status['response_model'], status['response_usage'], status['elapsed_seconds'])
+        finish(sentinel, status, True, usage=result.get("usage"), elapsed_seconds=round(time.monotonic()-started, 2))
     except Exception as error:
         detail = f"HTTP {error.code}" if isinstance(error, urllib.error.HTTPError) else str(error).replace(key, "<redacted>")[:300]
-        status.update(status="failed", error=detail)
-        trial.write_status(sentinel, status)
+        finish(sentinel, status, False, error=detail)
         if automatic:
             trial.write_status(fence, {**status, "run": str(run)})
-        raise RuntimeError(f"Single request failed; no retry: {detail}") from None
+        raise RuntimeError(f"Fusion failed; automatic backoff scheduled: {detail}") from None
     trial.write_status(sentinel, status)
     if automatic:
         trial.write_status(fence, {**status, "run": str(run)})
@@ -346,6 +450,8 @@ def main() -> int:
     run.add_argument("--date", type=date.fromisoformat)
     run.add_argument("--skip-sync", action="store_true", help="Manual local smoke only; not used by Cron")
     run.add_argument("--cron", action="store_true", help="Silence successful/waiting output")
+    pending = sub.add_parser('run-pending')
+    pending.add_argument('--cron', action='store_true', help='Continuously repair pending and late-arriving recording dates')
     sub.add_parser("doctor")
     sub.add_parser("login", help="Interactive Plaud MCP OAuth as the runtime account; never invoked by Cron")
     submit = sub.add_parser("submit-approved")
@@ -385,6 +491,9 @@ def main() -> int:
                 result = asyncio.run(login())
             elif args.command == "submit-approved":
                 result = submit_approved(workflow, args.run, args.approved_sha256)
+            elif args.command == 'run-pending':
+                missing = dependencies(workflow, config)
+                result = {'status':'blocked_credentials','missing':missing} if missing else run_pending(workflow, config)
             else:
                 day = (args.date or (datetime.now(ZoneInfo(workflow["timezone"])).date() - timedelta(days=1))).isoformat()
                 missing = dependencies(workflow, config)
@@ -394,7 +503,7 @@ def main() -> int:
                 finalize = not args.cron or local_now.hour * 60 + local_now.minute >= 450
                 result = {"date": day, "status": "blocked_credentials", "missing": missing} if missing else run_date(workflow, config, day, skip_sync=args.skip_sync, finalize=finalize)
             save_latest(root, result)
-            failed = result["status"] in {"blocked_credentials", "source_failed_no_retry", "source_quality_blocked", "review_input_modified", "daily_submission_already_attempted", "login_failed", "summary_failed"}
+            failed = result["status"] in {"blocked_credentials", "source_retry_pending", "source_quality_blocked", "review_input_modified", "daily_submission_already_attempted", "login_failed", "summary_failed"}
             if not getattr(args, "cron", False) or failed:
                 print(json.dumps(result, ensure_ascii=False))
             return 2 if failed else 0

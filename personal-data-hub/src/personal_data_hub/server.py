@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Request
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -75,6 +75,60 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
     from zoneinfo import ZoneInfoNotFoundError
     from datetime import date
     display = Display(store)
+    from .processing.query import ReadingQuery, ContentChanged, ContentRemoved
+    from .processing.repository import ProcessingRepository
+    reading = ReadingQuery(store)
+
+    @api.get("/api/v1/contents")
+    def contents(source: str | None = None, variant: str | None = None, query: str = "",
+                 cursor: str | None = None, limit: int = 50, start: datetime | None = None,
+                 end: datetime | None = None, type: str | None = Query(default=None), authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        if any(value and value.tzinfo is None for value in (start, end)) or (start and end and start >= end):
+            raise HTTPException(422, "invalid_time_range")
+        try: return reading.page(source, variant, query, cursor, limit, start, end, content_type=type)
+        except ValueError: raise HTTPException(422, "invalid_content_parameters") from None
+
+    @api.get("/api/v1/contents/{content_id}")
+    def content_detail(content_id: str, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        result = reading.detail(content_id)
+        if result is None: raise HTTPException(404, "content_removed")
+        return result
+
+    @api.get("/api/v1/contents/{content_id}/blocks")
+    def content_blocks(content_id: str, revision: int, after: int = -1, limit: int = 50,
+                       authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try: return reading.block_page(content_id, revision, after, limit)
+        except ContentChanged: raise HTTPException(409, "content_changed") from None
+        except ContentRemoved: raise HTTPException(404, "content_removed") from None
+        except ValueError: raise HTTPException(422, "invalid_block_parameters") from None
+
+    @api.get("/api/v1/contents/{content_id}/evidence")
+    def content_evidence(content_id: str, revision: int | None = None, after: str | None = None, limit: int = 100,
+                         authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        try: result = reading.evidence(content_id, revision, after, limit)
+        except ContentChanged: raise HTTPException(409, 'content_changed') from None
+        except ValueError: raise HTTPException(422, 'invalid_evidence_parameters') from None
+        if result is None: raise HTTPException(404, "content_removed")
+        return result
+
+    @api.get('/api/v1/contents/{content_id}/insights')
+    def conversation_insights(content_id: str, revision: int, authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        if not config.get('conversation_model', {}).get('enabled'):
+            return {'id': content_id, 'revision': revision, 'state': 'disabled', 'reason': 'deferred_to_analysis_module'}
+        try: return reading.insights(content_id, revision, config.get('conversation_model', {}).get('model'))
+        except ContentChanged: raise HTTPException(409, 'content_changed') from None
+        except ContentRemoved: raise HTTPException(404, 'content_removed') from None
+        except ValueError: raise HTTPException(422, 'invalid_insight_parameters') from None
+
+    @api.get("/api/v1/processing/status")
+    def processing_status(authorization: str | None = Header(default=None)):
+        authenticate(authorization, readonly=True)
+        return ProcessingRepository(store).status()
     from .daily_push import DailyPushData, daily_push_page
     daily_data = DailyPushData(store)
 

@@ -8,7 +8,8 @@ from uuid import uuid4
 
 from sqlalchemy import insert, update
 
-from .contracts import Batch, Record, instant, utcnow
+from .contracts import Batch, Record, canonical, instant, utcnow
+from .collection_errors import error_detail, isolated_error
 from .storage import Store, runs
 
 
@@ -28,8 +29,9 @@ def store_from(config):
 def adapter(settings):
     from .collectors import BillsCollector, FilesCollector, MemosCollector, PlaudCollector, SQLiteCollector, TokenCollector, PostgreSQLCrmCollector
     from .remote import GoogleCollector, EmailCollector, Mem0Collector, GitCollector
+    from .nas_activity import EmbyCollector, NavidromeCollector
     name = settings["adapter"]
-    classes = {"crm_pg": PostgreSQLCrmCollector, "crm": SQLiteCollector, "health": SQLiteCollector, "shellcrash": SQLiteCollector, "memos": MemosCollector, "plaud": PlaudCollector, "bills": BillsCollector, "skysight": FilesCollector, "files": FilesCollector, "token": TokenCollector, "google": GoogleCollector, "email": EmailCollector, "mem0": Mem0Collector, "git": GitCollector}
+    classes = {"crm_pg": PostgreSQLCrmCollector, "crm": SQLiteCollector, "health": SQLiteCollector, "shellcrash": SQLiteCollector, "memos": MemosCollector, "plaud": PlaudCollector, "bills": BillsCollector, "skysight": FilesCollector, "files": FilesCollector, "token": TokenCollector, "google": GoogleCollector, "email": EmailCollector, "mem0": Mem0Collector, "git": GitCollector, "emby": EmbyCollector, "navidrome": NavidromeCollector}
     return classes[name](settings)
 
 
@@ -40,18 +42,23 @@ def run(store, source, settings, since=None):
     invalid = 0
     with store.lock("source:" + source):
         with store.engine.begin() as c:
+            # Acquiring the source lock proves any previous running worker is
+            # gone. Preserve its history and finish the interrupted run.
+            c.execute(update(runs).where(runs.c.source == source, runs.c.status == "running").values(
+                ended_at=utcnow(), status="failed", error=canonical({"type": "InterruptedError", "reason": "上次采集进程中断，已自动重新采集"})))
             c.execute(insert(runs).values(id=rid, source=source, started_at=utcnow(), status="running", records=0))
         try:
             pending = Batch()
             cursor = None
             if settings.get("run_as"):
                 import subprocess, sys
-                from .contracts import canonical
                 config_path = settings.get("config_path") or os.environ.get("HUB_CONFIG", "/home/yuwk/.config/personal-data-hub/config.json")
                 process = subprocess.run(["sudo", "-n", "-u", settings["run_as"], str(Path(sys.executable).parent / "hub"), "--config", config_path, "export-source", source, "--cursor-stdin"], input=canonical({"cursor": {} if settings.get("force_full") else store.cursor(source), "since": since}), capture_output=True, text=True, timeout=300)
-                if process.returncode: raise RuntimeError("isolated_source_read_failed")
+                if process.returncode: raise isolated_error(process.stderr)
                 batches = []
-                for line in process.stdout.splitlines():
+                for line in process.stdout.split('\n'):
+                    if not line.strip():
+                        continue
                     wire = json.loads(line)
                     wire["records"] = [Record(**{**r, "occurred_at": instant(r.get("occurred_at")), "updated_at": instant(r.get("updated_at"))}) for r in wire["records"]]
                     batches.append(Batch(**wire))
@@ -72,7 +79,7 @@ def run(store, source, settings, since=None):
             for key in totals: totals[key] += result[key]
         except Exception as exc:
             with store.engine.begin() as c:
-                c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="failed", records=totals["changed"], error=type(exc).__name__))
+                c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="failed", records=totals["changed"], error=canonical(error_detail(exc))))
             raise
         with store.engine.begin() as c:
             # 本轮校验异常影响采集状态；水位中的历史异常另由 status 报告，不能令成功运行永久 partial。

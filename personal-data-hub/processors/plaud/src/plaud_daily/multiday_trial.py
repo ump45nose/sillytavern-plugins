@@ -36,7 +36,34 @@ SAMPLES = {
     "2026-09-30": "of_152e2654b9c268aa205f9c74d6a3cf9e",
 }
 SECONDS = 1200
-GEMINI_LINE = re.compile(r"^\s*(?:[-*]\s*)?\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*Speaker\s+([\d?]+)\s*[:：]\s*(.+)$", re.M)
+GEMINI_TIME = r'\d{1,3}:\d{2}(?::\d{2,3})?(?:[.,]\d{1,3})?'
+GEMINI_LINE = re.compile(r'^\s*(?:[-*]\s*)?\[(' + GEMINI_TIME + r')(?:\s*(?:-->|[–-])\s*(' +
+                         GEMINI_TIME + r'))?\]\s*(?:Speaker\s+([\d?]+)\s*[:：]\s*)?(.+)$', re.M)
+
+
+def gemini_seconds(value):
+    parts = value.replace(',', '.').split(':')
+    if len(parts) == 3 and len(parts[-1]) == 3 and '.' not in parts[-1]:
+        # mm:ss:SSS is an unambiguous millisecond format, distinct from hh:mm:ss.
+        parts = [parts[0], parts[1] + '.' + parts[2]]
+    numbers = [float(p) for p in parts]
+    if numbers[-1] >= 60 or (len(numbers) == 3 and numbers[1] >= 60):
+        raise ValueError('invalid_time_components')
+    return numbers[0]*60 + numbers[1] if len(numbers) == 2 else numbers[0]*3600 + numbers[1]*60 + numbers[2]
+
+
+def gemini_rows(contents):
+    rows = []
+    for match in GEMINI_LINE.finditer(contents):
+        try:
+            start = gemini_seconds(match[1])
+            end = gemini_seconds(match[2]) if match[2] else None
+        except ValueError:
+            rows.append({'start':0, 'speaker':match[3] or '?', 'text':match[4], 'invalid':True})
+            continue
+        rows.append({'start':start, 'speaker':match[3] or '?', 'text':match[4],
+                     **({'end':end} if end is not None else {})})
+    return rows
 
 
 def save_json(path: Path, data: dict) -> None:
@@ -282,23 +309,25 @@ def cloud(engine: str, days: list[str] | None = None, *, root: Path = ROOT) -> N
         model = os.environ.get("PLAUD_GEMINI_MODEL", "gemini-3-flash")
         suffix = "-native-" + sha256_file(Path(__file__).with_name("gemini_native.py"))[:12] if native else ""
         attempt = folder / (f"gemini-{model}{suffix}-attempt.json" if engine == "gemini" and (native or model != "gemini-3-flash") else f"{engine}-attempt.json")
-        if attempt.exists():
-            print(json.dumps({"day": day, "engine": engine, "status": "prior_attempt_no_retry"}), flush=True)
-            return
-        state = {"engine": engine, "status": "attempted_once", "audio_sha256": sha256_file(folder / "audio.mp3")}
-        write_once(attempt, json.dumps(state) + "\n")
+        from .retries import begin, finish
+        state = begin(attempt, {"engine": engine, "audio_sha256": audio_hash}, artifact_present=False)
+        if state is None:
+            print(json.dumps({"day": day, "engine": engine, "status": "retry_backoff"}), flush=True)
+            continue
         started = time.monotonic()
         command = [sys.executable, "-m", module, "--audio", str(folder / "audio.mp3"), "--output", str(folder)]
         if engine == "gemini":
             command += ["--model", model, "--url", os.environ.get("PLAUD_CPA_URL", "http://192.168.31.201:8317/v1/chat/completions")]
-        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        try:
+            result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=720)
+        except subprocess.TimeoutExpired:
+            finish(attempt, state, False, error="source_request_timeout")
+            continue
         state.update({"status": "complete" if result.returncode == 0 else "failed", "elapsed_seconds": round(time.monotonic() - started, 2)})
         if result.returncode:
             state["error"] = result.stderr.replace(key, "<redacted>")[-700:]
-        save_json(attempt, state)
+        finish(attempt, state, result.returncode == 0)
         print(json.dumps({"day": day, **state}, ensure_ascii=False), flush=True)
-        if result.returncode:
-            return
 
 
 def speaker_previews(folder: Path, turns: list[dict], seconds: float = SECONDS) -> list[str]:
@@ -320,21 +349,17 @@ def speaker_previews(folder: Path, turns: list[dict], seconds: float = SECONDS) 
 
 
 def parse_gemini(contents: str, seconds: float = SECONDS) -> list[dict]:
-    rows = []
-    for match in GEMINI_LINE.finditer(contents):
-        start = int(match[1]) * 60 + int(match[2]) if match[3] is None else int(match[1]) * 3600 + int(match[2]) * 60 + int(match[3])
-        rows.append({"start": start, "speaker": match[4], "text": match[5]})
-    if not rows or any(row["start"] >= seconds for row in rows) or rows != sorted(rows, key=lambda x: x["start"]):
+    rows = gemini_rows(contents)
+    if not inspect_gemini(contents, seconds)['valid']:
         raise RuntimeError("Gemini timestamps are absent, invalid, or out of order")
     return rows
 
 
 def inspect_gemini(contents: str, seconds: float = SECONDS) -> dict:
     """Reject invalid timing without silently rescaling or clipping a source."""
-    matches = list(GEMINI_LINE.finditer(contents))
-    starts = [int(m[1]) * 60 + int(m[2]) if m[3] is None else
-              int(m[1]) * 3600 + int(m[2]) * 60 + int(m[3]) for m in matches]
-    invalid = sum(t >= seconds for t in starts)
+    rows = gemini_rows(contents)
+    starts = [r['start'] for r in rows]
+    invalid = sum(r.get('invalid',False) or r['start'] >= seconds or r.get('end',r['start']) > seconds or r.get('end',r['start']) < r['start'] for r in rows)
     backwards = sum(b < a for a, b in zip(starts, starts[1:]))
     return {"valid": bool(starts) and not invalid and not backwards,
             "parsed_turns": len(starts), "out_of_range_turns": invalid,

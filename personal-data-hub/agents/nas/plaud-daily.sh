@@ -6,4 +6,4 @@ cd "$task_repo"
 exec "$task_repo/collectors/plaud/.venv/bin/python" \
   "$task_repo/agents/nas/plaud-process.py" \
   --config /home/yuwk/.config/personal-data-hub/plaud-processing.yaml \
-  run-date --cron "$@"
+  run-pending --cron "$@"

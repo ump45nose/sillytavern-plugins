@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
 
 from .contracts import Asset, Batch, digest, utcnow
 
@@ -16,6 +16,8 @@ metadata = MetaData()
 jtype = JSON()
 sources = Table("hub_sources", metadata, Column("id", String, primary_key=True), Column("account", String, nullable=False), Column("adapter", String, nullable=False), Column("deletion_support", String, nullable=False))
 records = Table("hub_records", metadata, Column("id", String(64), primary_key=True), Column("source", String, nullable=False, index=True), Column("external_id", Text, nullable=False), Column("kind", String, nullable=False, index=True), Column("occurred_at", DateTime(timezone=True), index=True), Column("updated_at", DateTime(timezone=True)), Column("observed_at", DateTime(timezone=True), nullable=False), Column("timezone", String, nullable=False), Column("hash", String(64), nullable=False), Column("raw", jtype, nullable=False), Column("normalized", jtype, nullable=False), Column("assets", jtype, nullable=False))
+Index('ix_hub_records_source_observed_at', records.c.source, records.c.observed_at)
+Index('ix_hub_records_kind_id_source', records.c.kind, records.c.id, records.c.source)
 previews = Table("hub_record_previews", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("title", Text, nullable=False), Column("preview", Text, nullable=False))
 display_index = Table("hub_display_index", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("source", String, nullable=False), Column("kind", String, nullable=False), Column("domain", String, nullable=False, index=True), Column("occurred_at", DateTime(timezone=True), index=True), Column("observed_at", DateTime(timezone=True), nullable=False), Column("title", String(160), nullable=False), Column("preview", String(500), nullable=False), Column("data", jtype, nullable=False))
 revisions = Table("hub_revisions", metadata, Column("record_id", ForeignKey("hub_records.id", ondelete="CASCADE"), primary_key=True), Column("hash", String(64), primary_key=True), Column("observed_at", DateTime(timezone=True), nullable=False), Column("value", jtype, nullable=False))
@@ -32,6 +34,8 @@ class Store:
         self.root = Path(asset_root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         metadata.create_all(self.engine)
+        from .processing.schema import migrate
+        migrate(self)
 
     @contextlib.contextmanager
     def lock(self, key: str):
@@ -55,7 +59,8 @@ class Store:
         else:
             path = self.root / (digest(key) + ".lock")
             with path.open("a") as handle:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                mode = fcntl.LOCK_EX if key == "hub-asset-and-record-writer" else fcntl.LOCK_EX | fcntl.LOCK_NB
+                fcntl.flock(handle, mode)
                 yield
 
     @staticmethod
@@ -131,6 +136,8 @@ class Store:
 
     def _purge(self, c, source: str, external_id: str):
         rid = self.identity(source, external_id)
+        from .processing.repository import ProcessingRepository
+        ProcessingRepository(self).removed(c, rid)
         if source == "crm" and ":" in external_id:
             from personal_crm.storage.models import Base
             table_name, key = external_id.split(":", 1)
@@ -167,12 +174,16 @@ class Store:
         changed = duplicate = ignored = removed = 0
         with self.writer_lock(connection):
             with (self.engine.begin() if connection is None else contextlib.nullcontext(connection)) as c:
+                identities = [self.identity(source, item.external_id) for item in batch.records]
+                existing = {row['id']: row for row in c.execute(select(records.c.id, records.c.hash, records.c.assets, records.c.kind).where(records.c.id.in_(identities))).mappings()} if identities else {}
+                deleted_ids = set(c.scalars(select(tombstones.c.record_id).where(tombstones.c.record_id.in_(identities)))) if identities else set()
+                duplicates = []
                 for item in batch.records:
                     rid = self.identity(source, item.external_id)
-                    if c.scalar(select(tombstones.c.record_id).where(tombstones.c.record_id == rid)):
+                    if rid in deleted_ids:
                         ignored += 1
                         continue  # 旧备份/离线重放不能复活已删除内容。
-                    old = c.execute(select(records).where(records.c.id == rid)).mappings().first()
+                    old = existing.get(rid)
                     attachments = [self.put_asset(a) for a in item.assets]
                     if source == "crm" and item.kind == "interactions" and old:
                         # 正文镜像和周期采集不撤销独立补齐的微信媒体。
@@ -184,8 +195,7 @@ class Store:
                     key = digest(body)
                     now = utcnow()
                     if old and old["hash"] == key:
-                        c.execute(update(records).where(records.c.id == rid).values(observed_at=now))
-                        self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
+                        duplicates.append(rid)
                         duplicate += 1
                         continue
                     values = dict(id=rid, source=source, external_id=str(item.external_id), hash=key, occurred_at=item.occurred_at, updated_at=item.updated_at, observed_at=now, kind=item.kind, timezone=item.timezone, raw=item.raw, normalized=item.normalized, assets=attachments)
@@ -194,6 +204,11 @@ class Store:
                     else:
                         c.execute(insert(records).values(**values))
                     self._put_preview(c, rid, item.kind, item.external_id, item.raw, item.normalized)
+                    from .processing.registry import PROFILES
+                    supported_kinds = {kind for profile in PROFILES.values() for kind in (*profile.KINDS, *getattr(profile, 'DEPENDENCY_KINDS', ()))}
+                    if item.kind in supported_kinds or (old and old['kind'] in supported_kinds):
+                        from .processing.repository import ProcessingRepository
+                        ProcessingRepository(self).changed(c, values)
                     if not c.scalar(select(revisions.c.hash).where(revisions.c.record_id == rid, revisions.c.hash == key)):
                         c.execute(insert(revisions).values(record_id=rid, hash=key, observed_at=now, value=body))
                     for a in attachments:
@@ -202,6 +217,13 @@ class Store:
                         if not c.scalar(select(asset_refs.c.asset_id).where(asset_refs.c.record_id == rid, asset_refs.c.asset_id == a["id"])):
                             c.execute(insert(asset_refs).values(record_id=rid, asset_id=a["id"]))
                     changed += 1
+                    existing[rid] = values
+                if duplicates:
+                    # Unchanged content has unchanged previews. Touch freshness in
+                    # one statement per batch, without rereading large raw bodies.
+                    now = utcnow()
+                    c.execute(update(records).where(records.c.id.in_(duplicates)).values(observed_at=now))
+                    c.execute(update(display_index).where(display_index.c.record_id.in_(duplicates)).values(observed_at=now))
                 deletions = set(batch.deletions)
                 if batch.authoritative:
                     if batch.seen_ids is None:
@@ -217,7 +239,7 @@ class Store:
                     else:
                         c.execute(insert(checkpoints).values(**values))
             # 文件清理失败可重试；数据库中的内容已经被清理，不回退删除账本。
-            if connection is None: self._gc()
+            if connection is None and removed: self._gc()
         return dict(changed=changed, duplicates=duplicate, tombstoned=ignored, deleted=removed)
 
     def _gc(self):
@@ -372,10 +394,20 @@ class Store:
     def status(self):
         with self.engine.connect() as c:
             result = []
+            # The status endpoint is polled by collectors and clients. Aggregate
+            # narrow columns once instead of rescanning each source twice.
+            statistics = {row['source']: row for row in c.execute(
+                select(records.c.source, func.count().label('count'),
+                       func.max(records.c.observed_at).label('last_observed_at')).group_by(records.c.source)).mappings()}
+            ranked = select(runs, func.row_number().over(partition_by=runs.c.source,
+                            order_by=(runs.c.started_at.desc(), runs.c.id.desc())).label('position')).subquery()
+            latest_runs = {row['source']: {k:v for k,v in row.items() if k != 'position'}
+                           for row in c.execute(select(ranked).where(ranked.c.position == 1)).mappings()}
             invalid_counts = dict(c.execute(select(records.c.source, func.count()).where(records.c.kind == "computer_segment_invalid").group_by(records.c.source)).all())
             for row in c.execute(select(sources)).mappings():
                 source = row["id"]
-                latest = c.execute(select(runs).where(runs.c.source == source).order_by(runs.c.started_at.desc()).limit(1)).mappings().first()
+                latest = latest_runs.get(source)
+                stats = statistics.get(source, {'count':0, 'last_observed_at':None})
                 warnings = [{"code": "historical_segment_invalid", "count": invalid_counts[source]}] if invalid_counts.get(source) else []
-                result.append({**dict(row), "count": c.scalar(select(func.count()).select_from(records).where(records.c.source == source)), "last_observed_at": c.scalar(select(func.max(records.c.observed_at)).where(records.c.source == source)), "last_run": dict(latest) if latest else None, "quality_warnings": warnings})
+                result.append({**dict(row), **{key:stats[key] for key in ('count','last_observed_at')}, "last_run": dict(latest) if latest else None, "quality_warnings": warnings})
             return result

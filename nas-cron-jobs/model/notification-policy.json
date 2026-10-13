@@ -1,0 +1,12 @@
+{
+  "job_names": [
+    "hermes-mem0-daily-sync-2200",
+    "daily-review-draft-2130",
+    "weekly-review-draft-2150",
+    "work-email-brief-weekdays-0850",
+    "personal-review-daily-2130",
+    "personal-review-weekly-2150",
+    "personal-review-stage-2105"
+  ],
+  "prompt_suffix": "推送排版：使用 Markdown 短标题与列表，直接给出结果、异常原因、待办与截止时间。删除执行过程、工具路径、来源说明、重复状态和客套叙述；没有内容的分区不展示。日/周报保留有据事实及必要的不确定性，不改变规定首行、确认流程或静默规则。Mem0 无变更时只写一行‘Mem0：本次无变更’，有变更时只列同步数量和问题。"
+}

@@ -29,7 +29,8 @@ def classify(text):
     return "scan_incomplete"
 
 
-def command(argv, timeout, output=None, *, warnings_are_errors=True):
+def command(argv, timeout, output=None, *, warnings_are_errors=True,
+            allowed_warning_patterns=()):
     # Child output may contain account data, cookies, signed URLs or post text.
     # Never relay it to the caller's logs; only return a bounded error category.
     with tempfile.TemporaryFile() as errors:
@@ -47,6 +48,10 @@ def command(argv, timeout, output=None, *, warnings_are_errors=True):
             if p.returncode:
                 sink.seek(0)
                 raise SyncError(classify(err + sink.read().decode("utf-8", "replace")))
+            if allowed_warning_patterns:
+                err = "\n".join(line for line in err.splitlines()
+                                if not any(pattern.fullmatch(line)
+                                           for pattern in allowed_warning_patterns))
             if "[error]" in err.lower() or (warnings_are_errors and "[warning]" in err.lower()):
                 # A partial extraction must never complete a likes baseline.
                 raise SyncError(classify(err))

@@ -31,11 +31,17 @@ def run(*args, timeout=15):
         return None
 
 
-def inspect(name):
-    result = run('docker', 'inspect', name)
-    if result is None or result.returncode:
-        return None
-    return json.loads(result.stdout)[0]
+def inspect(name, attempts=2, timeout=30):
+    for attempt in range(attempts):
+        result = run('docker', 'inspect', name, timeout=timeout)
+        if result is not None and result.returncode == 0:
+            try:
+                return json.loads(result.stdout)[0]
+            except (json.JSONDecodeError, IndexError):
+                pass
+        if attempt < attempts - 1:
+            time.sleep(1)
+    return None
 
 
 def load_order():

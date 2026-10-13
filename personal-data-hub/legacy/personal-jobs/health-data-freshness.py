@@ -95,9 +95,16 @@ def main() -> int:
         {"status": status, "reason": reason, "detail": detail, "checked_at": now.isoformat()},
     )
     if status == "unhealthy" and previous != "unhealthy":
-        print(f"Health 数据告警：{reason}（{detail}）")
+        problem = {
+            "source_unreadable": "无法读取数据来源",
+            "no_payload": "尚未收到数据",
+            "invalid_json": "数据格式无法解析",
+            "invalid_timestamp": "接收时间无法识别",
+            "stale": f"超过 {args.max_age_hours:g} 小时未收到新数据",
+        }.get(reason, "采集异常")
+        print(f"- 健康数据：{problem}")
     elif status == "healthy" and previous == "unhealthy":
-        print(f"Health 数据已恢复：{detail}")
+        print("- 健康数据：已恢复")
     return 0
 
 

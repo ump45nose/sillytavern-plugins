@@ -87,12 +87,8 @@ with tempfile.TemporaryDirectory(prefix="plaud-v3-smoke-") as directory:
             updated = daily.run_date(workflow, config, "2026-10-05", finalize=True)
         assert updated["status"] == "complete" and updated["run"] == str(root)
         assert len(requests) == 2 and len(prepared) == 4
-        try:
-            daily.submit_approved(workflow, root, result["input_sha256"], automatic=True, day="2026-10-05")
-        except FileExistsError:
-            pass
-        else:
-            raise AssertionError("Repeated submission must be rejected")
+        cached = daily.submit_approved(workflow, root, result["input_sha256"], automatic=True, day="2026-10-05")
+        assert cached["status"] == "complete"
         assert len(requests) == 2
         assert (Path(config["data_root"]) / "output/2026-10-05.md").is_file()
         assert (Path(config["data_root"]) / "output/2026-10-05.summary.md").is_file()
@@ -107,7 +103,7 @@ with tempfile.TemporaryDirectory(prefix="plaud-v3-smoke-") as directory:
          patch.object(daily.urllib.request, "urlopen", side_effect=fake_post):
         before = len(requests)
         result = daily.run_date(partial_workflow, partial_config, "2026-10-05")
-        assert result["status"] == "source_failed_no_retry" and result["draft"]
+        assert result["status"] == "source_retry_pending" and result["draft"]
         assert result["summary"]["status"] == "complete" and len(requests) == before + 1
         assert not (Path(result["run"]) / "transcript-v3.md").exists()
         assert (Path(partial_config["data_root"]) / "output/2026-10-05.draft-summary.md").is_file()
@@ -116,6 +112,12 @@ with tempfile.TemporaryDirectory(prefix="plaud-v3-smoke-") as directory:
 
 inventory = [{"id": "recording", "duration_ms": 7200000}]
 daily.validate_fused_response("## 录音 recording\n**00:00:02 Speaker 1**\n原话\n**01:59:59 Speaker 2**\n原话", inventory)
+unknown = '## 录音 recording\n**00:00:02** 原话\n[01:59:59.250] 原话'
+normalized = daily.normalize_fused_response(unknown)
+assert normalized == '## 录音 recording\n**00:00:02** Speaker ?: 原话\n[01:59:59.250] Speaker ?: 原话'
+daily.validate_fused_response(normalized, inventory)
+known = '## 录音 recording\n[00:02]  Speaker 1: 原话'
+assert daily.normalize_fused_response(known) == known
 for bad in ("## 录音 recording\n只有日期 2026-10-08T15:31:59", "## 录音 recording\n**02:00:00 Speaker 1**\n越界", "## 录音 recording\n[00:02] Speaker 1: 原话\n[00:01] Speaker 2: 倒序", "## 录音 recording\n[00:01] Speaker 1: 【他人?】"):
     try: daily.validate_fused_response(bad, inventory)
     except RuntimeError: pass
