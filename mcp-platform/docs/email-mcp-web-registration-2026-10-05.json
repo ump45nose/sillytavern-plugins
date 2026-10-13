@@ -1,0 +1,38 @@
+{
+  "name": "邮件",
+  "method": "ChatGPT 网页：创建自定义 MCP 服务器",
+  "visibility": "个人私有",
+  "plugin_id": "plugin_asdk_app_6ac285e95d74819193f153ce16dc5640",
+  "app_id": "asdk_app_6ac285e95d74819193f153ce16dc5640",
+  "app_version_id": "asdk_app_v_6ac285e95d808191b73f36326375b6f1",
+  "web_display_version": "1.0.0",
+  "review_status": "DEVELOPMENT",
+  "plugin_url": "https://chatgpt.com/plugins/plugin_asdk_app_6ac285e95d74819193f153ce16dc5640",
+  "mcp_url": "https://email-home.172906573.xyz/mcp",
+  "authentication": "OAuth",
+  "registration_method": "CIMD",
+  "connected": true,
+  "web_icon_verified": true,
+  "tool_count": 19,
+  "tool_groups": {
+    "Read": 7,
+    "Write": 12
+  },
+  "readonly_client_smoke": {
+    "status": "passed",
+    "accounts": 4,
+    "inbox_folders": 1,
+    "server_audit": {
+      "list_available_accounts": {
+        "calls": 1,
+        "status": "ok"
+      },
+      "list_mailboxes": {
+        "calls": 1,
+        "status": "ok"
+      }
+    },
+    "mail_write_tools_called": false
+  },
+  "smoke_chat_url": "https://chatgpt.com/c/6ac289c6-3f68-83e8-a0f0-576ff46f4502"
+}

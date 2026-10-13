@@ -1,0 +1,50 @@
+[
+  {
+    "service": "personal-crm",
+    "source": "/home/yuwk/personal-crm/assets/plugin/logo-c.png",
+    "upload": "/home/yuwk/mcp-platform/docs/gpt-web-plugin-drafts/2026-10-04/web-icons/personal-crm.png",
+    "bytes": 4796,
+    "dimensions": [
+      256,
+      256
+    ],
+    "colors": 256,
+    "sha256": "7d356ce05c59c2e9db6bdeed9bd1bf4fff82ff5b639e4f4f817906cdfc58f45c"
+  },
+  {
+    "service": "local-env-mcp",
+    "source": "/home/yuwk/mcp-platform/integrations/local-env-mcp/assets/plugin/logo-c.png",
+    "upload": "/home/yuwk/mcp-platform/docs/gpt-web-plugin-drafts/2026-10-04/web-icons/local-env-mcp.png",
+    "bytes": 4014,
+    "dimensions": [
+      256,
+      256
+    ],
+    "colors": 256,
+    "sha256": "f85ad9aa433eb4ce1042c61b9c614708a137ffed13cf5909e75a7cd59f94a8c3"
+  },
+  {
+    "service": "dingtalk",
+    "source": "/home/yuwk/mcp-platform/integrations/dingtalk/assets/plugin/logo.png",
+    "upload": "/home/yuwk/mcp-platform/docs/gpt-web-plugin-drafts/2026-10-04/web-icons/dingtalk.png",
+    "bytes": 5370,
+    "dimensions": [
+      256,
+      256
+    ],
+    "colors": 256,
+    "sha256": "9ac6fbcb8c46f136ff355afbdc48fceb300bfb90b402b8f11cd1b8e6fb1924b6"
+  },
+  {
+    "service": "media-download-mcp",
+    "source": "/home/yuwk/media-automation/apps/media-download-mcp/assets/plugin/moviepilot.png",
+    "upload": "/home/yuwk/mcp-platform/docs/gpt-web-plugin-drafts/2026-10-04/web-icons/media-download-mcp.png",
+    "bytes": 4848,
+    "dimensions": [
+      256,
+      256
+    ],
+    "colors": 256,
+    "sha256": "94434e57708b54f58d5974325b57077d0c9a608ca5585b9db2bfdb6e54b8cfdb"
+  }
+]

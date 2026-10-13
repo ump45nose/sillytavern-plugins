@@ -1,0 +1,27 @@
+services:
+  gateway:
+    image: local/mcp-platform-media-download-gateway:check-media-0.1.3
+    user: 1000:1001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+    - ${MEDIA_GATEWAY_RUNTIME_DIR:?set the private runtime directory}/gateway.env
+    volumes:
+    - ${MEDIA_GATEWAY_RUNTIME_DIR}/oauth:/data/oauth
+    - ${MEDIA_BACKEND_TOKEN_FILE:?set the existing token path}:/secrets/backend.token:ro
+    healthcheck:
+      test:
+      - CMD
+      - python3
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/healthz',
+        timeout=10).read()
+      interval: 30s
+      timeout: 15s
+      retries: 3
+    container_name: mcp-platform-media-download-gateway-1
+name: mcp
