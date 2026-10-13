@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "usage-monitor-mcp"
+version = "0.1.1"
+description = "Token Monitor 与 ShellCrash 只读日报及 MCP Events"
+requires-python = ">=3.12"
+dependencies = ["mcp-platform==0.1.6", "dingtalk-events==0.1.1", "uvicorn>=0.30,<1"]
+
+[project.scripts]
+usage-monitor-mcp = "usage_monitor_mcp.server:main"
+usage-monitor-check = "usage_monitor_mcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/usage_monitor_mcp"]
+
+[tool.uv.sources]
+mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }
+dingtalk-events = { git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git", rev = "59f91c009207528a4183e6d6db242f6ccf4117cd", subdirectory = "mmp-platform/events" }

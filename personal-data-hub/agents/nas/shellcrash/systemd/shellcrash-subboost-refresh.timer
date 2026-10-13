@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly SubBoost to ShellCrash configuration sync
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=15m
+Persistent=true
+Unit=shellcrash-subboost-refresh.service
+
+[Install]
+WantedBy=timers.target

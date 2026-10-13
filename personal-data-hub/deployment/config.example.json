@@ -1,0 +1,53 @@
+{
+  "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
+  "asset_root": "/hub-assets",
+  "hub_api_token_file": "/run/hub/api-token",
+  "hub_viewer_token_file": "/run/hub/viewer-token",
+  "health_webhook_token_file": "/run/hub/health-token",
+  "autoaccounting_webhook_token_file": "/run/hub/accounting-token",
+  "sources": {
+    "crm": {
+      "adapter": "crm_pg",
+      "account": "owner",
+      "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
+      "interval_seconds": 900,
+      "deletion_support": "authoritative_inventory"
+    },
+    "health": {
+      "adapter": "health",
+      "account": "owner",
+      "path": "/path/to/legacy-health.db",
+      "enabled": false,
+      "collection_mode": "push",
+      "deletion_support": "not_supported"
+    },
+    "finance": {
+      "adapter": "bills",
+      "account": "owner",
+      "path": "/path/to/legacy-accounting",
+      "enabled": false,
+      "collection_mode": "push",
+      "deletion_support": "not_supported"
+    },
+    "skysight-raw": {
+      "adapter": "skysight",
+      "account": "owner",
+      "path": "/path/to/skysight/raw",
+      "patterns": [
+        "**/metadata.json"
+      ],
+      "interval_seconds": 900,
+      "deletion_support": "explicit_only"
+    },
+    "skysight-summaries": {
+      "adapter": "skysight",
+      "account": "owner",
+      "path": "/path/to/skysight/summaries",
+      "patterns": [
+        "*.md"
+      ],
+      "interval_seconds": 900,
+      "deletion_support": "explicit_only"
+    }
+  }
+}

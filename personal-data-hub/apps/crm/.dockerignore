@@ -1,0 +1,17 @@
+.git/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+._*
+.DS_Store
+*.py[cod]
+.env
+connector.env
+connector.env.*
+*.db
+*.db-wal
+*.db-shm
+data/
+connector-state/
+backups/
