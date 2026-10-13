@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {launch,session,ready,urls,createCharacter,connect,selectPaper,paperValue} from './browser.mjs';
+const dir='artifacts/detail-polish';fs.mkdirSync(dir,{recursive:true});
+const browser=await launch(), checks=[];
+const pass=name=>{checks.push(name);console.log('PASS',name);};
+try {
+  const {page,errors}=await session(browser);await ready(page,urls.validation,{probe:true});await createCharacter(page);await connect(page);
+  const open=async kind=>{await (kind==='角色'?page.locator('.wb-panel-tabs').getByRole('button',{name:'角色',exact:true}):page.getByRole('button',{name:`${kind}详情`,exact:true})).click();await page.waitForTimeout(250);};
+  await open('用户设定');await page.getByRole('button',{name:'选择用户设定',exact:true}).click();
+  const search=page.getByRole('textbox',{name:'搜索用户设定',exact:true});await search.focus();
+  const focus=await search.evaluate(e=>({inner:getComputedStyle(e).boxShadow,outline:getComputedStyle(e).outlineStyle,outer:getComputedStyle(e.parentElement).boxShadow}));
+  assert.equal(focus.inner,'none');assert.equal(focus.outline,'none');assert.notEqual(focus.outer,'none');
+  await page.screenshot({path:dir+'/search-focus.png'});
+  await page.getByRole('combobox',{name:'用户设定排序',exact:true}).click();
+  await page.getByRole('listbox').waitFor();
+  const selected=page.getByRole('option',{selected:true});assert(await selected.isVisible());
+  assert.equal(await selected.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(240, 230, 218)');
+  await page.screenshot({path:dir+'/paper-dropdown.png'});
+  await page.getByRole('combobox',{name:'用户设定排序',exact:true}).press('End');
+  await page.keyboard.press('Enter');assert.equal(await paperValue(page,'用户设定排序'),'reverse');
+  await selectPaper(page,'用户设定排序','name');await page.getByRole('dialog',{name:'用户设定选择',exact:true}).press('Escape');
+  pass('one search focus surface; paper dropdown selection, End/Enter and native change');
+  await open('世界书');const input=page.getByLabel('世界书正文',{exact:true});
+  assert.equal(await input.getAttribute('readonly'),null);assert(await input.isVisible());
+  assert.equal(await page.getByRole('button',{name:'编辑条目',exact:true}).count(),0);
+  const mode=page.getByRole('combobox',{name:/激活方式/}).first();const modeLabel=await mode.getAttribute('aria-label');
+  const old=await paperValue(page,modeLabel);await mode.click();await mode.press('Home');await mode.press('Enter');assert.equal(await paperValue(page,modeLabel),'keyword');await selectPaper(page,modeLabel,old);
+  await page.screenshot({path:dir+'/world-direct-editor.png'});pass('world entry editor is present and editable by default; mode keyboard selection');
+  await open('角色');await page.getByRole('button',{name:'全部角色',exact:true}).click();
+  const fixture=page.locator('.wb-character-card').filter({hasText:'WorkbenchFixture'}).first();
+  const ring=fixture.locator('.wb-portrait');const before=await ring.boundingBox();
+  await fixture.evaluate(e=>e.classList.toggle('is-active'));const after=await ring.boundingBox();assert.deepEqual(after,before);await fixture.evaluate(e=>e.classList.toggle('is-active'));
+  const tab=page.getByRole('button',{name:'当前角色',exact:true});await tab.hover();assert.equal(await tab.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
+  await page.screenshot({path:dir+'/character-selection.png'});pass('avatar ring keeps dimensions and alignment; tabs hover without rectangular fill');
+  const detail=page.getByRole('button',{name:'连接详情',exact:true});await detail.hover();assert.equal(await detail.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
+  await page.screenshot({path:dir+'/header-hover.png'});pass('connection dot hover has no rectangular block');
+  await page.getByRole('button',{name:'关闭右栏',exact:true}).click();
+  await page.getByRole('button',{name:'连接详情',exact:true}).click();
+  await page.getByRole('button',{name:'连接记录与绑定',exact:true}).click();await page.getByRole('combobox',{name:'绑定预设',exact:true}).click();await page.getByRole('listbox').waitFor();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
+  await page.getByRole('button',{name:'关闭右栏',exact:true}).click();
+  for(const width of [1024,1366,1440]){await page.setViewportSize({width,height:900});await page.getByRole('button',{name:'角色与资源侧栏',exact:true}).click();await page.waitForTimeout(250);
+    const layout=await page.evaluate(()=>{const r=s=>document.querySelector(s).getBoundingClientRect();return {tools:r('.wb-composer-actions').right,right:r('#rightSendForm').x,bottom:r('#send_but').bottom,viewport:innerHeight};});
+    assert(layout.tools<=layout.right+1);assert(layout.bottom<=layout.viewport);await page.screenshot({path:`${dir}/composer-${width}.png`});await page.getByRole('button',{name:'关闭右栏',exact:true}).click();}
+  pass('narrow composer keeps actions and send aligned');assert.deepEqual(errors,[]);
+  fs.writeFileSync(dir+'/verification.json',JSON.stringify({checks,errors},null,2));
+} catch(e) { console.error(e);process.exitCode=1; } finally { await browser.close(); }

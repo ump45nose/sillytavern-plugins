@@ -1,0 +1,11 @@
+import {Download,Upload} from "lucide-react";
+import React,{useState} from "react";
+import type {HostAdapter} from "../host/adapter";
+import {Notice,SearchBox,useHost,useTask} from "../ui/common";
+import Resources from "./Resources";
+import {Check} from "../ui/ResourceControls";
+export default function PersonaManager({host,group,initial,onPosition}:{host:HostAdapter;group?:string;initial?:string;onPosition:(id:string)=>void}){
+ const snap=useHost(host),task=useTask(),[id,setId]=useState(initial||snap.current.persona||snap.resources.persona[0]?.id||""),[query,setQuery]=useState("");
+ if(group==="全局偏好"){const p=host.personaOptions(snap.current.persona).preferences;return <div className="wb-designed-settings"><header className="wb-designed-page-head"><div><h2>用户身份全局偏好</h2><small>切换、关联与锁定行为</small></div></header><Notice error={task.error}/><section className="wb-designed-section"><h3>身份切换</h3><div className="wb-designed-fields">{[["persona_auto_lock","自动锁定到当前对话"],["persona_show_notifications","切换身份时显示通知"],["persona_allow_multi_connections","允许角色关联多个身份"]].map(([key,label])=><Check key={key} label={label} checked={p[key]} disabled={task.busy} onChange={v=>task.run(()=>host.personaPreference(key,v))}/>)}</div></section><div className="wb-designed-actions"><button onClick={()=>host.click("#personas_backup")}><Download size={15}/>备份全部身份</button><button onClick={()=>host.click("#personas_restore")}><Upload size={15}/>恢复身份备份</button></div></div>;}
+ return <div className="wb-persona-page"><header className="wb-designed-page-head"><div><h2>用户设定</h2><small>身份、描述与注入关系</small></div></header><div className="wb-persona-manager"><aside><SearchBox value={query} onChange={setQuery} placeholder="搜索用户设定"/>{snap.resources.persona.filter(x=>x.name.toLowerCase().includes(query.toLowerCase())).map(x=><button key={x.id} aria-pressed={id===x.id} onClick={()=>{setId(x.id);onPosition(x.id);}}><i className={`wb-choice-state ${snap.current.persona===x.id?"is-current":""}`} aria-label={snap.current.persona===x.id?"当前身份":undefined}/><img src={x.image} alt=""/><span><strong>{x.name}</strong><small>{snap.current.persona===x.id?"当前身份":x.detail||"用户设定"}</small></span></button>)}</aside><Resources key={id} host={host} kind="persona" initial={id} deep onSelection={next=>{setId(next);onPosition(next);}}/></div></div>;
+}

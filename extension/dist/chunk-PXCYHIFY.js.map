@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/host/ids.ts"],
+  "sourcesContent": ["/** LAN HTTP exposes getRandomValues, but not the secure-context randomUUID API. */\nexport function randomId() {\n    const bytes = crypto.getRandomValues(new Uint8Array(16));\n    bytes[6] = (bytes[6] & 15) | 64;\n    bytes[8] = (bytes[8] & 63) | 128;\n    const hex = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');\n    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;\n}\n"],
+  "mappings": "AACO,SAASA,GAAW,CACvB,IAAMC,EAAQ,OAAO,gBAAgB,IAAI,WAAW,EAAE,CAAC,EACvDA,EAAM,CAAC,EAAKA,EAAM,CAAC,EAAI,GAAM,GAC7BA,EAAM,CAAC,EAAKA,EAAM,CAAC,EAAI,GAAM,IAC7B,IAAMC,EAAM,CAAC,GAAGD,CAAK,EAAE,IAAIE,GAASA,EAAM,SAAS,EAAE,EAAE,SAAS,EAAG,GAAG,CAAC,EAAE,KAAK,EAAE,EAChF,MAAO,GAAGD,EAAI,MAAM,EAAG,CAAC,CAAC,IAAIA,EAAI,MAAM,EAAG,EAAE,CAAC,IAAIA,EAAI,MAAM,GAAI,EAAE,CAAC,IAAIA,EAAI,MAAM,GAAI,EAAE,CAAC,IAAIA,EAAI,MAAM,EAAE,CAAC,EAC5G",
+  "names": ["randomId", "bytes", "hex", "value"]
+}

@@ -1,0 +1,120 @@
+/* Approved resource sidebar: header picker, API first, compact controls. */
+.wb-resource-v3,.wb-resource-v3.is-deep { display:flex; flex-direction:column; padding:0; min-height:0; flex:1; overflow:hidden; }
+.wb-resource-v3 .wb-resource-heading { display:block; padding:17px 20px 15px; flex:none; }
+.wb-resource-title-line { display:flex; align-items:center; gap:12px; min-width:0; }
+.wb-resource-title-copy { min-width:0; flex:1; }
+.wb-resource-title-copy > small { display:block; font-size:11px; margin-bottom:4px; color:var(--wb-muted); }
+.wb-heading-avatar { width:48px; height:48px; border-radius:50%; object-fit:cover; flex:none; }
+.wb-resource-picker { min-width:0; }
+.wb-ui .wb-resource-title { min-height:30px; max-width:100%; border:0; padding:0; gap:9px; background:transparent; font:500 20px/1.5 Georgia,"Noto Serif CJK SC",serif; justify-content:flex-start; text-align:left; }
+.wb-resource-title > span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.wb-resource-title > svg { flex:none; transition:transform 160ms; }
+.wb-resource-title[aria-expanded=true] > svg { transform:rotate(180deg); }
+.wb-ui .wb-resource-title:hover { color:var(--wb-accent); background:transparent; }
+.wb-resource-title-line > .wb-icon { flex:none; }
+.wb-resource-v3 .wb-native-profile-actions,.wb-persona-header-actions { display:flex; gap:7px; margin:13px 0 0; }
+.wb-resource-v3 .wb-native-profile-actions button,.wb-persona-header-actions button { padding:5px 10px; font-size:12px; min-height:32px; }
+.wb-resource-v3.kind-persona .wb-resource-title { font-size:19px; }
+.wb-persona-header-actions button { min-height:29px; font-size:11px; padding:4px 8px; }
+.wb-resource-v3 .wb-use-resource { padding:4px 8px; min-height:28px; margin:0; flex:none; }
+.wb-resource-v3 .wb-resource-detail { padding:15px 20px; min-height:0; flex:1; overflow:auto; }
+.wb-resource-v3 fieldset { border:0; padding:0; margin:0; min-width:0; }
+.wb-resource-v3 > .wb-persona-editor,.wb-resource-v3 > .wb-preset-editor { display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden; }
+.wb-resource-v3 .wb-field { gap:6px; margin:0 0 13px; font-size:12px; }
+.wb-resource-v3 .wb-form-pair { gap:12px; }
+.wb-resource-v3 .wb-field input,.wb-resource-v3 .wb-select-trigger { min-height:36px; padding:8px 10px; font-size:13px; }
+.wb-resource-v3 .wb-field textarea { font-size:13px; line-height:1.85; }
+.wb-resource-v3 h4 { margin:18px 0 12px; font-size:12px; color:var(--wb-muted); font-weight:500; }
+.wb-resource-v3 .wb-check { min-height:32px; padding:5px 0; font-size:12px; }
+.wb-resource-v3 .wb-lock-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+.wb-resource-v3 .wb-save-footer { flex:none; position:static; padding:12px 20px; }
+.wb-resource-v3 .wb-profile-editor > .wb-save-footer { padding:12px 0; }
+.wb-resource-v3 .wb-persona-actions { gap:6px; padding-top:12px; border-top:1px solid var(--wb-line); margin-bottom:0; }
+.wb-resource-v3 .wb-persona-actions button { padding:4px 8px; font-size:11px; min-height:29px; }
+.wb-resource-v3 .wb-resource-fold { margin:0; padding:7px 0; }
+.wb-resource-v3 .wb-resource-fold .wb-fold-toggle { padding:6px 0 !important; min-height:25px; }
+.wb-resource-v3 .wb-fold-body.is-open > div { max-height:none; overflow:visible; }
+.wb-resource-v3 .wb-fold-body:not(.is-open) > div { overflow:hidden; }
+.wb-ui.wb-resource-menu { position:fixed; z-index:12030; display:flex; flex-direction:column; max-height:calc(100dvh - 150px); padding:10px; background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:10px; box-shadow:0 8px 26px #44392c1b; animation:wb-menu 160ms ease; }
+.wb-resource-menu > .wb-search { flex:none; margin-bottom:8px; }
+.wb-resource-menu > .wb-select { align-self:flex-start; margin-bottom:7px; }
+.wb-picker-list { min-height:0; overflow:auto; }
+.wb-resource-choice { padding:4px 7px; gap:9px; }
+.wb-resource-choice img { flex:none; width:34px; height:34px; object-fit:cover; border-radius:50%; }
+.wb-ui .wb-resource-choice .wb-picker-apply { flex:none; width:24px; padding:0; min-height:34px; }
+.wb-ui .wb-resource-choice .wb-picker-copy { flex:1; padding:6px 0; min-width:0; align-items:flex-start; text-align:left; gap:2px; }
+.wb-resource-choice .wb-picker-copy strong { font-size:13px; font-weight:500; }
+.wb-resource-choice .wb-picker-copy small { font-size:11px; }
+.wb-resource-menu .wb-caption { margin:8px 7px; font-size:11px; }
+.wb-resource-v3 .wb-connection-quick { padding-bottom:6px; }
+.wb-connection-quick .wb-section-title { font-size:12px; color:var(--wb-muted); margin-bottom:12px; }
+.wb-connection-quick .wb-section-title small { font-size:11px; }
+.wb-connection-actions { display:flex; align-items:center; gap:8px; padding:0 0 16px; }
+.wb-connection-actions button { font-size:12px; padding:6px 11px; min-height:33px; }
+.wb-connection-actions small { color:var(--wb-muted); font-size:11px; }
+.wb-connection-model { display:flex; align-items:center; min-width:0; gap:7px; }
+.wb-connection-model > :is(input,.wb-select) { flex:1; min-width:0; }
+.wb-connection-model > .wb-icon { flex:none; width:30px; height:32px; min-height:32px; padding:5px; border:0; background:transparent; }
+.wb-connection-detail .wb-native-caption { display:none; }
+.wb-connection-detail .wb-native-slot { border:0; padding:0; }
+body.wb-active .wb-native-slot #rm_api_block.wb-native-embedded { min-width:0 !important; }
+body.wb-active .wb-connection-detail #title_api { display:none; }
+body.wb-active .wb-native-slot .wb-connection-bridged,body.wb-active .wb-native-slot .wb-connection-bridged + .select2-container { display:none !important; }
+body.wb-active .wb-native-slot .wb-connection-profile-original { display:none !important; }
+body.wb-active .wb-native-slot .wb-connection-actions-original > :is(#api_button_openai,#test_api_button,#api_button_textgenerationwebui) { display:none !important; }
+body.wb-active .wb-native-slot .neutral_warning { color:var(--wb-muted); font-size:11px; font-weight:400; line-height:1.8; margin:6px 0 13px; }
+body.wb-active .wb-native-slot :is(h4,.range-block-title) { font-size:12px; font-weight:400; color:var(--wb-muted); margin:8px 0 6px; }
+body.wb-active .wb-native-slot input:not([type=checkbox]),body.wb-active .wb-native-slot select,body.wb-active .wb-native-slot textarea { font-size:13px; min-height:37px; border-radius:7px; }
+body.wb-active .wb-native-slot .inline-drawer-header { background:transparent; border:0; padding:12px 0; box-shadow:none; }
+body.wb-active .wb-native-slot .inline-drawer { border-top:1px solid var(--wb-line); padding-bottom:8px; }
+body.wb-active .wb-native-slot .inline-drawer-header b { font-size:12px; font-weight:400; color:var(--wb-muted); }
+body.wb-active .wb-native-slot .menu_button:hover { background:var(--wb-paper); color:var(--wb-accent); }
+body.wb-active .wb-native-slot .select2-selection { background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:7px; color:var(--wb-ink); box-shadow:none; }
+body.wb-active .wb-native-slot .select2-selection__rendered { color:var(--wb-ink); font-size:13px; }
+body.wb-active .select2-dropdown { background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:8px; color:var(--wb-ink); box-shadow:0 8px 26px #44392c1b; font-size:12px; }
+body.wb-active .select2-results__option--highlighted[aria-selected] { background:var(--wb-selected); color:var(--wb-ink); }
+.wb-resource-v3 .wb-preset-common { padding:10px 20px 9px; flex:none; border-bottom:1px solid var(--wb-line); }
+.wb-resource-v3 .wb-check-pair { gap:12px; }
+.wb-resource-v3 .wb-parameter-strip { display:flex; flex-wrap:wrap; align-items:center; gap:7px 14px; margin:6px 0; }
+.wb-resource-v3 .wb-parameter-strip .wb-field { flex-direction:row; align-items:center; gap:6px; margin:0; font-size:11px; }
+.wb-resource-v3 .wb-parameter-strip .wb-field input { width:65px; min-height:28px; padding:4px 6px; font-size:12px; text-align:right; }
+.wb-resource-v3 .wb-parameter-strip .wb-field > span { white-space:nowrap; }
+.wb-resource-v3 .wb-preset-common .wb-resource-fold { padding:0; border:0; }
+.wb-resource-v3 .wb-fold-toolbar { display:flex; align-items:center; gap:8px; }
+.wb-resource-v3 .wb-fold-toolbar .wb-parameter-strip { flex:1; }
+.wb-resource-v3 .wb-fold-toolbar > .wb-icon { flex:none; width:28px; height:28px; min-height:28px; padding:5px !important; }
+.wb-resource-v3 .wb-fold-toolbar > .wb-icon[aria-expanded=true] { color:var(--wb-accent); }
+.wb-resource-v3 .wb-preset-common .wb-fold-toggle { min-height:23px; padding:2px 0 !important; font-size:11px !important; }
+.wb-resource-v3 .wb-preset-common .wb-fold-body.is-open > div { display:grid; grid-template-columns:1fr 1fr; max-height:130px; overflow:auto; padding-top:5px; }
+.wb-resource-v3 .wb-preset-columns { display:flex; flex:1; height:auto; min-height:145px; border-top:0; border-bottom:1px solid var(--wb-line); }
+.wb-resource-v3 .wb-prompt-list { flex:1; padding:12px 14px; overflow:auto; min-width:0; }
+.wb-resource-v3 .wb-prompt-list .wb-section-title { margin:0 5px 7px; padding:0; min-height:25px; }
+.wb-resource-v3 .wb-prompt-row { gap:10px; padding:2px 9px; min-height:41px; }
+.wb-resource-v3 .wb-prompt-row button { flex-direction:row; align-items:center; gap:8px; padding:7px 0; font-size:13px; }
+.wb-resource-v3 .wb-prompt-row button > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.wb-resource-v3 .wb-prompt-row small { margin-left:auto; font-size:11px; white-space:nowrap; }
+.wb-resource-v3 .wb-prompt-list .wb-section-title > .wb-select { margin-left:auto; order:1; }
+.wb-resource-v3 .wb-prompt-list .wb-section-title > .wb-icon { margin-left:7px; order:2; }
+.wb-resource-v3 .wb-prompt-list .wb-section-title .wb-select-trigger { min-height:28px; padding:4px 8px; font-size:11px; }
+.wb-resource-v3 .wb-preset-scroll { flex:none; max-height:42%; padding:12px 20px 0; overflow:auto; min-height:0; }
+.wb-resource-v3 .wb-editor-heading { gap:6px; min-height:29px; padding:0; margin-bottom:9px; }
+.wb-resource-v3 .wb-editor-heading > input { min-width:0; width:0; flex:1; min-height:28px; font-size:13px; font-weight:500; border-color:transparent; padding:3px 0; }
+.wb-resource-v3 .wb-editor-heading > input:hover { border-bottom-color:var(--wb-line); }
+.wb-resource-v3 .wb-editor-heading .wb-select { width:83px; flex:none; }
+.wb-resource-v3 .wb-editor-heading .wb-select-trigger { min-height:27px; font-size:11px; padding:3px 7px; }
+.wb-resource-v3 .wb-editor-heading .wb-icon { width:27px; height:27px; min-height:27px; padding:5px; flex:none; }
+.wb-resource-v3 .wb-prompt-editor > .wb-field > span { display:none; }
+.wb-resource-v3 .wb-prompt-editor > .wb-field { margin:0 0 8px; }
+.wb-resource-v3 .wb-prompt-editor textarea { height:98px; min-height:85px; font:13px/1.8 Georgia,"Noto Serif CJK SC",serif; resize:vertical; }
+.wb-resource-v3 .wb-preset-scroll > .wb-resource-fold { border-top:0; }
+.wb-resource-v3.is-deep .wb-preset-editor { display:grid; grid-template-columns:minmax(240px,1fr) minmax(400px,2fr); grid-template-rows:auto minmax(0,1fr) auto; }
+.wb-resource-v3.is-deep .wb-preset-common { grid-column:1/-1; }
+.wb-resource-v3.is-deep .wb-preset-columns { grid-column:1; grid-row:2; }
+.wb-resource-v3.is-deep .wb-preset-scroll { grid-column:2; grid-row:2; max-height:none; height:100%; padding:22px 26px; width:100%; border-left:1px solid var(--wb-line); }
+.wb-resource-v3.is-deep .wb-prompt-editor textarea { height:240px; }
+.wb-resource-v3.is-deep .wb-save-footer { grid-column:1/-1; }
+.wb-resource-v3.is-deep .wb-resource-detail { width:100%; max-width:960px; margin:0 auto; }
+@media (max-height:820px) {
+  .wb-resource-v3:not(.is-deep) .wb-prompt-editor textarea { height:76px; min-height:76px; }
+  .wb-resource-v3:not(.is-deep) .wb-preset-scroll { padding-top:10px; }
+}

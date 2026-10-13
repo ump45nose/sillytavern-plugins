@@ -1,0 +1,6 @@
+node_modules/
+upstream/
+runtime/
+artifacts/
+.env
+*.log

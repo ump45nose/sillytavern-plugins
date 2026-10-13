@@ -1,0 +1,7018 @@
+{
+  "officialVersion": "1.19.0",
+  "source": "upstream/SillyTavern/public/index.html",
+  "scope": "Static native controls and actions; extension-injected controls must be discovered at runtime. No user state or credentials.",
+  "areas": [
+    {
+      "name": "生成配置",
+      "container": "left-nav-panel",
+      "controls": [
+        {
+          "id": "lm_button_panel_pin",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "settings_preset",
+          "tag": "select",
+          "presetManager": "kobold",
+          "options": [
+            {
+              "value": "gui",
+              "label": "GUI KoboldAI Settings"
+            }
+          ]
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "settings_preset_novel",
+          "tag": "select",
+          "presetManager": "novel",
+          "options": [
+            {
+              "value": "gui",
+              "label": "Default"
+            }
+          ]
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "bind_preset_to_connection",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "settings_preset_openai",
+          "tag": "select",
+          "presetManager": "openai",
+          "options": [
+            {
+              "value": "gui",
+              "label": "Default"
+            }
+          ]
+        },
+        {
+          "id": "openai_preset_import_file",
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "settings_preset_textgenerationwebui",
+          "tag": "select",
+          "presetManager": "textgenerationwebui",
+          "options": []
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "amount_gen",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "amount_gen_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "streaming_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Streaming"
+        },
+        {
+          "id": "streaming_kobold",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Streaming"
+        },
+        {
+          "id": "streaming_novel",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Streaming"
+        },
+        {
+          "id": "max_context",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "max_context_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "max_context_unlocked",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "nai_prefix",
+          "tag": "select",
+          "options": [
+            {
+              "value": "vanilla",
+              "label": "No Module"
+            },
+            {
+              "value": "special_instruct",
+              "label": "Instruct"
+            },
+            {
+              "value": "special_proseaugmenter",
+              "label": "Prose Augmenter"
+            },
+            {
+              "value": "theme_textadventure",
+              "label": "Text Adventure"
+            }
+          ]
+        },
+        {
+          "id": "temp_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "temp_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_size_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_size_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_slope_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_slope_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_freq_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_freq_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_presence_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_presence_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_p_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_p_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "tail_free_sampling_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "tail_free_sampling_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_p_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_p_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_a_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_a_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_k_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_k_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_tau_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_tau_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_lr_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_lr_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "typical_p_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "typical_p_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "math1_temp_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "math1_temp_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "math1_quad_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "math1_quad_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "math1_quad_entropy_scale_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "math1_quad_entropy_scale_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_length_novel",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_length_counter_novel",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "phrase_rep_pen_novel",
+          "tag": "select",
+          "options": [
+            {
+              "value": "off",
+              "label": "Off"
+            },
+            {
+              "value": "very_light",
+              "label": "Very light"
+            },
+            {
+              "value": "light",
+              "label": "Light"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "aggressive",
+              "label": "Aggressive"
+            },
+            {
+              "value": "very_aggressive",
+              "label": "Very aggressive"
+            }
+          ]
+        },
+        {
+          "id": "nai_preamble_textarea",
+          "tag": "textarea",
+          "name": "nai_preamble"
+        },
+        {
+          "id": "nai_banned_tokens",
+          "tag": "textarea",
+          "name": "nai_banned_tokens"
+        },
+        {
+          "id": "oai_max_context_unlocked",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "openai_max_context",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "openai_max_context_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "openai_max_tokens",
+          "tag": "input",
+          "type": "number",
+          "name": "openai_max_tokens"
+        },
+        {
+          "id": "n_openai",
+          "tag": "input",
+          "type": "number",
+          "name": "n_openai"
+        },
+        {
+          "id": "openrouter_middleout",
+          "tag": "select",
+          "options": [
+            {
+              "value": "auto",
+              "label": "Auto"
+            },
+            {
+              "value": "on",
+              "label": "Allow"
+            },
+            {
+              "value": "off",
+              "label": "Forbid"
+            }
+          ]
+        },
+        {
+          "id": "stream_toggle",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Streaming"
+        },
+        {
+          "id": "temp_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "temp_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "freq_pen_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "freq_pen_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "pres_pen_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "pres_pen_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_k_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_k_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_p_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_p_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "repetition_penalty_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "repetition_penalty_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_p_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_p_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_a_openai",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_a_counter_openai",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "main_prompt_quick_edit_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "nsfw_prompt_quick_edit_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "jailbreak_prompt_quick_edit_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "impersonation_prompt_textarea",
+          "tag": "textarea",
+          "name": "impersonation_prompt"
+        },
+        {
+          "id": "wi_format_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "scenario_format_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "personality_format_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "group_nudge_prompt_textarea",
+          "tag": "textarea"
+        },
+        {
+          "id": "newchat_prompt_textarea",
+          "tag": "textarea",
+          "name": "new_chat"
+        },
+        {
+          "id": "newgroupchat_prompt_textarea",
+          "tag": "textarea",
+          "name": "new_group_chat"
+        },
+        {
+          "id": "newexamplechat_prompt_textarea",
+          "tag": "textarea",
+          "name": "new_example_chat"
+        },
+        {
+          "id": "continue_nudge_prompt_textarea",
+          "tag": "textarea",
+          "name": "continue_nudge"
+        },
+        {
+          "id": "send_if_empty_textarea",
+          "tag": "textarea",
+          "name": "send_if_empty"
+        },
+        {
+          "id": "seed_openai",
+          "tag": "input",
+          "type": "number",
+          "name": "seed_openai"
+        },
+        {
+          "id": "temp",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "temp_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_k",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_k_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_p",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_p_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "typical_p",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "typical_p_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_p",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_p_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_a",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_a_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "tfs",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "tfs_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_range",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_range_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_slope",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_slope_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_mode_kobold",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_mode_counter_kobold",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_tau_kobold",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_tau_counter_kobold",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_eta_kobold",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_eta_counter_kobold",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "use_default_badwordsids",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Ban EOS Token"
+        },
+        {
+          "id": "seed_kobold",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "grammar",
+          "tag": "textarea"
+        },
+        {
+          "id": "n_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "temp_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "temp_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_k_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_k_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_p_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_p_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "typical_p_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "typical_p_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_p_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_p_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "top_a_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "top_a_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "tfs_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "tfs_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "epsilon_cutoff_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "epsilon_cutoff_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "nsigma_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "nsigma_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_keep_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_keep_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "eta_cutoff_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "eta_cutoff_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_range_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_range_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_slope_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_slope_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rep_pen_decay_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "rep_pen_decay_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "encoder_rep_pen_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "encoder_rep_pen_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "freq_pen_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "freq_pen_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "presence_pen_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "presence_pen_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "no_repeat_ngram_size_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "no_repeat_ngram_size_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "skew_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "skew_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "min_length_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_length_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "max_tokens_second_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "max_tokens_second_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "adaptive_target_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "adaptive_target_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "adaptive_decay_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "adaptive_decay_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "smoothing_factor_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "smoothing_factor_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "smoothing_curve_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "smoothing_curve_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "xtc_threshold_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "xtc_threshold_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "xtc_probability_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "xtc_probability_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dry_multiplier_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "dry_multiplier_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dry_base_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "dry_base_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dry_allowed_length_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "dry_allowed_length_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dry_penalty_last_n_textgenerationwebui",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "dry_penalty_last_n_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dry_sequence_breakers_textgenerationwebui",
+          "tag": "textarea",
+          "name": "sequence_breakers"
+        },
+        {
+          "id": "dynatemp_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "min_temp_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "min_temp_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "max_temp_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "max_temp_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "dynatemp_exponent_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "dynatemp_exponent_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_mode_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_mode_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_tau_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_tau_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "mirostat_eta_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "mirostat_eta_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "num_beams_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "num_beams_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "length_penalty_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "length_penalty_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "early_stopping_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Early Stopping"
+        },
+        {
+          "id": "penalty_alpha_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "penalty_alpha_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "do_sample_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Do Sample"
+        },
+        {
+          "id": "add_bos_token_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Add BOS Token"
+        },
+        {
+          "id": "ban_eos_token_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Ban EOS Token"
+        },
+        {
+          "id": "ignore_eos_token_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Ignore EOS Token"
+        },
+        {
+          "id": "skip_special_tokens_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Skip Special Tokens"
+        },
+        {
+          "id": "include_reasoning_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Request Model Reasoning"
+        },
+        {
+          "id": "temperature_last_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Temperature Last"
+        },
+        {
+          "id": "speculative_ngram_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Speculative Ngram"
+        },
+        {
+          "id": "spaces_between_special_tokens_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Spaces Between Special Tokens"
+        },
+        {
+          "id": "seed_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "send_banned_tokens_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "global_banned_tokens_textgenerationwebui",
+          "tag": "textarea",
+          "name": "global_banned_tokens_textgenerationwebui"
+        },
+        {
+          "id": "banned_tokens_textgenerationwebui",
+          "tag": "textarea",
+          "name": "banned_tokens_textgenerationwebui"
+        },
+        {
+          "id": "guidance_scale_textgenerationwebui",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "guidance_scale_counter_textgenerationwebui",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "negative_prompt_textgenerationwebui",
+          "tag": "textarea",
+          "name": "negative_prompt"
+        },
+        {
+          "id": "grammar_string_textgenerationwebui",
+          "tag": "textarea"
+        },
+        {
+          "id": "tabby_json_schema",
+          "tag": "textarea"
+        },
+        {
+          "id": "json_schema_allow_empty_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow empty schema objects"
+        },
+        {
+          "id": "character_names_none",
+          "tag": "input",
+          "type": "radio",
+          "label": "None Never add character name prefixes. May behave poorly in groups, choose with caution.",
+          "name": "character_names"
+        },
+        {
+          "id": "character_names_default",
+          "tag": "input",
+          "type": "radio",
+          "label": "Default Add prefixes for groups and past personas. Otherwise, make sure you provide names in the prompt.",
+          "name": "character_names"
+        },
+        {
+          "id": "character_names_completion",
+          "tag": "input",
+          "type": "radio",
+          "label": "Completion Object Add character names to completion objects. Restrictions apply: only Latin alphanumerics and underscores.",
+          "name": "character_names"
+        },
+        {
+          "id": "character_names_content",
+          "tag": "input",
+          "type": "radio",
+          "label": "Message Content Prepend character names to message contents.",
+          "name": "character_names"
+        },
+        {
+          "id": "names_behavior",
+          "tag": "input",
+          "type": "hidden"
+        },
+        {
+          "id": "continue_postfix_none",
+          "tag": "input",
+          "type": "radio",
+          "label": "None",
+          "name": "continue_postfix"
+        },
+        {
+          "id": "continue_postfix_space",
+          "tag": "input",
+          "type": "radio",
+          "label": "Space",
+          "name": "continue_postfix"
+        },
+        {
+          "id": "continue_postfix_newline",
+          "tag": "input",
+          "type": "radio",
+          "label": "Newline",
+          "name": "continue_postfix"
+        },
+        {
+          "id": "continue_postfix_double_newline",
+          "tag": "input",
+          "type": "radio",
+          "label": "Double Newline",
+          "name": "continue_postfix"
+        },
+        {
+          "id": "continue_postfix",
+          "tag": "input",
+          "type": "hidden"
+        },
+        {
+          "id": "continue_prefill",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Continue prefill"
+        },
+        {
+          "id": "squash_system_messages",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Squash system messages"
+        },
+        {
+          "id": "use_sysprompt",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Use system prompt"
+        },
+        {
+          "id": "openai_enable_web_search",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Enable web search"
+        },
+        {
+          "id": "openai_function_calling",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Enable function calling"
+        },
+        {
+          "id": "tool_call_recurse_limit",
+          "tag": "input",
+          "type": "range",
+          "name": "tool_call_recurse_limit"
+        },
+        {
+          "id": "tool_call_recurse_limit_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "tool_reasoning_mode",
+          "tag": "select",
+          "label": "Interleaved Thinking",
+          "options": [
+            {
+              "value": "disabled",
+              "label": "Disabled"
+            },
+            {
+              "value": "since_last_user",
+              "label": "Since Last User Message"
+            },
+            {
+              "value": "active_chain",
+              "label": "Active Tool Chain"
+            }
+          ]
+        },
+        {
+          "id": "openai_media_inlining",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Send inline media"
+        },
+        {
+          "id": "openai_inline_image_quality",
+          "tag": "select",
+          "label": "Inline Image Quality",
+          "options": [
+            {
+              "value": "auto",
+              "label": "Auto"
+            },
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            }
+          ]
+        },
+        {
+          "id": "openai_request_images",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Request inline images"
+        },
+        {
+          "id": "request_image_resolution",
+          "tag": "select",
+          "label": "Resolution",
+          "options": [
+            {
+              "value": "",
+              "label": "Auto"
+            },
+            {
+              "value": "1K",
+              "label": "1K"
+            },
+            {
+              "value": "2K",
+              "label": "2K"
+            },
+            {
+              "value": "4K",
+              "label": "4K"
+            }
+          ]
+        },
+        {
+          "id": "request_image_aspect_ratio",
+          "tag": "select",
+          "label": "Aspect Ratio",
+          "options": [
+            {
+              "value": "",
+              "label": "Auto"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16"
+            },
+            {
+              "value": "16:9",
+              "label": "16:9"
+            },
+            {
+              "value": "3:4",
+              "label": "3:4"
+            },
+            {
+              "value": "4:3",
+              "label": "4:3"
+            },
+            {
+              "value": "3:2",
+              "label": "3:2"
+            },
+            {
+              "value": "2:3",
+              "label": "2:3"
+            },
+            {
+              "value": "5:4",
+              "label": "5:4"
+            },
+            {
+              "value": "4:5",
+              "label": "4:5"
+            },
+            {
+              "value": "21:9",
+              "label": "21:9"
+            }
+          ]
+        },
+        {
+          "id": "openai_show_thoughts",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Request model reasoning"
+        },
+        {
+          "id": "openai_reasoning_effort",
+          "tag": "select",
+          "label": "Reasoning Effort",
+          "options": [
+            {
+              "value": "auto",
+              "label": "Auto"
+            },
+            {
+              "value": "min",
+              "label": "Minimum"
+            },
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            },
+            {
+              "value": "max",
+              "label": "Maximum"
+            }
+          ]
+        },
+        {
+          "id": "openai_verbosity",
+          "tag": "select",
+          "label": "Verbosity",
+          "options": [
+            {
+              "value": "auto",
+              "label": "Auto"
+            },
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            }
+          ]
+        },
+        {
+          "id": "claude_assistant_prefill",
+          "tag": "textarea",
+          "name": "assistant_prefill"
+        },
+        {
+          "id": "claude_assistant_impersonation",
+          "tag": "textarea",
+          "name": "assistant_impersonation"
+        },
+        {
+          "id": "openai_logit_bias_preset",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "openai_logit_bias_import_file",
+          "tag": "input",
+          "type": "file"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Import preset",
+          "presetAction": {
+            "data-preset-manager-import": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Export preset",
+          "presetAction": {
+            "data-preset-manager-export": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Delete the preset",
+          "presetAction": {
+            "data-preset-manager-delete": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Update current preset",
+          "presetAction": {
+            "data-preset-manager-update": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Rename current preset",
+          "presetAction": {
+            "data-preset-manager-rename": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Save preset as",
+          "presetAction": {
+            "data-preset-manager-new": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Restore current preset",
+          "presetAction": {
+            "data-preset-manager-restore": "kobold"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Import preset",
+          "presetAction": {
+            "data-preset-manager-import": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Export preset",
+          "presetAction": {
+            "data-preset-manager-export": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Delete the preset",
+          "presetAction": {
+            "data-preset-manager-delete": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Update current preset",
+          "presetAction": {
+            "data-preset-manager-update": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Rename current preset",
+          "presetAction": {
+            "data-preset-manager-rename": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Save preset as",
+          "presetAction": {
+            "data-preset-manager-new": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Restore current preset",
+          "presetAction": {
+            "data-preset-manager-restore": "novel"
+          }
+        },
+        {
+          "tag": "div",
+          "id": "import_oai_preset",
+          "label": "Import preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "export_oai_preset",
+          "label": "Export preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "delete_oai_preset",
+          "label": "Delete the preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "update_oai_preset",
+          "label": "Update current preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Rename current preset",
+          "presetAction": {
+            "data-preset-manager-rename": "openai"
+          }
+        },
+        {
+          "tag": "div",
+          "id": "new_oai_preset",
+          "label": "Save preset as",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Import preset",
+          "presetAction": {
+            "data-preset-manager-import": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Export preset",
+          "presetAction": {
+            "data-preset-manager-export": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Delete the preset",
+          "presetAction": {
+            "data-preset-manager-delete": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Update current preset",
+          "presetAction": {
+            "data-preset-manager-update": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Rename current preset",
+          "presetAction": {
+            "data-preset-manager-rename": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Save preset as",
+          "presetAction": {
+            "data-preset-manager-new": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": null,
+          "label": "Restore current preset",
+          "presetAction": {
+            "data-preset-manager-restore": "textgenerationwebui"
+          }
+        },
+        {
+          "tag": "div",
+          "id": "nai_preamble_restore",
+          "label": "Restore default prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "novelai_logit_bias_new_entry",
+          "label": "Add",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "impersonation_prompt_restore",
+          "label": "Restore default prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "wi_format_restore",
+          "label": "Restore default format",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "scenario_format_restore",
+          "label": "Restore default format",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "personality_format_restore",
+          "label": "Restore default format",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "group_nudge_prompt_restore",
+          "label": "Restore default format",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "newchat_prompt_restore",
+          "label": "Restore new chat prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "newgroupchat_prompt_restore",
+          "label": "Restore default prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "newexamplechat_prompt_restore",
+          "label": "Restore new example chat prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "continue_nudge_prompt_restore",
+          "label": "Restore new chat prompt",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "samplers_order_recommended",
+          "label": "Load koboldcpp order",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "samplerResetButton",
+          "label": "Neutralize Samplers",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "samplerSelectButton",
+          "label": "Sampler Select",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "textgen_logit_bias_new_entry",
+          "label": "Add",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "koboldcpp_default_order",
+          "label": "Load default order",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "llamacpp_samplers_default_order",
+          "label": "Load default order",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "textgenerationwebui_default_order",
+          "label": "Load default order",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "aphrodite_default_order",
+          "label": "Load default order",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "openai_logit_bias_new_preset",
+          "label": "New preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "openai_logit_bias_import_preset",
+          "label": "Import preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "openai_logit_bias_export_preset",
+          "label": "Export preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "openai_logit_bias_delete_preset",
+          "label": "Delete preset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "openai_logit_bias_new_entry",
+          "label": "Add bias entry",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "连接",
+      "container": "rm_api_block",
+      "controls": [
+        {
+          "id": "main_api",
+          "tag": "select",
+          "options": [
+            {
+              "value": "textgenerationwebui",
+              "label": "Text Completion"
+            },
+            {
+              "value": "openai",
+              "label": "Chat Completion"
+            },
+            {
+              "value": "novel",
+              "label": "NovelAI"
+            },
+            {
+              "value": "koboldhorde",
+              "label": "AI Horde"
+            },
+            {
+              "value": "kobold",
+              "label": "KoboldAI Classic"
+            }
+          ]
+        },
+        {
+          "id": "horde_auto_adjust_context_length",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Adjust context size to worker capabilities"
+        },
+        {
+          "id": "horde_auto_adjust_response_length",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Adjust response length to worker capabilities"
+        },
+        {
+          "id": "horde_trusted_workers_only",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Trusted workers only"
+        },
+        {
+          "id": "horde_api_key",
+          "tag": "input",
+          "type": "text",
+          "name": "horde_api_key"
+        },
+        {
+          "id": "horde_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": null,
+              "label": "-- Horde models not loaded --"
+            }
+          ]
+        },
+        {
+          "id": "api_url_text",
+          "tag": "input",
+          "name": "api_url"
+        },
+        {
+          "id": "api_key_novel",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_novel"
+        },
+        {
+          "id": "model_novel_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "clio-v1",
+              "label": "Clio"
+            },
+            {
+              "value": "kayra-v1",
+              "label": "Kayra"
+            },
+            {
+              "value": "llama-3-erato-v1",
+              "label": "Erato"
+            }
+          ]
+        },
+        {
+          "id": "textgen_type",
+          "tag": "select",
+          "options": [
+            {
+              "value": "aphrodite",
+              "label": "Aphrodite"
+            },
+            {
+              "value": "dreamgen",
+              "label": "DreamGen"
+            },
+            {
+              "value": "featherless",
+              "label": "Featherless"
+            },
+            {
+              "value": "generic",
+              "label": "Generic (OpenAI-compatible) [LM Studio, LiteLLM, etc.]"
+            },
+            {
+              "value": "huggingface",
+              "label": "HuggingFace (Inference Endpoint)"
+            },
+            {
+              "value": "infermaticai",
+              "label": "InfermaticAI"
+            },
+            {
+              "value": "koboldcpp",
+              "label": "KoboldCpp"
+            },
+            {
+              "value": "llamacpp",
+              "label": "llama.cpp"
+            },
+            {
+              "value": "mancer",
+              "label": "Mancer"
+            },
+            {
+              "value": "ollama",
+              "label": "Ollama"
+            },
+            {
+              "value": "openrouter",
+              "label": "OpenRouter"
+            },
+            {
+              "value": "tabby",
+              "label": "TabbyAPI"
+            },
+            {
+              "value": "ooba",
+              "label": "Text Generation WebUI (oobabooga)"
+            },
+            {
+              "value": "togetherai",
+              "label": "TogetherAI"
+            },
+            {
+              "value": "vllm",
+              "label": "vLLM"
+            }
+          ]
+        },
+        {
+          "id": "api_key_togetherai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_togetherai"
+        },
+        {
+          "id": "model_togetherai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_openrouter-tg",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_openrouter"
+        },
+        {
+          "id": "openrouter_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "openrouter_providers_text",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "openrouter_allow_fallbacks_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow fallback providers"
+        },
+        {
+          "id": "openrouter_quantizations_text",
+          "tag": "select",
+          "options": [
+            {
+              "value": "int4",
+              "label": "Integer (4 bit)"
+            },
+            {
+              "value": "int8",
+              "label": "Integer (8 bit)"
+            },
+            {
+              "value": "fp4",
+              "label": "Floating point (4 bit)"
+            },
+            {
+              "value": "fp6",
+              "label": "Floating point (6 bit)"
+            },
+            {
+              "value": "fp8",
+              "label": "Floating point (8 bit)"
+            },
+            {
+              "value": "fp16",
+              "label": "Floating point (16 bit)"
+            },
+            {
+              "value": "bf16",
+              "label": "Brain floating point (16 bit)"
+            },
+            {
+              "value": "fp32",
+              "label": "Floating point (32 bit)"
+            },
+            {
+              "value": "unknown",
+              "label": "Unknown"
+            }
+          ]
+        },
+        {
+          "id": "api_key_infermaticai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_infermaticai"
+        },
+        {
+          "id": "model_infermaticai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_dreamgen",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_dreamgen"
+        },
+        {
+          "id": "model_dreamgen_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_mancer",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_mancer"
+        },
+        {
+          "id": "mancer_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_generic",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_generic"
+        },
+        {
+          "id": "generic_api_url_text",
+          "tag": "input",
+          "name": "generic_api_url"
+        },
+        {
+          "id": "generic_model_textgenerationwebui",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "generic_model_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_ooba",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_ooba"
+        },
+        {
+          "id": "textgenerationwebui_api_url_text",
+          "tag": "input",
+          "name": "textgenerationwebui_api_url"
+        },
+        {
+          "id": "custom_model_textgenerationwebui",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "api_key_featherless",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_featherless"
+        },
+        {
+          "id": "featherless_model_search_bar",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "featherless_model_sort_order",
+          "tag": "select",
+          "options": [
+            {
+              "value": "search",
+              "label": "A-Z"
+            },
+            {
+              "value": "asc",
+              "label": "A-Z"
+            },
+            {
+              "value": "desc",
+              "label": "Z-A"
+            },
+            {
+              "value": "date_asc",
+              "label": "Date Asc"
+            },
+            {
+              "value": "date_desc",
+              "label": "Date Desc"
+            }
+          ]
+        },
+        {
+          "id": "featherless_category_selection",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "category"
+            },
+            {
+              "value": "Top",
+              "label": "Top"
+            },
+            {
+              "value": "New",
+              "label": "New"
+            },
+            {
+              "value": "All",
+              "label": "All"
+            }
+          ]
+        },
+        {
+          "id": "featherless_class_selection",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "All Classes"
+            }
+          ]
+        },
+        {
+          "id": "featherless_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_vllm",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_vllm"
+        },
+        {
+          "id": "vllm_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "vllm_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_huggingface",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_huggingface"
+        },
+        {
+          "id": "huggingface_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "api_key_aphrodite",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_aphrodite"
+        },
+        {
+          "id": "aphrodite_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "aphrodite_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_llamacpp",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_llamacpp"
+        },
+        {
+          "id": "llamacpp_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "llamacpp_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "ollama_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "ollama_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_tabby",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_tabby"
+        },
+        {
+          "id": "tabby_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "tabby_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_koboldcpp",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_koboldcpp"
+        },
+        {
+          "id": "koboldcpp_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "bypass_status_check_textgenerationwebui",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Bypass status check"
+        },
+        {
+          "id": "context_size_derived",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Derive context size from backend"
+        },
+        {
+          "id": "chat_completion_source",
+          "tag": "select",
+          "options": [
+            {
+              "value": "openai",
+              "label": "OpenAI"
+            },
+            {
+              "value": "custom",
+              "label": "Custom (OpenAI-compatible)"
+            },
+            {
+              "value": "ai21",
+              "label": "AI21"
+            },
+            {
+              "value": "aimlapi",
+              "label": "AI/ML API"
+            },
+            {
+              "value": "azure_openai",
+              "label": "Azure OpenAI"
+            },
+            {
+              "value": "chutes",
+              "label": "Chutes"
+            },
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "workers_ai",
+              "label": "Cloudflare Workers AI"
+            },
+            {
+              "value": "cohere",
+              "label": "Cohere"
+            },
+            {
+              "value": "deepseek",
+              "label": "DeepSeek"
+            },
+            {
+              "value": "electronhub",
+              "label": "Electron Hub"
+            },
+            {
+              "value": "fireworks",
+              "label": "Fireworks AI"
+            },
+            {
+              "value": "groq",
+              "label": "Groq"
+            },
+            {
+              "value": "makersuite",
+              "label": "Google AI Studio"
+            },
+            {
+              "value": "vertexai",
+              "label": "Google Vertex AI"
+            },
+            {
+              "value": "mistralai",
+              "label": "MistralAI"
+            },
+            {
+              "value": "minimax",
+              "label": "MiniMax"
+            },
+            {
+              "value": "moonshot",
+              "label": "Moonshot AI"
+            },
+            {
+              "value": "nanogpt",
+              "label": "NanoGPT"
+            },
+            {
+              "value": "openrouter",
+              "label": "OpenRouter"
+            },
+            {
+              "value": "perplexity",
+              "label": "Perplexity"
+            },
+            {
+              "value": "pollinations",
+              "label": "Pollinations"
+            },
+            {
+              "value": "siliconflow",
+              "label": "SiliconFlow"
+            },
+            {
+              "value": "xai",
+              "label": "xAI (Grok)"
+            },
+            {
+              "value": "zai",
+              "label": "Z.AI (GLM)"
+            }
+          ]
+        },
+        {
+          "id": "openai_proxy_preset",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "openai_reverse_proxy_name",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "openai_reverse_proxy",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "openai_proxy_access_key",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "api_key_openai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_openai"
+        },
+        {
+          "id": "model_openai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "gpt-6-astra",
+              "label": "gpt-6-astra"
+            },
+            {
+              "value": "gpt-5.6",
+              "label": "gpt-5.6"
+            },
+            {
+              "value": "gpt-5.6-sol",
+              "label": "gpt-5.6-sol"
+            },
+            {
+              "value": "gpt-5.6-terra",
+              "label": "gpt-5.6-terra"
+            },
+            {
+              "value": "gpt-5.6-luna",
+              "label": "gpt-5.6-luna"
+            },
+            {
+              "value": "gpt-5.5",
+              "label": "gpt-5.5"
+            },
+            {
+              "value": "gpt-5.5-2026-04-23",
+              "label": "gpt-5.5-2026-04-23"
+            },
+            {
+              "value": "gpt-5.4",
+              "label": "gpt-5.4"
+            },
+            {
+              "value": "gpt-5.4-2026-03-05",
+              "label": "gpt-5.4-2026-03-05"
+            },
+            {
+              "value": "gpt-5.4-mini",
+              "label": "gpt-5.4-mini"
+            },
+            {
+              "value": "gpt-5.4-mini-2026-03-17",
+              "label": "gpt-5.4-mini-2026-03-17"
+            },
+            {
+              "value": "gpt-5.4-nano",
+              "label": "gpt-5.4-nano"
+            },
+            {
+              "value": "gpt-5.4-nano-2026-03-17",
+              "label": "gpt-5.4-nano-2026-03-17"
+            },
+            {
+              "value": "gpt-5.3-chat-latest",
+              "label": "gpt-5.3-chat-latest (deprecated)"
+            },
+            {
+              "value": "gpt-5.2",
+              "label": "gpt-5.2"
+            },
+            {
+              "value": "gpt-5.2-2025-12-11",
+              "label": "gpt-5.2-2025-12-11"
+            },
+            {
+              "value": "gpt-5.2-chat-latest",
+              "label": "gpt-5.2-chat-latest (deprecated)"
+            },
+            {
+              "value": "gpt-5.1",
+              "label": "gpt-5.1"
+            },
+            {
+              "value": "gpt-5.1-2025-11-13",
+              "label": "gpt-5.1-2025-11-13"
+            },
+            {
+              "value": "gpt-5.1-chat-latest",
+              "label": "gpt-5.1-chat-latest"
+            },
+            {
+              "value": "gpt-5",
+              "label": "gpt-5"
+            },
+            {
+              "value": "gpt-5-2025-08-07",
+              "label": "gpt-5-2025-08-07 (deprecated)"
+            },
+            {
+              "value": "gpt-5-chat-latest",
+              "label": "gpt-5-chat-latest"
+            },
+            {
+              "value": "gpt-5-mini",
+              "label": "gpt-5-mini"
+            },
+            {
+              "value": "gpt-5-mini-2025-08-07",
+              "label": "gpt-5-mini-2025-08-07 (deprecated)"
+            },
+            {
+              "value": "gpt-5-nano",
+              "label": "gpt-5-nano"
+            },
+            {
+              "value": "gpt-5-nano-2025-08-07",
+              "label": "gpt-5-nano-2025-08-07 (deprecated)"
+            },
+            {
+              "value": "gpt-4.1",
+              "label": "gpt-4.1"
+            },
+            {
+              "value": "gpt-4.1-2025-04-14",
+              "label": "gpt-4.1-2025-04-14"
+            },
+            {
+              "value": "gpt-4.1-mini",
+              "label": "gpt-4.1-mini"
+            },
+            {
+              "value": "gpt-4.1-mini-2025-04-14",
+              "label": "gpt-4.1-mini-2025-04-14"
+            },
+            {
+              "value": "gpt-4.1-nano",
+              "label": "gpt-4.1-nano (deprecated)"
+            },
+            {
+              "value": "gpt-4.1-nano-2025-04-14",
+              "label": "gpt-4.1-nano-2025-04-14 (deprecated)"
+            },
+            {
+              "value": "o4-mini",
+              "label": "o4-mini (deprecated)"
+            },
+            {
+              "value": "o4-mini-2025-04-16",
+              "label": "o4-mini-2025-04-16 (deprecated)"
+            },
+            {
+              "value": "o3",
+              "label": "o3"
+            },
+            {
+              "value": "o3-2025-04-16",
+              "label": "o3-2025-04-16 (deprecated)"
+            },
+            {
+              "value": "o3-mini",
+              "label": "o3-mini (deprecated)"
+            },
+            {
+              "value": "o3-mini-2025-01-31",
+              "label": "o3-mini-2025-01-31 (deprecated)"
+            },
+            {
+              "value": "o1",
+              "label": "o1 (deprecated)"
+            },
+            {
+              "value": "o1-2024-12-17",
+              "label": "o1-2024-12-17 (deprecated)"
+            },
+            {
+              "value": "gpt-4o",
+              "label": "gpt-4o"
+            },
+            {
+              "value": "gpt-4o-2024-11-20",
+              "label": "gpt-4o-2024-11-20"
+            },
+            {
+              "value": "gpt-4o-2024-08-06",
+              "label": "gpt-4o-2024-08-06"
+            },
+            {
+              "value": "gpt-4o-2024-05-13",
+              "label": "gpt-4o-2024-05-13"
+            },
+            {
+              "value": "gpt-4o-mini",
+              "label": "gpt-4o-mini"
+            },
+            {
+              "value": "gpt-4o-mini-2024-07-18",
+              "label": "gpt-4o-mini-2024-07-18"
+            },
+            {
+              "value": "gpt-4-turbo",
+              "label": "gpt-4-turbo (deprecated)"
+            },
+            {
+              "value": "gpt-4-turbo-2024-04-09",
+              "label": "gpt-4-turbo-2024-04-09 (deprecated)"
+            },
+            {
+              "value": "gpt-4",
+              "label": "gpt-4 (deprecated)"
+            },
+            {
+              "value": "gpt-4-0613",
+              "label": "gpt-4-0613 (2023, deprecated)"
+            },
+            {
+              "value": "gpt-3.5-turbo",
+              "label": "gpt-3.5-turbo (deprecated)"
+            },
+            {
+              "value": "gpt-3.5-turbo-0125",
+              "label": "gpt-3.5-turbo-0125 (2024, deprecated)"
+            },
+            {
+              "value": "gpt-3.5-turbo-1106",
+              "label": "gpt-3.5-turbo-1106 (2023, deprecated)"
+            },
+            {
+              "value": "gpt-3.5-turbo-instruct",
+              "label": "gpt-3.5-turbo-instruct (deprecated)"
+            },
+            {
+              "value": "babbage-002",
+              "label": "babbage-002"
+            },
+            {
+              "value": "davinci-002",
+              "label": "davinci-002"
+            }
+          ]
+        },
+        {
+          "id": "openai_bypass_status_check",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Bypass API status check"
+        },
+        {
+          "id": "openai_show_external_models",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show \"External\" models (provided by API)"
+        },
+        {
+          "id": "api_key_claude",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_claude"
+        },
+        {
+          "id": "model_claude_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "claude-fable-5-1",
+              "label": "claude-fable-5-1"
+            },
+            {
+              "value": "claude-fable-5",
+              "label": "claude-fable-5"
+            },
+            {
+              "value": "claude-opus-5",
+              "label": "claude-opus-5"
+            },
+            {
+              "value": "claude-sonnet-5",
+              "label": "claude-sonnet-5"
+            },
+            {
+              "value": "claude-opus-4-8",
+              "label": "claude-opus-4-8"
+            },
+            {
+              "value": "claude-opus-4-7",
+              "label": "claude-opus-4-7"
+            },
+            {
+              "value": "claude-opus-4-6",
+              "label": "claude-opus-4-6"
+            },
+            {
+              "value": "claude-opus-4-5",
+              "label": "claude-opus-4-5"
+            },
+            {
+              "value": "claude-opus-4-5-20251101",
+              "label": "claude-opus-4-5-20251101"
+            },
+            {
+              "value": "claude-sonnet-4-6",
+              "label": "claude-sonnet-4-6"
+            },
+            {
+              "value": "claude-sonnet-4-5",
+              "label": "claude-sonnet-4-5"
+            },
+            {
+              "value": "claude-sonnet-4-5-20250929",
+              "label": "claude-sonnet-4-5-20250929"
+            },
+            {
+              "value": "claude-haiku-4-5",
+              "label": "claude-haiku-4-5"
+            },
+            {
+              "value": "claude-haiku-4-5-20251001",
+              "label": "claude-haiku-4-5-20251001"
+            },
+            {
+              "value": "claude-opus-4-0",
+              "label": "claude-opus-4-0 (deprecated)"
+            },
+            {
+              "value": "claude-opus-4-20250514",
+              "label": "claude-opus-4-20250514 (deprecated)"
+            },
+            {
+              "value": "claude-sonnet-4-0",
+              "label": "claude-sonnet-4-0 (deprecated)"
+            },
+            {
+              "value": "claude-sonnet-4-20250514",
+              "label": "claude-sonnet-4-20250514 (deprecated)"
+            }
+          ]
+        },
+        {
+          "id": "api_key_openrouter",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_openrouter"
+        },
+        {
+          "id": "model_openrouter_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "openrouter_use_fallback",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow fallback models"
+        },
+        {
+          "id": "openrouter_providers_chat",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "openrouter_allow_fallbacks",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow fallback providers"
+        },
+        {
+          "id": "openrouter_quantizations_chat",
+          "tag": "select",
+          "options": [
+            {
+              "value": "int4",
+              "label": "Integer (4 bit)"
+            },
+            {
+              "value": "int8",
+              "label": "Integer (8 bit)"
+            },
+            {
+              "value": "fp4",
+              "label": "Floating point (4 bit)"
+            },
+            {
+              "value": "fp6",
+              "label": "Floating point (6 bit)"
+            },
+            {
+              "value": "fp8",
+              "label": "Floating point (8 bit)"
+            },
+            {
+              "value": "fp16",
+              "label": "Floating point (16 bit)"
+            },
+            {
+              "value": "bf16",
+              "label": "Brain floating point (16 bit)"
+            },
+            {
+              "value": "fp32",
+              "label": "Floating point (32 bit)"
+            },
+            {
+              "value": "unknown",
+              "label": "Unknown"
+            }
+          ]
+        },
+        {
+          "id": "api_key_ai21",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_ai21"
+        },
+        {
+          "id": "model_ai21_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "jamba-mini",
+              "label": "jamba-mini"
+            },
+            {
+              "value": "jamba-large",
+              "label": "jamba-large"
+            },
+            {
+              "value": "jamba-1.7-mini",
+              "label": "jamba-1.7-mini"
+            },
+            {
+              "value": "jamba-1.7-large",
+              "label": "jamba-1.7-large"
+            },
+            {
+              "value": "jamba-1.6-mini",
+              "label": "jamba-1.6-mini"
+            },
+            {
+              "value": "jamba-1.6-large",
+              "label": "jamba-1.6-large"
+            },
+            {
+              "value": "jamba-1.5-mini",
+              "label": "jamba-1.5-mini"
+            },
+            {
+              "value": "jamba-1.5-large",
+              "label": "jamba-1.5-large"
+            },
+            {
+              "value": "jamba-instruct-preview",
+              "label": "jamba-instruct-preview"
+            }
+          ]
+        },
+        {
+          "id": "api_key_makersuite",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_makersuite"
+        },
+        {
+          "id": "model_google_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "gemini-3.7-flash",
+              "label": "gemini-3.7-flash"
+            },
+            {
+              "value": "gemini-3.6-flash",
+              "label": "gemini-3.6-flash"
+            },
+            {
+              "value": "gemini-3.5-flash",
+              "label": "gemini-3.5-flash"
+            },
+            {
+              "value": "gemini-3.5-flash-lite",
+              "label": "gemini-3.5-flash-lite"
+            },
+            {
+              "value": "gemini-3.1-pro-preview",
+              "label": "gemini-3.1-pro-preview"
+            },
+            {
+              "value": "gemini-3.1-flash-lite",
+              "label": "gemini-3.1-flash-lite"
+            },
+            {
+              "value": "gemini-3.1-flash-image",
+              "label": "gemini-3.1-flash-image"
+            },
+            {
+              "value": "gemini-3-pro-image",
+              "label": "gemini-3-pro-image"
+            },
+            {
+              "value": "gemini-3-flash-preview",
+              "label": "gemini-3-flash-preview"
+            },
+            {
+              "value": "gemini-2.5-pro",
+              "label": "gemini-2.5-pro"
+            },
+            {
+              "value": "gemini-2.5-flash",
+              "label": "gemini-2.5-flash"
+            },
+            {
+              "value": "gemini-2.5-flash-lite",
+              "label": "gemini-2.5-flash-lite"
+            },
+            {
+              "value": "gemini-2.5-flash-image",
+              "label": "gemini-2.5-flash-image"
+            },
+            {
+              "value": "gemini-2.0-flash-001",
+              "label": "gemini-2.0-flash-001 (deprecated)"
+            },
+            {
+              "value": "gemini-2.0-flash",
+              "label": "gemini-2.0-flash (deprecated)"
+            },
+            {
+              "value": "gemini-2.0-flash-lite-001",
+              "label": "gemini-2.0-flash-lite-001 (deprecated)"
+            },
+            {
+              "value": "gemini-2.0-flash-lite",
+              "label": "gemini-2.0-flash-lite (deprecated)"
+            },
+            {
+              "value": "gemma-4-31b-it",
+              "label": "gemma-4-31b-it"
+            },
+            {
+              "value": "gemma-4-26b-a4b-it",
+              "label": "gemma-4-26b-a4b-it"
+            },
+            {
+              "value": "gemma-3n-e4b-it",
+              "label": "gemma-3n-e4b-it"
+            },
+            {
+              "value": "gemma-3n-e2b-it",
+              "label": "gemma-3n-e2b-it"
+            },
+            {
+              "value": "gemma-3-27b-it",
+              "label": "gemma-3-27b-it"
+            },
+            {
+              "value": "gemma-3-12b-it",
+              "label": "gemma-3-12b-it"
+            },
+            {
+              "value": "gemma-3-4b-it",
+              "label": "gemma-3-4b-it"
+            },
+            {
+              "value": "gemma-3-1b-it",
+              "label": "gemma-3-1b-it"
+            },
+            {
+              "value": "learnlm-2.0-flash-experimental",
+              "label": "learnlm-2.0-flash-experimental"
+            },
+            {
+              "value": "gemini-robotics-er-1.5-preview",
+              "label": "gemini-robotics-er-1.5-preview"
+            }
+          ]
+        },
+        {
+          "id": "vertexai_auth_mode",
+          "tag": "select",
+          "label": "Authentication Mode:",
+          "options": [
+            {
+              "value": "express",
+              "label": "Express Mode (API Key)"
+            },
+            {
+              "value": "full",
+              "label": "Full Version (Service Account)"
+            }
+          ]
+        },
+        {
+          "id": "api_key_vertexai",
+          "tag": "input",
+          "type": "text",
+          "label": "API Key:",
+          "name": "api_key_vertexai"
+        },
+        {
+          "id": "vertexai_express_project_id",
+          "tag": "input",
+          "type": "text",
+          "label": "Project ID:",
+          "name": "vertexai_express_project_id"
+        },
+        {
+          "id": "vertexai_service_account_json",
+          "tag": "input",
+          "type": "text",
+          "label": "Service Account JSON Content:",
+          "name": "vertexai_service_account_json"
+        },
+        {
+          "id": "vertexai_region",
+          "tag": "input",
+          "type": "text",
+          "label": "Region:",
+          "name": "vertexai_region"
+        },
+        {
+          "id": "model_vertexai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "gemini-3.7-flash",
+              "label": "gemini-3.7-flash"
+            },
+            {
+              "value": "gemini-3.6-flash",
+              "label": "gemini-3.6-flash"
+            },
+            {
+              "value": "gemini-3.5-flash",
+              "label": "gemini-3.5-flash"
+            },
+            {
+              "value": "gemini-3.5-flash-lite",
+              "label": "gemini-3.5-flash-lite"
+            },
+            {
+              "value": "gemini-3.1-pro-preview",
+              "label": "gemini-3.1-pro-preview"
+            },
+            {
+              "value": "gemini-3.1-flash-lite",
+              "label": "gemini-3.1-flash-lite"
+            },
+            {
+              "value": "gemini-3.1-flash-image",
+              "label": "gemini-3.1-flash-image"
+            },
+            {
+              "value": "gemini-3-pro-image",
+              "label": "gemini-3-pro-image"
+            },
+            {
+              "value": "gemini-3-flash-preview",
+              "label": "gemini-3-flash-preview"
+            },
+            {
+              "value": "gemini-2.5-pro",
+              "label": "gemini-2.5-pro"
+            },
+            {
+              "value": "gemini-2.5-flash",
+              "label": "gemini-2.5-flash"
+            },
+            {
+              "value": "gemini-2.5-flash-lite",
+              "label": "gemini-2.5-flash-lite"
+            },
+            {
+              "value": "gemini-2.5-flash-image",
+              "label": "gemini-2.5-flash-image"
+            },
+            {
+              "value": "gemini-2.0-flash",
+              "label": "gemini-2.0-flash (deprecated)"
+            },
+            {
+              "value": "gemini-2.0-flash-001",
+              "label": "gemini-2.0-flash-001 (deprecated)"
+            },
+            {
+              "value": "gemini-2.0-flash-lite-001",
+              "label": "gemini-2.0-flash-lite-001 (deprecated)"
+            }
+          ]
+        },
+        {
+          "id": "api_key_mistralai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_mistralai"
+        },
+        {
+          "id": "model_mistralai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_groq",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_groq"
+        },
+        {
+          "id": "model_groq_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "qwen/qwen3-32b",
+              "label": "qwen/qwen3-32b"
+            },
+            {
+              "value": "deepseek-r1-distill-llama-70b",
+              "label": "deepseek-r1-distill-llama-70b"
+            },
+            {
+              "value": "gemma2-9b-it",
+              "label": "gemma2-9b-it"
+            },
+            {
+              "value": "meta-llama/llama-4-scout-17b-16e-instruct",
+              "label": "meta-llama/llama-4-scout-17b-16e-instruct"
+            },
+            {
+              "value": "meta-llama/llama-4-maverick-17b-128e-instruct",
+              "label": "meta-llama/llama-4-maverick-17b-128e-instruct"
+            },
+            {
+              "value": "llama-3.1-8b-instant",
+              "label": "llama-3.1-8b-instant"
+            },
+            {
+              "value": "llama-3.3-70b-versatile",
+              "label": "llama-3.3-70b-versatile"
+            },
+            {
+              "value": "llama-guard-3-8b",
+              "label": "llama-guard-3-8b"
+            },
+            {
+              "value": "llama3-70b-8192",
+              "label": "llama3-70b-8192"
+            },
+            {
+              "value": "llama3-8b-8192",
+              "label": "llama3-8b-8192"
+            },
+            {
+              "value": "mistral-saba-24b",
+              "label": "mistral-saba-24b"
+            }
+          ]
+        },
+        {
+          "id": "api_key_siliconflow",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_siliconflow"
+        },
+        {
+          "id": "siliconflow_endpoint",
+          "tag": "select",
+          "options": [
+            {
+              "value": "global",
+              "label": "Global (siliconflow.com)"
+            },
+            {
+              "value": "cn",
+              "label": "China (siliconflow.cn)"
+            }
+          ]
+        },
+        {
+          "id": "model_siliconflow_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_minimax",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_minimax"
+        },
+        {
+          "id": "minimax_endpoint",
+          "tag": "select",
+          "options": [
+            {
+              "value": "global",
+              "label": "Global (minimax.io)"
+            },
+            {
+              "value": "cn",
+              "label": "China (minimaxi.com)"
+            }
+          ]
+        },
+        {
+          "id": "model_minimax_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "MiniMax-M2.7",
+              "label": "MiniMax-M2.7"
+            },
+            {
+              "value": "MiniMax-M2.7-highspeed",
+              "label": "MiniMax-M2.7-highspeed"
+            },
+            {
+              "value": "MiniMax-M2.5",
+              "label": "MiniMax-M2.5"
+            },
+            {
+              "value": "MiniMax-M2.5-highspeed",
+              "label": "MiniMax-M2.5-highspeed"
+            },
+            {
+              "value": "MiniMax-M2.1",
+              "label": "MiniMax-M2.1"
+            },
+            {
+              "value": "MiniMax-M2.1-highspeed",
+              "label": "MiniMax-M2.1-highspeed"
+            },
+            {
+              "value": "MiniMax-M2",
+              "label": "MiniMax-M2"
+            },
+            {
+              "value": "M2-her",
+              "label": "M2-her"
+            }
+          ]
+        },
+        {
+          "id": "api_key_electronhub",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_electronhub"
+        },
+        {
+          "id": "model_electronhub_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_chutes",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_chutes"
+        },
+        {
+          "id": "model_chutes_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_nanogpt",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_nanogpt"
+        },
+        {
+          "id": "model_nanogpt_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "nanogpt_provider",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "Auto"
+            }
+          ]
+        },
+        {
+          "id": "nanogpt_payg_override",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Use pay-as-you-go billing"
+        },
+        {
+          "id": "api_key_workers_ai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_workers_ai"
+        },
+        {
+          "id": "workers_ai_account_id",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "model_workers_ai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_deepseek",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_deepseek"
+        },
+        {
+          "id": "model_deepseek_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_fireworks",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_fireworks"
+        },
+        {
+          "id": "model_fireworks_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_cometapi",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_cometapi"
+        },
+        {
+          "id": "model_cometapi_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_perplexity",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_perplexity"
+        },
+        {
+          "id": "model_perplexity_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "sonar",
+              "label": "sonar"
+            },
+            {
+              "value": "sonar-pro",
+              "label": "sonar-pro"
+            },
+            {
+              "value": "sonar-reasoning",
+              "label": "sonar-reasoning"
+            },
+            {
+              "value": "sonar-reasoning-pro",
+              "label": "sonar-reasoning-pro"
+            },
+            {
+              "value": "sonar-deep-research",
+              "label": "sonar-deep-research"
+            },
+            {
+              "value": "r1-1776",
+              "label": "r1-1776"
+            },
+            {
+              "value": "llama-3.1-sonar-small-128k-online",
+              "label": "llama-3.1-sonar-small-128k-online"
+            },
+            {
+              "value": "llama-3.1-sonar-large-128k-online",
+              "label": "llama-3.1-sonar-large-128k-online"
+            },
+            {
+              "value": "llama-3.1-sonar-huge-128k-online",
+              "label": "llama-3.1-sonar-huge-128k-online"
+            },
+            {
+              "value": "llama-3.1-sonar-small-128k-chat",
+              "label": "llama-3.1-sonar-small-128k-chat"
+            },
+            {
+              "value": "llama-3.1-sonar-large-128k-chat",
+              "label": "llama-3.1-sonar-large-128k-chat"
+            }
+          ]
+        },
+        {
+          "id": "api_key_cohere",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_cohere"
+        },
+        {
+          "id": "model_cohere_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "c4ai-aya-23-8b",
+              "label": "c4ai-aya-23-8b"
+            },
+            {
+              "value": "c4ai-aya-23",
+              "label": "c4ai-aya-23"
+            },
+            {
+              "value": "c4ai-aya-expanse-8b",
+              "label": "c4ai-aya-expanse-8b"
+            },
+            {
+              "value": "c4ai-aya-expanse-32b",
+              "label": "c4ai-aya-expanse-32b"
+            },
+            {
+              "value": "c4ai-aya-vision-8b",
+              "label": "c4ai-aya-vision-8b"
+            },
+            {
+              "value": "c4ai-aya-vision-32b",
+              "label": "c4ai-aya-vision-32b"
+            },
+            {
+              "value": "command-light",
+              "label": "command-light"
+            },
+            {
+              "value": "command",
+              "label": "command"
+            },
+            {
+              "value": "command-r",
+              "label": "command-r"
+            },
+            {
+              "value": "command-r-plus",
+              "label": "command-r-plus"
+            },
+            {
+              "value": "command-r-08-2024",
+              "label": "command-r-08-2024"
+            },
+            {
+              "value": "command-r-plus-08-2024",
+              "label": "command-r-plus-08-2024"
+            },
+            {
+              "value": "command-r7b-12-2024",
+              "label": "command-r7b-12-2024"
+            },
+            {
+              "value": "command-a-03-2025",
+              "label": "command-a-03-2025"
+            },
+            {
+              "value": "command-a-vision-07-2025",
+              "label": "command-a-vision-07-2025"
+            },
+            {
+              "value": "command-light-nightly",
+              "label": "command-light-nightly"
+            },
+            {
+              "value": "command-nightly",
+              "label": "command-nightly"
+            }
+          ]
+        },
+        {
+          "id": "custom_api_url_text",
+          "tag": "input"
+        },
+        {
+          "id": "api_key_custom",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_custom"
+        },
+        {
+          "id": "custom_model_id",
+          "tag": "input"
+        },
+        {
+          "id": "model_custom_select",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "api_key_xai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_xai"
+        },
+        {
+          "id": "model_xai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- Connect to the API --"
+            }
+          ]
+        },
+        {
+          "id": "api_key_aimlapi",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_aimlapi"
+        },
+        {
+          "id": "model_aimlapi_select",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "pollinations_endpoint",
+          "tag": "select",
+          "options": [
+            {
+              "value": "anonymous",
+              "label": "Anonymous (No Key)"
+            },
+            {
+              "value": "authenticated",
+              "label": "Authenticated (API Key)"
+            }
+          ]
+        },
+        {
+          "id": "api_key_pollinations",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_pollinations"
+        },
+        {
+          "id": "model_pollinations_select",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "api_key_moonshot",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_moonshot"
+        },
+        {
+          "id": "model_moonshot_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "kimi-k2-0711-preview",
+              "label": "kimi-k2-0711-preview"
+            },
+            {
+              "value": "moonshot-v1-8k",
+              "label": "moonshot-v1-8k"
+            },
+            {
+              "value": "moonshot-v1-32k",
+              "label": "moonshot-v1-32k"
+            },
+            {
+              "value": "moonshot-v1-128k",
+              "label": "moonshot-v1-128k"
+            },
+            {
+              "value": "moonshot-v1-auto",
+              "label": "moonshot-v1-auto"
+            },
+            {
+              "value": "kimi-latest",
+              "label": "kimi-latest"
+            },
+            {
+              "value": "moonshot-v1-8k-vision-preview",
+              "label": "moonshot-v1-8k-vision-preview"
+            },
+            {
+              "value": "moonshot-v1-32k-vision-preview",
+              "label": "moonshot-v1-32k-vision-preview"
+            },
+            {
+              "value": "moonshot-v1-128k-vision-preview",
+              "label": "moonshot-v1-128k-vision-preview"
+            },
+            {
+              "value": "kimi-thinking-preview",
+              "label": "kimi-thinking-preview"
+            }
+          ]
+        },
+        {
+          "id": "api_key_zai",
+          "tag": "input",
+          "type": "text",
+          "name": "api_key_zai"
+        },
+        {
+          "id": "zai_endpoint",
+          "tag": "select",
+          "options": [
+            {
+              "value": "common",
+              "label": "Common API"
+            },
+            {
+              "value": "coding",
+              "label": "Coding API"
+            }
+          ]
+        },
+        {
+          "id": "model_zai_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "glm-5.2",
+              "label": "glm-5.2"
+            },
+            {
+              "value": "glm-5-turbo",
+              "label": "glm-5-turbo"
+            },
+            {
+              "value": "glm-5v-turbo",
+              "label": "glm-5v-turbo"
+            },
+            {
+              "value": "glm-5.1",
+              "label": "glm-5.1"
+            },
+            {
+              "value": "glm-5",
+              "label": "glm-5"
+            },
+            {
+              "value": "glm-4.7",
+              "label": "glm-4.7"
+            },
+            {
+              "value": "glm-4.7-flash",
+              "label": "glm-4.7-flash"
+            },
+            {
+              "value": "glm-4.7-flashx",
+              "label": "glm-4.7-flashx"
+            },
+            {
+              "value": "glm-4.6",
+              "label": "glm-4.6"
+            },
+            {
+              "value": "glm-4.6v",
+              "label": "glm-4.6v"
+            },
+            {
+              "value": "glm-4.6v-flash",
+              "label": "glm-4.6v-flash"
+            },
+            {
+              "value": "glm-4.6v-flashx",
+              "label": "glm-4.6v-flashx"
+            },
+            {
+              "value": "glm-4.5v",
+              "label": "glm-4.5v"
+            },
+            {
+              "value": "glm-4.5",
+              "label": "glm-4.5"
+            },
+            {
+              "value": "glm-4.5-air",
+              "label": "glm-4.5-air"
+            },
+            {
+              "value": "glm-4.5-x",
+              "label": "glm-4.5-x"
+            },
+            {
+              "value": "glm-4.5-airx",
+              "label": "glm-4.5-airx"
+            },
+            {
+              "value": "glm-4.5-flash",
+              "label": "glm-4.5-flash"
+            },
+            {
+              "value": "glm-4-32b-0414-128k",
+              "label": "glm-4-32b-0414-128k"
+            },
+            {
+              "value": "autoglm-phone-multilingual",
+              "label": "autoglm-phone-multilingual"
+            }
+          ]
+        },
+        {
+          "id": "azure_base_url",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "azure_deployment_name",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "azure_api_version",
+          "tag": "select",
+          "options": [
+            {
+              "value": "2025-04-01-preview",
+              "label": "2025-04-01-preview"
+            },
+            {
+              "value": "2024-10-21",
+              "label": "2024-10-21"
+            }
+          ]
+        },
+        {
+          "id": "api_key_azure_openai",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "azure_openai_model",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "Click 'Connect' to fetch model name"
+            }
+          ]
+        },
+        {
+          "id": "cc_sort_models",
+          "tag": "select",
+          "label": "Alphabetically Prompt Price (cheapest) Completion Price (cheapest) Context Size",
+          "options": [
+            {
+              "value": "alphabetically",
+              "label": "Alphabetically"
+            },
+            {
+              "value": "pricing.prompt",
+              "label": "Prompt Price (cheapest)"
+            },
+            {
+              "value": "pricing.completion",
+              "label": "Completion Price (cheapest)"
+            },
+            {
+              "value": "context_length",
+              "label": "Context Size"
+            }
+          ]
+        },
+        {
+          "id": "cc_group_models",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Group by vendors"
+        },
+        {
+          "id": "custom_prompt_post_processing",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "None"
+            },
+            {
+              "value": "merge_tools",
+              "label": "Merge consecutive roles (with tools)"
+            },
+            {
+              "value": "semi_tools",
+              "label": "Semi-strict (alternating roles; with tools)"
+            },
+            {
+              "value": "strict_tools",
+              "label": "Strict (user first, alternating roles; with tools)"
+            },
+            {
+              "value": "merge",
+              "label": "Merge consecutive roles (no tools)"
+            },
+            {
+              "value": "semi",
+              "label": "Semi-strict (alternating roles; no tools)"
+            },
+            {
+              "value": "strict",
+              "label": "Strict (user first, alternating roles; no tools)"
+            },
+            {
+              "value": "single",
+              "label": "Single user message (no tools)"
+            }
+          ]
+        },
+        {
+          "id": "auto-connect-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-connect to Last Server"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "horde_api_key_button",
+          "label": "Save and connect",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "horde_refresh",
+          "label": "Refresh models",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "api_button",
+          "label": "Connect",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "api_button_novel",
+          "label": "Connect",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "featherless_model_grid_toggle",
+          "label": "Toggle grid view",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ollama_download_model",
+          "label": "Download",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "tabby_download_model",
+          "label": "Download",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "api_button_textgenerationwebui",
+          "label": "Connect",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "save_proxy",
+          "label": "Save Proxy",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "delete_proxy",
+          "label": "Delete Proxy",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "openai_proxy_access_key_show",
+          "label": "Peek a password",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "vertexai_validate_service_account",
+          "label": "Validate JSON",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "api_button_openai",
+          "label": "Connect",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "customize_additional_parameters",
+          "label": "Additional Parameters",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "test_api_button",
+          "label": "Test Message",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "回复格式",
+      "container": "AdvancedFormatting",
+      "controls": [
+        {
+          "id": "af_master_import_file",
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "context_derived",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "context_presets",
+          "tag": "select",
+          "presetManager": "context",
+          "options": []
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "context_story_string",
+          "tag": "textarea",
+          "label": "Story String"
+        },
+        {
+          "id": "context_story_string_position",
+          "tag": "select",
+          "label": "Position:",
+          "options": [
+            {
+              "value": "0",
+              "label": "Default (top of context)"
+            },
+            {
+              "value": "1",
+              "label": "In-chat @ Depth"
+            }
+          ]
+        },
+        {
+          "id": "context_story_string_depth",
+          "tag": "input",
+          "type": "number",
+          "label": "Depth:"
+        },
+        {
+          "id": "context_story_string_role",
+          "tag": "select",
+          "label": "Role:",
+          "options": [
+            {
+              "value": "0",
+              "label": "System"
+            },
+            {
+              "value": "1",
+              "label": "User"
+            },
+            {
+              "value": "2",
+              "label": "Assistant"
+            }
+          ]
+        },
+        {
+          "id": "context_example_separator",
+          "tag": "textarea",
+          "label": "Example Separator"
+        },
+        {
+          "id": "context_chat_start",
+          "tag": "textarea",
+          "label": "Chat Start"
+        },
+        {
+          "id": "always-force-name2-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Always add character's name to prompt"
+        },
+        {
+          "id": "single_line",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Generate only one line per request"
+        },
+        {
+          "id": "collapse-newlines-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Collapse Consecutive Newlines"
+        },
+        {
+          "id": "trim_spaces",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Trim spaces"
+        },
+        {
+          "id": "trim_sentences_checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Trim Incomplete Sentences"
+        },
+        {
+          "id": "context_use_stop_strings",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "context_names_as_stop_strings",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "instruct_derived",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "instruct_bind_to_context",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "instruct_enabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "instruct_presets",
+          "tag": "select",
+          "presetManager": "instruct",
+          "options": []
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "instruct_activation_regex",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "instruct_wrap",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Wrap Sequences with Newline"
+        },
+        {
+          "id": "instruct_macro",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Replace Macro in Sequences"
+        },
+        {
+          "id": "instruct_sequences_as_stop_strings",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Sequences as Stop Strings"
+        },
+        {
+          "id": "instruct_skip_examples",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Skip Example Dialogues Formatting"
+        },
+        {
+          "id": "instruct_names_behavior",
+          "tag": "select",
+          "options": [
+            {
+              "value": "none",
+              "label": "Never"
+            },
+            {
+              "value": "force",
+              "label": "Groups and Past Personas"
+            },
+            {
+              "value": "always",
+              "label": "Always"
+            }
+          ]
+        },
+        {
+          "id": "instruct_story_string_prefix",
+          "tag": "textarea",
+          "label": "Story String Prefix"
+        },
+        {
+          "id": "instruct_story_string_suffix",
+          "tag": "textarea",
+          "label": "Story String Suffix"
+        },
+        {
+          "id": "instruct_input_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_input_suffix",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_output_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_output_suffix",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_system_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_system_suffix",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_system_same_as_user",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "System same as User"
+        },
+        {
+          "id": "instruct_first_output_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_last_output_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_first_input_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_last_input_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_last_system_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_stop_sequence",
+          "tag": "textarea"
+        },
+        {
+          "id": "instruct_user_alignment_message",
+          "tag": "textarea"
+        },
+        {
+          "id": "sysprompt_enabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "sysprompt_select",
+          "tag": "select",
+          "presetManager": "sysprompt",
+          "options": []
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "sysprompt_content",
+          "tag": "textarea",
+          "label": "Prompt Content"
+        },
+        {
+          "id": "sysprompt_post_history",
+          "tag": "textarea",
+          "label": "Post-History Instructions"
+        },
+        {
+          "id": "custom_stopping_strings",
+          "tag": "textarea"
+        },
+        {
+          "id": "custom_stopping_strings_macro",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Replace Macro in Stop Strings"
+        },
+        {
+          "id": "tokenizer",
+          "tag": "select",
+          "options": [
+            {
+              "value": "99",
+              "label": "Best match (recommended)"
+            },
+            {
+              "value": "0",
+              "label": "None / Estimated"
+            },
+            {
+              "value": "1",
+              "label": "GPT-2"
+            },
+            {
+              "value": "3",
+              "label": "Llama 1/2"
+            },
+            {
+              "value": "12",
+              "label": "Llama 3"
+            },
+            {
+              "value": "13",
+              "label": "Gemma / Gemini"
+            },
+            {
+              "value": "14",
+              "label": "Jamba"
+            },
+            {
+              "value": "15",
+              "label": "Qwen2"
+            },
+            {
+              "value": "16",
+              "label": "Command-R"
+            },
+            {
+              "value": "19",
+              "label": "Command-A"
+            },
+            {
+              "value": "4",
+              "label": "NerdStash (NovelAI Clio)"
+            },
+            {
+              "value": "5",
+              "label": "NerdStash v2 (NovelAI Kayra)"
+            },
+            {
+              "value": "7",
+              "label": "Mistral V1"
+            },
+            {
+              "value": "17",
+              "label": "Mistral Nemo"
+            },
+            {
+              "value": "8",
+              "label": "Yi"
+            },
+            {
+              "value": "11",
+              "label": "Claude 1/2"
+            },
+            {
+              "value": "18",
+              "label": "DeepSeek V3"
+            },
+            {
+              "value": "6",
+              "label": "API (WebUI / koboldcpp)"
+            }
+          ]
+        },
+        {
+          "id": "token_padding",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "reasoning_auto_parse",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-Parse"
+        },
+        {
+          "id": "reasoning_auto_expand",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-Expand"
+        },
+        {
+          "id": "reasoning_show_hidden",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show Hidden"
+        },
+        {
+          "id": "reasoning_add_to_prompts",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Add to Prompts"
+        },
+        {
+          "id": "reasoning_max_additions",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "reasoning_select",
+          "tag": "select",
+          "presetManager": "reasoning",
+          "options": []
+        },
+        {
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "reasoning_prefix",
+          "tag": "textarea"
+        },
+        {
+          "id": "reasoning_suffix",
+          "tag": "textarea"
+        },
+        {
+          "id": "reasoning_separator",
+          "tag": "textarea"
+        },
+        {
+          "id": "bind_model_templates",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Bind Model to Templates"
+        },
+        {
+          "id": "markdown_escape_strings",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "start_reply_with",
+          "tag": "textarea"
+        },
+        {
+          "id": "chat-show-reply-prefix-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show reply prefix in chat"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "af_master_import",
+          "label": "Master Import",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "af_master_export",
+          "label": "Master Export",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Update current template",
+          "presetAction": {
+            "data-preset-manager-update": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Rename current template",
+          "presetAction": {
+            "data-preset-manager-rename": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Save template as",
+          "presetAction": {
+            "data-preset-manager-new": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Import template",
+          "presetAction": {
+            "data-preset-manager-import": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Export template",
+          "presetAction": {
+            "data-preset-manager-export": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Restore current template",
+          "presetAction": {
+            "data-preset-manager-restore": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": "context_delete_preset",
+          "label": "Delete the template",
+          "presetAction": {
+            "data-preset-manager-delete": "context"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Update current template",
+          "presetAction": {
+            "data-preset-manager-update": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Rename current template",
+          "presetAction": {
+            "data-preset-manager-rename": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Save template as",
+          "presetAction": {
+            "data-preset-manager-new": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Import template",
+          "presetAction": {
+            "data-preset-manager-import": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Export template",
+          "presetAction": {
+            "data-preset-manager-export": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Restore current template",
+          "presetAction": {
+            "data-preset-manager-restore": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Delete template",
+          "presetAction": {
+            "data-preset-manager-delete": "instruct"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Update current prompt",
+          "presetAction": {
+            "data-preset-manager-update": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Rename current prompt",
+          "presetAction": {
+            "data-preset-manager-rename": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Save prompt as",
+          "presetAction": {
+            "data-preset-manager-new": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Import template",
+          "presetAction": {
+            "data-preset-manager-import": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Export template",
+          "presetAction": {
+            "data-preset-manager-export": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Restore current prompt",
+          "presetAction": {
+            "data-preset-manager-restore": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Delete prompt",
+          "presetAction": {
+            "data-preset-manager-delete": "sysprompt"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Update current template",
+          "presetAction": {
+            "data-preset-manager-update": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Rename current template",
+          "presetAction": {
+            "data-preset-manager-rename": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Save template as",
+          "presetAction": {
+            "data-preset-manager-new": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Import template",
+          "presetAction": {
+            "data-preset-manager-import": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Export template",
+          "presetAction": {
+            "data-preset-manager-export": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Restore current template",
+          "presetAction": {
+            "data-preset-manager-restore": "reasoning"
+          }
+        },
+        {
+          "tag": "i",
+          "id": null,
+          "label": "Delete template",
+          "presetAction": {
+            "data-preset-manager-delete": "reasoning"
+          }
+        }
+      ]
+    },
+    {
+      "name": "世界书",
+      "container": "WorldInfo",
+      "controls": [
+        {
+          "id": "WI_panel_pin",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "world_info",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "-- World Info not found --"
+            }
+          ]
+        },
+        {
+          "id": "world_info_depth",
+          "tag": "input",
+          "type": "range",
+          "name": "world_info_depth"
+        },
+        {
+          "id": "world_info_depth_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_budget",
+          "tag": "input",
+          "type": "range",
+          "name": "world_info_budget"
+        },
+        {
+          "id": "world_info_budget_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_budget_cap",
+          "tag": "input",
+          "type": "range",
+          "name": "world_info_budget_cap"
+        },
+        {
+          "id": "world_info_budget_cap_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_min_activations",
+          "tag": "input",
+          "type": "range",
+          "name": "world_info_min_activations"
+        },
+        {
+          "id": "world_info_min_activations_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_min_activations_depth_max",
+          "tag": "input",
+          "type": "range",
+          "name": "volume"
+        },
+        {
+          "id": "world_info_min_activations_depth_max_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_max_recursion_steps",
+          "tag": "input",
+          "type": "range",
+          "name": "world_info_max_recursion_steps"
+        },
+        {
+          "id": "world_info_max_recursion_steps_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "world_info_character_strategy",
+          "tag": "select",
+          "options": [
+            {
+              "value": "0",
+              "label": "Sorted Evenly"
+            },
+            {
+              "value": "1",
+              "label": "Character Lore First"
+            },
+            {
+              "value": "2",
+              "label": "Global Lore First"
+            }
+          ]
+        },
+        {
+          "id": "world_info_include_names",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_info_recursive",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_info_case_sensitive",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_info_match_whole_words",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_info_use_group_scoring",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_info_overflow_alert",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "world_import_file",
+          "tag": "input",
+          "type": "file",
+          "name": "avatar"
+        },
+        {
+          "id": "world_editor_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "--- Pick to Edit ---"
+            }
+          ]
+        },
+        {
+          "id": "world_info_search",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "world_info_sort_order",
+          "tag": "select",
+          "options": [
+            {
+              "value": "14",
+              "label": "Search"
+            },
+            {
+              "value": "0",
+              "label": "Priority"
+            },
+            {
+              "value": "13",
+              "label": "Custom"
+            },
+            {
+              "value": "1",
+              "label": "Title A-Z"
+            },
+            {
+              "value": "2",
+              "label": "Title Z-A"
+            },
+            {
+              "value": "3",
+              "label": "Tokens ↗"
+            },
+            {
+              "value": "4",
+              "label": "Tokens ↘"
+            },
+            {
+              "value": "5",
+              "label": "Depth ↗"
+            },
+            {
+              "value": "6",
+              "label": "Depth ↘"
+            },
+            {
+              "value": "7",
+              "label": "Order ↗"
+            },
+            {
+              "value": "8",
+              "label": "Order ↘"
+            },
+            {
+              "value": "9",
+              "label": "UID ↗"
+            },
+            {
+              "value": "10",
+              "label": "UID ↘"
+            },
+            {
+              "value": "11",
+              "label": "Trigger% ↗"
+            },
+            {
+              "value": "12",
+              "label": "Trigger% ↘"
+            }
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "world_create_button",
+          "label": "Create",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_import_button",
+          "label": "Import World Info",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_popup_export",
+          "label": "Export World Info",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_popup_name_button",
+          "label": "Rename World Info",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_duplicate",
+          "label": "Duplicate World Info",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_popup_delete",
+          "label": "Delete World Info",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_popup_new",
+          "label": "New Entry",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "OpenAllWIEntries",
+          "label": "Open all Entries",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "CloseAllWIEntries",
+          "label": "Close all Entries",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_backfill_memos",
+          "label": "Fill empty Memo/Titles with Keywords",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_apply_current_sorting",
+          "label": "Apply current sorting as Order",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_refresh",
+          "label": "Refresh",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "用户设置",
+      "container": "user-settings-block",
+      "controls": [
+        {
+          "id": "ui_language_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "",
+              "label": "Default"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            }
+          ]
+        },
+        {
+          "id": "settingsSearch",
+          "tag": "textarea"
+        },
+        {
+          "id": "ui_preset_import_file",
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "themes",
+          "tag": "select",
+          "options": []
+        },
+        {
+          "id": "avatar_style",
+          "tag": "select",
+          "options": [
+            {
+              "value": "0",
+              "label": "Circle"
+            },
+            {
+              "value": "2",
+              "label": "Square"
+            },
+            {
+              "value": "3",
+              "label": "Rounded"
+            },
+            {
+              "value": "1",
+              "label": "Rectangle"
+            }
+          ]
+        },
+        {
+          "id": "chat_display",
+          "tag": "select",
+          "options": [
+            {
+              "value": "0",
+              "label": "Flat"
+            },
+            {
+              "value": "1",
+              "label": "Bubbles"
+            },
+            {
+              "value": "2",
+              "label": "Document"
+            }
+          ]
+        },
+        {
+          "id": "media_display",
+          "tag": "select",
+          "options": [
+            {
+              "value": "list",
+              "label": "List"
+            },
+            {
+              "value": "gallery",
+              "label": "Gallery"
+            }
+          ]
+        },
+        {
+          "id": "toastr_position",
+          "tag": "select",
+          "options": [
+            {
+              "value": "toast-top-left",
+              "label": "Top Left"
+            },
+            {
+              "value": "toast-top-center",
+              "label": "Top Center"
+            },
+            {
+              "value": "toast-top-right",
+              "label": "Top Right"
+            },
+            {
+              "value": "toast-bottom-left",
+              "label": "Bottom Left"
+            },
+            {
+              "value": "toast-bottom-center",
+              "label": "Bottom Center"
+            },
+            {
+              "value": "toast-bottom-right",
+              "label": "Bottom Right"
+            }
+          ]
+        },
+        {
+          "id": "main-text-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "italics-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "underline-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "quote-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "shadow-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "chat-tint-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "blur-tint-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "border-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "user-mes-blur-tint-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "bot-mes-blur-tint-color-picker",
+          "tag": "toolcool-color-picker"
+        },
+        {
+          "id": "chat_width_slider",
+          "tag": "input",
+          "type": "range",
+          "name": "chat_width_slider"
+        },
+        {
+          "id": "chat_width_slider_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "font_scale",
+          "tag": "input",
+          "type": "range",
+          "name": "font_scale"
+        },
+        {
+          "id": "font_scale_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "blur_strength",
+          "tag": "input",
+          "type": "range",
+          "name": "blur_strength"
+        },
+        {
+          "id": "blur_strength_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "shadow_width",
+          "tag": "input",
+          "type": "range",
+          "name": "shadow_width"
+        },
+        {
+          "id": "shadow_width_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "reduced_motion",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Reduced Motion"
+        },
+        {
+          "id": "fast_ui_mode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "No Blur Effect"
+        },
+        {
+          "id": "noShadowsmode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "No Text Shadows"
+        },
+        {
+          "id": "waifuMode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Visual Novel Mode"
+        },
+        {
+          "id": "expandMessageActions",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Expand Message Actions"
+        },
+        {
+          "id": "enableZenSliders",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Zen Sliders"
+        },
+        {
+          "id": "enableLabMode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Mad Lab Mode"
+        },
+        {
+          "id": "messageTimerEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Message Timer"
+        },
+        {
+          "id": "messageTimestampsEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Chat Timestamps"
+        },
+        {
+          "id": "messageModelIconEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Model Icons"
+        },
+        {
+          "id": "mesIDDisplayEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Message IDs"
+        },
+        {
+          "id": "hideChatAvatarsEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Hide Chat Avatars"
+        },
+        {
+          "id": "messageTokensEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Message Token Count"
+        },
+        {
+          "id": "compact_input_area",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Compact Input Area"
+        },
+        {
+          "id": "show_swipe_num_all_messages",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Swipe # for All Messages"
+        },
+        {
+          "id": "hotswapEnabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Characters Hotswap"
+        },
+        {
+          "id": "zoomed_avatar_magnification",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Avatar Hover Magnification"
+        },
+        {
+          "id": "bogus_folders",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Tags as Folders"
+        },
+        {
+          "id": "click_to_edit",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Click to Edit"
+        },
+        {
+          "id": "aux_field",
+          "tag": "select",
+          "label": "Char List Subheader",
+          "options": [
+            {
+              "value": "character_version",
+              "label": "Character Version"
+            },
+            {
+              "value": "creator",
+              "label": "Created by"
+            }
+          ]
+        },
+        {
+          "id": "tag_import_setting",
+          "tag": "select",
+          "label": "Import Card Tags",
+          "options": [
+            {
+              "value": "1",
+              "label": "Ask"
+            },
+            {
+              "value": "2",
+              "label": "None"
+            },
+            {
+              "value": "3",
+              "label": "All"
+            },
+            {
+              "value": "4",
+              "label": "Existing"
+            }
+          ]
+        },
+        {
+          "id": "fuzzy_search_checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Advanced Character Search"
+        },
+        {
+          "id": "prefer_character_prompt",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Prefer Char. Prompt"
+        },
+        {
+          "id": "prefer_character_jailbreak",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Prefer Char. Instructions"
+        },
+        {
+          "id": "never_resize_avatars",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Never resize avatars"
+        },
+        {
+          "id": "background_thumbnails_animation",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Animated background thumbnails"
+        },
+        {
+          "id": "show_card_avatar_urls",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show avatar filenames"
+        },
+        {
+          "id": "spoiler_free_mode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Spoiler Free Mode"
+        },
+        {
+          "id": "smooth_streaming",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Smooth Streaming"
+        },
+        {
+          "id": "smooth_streaming_no_think",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Exclude 'Thinking...'"
+        },
+        {
+          "id": "smooth_streaming_speed",
+          "tag": "input",
+          "type": "range",
+          "name": "smooth_streaming_speed"
+        },
+        {
+          "id": "stream_fade_in",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Stream Fade-In"
+        },
+        {
+          "id": "play_message_sound",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Message Sound"
+        },
+        {
+          "id": "play_sound_unfocused",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Background Sound Only"
+        },
+        {
+          "id": "relaxed_api_urls",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Relaxed API URLs"
+        },
+        {
+          "id": "world_import_dialog",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Lorebook Import Dialog"
+        },
+        {
+          "id": "enable_auto_select_input",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "enable_md_hotkeys",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Markdown Hotkeys"
+        },
+        {
+          "id": "restore_user_input",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Restore User Input"
+        },
+        {
+          "id": "movingUImode",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "MovingUI"
+        },
+        {
+          "id": "movingUIPresets",
+          "tag": "select",
+          "label": "MovingUI Preset:",
+          "options": []
+        },
+        {
+          "id": "customCSS",
+          "tag": "textarea"
+        },
+        {
+          "id": "chat_truncation",
+          "tag": "input",
+          "type": "range",
+          "name": "chat_truncation"
+        },
+        {
+          "id": "chat_truncation_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "streaming_fps",
+          "tag": "input",
+          "type": "range",
+          "name": "streaming_fps"
+        },
+        {
+          "id": "streaming_fps_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "example_messages_behavior",
+          "tag": "select",
+          "label": "Example Messages Behavior:",
+          "options": [
+            {
+              "value": "normal",
+              "label": "Gradual push-out"
+            },
+            {
+              "value": "keep",
+              "label": "Always include examples"
+            },
+            {
+              "value": "strip",
+              "label": "Never include examples"
+            }
+          ]
+        },
+        {
+          "id": "image_overswipe",
+          "tag": "select",
+          "label": "Image Swipe Behavior:",
+          "options": [
+            {
+              "value": "generate",
+              "label": "Generate new"
+            },
+            {
+              "value": "rollover",
+              "label": "Roll over"
+            }
+          ]
+        },
+        {
+          "id": "send_on_enter",
+          "tag": "select",
+          "options": [
+            {
+              "value": "-1",
+              "label": "Disabled"
+            },
+            {
+              "value": "0",
+              "label": "Automatic (PC)"
+            },
+            {
+              "value": "1",
+              "label": "Enabled"
+            }
+          ]
+        },
+        {
+          "id": "continue_on_send",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "\"Send\" to Continue"
+        },
+        {
+          "id": "quick_continue",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Quick \"Continue\" button"
+        },
+        {
+          "id": "quick_impersonate",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Quick \"Impersonate\" button"
+        },
+        {
+          "id": "swipes-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Swipes"
+        },
+        {
+          "id": "gestures-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Gestures"
+        },
+        {
+          "id": "auto-load-chat-checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-load Last Chat"
+        },
+        {
+          "id": "auto_scroll_chat_to_bottom",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-scroll Chat"
+        },
+        {
+          "id": "auto_save_msg_edits",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-save Message Edits"
+        },
+        {
+          "id": "confirm_message_delete",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Confirm message deletion"
+        },
+        {
+          "id": "auto_fix_generated_markdown",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-fix Markdown"
+        },
+        {
+          "id": "forbid_external_media",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Forbid External Media"
+        },
+        {
+          "id": "allow_name2_display",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show {{char}}: in responses"
+        },
+        {
+          "id": "allow_name1_display",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show {{user}}: in responses"
+        },
+        {
+          "id": "encode_tags",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show <tags> in responses"
+        },
+        {
+          "id": "experimental_macro_engine",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Experimental Macro Engine"
+        },
+        {
+          "id": "disable_group_trimming",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Relax message trim in Groups"
+        },
+        {
+          "id": "console_log_prompts",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Log prompts to console"
+        },
+        {
+          "id": "request_token_probabilities",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Request token probabilities"
+        },
+        {
+          "id": "show_group_chat_queue",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show group chat queue"
+        },
+        {
+          "id": "pin_styles",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Pin greeting message styles"
+        },
+        {
+          "id": "auto_swipe",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Enabled"
+        },
+        {
+          "id": "auto_swipe_minimum_length",
+          "tag": "input",
+          "type": "number",
+          "name": "auto_swipe_minimum_length"
+        },
+        {
+          "id": "auto_swipe_blacklist",
+          "tag": "textarea",
+          "name": "auto_swipe_blacklist"
+        },
+        {
+          "id": "auto_swipe_blacklist_threshold",
+          "tag": "input",
+          "type": "number",
+          "name": "auto_swipe_blacklist_threshold"
+        },
+        {
+          "id": "auto_continue_enabled",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Enabled"
+        },
+        {
+          "id": "auto_continue_allow_chat_completions",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow for Chat Completion APIs"
+        },
+        {
+          "id": "auto_continue_target_length",
+          "tag": "input",
+          "type": "number",
+          "label": "Target length (tokens)"
+        },
+        {
+          "id": "stscript_autocomplete_state",
+          "tag": "select",
+          "label": "Visibility",
+          "options": [
+            {
+              "value": "0",
+              "label": "Don't show"
+            },
+            {
+              "value": "1",
+              "label": "Input length > 1"
+            },
+            {
+              "value": "2",
+              "label": "Always show"
+            }
+          ]
+        },
+        {
+          "id": "stscript_autocomplete_autoHide",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Automatically hide details"
+        },
+        {
+          "id": "stscript_autocomplete_showInAllMacroFields",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show in all macro fields"
+        },
+        {
+          "id": "stscript_matching",
+          "tag": "select",
+          "label": "Matching",
+          "options": [
+            {
+              "value": "strict",
+              "label": "Starts with"
+            },
+            {
+              "value": "includes",
+              "label": "Includes"
+            },
+            {
+              "value": "fuzzy",
+              "label": "Fuzzy"
+            }
+          ]
+        },
+        {
+          "id": "stscript_autocomplete_style",
+          "tag": "select",
+          "label": "Style",
+          "options": [
+            {
+              "value": "theme",
+              "label": "Follow Theme"
+            },
+            {
+              "value": "dark",
+              "label": "Dark"
+            },
+            {
+              "value": "light",
+              "label": "Light"
+            }
+          ]
+        },
+        {
+          "id": "stscript_autocomplete_select",
+          "tag": "select",
+          "options": [
+            {
+              "value": "3",
+              "label": "Select with Tab or Enter"
+            },
+            {
+              "value": "1",
+              "label": "Select with Tab"
+            },
+            {
+              "value": "2",
+              "label": "Select with Enter"
+            }
+          ]
+        },
+        {
+          "id": "stscript_autocomplete_font_scale",
+          "tag": "input",
+          "type": "range",
+          "label": "Font Scale"
+        },
+        {
+          "id": "stscript_autocomplete_font_scale_counter",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "stscript_autocomplete_width_left",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "stscript_autocomplete_width_right",
+          "tag": "input",
+          "type": "range"
+        },
+        {
+          "id": "stscript_parser_flag_strict_escaping",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "stscript_parser_flag_replace_getvar",
+          "tag": "input",
+          "type": "checkbox"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "account_button",
+          "label": "Account",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "admin_button",
+          "label": "Admin Panel",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "logout_button",
+          "label": "Logout",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ui_preset_import_button",
+          "label": "Import a theme file",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ui_preset_export_button",
+          "label": "Export a theme file",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ui-preset-delete-button",
+          "label": "Delete a theme",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ui-preset-update-button",
+          "label": "Update a theme file",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "ui-preset-save-button",
+          "label": "Save as a new theme",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "reload_chat",
+          "label": "Reload Chat",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "debug_menu",
+          "label": "Debug Menu",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "data_maid_button",
+          "label": "Clean-Up",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "movingUIreset",
+          "label": "Reset",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "movingui-preset-save-button",
+          "label": "Save changes to a new MovingUI preset file.",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "背景",
+      "container": "Backgrounds",
+      "controls": [
+        {
+          "id": "background_fitting",
+          "tag": "select",
+          "options": [
+            {
+              "value": "classic",
+              "label": "Classic"
+            },
+            {
+              "value": "cover",
+              "label": "Cover"
+            },
+            {
+              "value": "contain",
+              "label": "Contain"
+            },
+            {
+              "value": "stretch",
+              "label": "Stretch"
+            },
+            {
+              "value": "center",
+              "label": "Center"
+            }
+          ]
+        },
+        {
+          "id": "bg-filter",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "bg-sort",
+          "tag": "select",
+          "options": [
+            {
+              "value": "az",
+              "label": "A-Z"
+            },
+            {
+              "value": "za",
+              "label": "Z-A"
+            },
+            {
+              "value": "newest",
+              "label": "Newest"
+            },
+            {
+              "value": "oldest",
+              "label": "Oldest"
+            }
+          ]
+        },
+        {
+          "id": "add_bg_button",
+          "tag": "input",
+          "type": "file",
+          "label": "Add Background",
+          "name": "avatar"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "auto_background",
+          "label": "Auto-select",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_add_folder_button",
+          "label": "New Folder",
+          "presetAction": {}
+        },
+        {
+          "tag": "label",
+          "id": "add_background_button_top",
+          "label": "Add Background",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_group_add_to_folder_button",
+          "label": "Add to Folder",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_selection_mode_button",
+          "label": "Select backgrounds for bulk folder actions",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_thumb_zoom_out",
+          "label": "Make thumbnails smaller",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_thumb_zoom_in",
+          "label": "Make thumbnails larger",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_back_to_folders",
+          "label": "Back",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg_folder_remove_selected_button",
+          "label": "Remove from Folder",
+          "presetAction": {}
+        },
+        {
+          "tag": "button",
+          "id": "bg-scroll-top",
+          "label": "Scroll backgrounds to top",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "扩展",
+      "container": "rm_extensions_block",
+      "controls": [
+        {
+          "id": "extensions_notify_updates",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Notify on extension updates"
+        },
+        {
+          "id": "extensions_autoconnect",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-connect"
+        },
+        {
+          "id": "extensions_url",
+          "tag": "input",
+          "type": "text"
+        },
+        {
+          "id": "extensions_api_key",
+          "tag": "input",
+          "type": "text"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "extensions_details",
+          "label": "Manage extensions",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "third_party_extension_button",
+          "label": "Install extension",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "extensions_connect",
+          "label": "Connect",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "用户设定",
+      "container": "PersonaManagement",
+      "controls": [
+        {
+          "id": "personas_restore_input",
+          "tag": "input",
+          "type": "file"
+        },
+        {
+          "id": "persona_search_bar",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "persona_sort_order",
+          "tag": "select",
+          "options": [
+            {
+              "value": "search",
+              "label": "Search"
+            },
+            {
+              "value": "asc",
+              "label": "A-Z"
+            },
+            {
+              "value": "desc",
+              "label": "Z-A"
+            }
+          ]
+        },
+        {
+          "id": "avatar_upload_file",
+          "tag": "input",
+          "type": "file",
+          "name": "avatar"
+        },
+        {
+          "id": "avatar_upload_overwrite",
+          "tag": "input",
+          "type": "hidden",
+          "name": "overwrite_name"
+        },
+        {
+          "id": "persona-management-dropdown",
+          "tag": "select",
+          "label": "More... Link to Persona Lorebook",
+          "options": [
+            {
+              "value": "default",
+              "label": "More..."
+            },
+            {
+              "value": null,
+              "label": "Link to Persona Lorebook"
+            }
+          ]
+        },
+        {
+          "id": "persona_description",
+          "tag": "textarea",
+          "name": "persona_description"
+        },
+        {
+          "id": "persona_description_position",
+          "tag": "select",
+          "options": [
+            {
+              "value": "9",
+              "label": "None (disabled)"
+            },
+            {
+              "value": "0",
+              "label": "In Story String / Prompt Manager"
+            },
+            {
+              "value": "2",
+              "label": "Top of Author's Note"
+            },
+            {
+              "value": "3",
+              "label": "Bottom of Author's Note"
+            },
+            {
+              "value": "4",
+              "label": "In-chat @ Depth"
+            }
+          ]
+        },
+        {
+          "id": "persona_depth_value",
+          "tag": "input",
+          "type": "number",
+          "label": "Depth:"
+        },
+        {
+          "id": "persona_depth_role",
+          "tag": "select",
+          "label": "Role:",
+          "options": [
+            {
+              "value": "0",
+              "label": "System"
+            },
+            {
+              "value": "1",
+              "label": "User"
+            },
+            {
+              "value": "2",
+              "label": "Assistant"
+            }
+          ]
+        },
+        {
+          "id": "persona_show_notifications",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Show notifications on switching personas"
+        },
+        {
+          "id": "persona_allow_multi_connections",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Allow multiple persona connections per character"
+        },
+        {
+          "id": "persona_auto_lock",
+          "tag": "input",
+          "type": "checkbox",
+          "label": "Auto-lock a chosen persona to the chat"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "personas_backup",
+          "label": "Backup",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "personas_restore",
+          "label": "Restore",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "create_dummy_persona",
+          "label": "Create",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "persona_grid_toggle",
+          "label": "Toggle grid view",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "persona_rename_button",
+          "label": "Rename Persona",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "sync_name_button",
+          "label": "Click to set user name for all messages",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "persona_lore_button",
+          "label": "Persona Lore\n\nClick to load\nShift/Alt-click or long-press to open 'Link to Persona Lorebook' popup",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "persona_set_image_button",
+          "label": "Change Persona Image",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "persona_duplicate_button",
+          "label": "Duplicate Persona",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "persona_delete_button",
+          "label": "Delete Persona",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "lock_persona_default",
+          "label": "Default",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "lock_persona_to_char",
+          "label": "Character",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "lock_user_name",
+          "label": "Chat",
+          "presetAction": {}
+        }
+      ]
+    },
+    {
+      "name": "角色管理",
+      "container": "right-nav-panel",
+      "controls": [
+        {
+          "id": "rm_button_panel_pin",
+          "tag": "input",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "id": "character_name_pole",
+          "tag": "input",
+          "name": "ch_name"
+        },
+        {
+          "id": "add_avatar_button",
+          "tag": "input",
+          "type": "file",
+          "label": "",
+          "name": "avatar"
+        },
+        {
+          "id": "fav_checkbox",
+          "tag": "input",
+          "type": "hidden",
+          "name": "fav"
+        },
+        {
+          "id": "create_button",
+          "tag": "input",
+          "type": "submit",
+          "label": "",
+          "name": "create_button"
+        },
+        {
+          "id": "char-management-dropdown",
+          "tag": "select",
+          "label": "More... Link to World Info Import Card Lore Character Settings Overrides Convert to Persona Rename Link to Source Replace / Update Import Tags Set / Unset as Welcome Page Assistant",
+          "options": [
+            {
+              "value": "default",
+              "label": "More..."
+            },
+            {
+              "value": null,
+              "label": "Link to World Info"
+            },
+            {
+              "value": null,
+              "label": "Import Card Lore"
+            },
+            {
+              "value": null,
+              "label": "Character Settings Overrides"
+            },
+            {
+              "value": null,
+              "label": "Convert to Persona"
+            },
+            {
+              "value": null,
+              "label": "Rename"
+            },
+            {
+              "value": null,
+              "label": "Link to Source"
+            },
+            {
+              "value": null,
+              "label": "Replace / Update"
+            },
+            {
+              "value": null,
+              "label": "Import Tags"
+            },
+            {
+              "value": null,
+              "label": "Set / Unset as Welcome Page Assistant"
+            }
+          ]
+        },
+        {
+          "id": "tagInput",
+          "tag": "input"
+        },
+        {
+          "id": "description_textarea",
+          "tag": "textarea",
+          "name": "description"
+        },
+        {
+          "id": "firstmessage_textarea",
+          "tag": "textarea",
+          "name": "first_mes"
+        },
+        {
+          "id": "character_json_data",
+          "tag": "input",
+          "type": "hidden",
+          "name": "json_data"
+        },
+        {
+          "id": "avatar_url_pole",
+          "tag": "input",
+          "type": "hidden",
+          "name": "avatar_url"
+        },
+        {
+          "id": "selected_chat_pole",
+          "tag": "input",
+          "type": "hidden",
+          "name": "chat"
+        },
+        {
+          "id": "create_date_pole",
+          "tag": "input",
+          "type": "hidden",
+          "name": "create_date"
+        },
+        {
+          "id": "last_mes_pole",
+          "tag": "input",
+          "type": "hidden",
+          "name": "last_mes"
+        },
+        {
+          "id": "character_world",
+          "tag": "input",
+          "type": "hidden",
+          "name": "world"
+        },
+        {
+          "id": "rm_group_chat_name",
+          "tag": "input",
+          "type": "text",
+          "name": "chat_name"
+        },
+        {
+          "id": "group-chat-lorebook-dropdown",
+          "tag": "select",
+          "label": "More... Link to Chat Lorebook",
+          "options": [
+            {
+              "value": "default",
+              "label": "More..."
+            },
+            {
+              "value": null,
+              "label": "Link to Chat Lorebook"
+            }
+          ]
+        },
+        {
+          "id": "groupTagInput",
+          "tag": "input"
+        },
+        {
+          "id": "group_avatar_button",
+          "tag": "input",
+          "type": "file",
+          "label": "",
+          "name": "avatar"
+        },
+        {
+          "id": "rm_group_activation_strategy",
+          "tag": "select",
+          "label": "Group reply strategy",
+          "options": [
+            {
+              "value": "2",
+              "label": "Manual"
+            },
+            {
+              "value": "0",
+              "label": "Natural order"
+            },
+            {
+              "value": "1",
+              "label": "List order"
+            },
+            {
+              "value": "3",
+              "label": "Pooled order"
+            }
+          ]
+        },
+        {
+          "id": "rm_group_generation_mode",
+          "tag": "select",
+          "label": "Group generation handling mode",
+          "options": [
+            {
+              "value": "0",
+              "label": "Swap character cards"
+            },
+            {
+              "value": "1",
+              "label": "Join character cards (exclude muted)"
+            },
+            {
+              "value": "2",
+              "label": "Join character cards (include muted)"
+            }
+          ]
+        },
+        {
+          "id": "rm_group_generation_mode_join_prefix",
+          "tag": "textarea",
+          "label": "Join Prefix"
+        },
+        {
+          "id": "rm_group_generation_mode_join_suffix",
+          "tag": "textarea",
+          "label": "Join Suffix"
+        },
+        {
+          "id": "rm_group_fav",
+          "tag": "input",
+          "type": "hidden"
+        },
+        {
+          "id": "rm_group_allow_self_responses",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "rm_group_automode",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "rm_group_automode_delay",
+          "tag": "input",
+          "type": "number"
+        },
+        {
+          "id": "rm_group_hidemutedsprites",
+          "tag": "input",
+          "type": "checkbox"
+        },
+        {
+          "id": "rm_group_members_filter",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "rm_group_filter",
+          "tag": "input",
+          "type": "search"
+        },
+        {
+          "id": "character_import_file",
+          "tag": "input",
+          "type": "file",
+          "name": "avatar"
+        },
+        {
+          "id": "character_import_file_type",
+          "tag": "input",
+          "name": "file_type"
+        },
+        {
+          "id": "character_replace_file",
+          "tag": "input",
+          "type": "file",
+          "name": "replace_avatar"
+        },
+        {
+          "id": "character_sort_order",
+          "tag": "select",
+          "options": [
+            {
+              "value": null,
+              "label": "Search"
+            },
+            {
+              "value": null,
+              "label": "A-Z"
+            },
+            {
+              "value": null,
+              "label": "Z-A"
+            },
+            {
+              "value": null,
+              "label": "Newest"
+            },
+            {
+              "value": null,
+              "label": "Oldest"
+            },
+            {
+              "value": null,
+              "label": "Favorites"
+            },
+            {
+              "value": null,
+              "label": "Recent"
+            },
+            {
+              "value": null,
+              "label": "Most chats"
+            },
+            {
+              "value": null,
+              "label": "Least chats"
+            },
+            {
+              "value": null,
+              "label": "Most tokens"
+            },
+            {
+              "value": null,
+              "label": "Least tokens"
+            },
+            {
+              "value": null,
+              "label": "Random"
+            }
+          ]
+        },
+        {
+          "id": "character_search_bar",
+          "tag": "input",
+          "type": "search"
+        }
+      ],
+      "actions": [
+        {
+          "tag": "div",
+          "id": "rm_button_characters",
+          "label": "Select/Create Characters",
+          "presetAction": {}
+        },
+        {
+          "tag": "a",
+          "id": "chartokenwarning",
+          "label": "About Token 'Limits'",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "hideCharPanelAvatarButton",
+          "label": "Toggle character info panel",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_button_back",
+          "label": null,
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "favorite_button",
+          "label": "Add to Favorites",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "advanced_div",
+          "label": "Advanced Definitions",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "world_button",
+          "label": "Character Lore\n\nClick to load\nShift/Alt-click or long-press to open 'Link to World Info' popup",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "char_connections_button",
+          "label": "Connected Personas",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "export_button",
+          "label": "Export and Download",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "dupe_button",
+          "label": "Duplicate Character",
+          "presetAction": {}
+        },
+        {
+          "tag": "label",
+          "id": "create_button_label",
+          "label": "Create Character",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "delete_button",
+          "label": "Delete Character",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "creators_note_styles_button",
+          "label": "Allow / Forbid the use of global styles for this character.",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "spoiler_free_desc_button",
+          "label": "Show / Hide Description and First Message",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "character_open_media_overrides",
+          "label": "Ext. Media",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_button_back_from_group",
+          "label": null,
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_group_scenario",
+          "label": "Set group chat character settings overrides",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "group_favorite_button",
+          "label": "Add to Favorites",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "group_open_media_overrides",
+          "label": "Click to allow/forbid the use of external media for this group.",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_group_submit",
+          "label": "Create",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_group_restore_avatar",
+          "label": "Restore collage avatar",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_group_delete",
+          "label": "Delete",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "groupCurrentMemberPopoutButton",
+          "label": null,
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_button_create",
+          "label": "Create New Character",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "character_import_button",
+          "label": "Import Character from File",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "external_import_button",
+          "label": "Import content from external URL",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_button_group_chats",
+          "label": "Create New Chat Group",
+          "presetAction": {}
+        },
+        {
+          "tag": "div",
+          "id": "rm_button_search",
+          "label": "Toggle search bar",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "charListGridToggle",
+          "label": "Toggle character grid view",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "bulkEditButton",
+          "label": "Bulk edit characters\r\rClick to toggle characters\rShift + Click to select/deselect a range of characters\rRight-click for actions",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "bulkSelectAllButton",
+          "label": "Bulk select all characters",
+          "presetAction": {}
+        },
+        {
+          "tag": "i",
+          "id": "bulkDeleteButton",
+          "label": "Bulk delete characters",
+          "presetAction": {}
+        }
+      ]
+    }
+  ]
+}

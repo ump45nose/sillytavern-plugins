@@ -1,0 +1,58 @@
+/* The mode entry is also available on the native page, with its own paper tokens. */
+.wb-layout-switcher {
+ --wb-surface:var(--wb-theme-surface,#fffefa); --wb-soft:var(--wb-theme-soft,#f0eee6);
+ --wb-line:var(--wb-theme-line,#dfdcd2); --wb-ink:var(--wb-theme-ink,#302e29);
+ --wb-muted:var(--wb-theme-muted,#817a6c); --wb-accent:var(--wb-theme-accent,#b76449);
+ --wb-selected:var(--wb-theme-selected,#f0e6da);
+ position:fixed; top:18px; right:24px; z-index:10005; font:12px/1.5 system-ui,sans-serif; color:var(--wb-ink); text-shadow:none;
+}
+.wb-layout-switcher.is-rp { right:72px; }
+.wb-layout-controls { display:flex; align-items:center; width:100px; height:36px; padding:2px; background:color-mix(in srgb,var(--wb-surface) 90%,transparent); border:1px solid var(--wb-line); border-radius:9px; }
+.wb-ui.wb-layout-switcher .wb-layout-controls>button { height:30px; min-height:30px; padding:0; border:0; border-radius:6px; background:transparent; transition:background 160ms,color 160ms,scale 160ms; }
+.wb-ui.wb-layout-switcher .wb-layout-step { width:27px; flex:none; }
+.wb-ui.wb-layout-switcher .wb-layout-trigger { width:40px; flex:none; }
+.wb-ui.wb-layout-switcher .wb-layout-controls>button:hover { background:var(--wb-soft); }
+.wb-ui.wb-layout-switcher .wb-layout-trigger[aria-expanded=true] { background:var(--wb-selected); color:var(--wb-accent); }
+.wb-ui.wb-layout-switcher .wb-layout-controls>button:active { scale:.94; }
+.wb-layout-controls>button>svg { transition:transform 180ms; }
+.wb-layout-trigger>svg { animation:wb-layout-icon 180ms ease both; }
+.wb-layout-step:first-child:hover>svg { transform:translateX(-2px); }
+.wb-layout-step:last-child:hover>svg { transform:translateX(2px); }
+.wb-layout-menu { position:absolute; top:calc(100% + 9px); right:0; width:224px; padding:6px; background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:12px; box-shadow:0 8px 28px #43362818; transform-origin:top right; animation:wb-layout-in 180ms cubic-bezier(.22,.8,.3,1) both; }
+.wb-ui .wb-layout-menu>button { display:flex; width:100%; min-height:52px; gap:12px; padding:9px 11px; border:1px solid transparent; border-radius:8px; background:transparent; justify-content:flex-start; }
+.wb-layout-menu>button>svg { color:var(--wb-muted); }
+.wb-layout-menu>button>span { flex:1; text-align:left; display:flex; flex-direction:column; gap:1px; }
+.wb-layout-menu strong { font-weight:500; font-size:13px; }
+.wb-layout-menu small { font-size:11px; color:var(--wb-muted); }
+.wb-ui .wb-layout-menu>button[aria-checked=true] { background:color-mix(in srgb,var(--wb-selected) 70%,var(--wb-surface)); border-color:color-mix(in srgb,var(--wb-accent) 28%,var(--wb-line)); }
+.wb-layout-menu>button[aria-checked=true]>svg { color:var(--wb-accent); }
+.wb-layout-dot { width:10px; height:10px; border-radius:50%; border:1px solid var(--wb-line); background:transparent; transition:background 160ms,border-color 160ms; }
+[aria-checked=true]>.wb-layout-dot { border-color:var(--wb-accent); background:var(--wb-accent); }
+.wb-layout-error { margin:6px 10px; font-size:11px; color:var(--wb-accent); }
+.wb-layout-menu[data-wb-exiting=true] { animation:wb-layout-out 180ms ease both; }
+@keyframes wb-layout-in { from { opacity:0; transform:translateY(-5px) scale(.97); } to { opacity:1; transform:none; } }
+@keyframes wb-layout-out { to { opacity:0; transform:translateY(-4px) scale(.98); } }
+@keyframes wb-layout-icon { from { opacity:.25; transform:scale(.88); } to { opacity:1; transform:none; } }
+/* Equal side columns keep resource selectors centered and reserve room for the entry. */
+body.wb-active .wb-top { padding-right:24px; grid-template-columns:minmax(212px,1fr) minmax(0,860px) minmax(212px,1fr); }
+body.wb-active.wb-rp .wb-top { grid-template-columns:minmax(244px,1fr) minmax(0,860px) minmax(244px,1fr); }
+body.wb-rp .wb-contexts { transform:none; }
+.wb-layout-space { width:112px; flex:none; }
+body.wb-rp .wb-layout-space { width:160px; }
+@media(max-width:1400px) { body.wb-active .wb-top { padding-left:18px; padding-right:18px; } }
+@media(max-width:1150px) {
+ body.wb-active .wb-top { grid-template-columns:minmax(212px,1fr) minmax(0,860px) minmax(212px,1fr); }
+ body.wb-active.wb-rp .wb-top { grid-template-columns:minmax(244px,1fr) minmax(0,860px) minmax(244px,1fr); }
+}
+@media(prefers-reduced-motion:reduce) { .wb-layout-switcher * { animation:none !important; transition:none !important; } }
+body.reduced-motion .wb-layout-switcher * { animation:none !important; transition:none !important; }
+/* Native expression containers can be transparent yet intercept the input
+   toolbar on wide screens. They stay connected for the extension to manage. */
+body.wb-active :is(#expression-wrapper,#visual-novel-wrapper) { pointer-events:none !important; }
+
+/* Mouse reveals overlay the reading area without changing its width. */
+body.wb-left-hover-open .wb-left { z-index:25; box-shadow:8px 0 24px #34291e0d; }
+body.wb-right-hover-open .wb-right { z-index:25; box-shadow:-8px 0 24px #34291e0d; }
+body.wb-right-hover-open .wb-resource-rail { right:var(--wb-right-size); z-index:24; }
+
+body.wb-left-hover-open .wb-edge-nav,body.wb-right-hover-open .wb-edge-nav { z-index:26; }

@@ -1,0 +1,48 @@
+name: sillytavern-workbench
+
+x-tavern: &tavern
+  image: ghcr.io/sillytavern/sillytavern@sha256:b712eb8609f2d9b9f820b581fecfc7cd400c50a6c6533287cbbd368c4fb1d060
+  user: "${WB_UID:-1000}:${WB_GID:-100}"
+  restart: unless-stopped
+  networks: [validation]
+  healthcheck:
+    test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8000/',r=>process.exit([200,401].includes(r.statusCode)?0:1)).on('error',()=>process.exit(1))"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+    start_period: 10s
+
+services:
+  baseline:
+    <<: *tavern
+    ports: ["${WB_BIND_ADDRESS:-127.0.0.1}:32011:8000"]
+    volumes:
+      - ./runtime/baseline/config:/home/node/app/config
+      - ./runtime/baseline/data:/home/node/app/data
+      - ./runtime/baseline/backups:/home/node/app/backups
+      - ./runtime/baseline/plugins:/home/node/app/plugins
+      - ./runtime/baseline/extensions:/home/node/app/public/scripts/extensions/third-party:ro
+
+  validation:
+    <<: *tavern
+    ports: ["${WB_BIND_ADDRESS:-127.0.0.1}:32012:8000"]
+    volumes:
+      - ./runtime/validation/config:/home/node/app/config
+      - ./runtime/validation/data:/home/node/app/data
+      - ./runtime/validation/backups:/home/node/app/backups
+      - ./runtime/validation/plugins:/home/node/app/plugins
+      - ./runtime/validation/extensions:/home/node/app/public/scripts/extensions/third-party:ro
+      - ./extension:/home/node/app/public/scripts/extensions/third-party/workbench-probe:ro
+
+  mock-model:
+    image: ghcr.io/sillytavern/sillytavern@sha256:b712eb8609f2d9b9f820b581fecfc7cd400c50a6c6533287cbbd368c4fb1d060
+    user: "${WB_UID:-1000}:${WB_GID:-100}"
+    entrypoint: ["node", "/fixtures/mock-model.mjs"]
+    restart: unless-stopped
+    networks: [validation]
+    ports: ["127.0.0.1:32013:4010"]
+    volumes: ["./fixtures:/fixtures:ro"]
+
+networks:
+  validation:
+    driver: bridge

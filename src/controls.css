@@ -1,0 +1,76 @@
+/* Shared interaction states: one focus surface and no moving selection geometry. */
+.wb-ui button:hover { background:color-mix(in srgb,var(--wb-selected) 24%,var(--wb-surface)); }
+.wb-ui button:active { background:color-mix(in srgb,var(--wb-selected) 65%,var(--wb-surface)); }
+.wb-ui button:focus-visible { outline:2px solid color-mix(in srgb,var(--wb-accent) 55%,var(--wb-line)); outline-offset:2px; }
+.wb-ui input:not([type=checkbox]):focus-visible,.wb-ui textarea:focus-visible { outline:0; border-color:color-mix(in srgb,var(--wb-accent) 55%,var(--wb-line)); box-shadow:0 0 0 2px color-mix(in srgb,var(--wb-accent) 9%,transparent); }
+.wb-search { transition:border-color 160ms,box-shadow 160ms; }
+.wb-search:focus-within { border-color:color-mix(in srgb,var(--wb-accent) 55%,var(--wb-line)); box-shadow:0 0 0 2px color-mix(in srgb,var(--wb-accent) 9%,transparent); }
+.wb-ui .wb-search input:focus-visible { outline:0; box-shadow:none; }
+.wb-ui .wb-tabs > button:hover,.wb-ui .wb-tabs > button:active { background:transparent; color:var(--wb-ink); border-bottom-color:color-mix(in srgb,var(--wb-accent) 30%,var(--wb-line)); }
+.wb-ui .wb-tabs > button.is-active,.wb-ui .wb-tabs > button.is-active:hover { color:var(--wb-accent); border-bottom-color:var(--wb-accent); }
+.wb-selector > button.wb-selector-detail { flex:0 0 34px; }
+.wb-ui .wb-selector > button.wb-selector-detail:hover,.wb-ui .wb-selector > button.wb-selector-detail:active,.wb-ui .wb-selector > button.wb-selector-value:hover,.wb-ui .wb-selector > button.wb-selector-value:active { background:transparent; color:var(--wb-accent); }
+.wb-selector-detail .wb-dot { transition:box-shadow 160ms; }
+.wb-selector-detail:hover .wb-dot { box-shadow:0 0 0 4px color-mix(in srgb,#628671 12%,transparent); }
+.wb-selector-detail > svg { transition:color 160ms; }
+body.wb-active .wb-ui .wb-selector-detail:hover svg,body.wb-active .wb-ui .wb-selector-detail:hover svg * { color:var(--wb-accent) !important; }
+.wb-selector.is-active { border-color:color-mix(in srgb,var(--wb-accent) 48%,var(--wb-line)); box-shadow:0 1px 4px color-mix(in srgb,var(--wb-accent) 7%,transparent); }
+.wb-ui .wb-selector > button:focus-visible { outline-offset:-4px; border-radius:7px; }
+.wb-ui .wb-favorites > button { width:64px; align-items:center; gap:6px; }
+.wb-ui .wb-favorites > button:hover,.wb-ui .wb-favorites > button:active { background:transparent; color:var(--wb-accent); }
+.wb-favorites .wb-portrait,.wb-character-main .wb-portrait { display:block; flex:none; width:52px; height:52px; padding:2px; border:2px solid transparent; border-radius:50%; transition:border-color 160ms,background-color 160ms; }
+.wb-ui .wb-portrait img { display:block; width:100%; height:100%; border:0; padding:0; outline:0; border-radius:inherit; object-fit:cover; object-position:center; }
+.wb-favorites .wb-portrait { white-space:normal; overflow:visible; }
+.wb-favorites > button > span:not(.wb-portrait) { width:64px; }
+.wb-favorites > button:hover .wb-portrait { background:var(--wb-selected); }
+.wb-favorites .is-active .wb-portrait,.wb-character-card.is-active .wb-portrait { border-color:var(--wb-accent); }
+.wb-ui .wb-favorites .is-active img,.wb-ui .wb-character-card.is-active .wb-character-main img { padding:0; border:0; outline:0; }
+.wb-character-list .wb-character-main .wb-portrait { width:61px; height:61px; }
+.wb-character-card:hover { background:color-mix(in srgb,var(--wb-selected) 18%,var(--wb-surface)); }
+.wb-card-grid .wb-character-main .wb-portrait { width:100%; height:175px; border-radius:10px; }
+.wb-card-grid .wb-character-main .wb-portrait img { width:100%; height:100%; }
+body.wb-active .wb-composer-tools button:hover { background:color-mix(in srgb,var(--wb-selected) 45%,var(--wb-surface)); }
+body.wb-active #send_form:focus-within { border-color:color-mix(in srgb,var(--wb-accent) 35%,var(--wb-line)) !important; box-shadow:0 4px 18px #34291e08 !important; }
+.wb-world:not(.is-deep) .wb-world-grid { grid-template-rows:minmax(160px,1fr) minmax(230px,1fr); }
+.wb-world .wb-editor-heading input { font-size:15px; min-height:32px; }
+.wb-world .wb-entry-editor .wb-tabs > button { padding:9px 3px; font-size:12px; }
+
+/* A single paper popup replaces OS-painted selects in workbench-owned forms. */
+.wb-select { display:inline-flex; min-width:0; max-width:100%; position:relative; vertical-align:middle; }
+.wb-ui select.wb-select-native { display:none; }
+.wb-ui .wb-select-trigger { width:100%; min-width:0; justify-content:space-between; gap:12px; padding:8px 10px; background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:8px; text-align:left; font-size:12px; font-weight:400; }
+.wb-select-trigger > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wb-select-trigger > svg { flex:none; transition:transform 160ms; }
+.wb-select-trigger[aria-expanded=true] > svg { transform:rotate(180deg); }
+.wb-ui .wb-select-trigger:hover { background:var(--wb-paper); border-color:color-mix(in srgb,var(--wb-muted) 25%,var(--wb-line)); }
+.wb-ui .wb-select-trigger[aria-expanded=true],.wb-ui .wb-select-trigger:focus-visible { outline:0; border-color:color-mix(in srgb,var(--wb-accent) 55%,var(--wb-line)); box-shadow:0 0 0 2px color-mix(in srgb,var(--wb-accent) 9%,transparent); }
+.wb-field > .wb-select { width:100%; }
+.wb-ui.wb-select-menu { position:fixed; z-index:12050; box-sizing:border-box; padding:5px; overflow:auto; background:var(--wb-surface); border:1px solid var(--wb-line); border-radius:10px; box-shadow:0 6px 24px #43362818; animation:wb-menu 160ms ease both; scrollbar-width:thin; }
+.wb-ui.wb-select-menu > button { width:100%; justify-content:flex-start; min-height:34px; padding:8px; gap:9px; font-size:12px; text-align:left; border:0; border-radius:6px; background:transparent; }
+.wb-ui.wb-select-menu > button > span:last-child { min-width:0; overflow-wrap:anywhere; }
+.wb-ui.wb-select-menu > button.is-highlighted { background:color-mix(in srgb,var(--wb-selected) 45%,var(--wb-surface)); }
+.wb-ui.wb-select-menu > button.is-selected { background:var(--wb-selected); }
+.wb-option-state { flex:none; width:11px; height:11px; border:1.5px solid #b9b0a0; border-radius:50%; }
+.is-selected .wb-option-state { border-color:var(--wb-accent); background:var(--wb-accent); }
+.wb-list-tools > .wb-select { flex:none; max-width:120px; }
+.wb-entry-copy .wb-mode-label { padding:0; min-height:22px; }
+.wb-ui .wb-mode-label > .wb-select-trigger { border:0; padding:1px 4px; min-height:22px; font-size:11px; color:var(--wb-muted); gap:5px; background:transparent; }
+.wb-mode-label svg { width:11px; height:11px; }
+.wb-ui .wb-mode-label > .wb-select-trigger:hover { color:var(--wb-ink); background:transparent; }
+.wb-trace-scroll > .wb-select { width:100%; }
+
+/* A resource row has one hover surface; nested controls never paint a second. */
+.wb-ui :is(.wb-resource-choice,.wb-row,.wb-book-row,.wb-entry-row,.wb-prompt-row,.wb-quick-row) button:hover,
+.wb-ui :is(.wb-resource-choice,.wb-row,.wb-book-row,.wb-entry-row,.wb-prompt-row,.wb-quick-row) button:active { background:transparent; }
+.wb-ui :is(.wb-resource-choice,.wb-row,.wb-book-row,.wb-entry-row,.wb-prompt-row,.wb-quick-row):hover { background:color-mix(in srgb,var(--wb-selected) 28%,var(--wb-surface)); }
+.wb-ui :is(.wb-resource-choice,.wb-row,.wb-book-row,.wb-entry-row,.wb-prompt-row,.wb-quick-row).is-active:hover { background:var(--wb-selected); }
+
+/* Same quiet scroll thumb in reading, editors, popovers and leased controls. */
+body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea) { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--wb-muted) 36%,var(--wb-line)) transparent; }
+@supports selector(::-webkit-scrollbar) {
+  body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea) { scrollbar-width:auto; scrollbar-color:auto; }
+  body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea)::-webkit-scrollbar { width:6px; height:6px; background:transparent; }
+  body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea)::-webkit-scrollbar-track { background:transparent; }
+  body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea)::-webkit-scrollbar-thumb { border-radius:6px; background:color-mix(in srgb,var(--wb-muted) 32%,var(--wb-line)); }
+  body.wb-active :is(.wb-ui,.wb-ui *,#chat,#send_textarea)::-webkit-scrollbar-thumb:hover { background:color-mix(in srgb,var(--wb-muted) 62%,var(--wb-line)); }
+}

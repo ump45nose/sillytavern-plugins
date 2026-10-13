@@ -1,0 +1,264 @@
+<div id="noval-resource-redesign" class="viz-dotted-background">
+  <section class="nr-panel" aria-label="Noval 资源右栏">
+    <nav class="nr-nav" aria-label="右栏页面">
+      <button class="nr-quiet cursor-interaction" data-panel="connection"><i data-lucide="plug" aria-hidden="true"></i>连接</button>
+      <button class="nr-quiet cursor-interaction" data-panel="preset"><i data-lucide="sliders-horizontal" aria-hidden="true"></i>预设</button>
+      <button class="nr-quiet cursor-interaction" data-panel="persona"><i data-lucide="user-round" aria-hidden="true"></i>用户设定</button>
+    </nav>
+    <div class="nr-page"></div>
+    <footer class="nr-footer"><span class="nr-save-state" role="status" aria-live="polite">布局预览</span><span class="nr-spacer"></span><button class="nr-button cursor-interaction" data-reset>还原</button><button class="nr-button nr-primary cursor-interaction" data-save><i data-lucide="save" aria-hidden="true"></i>保存</button></footer>
+  </section>
+  <div class="nr-layer"></div>
+</div>
+<style>
+#noval-resource-redesign { --nr-paper:#faf9f5; --nr-surface:#fffefa; --nr-soft:#f0eee6; --nr-ink:#302e29; --nr-muted:#817a6c; --nr-line:#e2ddd2; --nr-clay:#b76449; --nr-selected:#f0e6da; --nr-green:#628671; color:var(--nr-ink); padding:18px 12px; font:14px/1.65 system-ui,-apple-system,"Noto Sans CJK SC",sans-serif; position:relative; }
+#noval-resource-redesign * { box-sizing:border-box; }
+#noval-resource-redesign .nr-panel { width:min(100%,460px); margin:auto; background:var(--nr-surface); border:1px solid var(--nr-line); border-radius:14px; box-shadow:0 12px 36px #44392c0c; overflow:hidden; height:826px; display:flex; flex-direction:column; }
+#noval-resource-redesign button,#noval-resource-redesign input,#noval-resource-redesign textarea { font:inherit; color:inherit; }
+#noval-resource-redesign button { transition:background-color 160ms,color 160ms,border-color 160ms,box-shadow 160ms; }
+#noval-resource-redesign button:focus-visible { outline:2px solid #c8947f; outline-offset:2px; }
+#noval-resource-redesign button:disabled { opacity:.4; }
+#noval-resource-redesign svg { width:17px; height:17px; flex:none; stroke-width:1.7; color:currentColor; }
+#noval-resource-redesign .nr-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; padding:12px 14px; flex-shrink:0; background:var(--nr-soft); border-bottom:1px solid var(--nr-line); }
+#noval-resource-redesign .nr-quiet { border:0; background:transparent; border-radius:8px; color:var(--nr-muted); display:flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px; }
+#noval-resource-redesign .nr-quiet:hover { color:var(--nr-ink); background:#e7e2d644; }
+#noval-resource-redesign .nr-quiet.is-active { color:var(--nr-clay); background:var(--nr-surface); box-shadow:0 1px 4px #44392c07; }
+#noval-resource-redesign .nr-heading { flex-shrink:0; padding:17px 20px 15px; border-bottom:1px solid var(--nr-line); }
+#noval-resource-redesign .nr-title-row { display:flex; align-items:center; gap:10px; }
+#noval-resource-redesign .nr-spacer { flex:1; }
+#noval-resource-redesign .nr-eyebrow { display:block; font-size:11px; color:var(--nr-muted); letter-spacing:.06em; margin-bottom:4px; }
+#noval-resource-redesign .nr-title { display:flex; align-items:center; gap:9px; border:0; background:transparent; font:500 20px/1.5 Georgia,"Noto Serif CJK SC",serif; padding:0; min-width:0; text-align:left; }
+#noval-resource-redesign .nr-title > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#noval-resource-redesign .nr-title:hover { color:var(--nr-clay); }
+#noval-resource-redesign .nr-title svg { width:14px; height:14px; color:var(--nr-muted); transition:transform 160ms; }
+#noval-resource-redesign .nr-title[aria-expanded=true] svg { transform:rotate(180deg); }
+#noval-resource-redesign .nr-icon { border:0; border-radius:7px; background:transparent; width:30px; height:30px; display:inline-grid; place-items:center; padding:5px; color:var(--nr-muted); flex:none; }
+#noval-resource-redesign .nr-icon:hover { background:#f0e6da66; color:var(--nr-clay); }
+#noval-resource-redesign .nr-header-actions { display:flex; gap:7px; padding-top:14px; }
+#noval-resource-redesign .nr-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:33px; padding:6px 11px; border:1px solid var(--nr-line); border-radius:7px; background:var(--nr-surface); font-size:12px; white-space:nowrap; }
+#noval-resource-redesign .nr-button:hover { background:var(--nr-paper); border-color:#cfc5b4; }
+#noval-resource-redesign .nr-button:active { background:var(--nr-selected); }
+#noval-resource-redesign .nr-primary { background:var(--nr-clay); border-color:var(--nr-clay); color:var(--nr-surface); }
+#noval-resource-redesign .nr-primary:hover { background:#a85940; color:var(--nr-surface); border-color:#a85940; }
+#noval-resource-redesign .nr-danger:hover { color:#9d4a3d; border-color:#d8b4a8; }
+#noval-resource-redesign .nr-content { padding:17px 20px; flex:1; min-height:0; overflow:auto; scrollbar-width:thin; }
+#noval-resource-redesign .nr-section-title { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:12px; color:var(--nr-muted); font-weight:500; }
+#noval-resource-redesign .nr-field { display:flex; flex-direction:column; gap:6px; min-width:0; margin:0 0 13px; }
+#noval-resource-redesign .nr-field > span { font-size:12px; color:var(--nr-muted); }
+#noval-resource-redesign .nr-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+#noval-resource-redesign input:not([type=checkbox]),#noval-resource-redesign textarea { min-width:0; width:100%; background:var(--nr-surface); border:1px solid var(--nr-line); border-radius:7px; padding:8px 10px; transition:border-color 160ms,box-shadow 160ms; box-shadow:none; font-size:13px; }
+#noval-resource-redesign textarea { resize:vertical; min-height:90px; line-height:1.85; }
+#noval-resource-redesign input::placeholder { color:#a69d8e; }
+#noval-resource-redesign input:focus-visible,#noval-resource-redesign textarea:focus-visible { outline:0; border-color:#c8947f; box-shadow:0 0 0 2px #b7644912; }
+#noval-resource-redesign .nr-picker { display:flex; justify-content:space-between; align-items:center; gap:8px; min-width:0; width:100%; min-height:37px; border:1px solid var(--nr-line); border-radius:7px; padding:8px 10px; background:var(--nr-surface); text-align:left; font-size:13px; }
+#noval-resource-redesign .nr-picker > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#noval-resource-redesign .nr-picker svg { width:14px; height:14px; color:var(--nr-muted); transition:transform 160ms; }
+#noval-resource-redesign .nr-picker:hover { border-color:#cec5b5; background:var(--nr-paper); }
+#noval-resource-redesign .nr-picker[aria-expanded=true] { border-color:#c8947f; box-shadow:0 0 0 2px #b7644912; }
+#noval-resource-redesign .nr-picker[aria-expanded=true] svg { transform:rotate(180deg); }
+#noval-resource-redesign .nr-input-action { display:flex; align-items:center; border:1px solid var(--nr-line); border-radius:7px; min-width:0; }
+#noval-resource-redesign .nr-input-action:focus-within { border-color:#c8947f; box-shadow:0 0 0 2px #b7644912; }
+#noval-resource-redesign .nr-input-action input { border:0; background:transparent; outline:0; box-shadow:none; flex:1; width:0; }
+#noval-resource-redesign .nr-input-action > .nr-icon { margin-right:4px; }
+#noval-resource-redesign .nr-note { font-size:11px; color:var(--nr-muted); display:flex; align-items:center; gap:6px; margin:4px 0 13px; }
+#noval-resource-redesign .nr-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--nr-green); flex:none; }
+#noval-resource-redesign .nr-connect-actions { display:flex; align-items:center; gap:8px; margin:18px 0 4px; }
+#noval-resource-redesign .nr-divider { border:0; border-top:1px solid var(--nr-line); margin:18px 0 15px; }
+#noval-resource-redesign details { border-top:1px solid var(--nr-line); margin:0; }
+#noval-resource-redesign summary { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 0; list-style:none; font-size:12px; color:var(--nr-muted); }
+#noval-resource-redesign summary::-webkit-details-marker { display:none; }
+#noval-resource-redesign summary:hover { color:var(--nr-clay); }
+#noval-resource-redesign summary svg { width:14px; height:14px; transition:transform 160ms; }
+#noval-resource-redesign details[open] > summary svg { transform:rotate(180deg); }
+#noval-resource-redesign .nr-check { display:flex; align-items:center; gap:8px; min-height:32px; font-size:12px; color:#6c6254; }
+#noval-resource-redesign input[type=checkbox] { appearance:none; width:14px; height:14px; border:1.5px solid #b9b0a0; border-radius:50%; margin:0; background:transparent; flex:none; transition:background-color 160ms,border-color 160ms,box-shadow 160ms; }
+#noval-resource-redesign input[type=checkbox]:checked { background:var(--nr-clay); border-color:var(--nr-clay); }
+#noval-resource-redesign input[type=checkbox]:hover { box-shadow:0 0 0 3px #b7644912; }
+#noval-resource-redesign .nr-footer { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:12px 20px; border-top:1px solid var(--nr-line); background:var(--nr-surface); }
+#noval-resource-redesign .nr-save-state { font-size:11px; color:var(--nr-muted); }
+#noval-resource-redesign .nr-save-state.is-dirty { color:var(--nr-clay); }
+#noval-resource-redesign .nr-page { animation:nr-page 180ms ease both; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+#noval-resource-redesign .nr-common { flex-shrink:0; padding:10px 20px 12px; border-bottom:1px solid var(--nr-line); }
+#noval-resource-redesign .nr-common-checks { display:flex; justify-content:space-between; gap:12px; }
+#noval-resource-redesign .nr-parameter-strip { display:flex; align-items:center; gap:13px; margin:8px 0; }
+#noval-resource-redesign .nr-mini-field { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--nr-muted); }
+#noval-resource-redesign .nr-mini-field input { width:59px; min-height:29px; padding:4px 6px; text-align:right; font-size:12px; }
+#noval-resource-redesign .nr-mini-field input.wide { width:69px; }
+#noval-resource-redesign .nr-common summary { display:none; }
+#noval-resource-redesign .nr-common details { border:0; }
+#noval-resource-redesign .nr-pins { max-height:132px; overflow:auto; display:grid; grid-template-columns:1fr 1fr; gap:0 12px; padding-top:8px; }
+#noval-resource-redesign .nr-prompts { flex:1; min-height:145px; overflow:auto; scrollbar-width:thin; padding:15px 14px; border-bottom:1px solid var(--nr-line); }
+#noval-resource-redesign .nr-list-head { display:flex; align-items:center; gap:7px; margin:0 6px 10px; }
+#noval-resource-redesign .nr-list-head > strong { font-size:12px; font-weight:500; }
+#noval-resource-redesign .nr-list-head > small { font-size:11px; color:var(--nr-muted); }
+#noval-resource-redesign .nr-list-head .nr-picker { width:auto; min-height:29px; padding:4px 8px; font-size:11px; }
+#noval-resource-redesign .nr-prompt-rows { display:flex; flex-direction:column; gap:3px; }
+#noval-resource-redesign .nr-prompt-row { display:flex; align-items:center; gap:10px; padding:2px 10px; border-radius:8px; transition:background 160ms; }
+#noval-resource-redesign .nr-prompt-row:hover { background:#f0e6da55; }
+#noval-resource-redesign .nr-prompt-row.is-selected { background:var(--nr-selected); }
+#noval-resource-redesign .nr-prompt-name { display:flex; align-items:center; text-align:left; gap:8px; flex:1; min-width:0; min-height:39px; border:0; background:transparent; padding:8px 0; font-size:13px; }
+#noval-resource-redesign .nr-prompt-name > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#noval-resource-redesign .nr-prompt-name small { margin-left:auto; color:var(--nr-muted); font-size:11px; flex:none; }
+#noval-resource-redesign .nr-prompt-name:hover { color:var(--nr-ink); }
+#noval-resource-redesign .nr-prompt-row.is-off .nr-prompt-name { color:#a49b8d; }
+#noval-resource-redesign .nr-prompt-editor { flex-shrink:0; padding:14px 20px 10px; }
+#noval-resource-redesign .nr-editor-title { display:flex; gap:7px; align-items:center; margin-bottom:10px; }
+#noval-resource-redesign .nr-editor-title strong { font-size:13px; font-weight:500; }
+#noval-resource-redesign .nr-editor-title input { min-width:0; flex:1; width:0; border-color:transparent; padding:3px 0; border-radius:4px; font-size:13px; font-weight:500; }
+#noval-resource-redesign .nr-editor-title input:hover { border-bottom-color:var(--nr-line); }
+#noval-resource-redesign .nr-preset-more { flex:none; padding:0 20px; max-height:240px; overflow:auto; scrollbar-width:thin; }
+#noval-resource-redesign .nr-preset-more > details { border-top:0; }
+#noval-resource-redesign .nr-editor-title .nr-picker { width:auto; min-height:27px; font-size:11px; padding:3px 7px; }
+#noval-resource-redesign .nr-prompt-editor textarea { min-height:106px; font:13px/1.8 Georgia,"Noto Serif CJK SC",serif; }
+#noval-resource-redesign .nr-persona-heading { display:flex; align-items:center; gap:12px; }
+#noval-resource-redesign .nr-avatar { display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:#e9dfd0; color:#9b8872; font:20px/1 Georgia,"Noto Serif CJK SC",serif; flex:none; }
+#noval-resource-redesign .nr-persona-heading > .nr-title-row { min-width:0; flex:1; }
+#noval-resource-redesign .nr-persona-heading .nr-title { font-size:19px; }
+#noval-resource-redesign .nr-persona-controls { display:flex; gap:7px; padding-top:13px; }
+#noval-resource-redesign .nr-persona-controls .nr-button { font-size:11px; min-height:29px; padding:4px 9px; }
+#noval-resource-redesign .nr-persona-description { min-height:134px; }
+#noval-resource-redesign .nr-section-label { display:flex; align-items:center; color:var(--nr-muted); font-size:12px; margin:18px 0 12px; gap:6px; }
+#noval-resource-redesign .nr-locks { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; padding-bottom:13px; }
+#noval-resource-redesign .nr-persona-tools { display:flex; flex-wrap:wrap; gap:6px; padding:12px 0 3px; }
+#noval-resource-redesign .nr-persona-tools .nr-button { font-size:11px; min-height:29px; padding:4px 8px; }
+#noval-resource-redesign .nr-layer { position:absolute; inset:0; pointer-events:none; z-index:5; }
+#noval-resource-redesign .nr-menu { position:absolute; pointer-events:auto; padding:6px; border:1px solid var(--nr-line); background:var(--nr-surface); border-radius:10px; box-shadow:0 8px 26px #44392c1b; animation:nr-menu 160ms ease both; max-height:320px; overflow:auto; }
+#noval-resource-redesign .nr-menu-search { display:flex; align-items:center; gap:7px; margin:3px 4px 7px; border:1px solid var(--nr-line); border-radius:7px; padding-left:8px; color:var(--nr-muted); }
+#noval-resource-redesign .nr-menu-search input { padding:7px 8px; border:0; outline:0; box-shadow:none; }
+#noval-resource-redesign .nr-menu-search:focus-within { border-color:#c8947f; box-shadow:0 0 0 2px #b7644912; }
+#noval-resource-redesign .nr-menu-option { display:flex; align-items:center; gap:10px; min-height:38px; padding:8px; width:100%; text-align:left; border:0; border-radius:6px; background:transparent; font-size:13px; }
+#noval-resource-redesign .nr-menu-option:hover { background:#f0e6da55; }
+#noval-resource-redesign .nr-menu-option[aria-selected=true] { background:var(--nr-selected); }
+#noval-resource-redesign .nr-option-dot { width:12px; height:12px; border:1.5px solid #b9b0a0; border-radius:50%; flex:none; }
+#noval-resource-redesign .nr-menu-option[aria-selected=true] .nr-option-dot { background:var(--nr-clay); border-color:var(--nr-clay); }
+#noval-resource-redesign .nr-menu-option > span:last-child { min-width:0; overflow-wrap:anywhere; }
+#noval-resource-redesign .nr-menu-actions { border-top:1px solid var(--nr-line); padding:7px 4px 2px; margin-top:6px; }
+#noval-resource-redesign .nr-menu-actions button { border:0; background:transparent; color:var(--nr-muted); display:flex; align-items:center; gap:7px; padding:7px 4px; font-size:12px; }
+#noval-resource-redesign .nr-menu-actions button:hover { color:var(--nr-clay); }
+@keyframes nr-menu { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+@keyframes nr-page { from { opacity:.6; } to { opacity:1; } }
+@media(max-width:420px) { #noval-resource-redesign { padding:12px 0; } #noval-resource-redesign .nr-heading,#noval-resource-redesign .nr-content,#noval-resource-redesign .nr-common,#noval-resource-redesign .nr-prompt-editor,#noval-resource-redesign .nr-footer { padding-left:15px; padding-right:15px; } #noval-resource-redesign .nr-parameter-strip { gap:8px; flex-wrap:wrap; } #noval-resource-redesign .nr-title { font-size:18px; } }
+@media(prefers-reduced-motion:reduce) { #noval-resource-redesign *,#noval-resource-redesign *::before { transition:none!important; animation:none!important; } }
+#noval-resource-redesign * { scrollbar-width:thin; scrollbar-color:#c5beb0 transparent; }
+@supports selector(::-webkit-scrollbar) {
+  #noval-resource-redesign * { scrollbar-width:auto; scrollbar-color:auto; }
+  #noval-resource-redesign *::-webkit-scrollbar { width:6px; height:6px; background:transparent; }
+  #noval-resource-redesign *::-webkit-scrollbar-track { background:transparent; }
+  #noval-resource-redesign *::-webkit-scrollbar-thumb { background:#c5beb0; border-radius:6px; }
+  #noval-resource-redesign *::-webkit-scrollbar-thumb:hover { background:#a79c88; }
+}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('noval-resource-redesign'), page=root.querySelector('.nr-page'), layer=root.querySelector('.nr-layer');
+  const saved=window.openai?.widgetState?.privateContent || {};
+  const state={ panel:['connection','preset','persona'].includes(saved.panel)?saved.panel:'connection', connection:saved.connection||'Claude · 日常', preset:saved.preset||'长篇 · 细腻 v3', persona:saved.persona||'沈砚', entry:Number.isInteger(saved.entry)?saved.entry:0, provider:saved.provider||'OpenRouter', dirty:false };
+  let dirty=false, opener=null;
+  const originalPrompts=[
+    {name:'Main Prompt',role:'system',enabled:true,content:'你是一位擅长细腻叙事的小说作者。\n\n以人物的行动、对白和感官细节推动故事，保持叙述视角一致。\n<story>\n{{char}} 与 {{user}} 的故事仍在继续。\n</story>'},
+    {name:'World Info (before)',role:'动态内容',enabled:true,content:''},
+    {name:'Char Description',role:'动态内容',enabled:true,content:''},
+    {name:'Char Personality',role:'动态内容',enabled:true,content:''},
+    {name:'Scenario',role:'动态内容',enabled:true,content:''},
+    {name:'Chat History',role:'动态内容',enabled:true,content:''},
+    {name:'World Info (after)',role:'动态内容',enabled:true,content:''},
+    {name:'Post-History Instructions',role:'system',enabled:false,content:'保持对白自然，避免替用户作决定。'}
+  ];
+  let prompts=structuredClone(originalPrompts);
+  let pins=["温度","回复上限"];
+  const parameters={"温度":"0.85","回复上限":"2048","Top P":"1","上下文上限":"200000","重复惩罚":"1","思考强度":"medium"};
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const pick=(label,key,value)=>`<button type="button" class="nr-picker cursor-interaction" data-picker="${key}" role="combobox" aria-label="${label}" aria-expanded="false"><span>${esc(value)}</span>${icon('chevron-down')}</button>`;
+  const field=(label,content)=>`<label class="nr-field"><span>${label}</span>${content}</label>`;
+  const input=(label,value,extra='')=>`<input aria-label="${label}" value="${esc(value)}" ${extra}>`;
+  const check=(label,on=true)=>`<label class="nr-check cursor-interaction"><input type="checkbox" ${on?'checked':''}>${label}</label>`;
+  const fold=(title,content)=>`<details><summary class="cursor-interaction">${title}${icon('chevron-down')}</summary>${content}</details>`;
+  const deeper=`<button class="nr-icon cursor-interaction" aria-label="独立管理" data-notice="独立管理布局沿用已确认方案">${icon('maximize-2')}</button>`;
+  function heading(kind,name,actions='') {
+    return `<header class="nr-heading"><span class="nr-eyebrow">${kind}</span><div class="nr-title-row"><button class="nr-title cursor-interaction" data-picker="${state.panel}" role="combobox" aria-label="选择${kind}" aria-expanded="false"><span>${esc(name)}</span>${icon('chevron-down')}</button><span class="nr-spacer"></span>${deeper}</div>${actions}</header>`;
+  }
+  function connection() {
+    const actions=`<div class="nr-header-actions"><button class="nr-button cursor-interaction" data-new>${icon('plus')}新建</button><button class="nr-button cursor-interaction" data-record>${icon('bookmark-plus')}记录</button><button class="nr-button nr-danger cursor-interaction" data-delete>${icon('trash-2')}删除</button></div>`;
+    return heading('连接',state.connection,actions)+`<div class="nr-content">
+      <div class="nr-section-title">API 连接配置<span class="nr-spacer"></span><span class="nr-dot"></span><span>当前连接</span></div>
+      ${field('模型',`<div class="nr-title-row">${pick('模型','model','anthropic/claude-opus-4.1')}<button class="nr-icon cursor-interaction" aria-label="刷新模型" data-notice="模型列表已刷新 · 预览">${icon('refresh-cw')}</button></div>`)}
+      <div class="nr-connect-actions"><button class="nr-button nr-primary cursor-interaction" data-connect>${icon('plug-zap')}连接</button><button class="nr-button cursor-interaction" data-test>${icon('flask-conical')}测试</button><span class="nr-spacer"></span><span class="nr-note nr-connect-status">未发送请求</span></div>
+      <div class="nr-pair">${field('接口类型',pick('接口类型','apiType','Chat Completion'))}${field('服务商',pick('服务商','provider',state.provider))}</div>
+      ${field('服务地址',input('服务地址',state.provider==='OpenRouter'?'https://openrouter.ai/api/v1':state.provider==='Anthropic'?'https://api.anthropic.com':'https://api.openai.com/v1'))}
+      ${field('API 密钥',`<div class="nr-input-action"><input type="password" autocomplete="off" aria-label="API 密钥" placeholder="输入密钥或选择已保存的账号"><button class="nr-icon cursor-interaction" data-picker="credential" role="combobox" aria-expanded="false" aria-label="选择已保存密钥">${icon('key-round')}</button></div>`)}
+      <div class="nr-note">${icon('shield-check')}已保存账号 · 创作常用</div>
+      <hr class="nr-divider">
+      <div class="nr-pair">${field('绑定预设',pick('绑定预设','binding','长篇 · 细腻 v3'))}${field('模型分组',input('模型分组','Claude'))}</div>
+      ${fold('服务商选项',check('允许模型回退',false)+check('显示模型详细信息',true)+field('模型排序',pick('模型排序','modelSort','默认顺序')))}
+      ${fold('代理与请求',field('反向代理地址',input('反向代理地址','','placeholder="可选"'))+field('自定义请求头','<textarea aria-label="自定义请求头" rows="3" placeholder="JSON 格式"></textarea>')+field('自定义请求体','<textarea aria-label="自定义请求体" rows="3" placeholder="JSON 格式"></textarea>'))}
+      ${fold('配置应用范围',check('记录模型',true)+check('记录预设',true)+check('记录正则配置',false)+field('跳过字段','<textarea aria-label="跳过字段" rows="3" placeholder="每行一个字段名"></textarea>'))}
+    </div>`;
+  }
+  function preset() {
+    return heading('预设',state.preset)+`<section class="nr-common"><div class="nr-common-checks">${check('流式传输')}${check('请求思维链',false)}</div>
+      <div class="nr-parameter-strip">${pins.map(label=>`<label class="nr-mini-field">${label}${input(label,parameters[label],`data-parameter="${label}" class="${label.includes("上限")?"wide":""}" ${label==="思考强度"?"":'type="number" step="any"'}`)}</label>`).join('')}<span class="nr-spacer"></span><button class="nr-icon cursor-interaction" aria-label="配置常用项" aria-expanded="false" data-pins>${icon('sliders-horizontal')}</button></div>
+      <details class="nr-pin-details"><summary class="cursor-interaction">常用项${icon('chevron-down')}</summary><div class="nr-pins">${Object.keys(parameters).map(label=>`<label class="nr-check cursor-interaction"><input type="checkbox" data-pin="${label}" ${pins.includes(label)?'checked':''}>${label}</label>`).join('')}</div></details></section>
+      <section class="nr-prompts"><div class="nr-list-head"><strong>提示词</strong><small>· ${prompts.length}</small><span class="nr-spacer"></span>${pick('提示词作用范围','scope','全局')}<button class="nr-icon cursor-interaction" aria-label="新增提示词" data-add>${icon('plus')}</button></div><div class="nr-prompt-rows">${prompts.map((p,i)=>`<div class="nr-prompt-row ${state.entry===i?'is-selected':''} ${p.enabled?'':'is-off'}"><input type="checkbox" aria-label="启用 ${esc(p.name)}" data-enabled="${i}" ${p.enabled?'checked':''}><button class="nr-prompt-name cursor-interaction" data-entry="${i}"><span>${esc(p.name)}</span><small>${p.role}</small></button></div>`).join('')}</div></section>
+      <section class="nr-prompt-editor">${promptEditor()}</section>
+      <div class="nr-preset-more"><details><summary class="cursor-interaction">更多预设设置${icon('chevron-down')}</summary>${fold('其他生成参数',`<div class="nr-pair">${field('Top P',input('Top P','1','type="number" step="0.1"'))}${field('频率惩罚',input('频率惩罚','0','type="number" step="0.1"'))}</div>`)}${fold('提示格式与绑定',field('世界书格式','<textarea aria-label="世界书格式" rows="3">{{worldInfo}}</textarea>')+check('绑定当前连接',false)+check('绑定当前模型',false))}${fold('文件与管理',`<div class="nr-persona-tools">${['新建','另存为','导入','导出','删除'].map(t=>`<button class="nr-button cursor-interaction" data-notice="${t} · 布局预览">${t}</button>`).join('')}</div>`)}</details></div>`;
+  }
+  function promptEditor() {
+    const p=prompts[state.entry]||prompts[0];
+    return `<div class="nr-editor-title"><input aria-label="提示词名称" data-prompt-name value="${esc(p.name)}">${p.role==='动态内容'?'<span class="nr-note">动态内容</span>':pick('提示词角色','role',p.role)}<button class="nr-icon cursor-interaction" aria-label="上移提示词" data-up ${state.entry===0?'disabled':''}>${icon('arrow-up')}</button><button class="nr-icon cursor-interaction" aria-label="下移提示词" data-down ${state.entry===prompts.length-1?'disabled':''}>${icon('arrow-down')}</button></div>${p.role==='动态内容'?'<div class="nr-note">由酒馆组装，启用和顺序在上方调整。</div>':`<textarea aria-label="提示词正文" rows="4" data-content>${esc(p.content)}</textarea>`}`;
+  }
+  function persona() {
+    const author=state.persona==='作者视角';
+    return `<header class="nr-heading"><div class="nr-persona-heading"><div class="nr-avatar">${author?'作':'砚'}</div><div class="nr-title-row"><div style="min-width:0"><span class="nr-eyebrow">用户设定</span><button class="nr-title cursor-interaction" role="combobox" aria-label="选择用户设定" aria-expanded="false" data-picker="persona"><span>${esc(state.persona)}</span>${icon('chevron-down')}</button></div><span class="nr-spacer"></span>${deeper}</div></div><div class="nr-persona-controls"><button class="nr-button cursor-interaction" data-notice="更换头像 · 布局预览">${icon('image')}更换头像</button><button class="nr-button cursor-interaction" data-notice="新建身份 · 布局预览">${icon('plus')}新建</button><button class="nr-button cursor-interaction" data-notice="复制身份 · 布局预览">${icon('copy')}复制</button></div></header>
+      <div class="nr-content"><div class="nr-pair">${field('名称',input('用户名称',state.persona))}${field('说明标题',input('说明标题',author?'全知叙事':'雾港来信'))}</div>
+      ${field('用户描述',`<textarea class="nr-persona-description" aria-label="用户描述" rows="5">${author?'以第三人称叙述故事，描述人物行动与场景，不代替角色做出关键决定。':'你是沈砚，离开雾港多年后，带着一封没有拆开的旧信回到故乡。\n\n话语克制，习惯先观察对方的神情，再作回应。'}</textarea>`)}
+      <div class="nr-section-label">${icon('text-cursor-input')}注入设置</div>
+      ${field('注入位置',pick('注入位置','position','提示词 / 故事模板'))}
+      <div class="nr-pair">${field('深度',input('深度','2','type="number" min="0"'))}${field('注入角色',pick('注入角色','personaRole','System'))}</div>
+      ${field('绑定世界书',pick('绑定世界书','world','雾港志'))}
+      <hr class="nr-divider"><div class="nr-section-label" style="margin-top:0">默认与锁定</div><div class="nr-locks">${check('默认身份')}${check('锁定当前角色',false)}${check('锁定当前聊天',false)}${check('自动锁定聊天',false)}</div>
+      <div class="nr-section-label">全局偏好</div>${check('切换身份时显示通知')}${check('允许角色关联多个身份',false)}
+      <hr class="nr-divider"><div class="nr-persona-tools">${[['refresh-cw','同步消息名'],['chart-no-axes-column','使用统计'],['download','备份'],['upload','恢复'],['trash-2','删除']].map(([ico,t])=>`<button class="nr-button cursor-interaction ${t==='删除'?'nr-danger':''}" data-notice="${t} · 布局预览">${icon(ico)}${t}</button>`).join('')}</div></div>`;
+  }
+  const icons=()=>globalThis.lucide?.createIcons({attrs:{width:17,height:17}});
+  const persist=()=>window.openai?.setWidgetState?.({modelContent:{预览页面:state.panel,连接:state.connection,预设:state.preset,用户设定:state.persona},privateContent:{panel:state.panel,connection:state.connection,preset:state.preset,persona:state.persona,entry:state.entry,provider:state.provider}})?.catch(()=>{});
+  function status(text,isDirty=false) { const e=root.querySelector('.nr-save-state');e.textContent=text;e.classList.toggle('is-dirty',isDirty); }
+  function markDirty() { dirty=true;status('未保存 · 预览',true); }
+  function render() { closeMenu();page.dataset.kind=state.panel;page.innerHTML=({connection,preset,persona})[state.panel]();root.querySelectorAll('[data-panel]').forEach(b=>{b.classList.toggle('is-active',b.dataset.panel===state.panel);b.setAttribute('aria-pressed',String(b.dataset.panel===state.panel));});status(dirty?'未保存 · 预览':'布局预览',dirty);icons(); }
+  function closeMenu() { layer.innerHTML='';opener?.setAttribute('aria-expanded','false');opener=null; }
+  const menus={connection:['Claude · 日常','GPT · 校稿','本地 · 离线'],preset:['长篇 · 细腻 v3','对白 · 克制','场景描写 · 轻量'],persona:['沈砚','作者视角','旁观者'],provider:['OpenRouter','OpenAI','Anthropic','自定义兼容接口'],apiType:['Chat Completion','Text Completion'],credential:['创作常用','备用账号','管理已保存密钥'],model:['anthropic/claude-opus-4.1','anthropic/claude-sonnet-4.5','openai/gpt-5'],binding:['不绑定','长篇 · 细腻 v3','对白 · 克制'],modelSort:['默认顺序','按价格','按上下文长度'],scope:['全局','当前角色'],role:['system','user','assistant'],position:['提示词 / 故事模板','作者注释之前','作者注释之后','指定深度','停用'],personaRole:['System','User','Assistant'],world:['不绑定','雾港志','人物关系']};
+  function openMenu(button) {
+    if(opener===button){closeMenu();return;}closeMenu();opener=button;button.setAttribute('aria-expanded','true');
+    const key=button.dataset.picker, options=menus[key], current=state[key]||button.querySelector('span')?.textContent||options[0], searchable=['connection','preset','persona','model'].includes(key);
+    const menu=document.createElement('div');menu.className='nr-menu';menu.setAttribute('role','listbox');menu.setAttribute('aria-label',button.getAttribute('aria-label')||'选择');
+    menu.innerHTML=(searchable?`<label class="nr-menu-search">${icon('search')}<input aria-label="搜索选项" placeholder="搜索${{connection:'连接',preset:'预设',persona:'身份',model:'模型'}[key]}"></label>`:'')+options.map(value=>`<button class="nr-menu-option cursor-interaction" role="option" aria-selected="${value===current}" data-value="${esc(value)}"><span class="nr-option-dot"></span><span>${esc(value)}</span></button>`).join('')+(key==='persona'?`<div class="nr-menu-actions"><button data-sort class="cursor-interaction">${icon('arrow-down-a-z')}名称 A–Z</button></div>`:'');
+    layer.append(menu);const bounds=root.getBoundingClientRect(),r=button.getBoundingClientRect();const width=Math.min(Math.max(r.width,searchable?280:200),root.clientWidth-20);menu.style.width=width+'px';menu.style.left=Math.max(10,Math.min(r.left-bounds.left,root.clientWidth-width-10))+'px';menu.style.top=(r.bottom-bounds.top+6)+'px';
+    menu.querySelector('[aria-label="搜索选项"]')?.addEventListener('input',e=>{menu.querySelectorAll('[data-value]').forEach(o=>o.hidden=!o.dataset.value.toLowerCase().includes(e.target.value.toLowerCase()));});
+    menu.addEventListener('click',e=>{const option=e.target.closest('[data-value]');if(option){const value=option.dataset.value;if(['connection','preset','persona','provider'].includes(key)){state[key]=value;render();}else{if(key==='role'){prompts[state.entry].role=value;markDirty();}button.querySelector('span').textContent=value;closeMenu();}persist();}if(e.target.closest('[data-sort]')){const rows=[...menu.querySelectorAll('[data-value]')].sort((a,b)=>a.dataset.value.localeCompare(b.dataset.value,'zh'));rows.forEach(o=>menu.insertBefore(o,menu.querySelector('.nr-menu-actions')));e.target.closest('[data-sort]').innerHTML=icon('arrow-down-a-z')+'已按名称排序';icons();}});
+    icons();
+  }
+  root.addEventListener('click',e=>{
+    const button=e.target.closest('button');if(!button)return;
+    if(button.dataset.panel){state.panel=button.dataset.panel;render();persist();return;}
+    if(button.dataset.picker){openMenu(button);return;}
+    if(button.hasAttribute('data-save')){dirty=false;status('已保存 · 预览');persist();}
+    if(button.hasAttribute('data-reset')){prompts=structuredClone(originalPrompts);dirty=false;state.entry=0;render();persist();}
+    if(button.dataset.entry!=null){state.entry=Number(button.dataset.entry);page.querySelectorAll('.nr-prompt-row').forEach((row,i)=>row.classList.toggle('is-selected',i===state.entry));page.querySelector('.nr-prompt-editor').innerHTML=promptEditor();icons();persist();}
+    if(button.hasAttribute('data-up')||button.hasAttribute('data-down')){const next=state.entry+(button.hasAttribute('data-up')?-1:1);if(next>=0&&next<prompts.length){[prompts[state.entry],prompts[next]]=[prompts[next],prompts[state.entry]];state.entry=next;markDirty();render();persist();}}
+    if(button.hasAttribute('data-add')){prompts.push({name:'新提示词',role:'system',enabled:true,content:''});state.entry=prompts.length-1;markDirty();render();persist();}
+    if(button.hasAttribute('data-pins')){const d=page.querySelector('.nr-pin-details');d.open=!d.open;button.setAttribute('aria-expanded',String(d.open));}
+    if(button.hasAttribute('data-connect')||button.hasAttribute('data-test')){page.querySelector('.nr-connect-status').textContent='预览 · 未发送请求';status('连接操作 · 预览');}
+    if(button.hasAttribute('data-new')){state.connection='新连接';menus.connection.push(state.connection);dirty=true;render();persist();}
+    if(button.hasAttribute('data-record')){dirty=false;status('已记录当前配置 · 预览');}
+    if(button.hasAttribute('data-delete')){if(menus.connection.length>1){menus.connection=menus.connection.filter(x=>x!==state.connection);state.connection=menus.connection[0];dirty=true;render();persist();}}
+    if(button.dataset.notice)status(button.dataset.notice);
+  });
+  root.addEventListener('input',e=>{if(e.target.closest('.nr-menu'))return;if(e.target.hasAttribute('data-content'))prompts[state.entry].content=e.target.value;if(e.target.hasAttribute('data-prompt-name')){prompts[state.entry].name=e.target.value;page.querySelector(`[data-entry="${state.entry}"] > span`).textContent=e.target.value;page.querySelector(`[data-enabled="${state.entry}"]`).setAttribute('aria-label','启用 '+e.target.value);}if(e.target.dataset.parameter)parameters[e.target.dataset.parameter]=e.target.value;markDirty();});
+  root.addEventListener('change',e=>{if(e.target.dataset.pin){const label=e.target.dataset.pin;pins=e.target.checked?[...pins,label]:pins.filter(p=>p!==label);markDirty();render();page.querySelector('.nr-pin-details').open=true;page.querySelector('[data-pins]').setAttribute('aria-expanded','true');}if(e.target.dataset.enabled!=null){const i=Number(e.target.dataset.enabled);prompts[i].enabled=e.target.checked;e.target.closest('.nr-prompt-row').classList.toggle('is-off',!e.target.checked);markDirty();persist();}});
+  document.addEventListener('pointerdown',e=>{if(opener&&!layer.contains(e.target)&&!opener.contains(e.target))closeMenu();});
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();return;}if(layer.querySelector('.nr-menu')&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const options=[...layer.querySelectorAll('[data-value]')].filter(o=>!o.hidden);const i=options.indexOf(document.activeElement);options[(i+(e.key==='ArrowDown'?1:options.length-1))%options.length]?.focus();}});
+  window.addEventListener('openai:set_globals',e=>{const value=e.detail?.globals?.widgetState?.privateContent;if(value&&['connection','preset','persona'].includes(value.panel)&&Object.entries(value).some(([k,v])=>state[k]!==v)){Object.assign(state,value);render();}});
+  render();
+  if(globalThis.Tweak){const options={density:1};const tweak=new Tweak({container:root.querySelector('.nr-panel'),onChange:()=>{root.style.setProperty('--nr-density',options.density);root.querySelectorAll('.nr-prompt-row').forEach(e=>e.style.paddingBlock=(2*options.density)+'px');}});tweak.addSlider(options,'density',{label:'提示词行距',min:1,max:3,step:.5});}
+})();
+</script>

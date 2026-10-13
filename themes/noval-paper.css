@@ -1,0 +1,12 @@
+/* Import through SillyTavern Custom CSS or the companion theme JSON. */
+:root {
+  --wb-theme-paper:#faf9f5;
+  --wb-theme-surface:#fffefa;
+  --wb-theme-soft:#f0eee6;
+  --wb-theme-ink:#302e29;
+  --wb-theme-muted:#817a6c;
+  --wb-theme-line:#dfdcd2;
+  --wb-theme-accent:#b76449;
+  --wb-theme-selected:#f0e6da;
+  --wb-theme-reading-font:'Noto Serif CJK SC','Source Han Serif SC',Georgia,serif;
+}
