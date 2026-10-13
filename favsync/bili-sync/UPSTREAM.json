@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/amtoaer/bili-sync",
+  "upstream_commit": "791dd57f2321d9093c39f38bee8528f249b06e04",
+  "version": "2.11.1",
+  "variant_origin": "https://github.com/ump45nose/bili-sync-flat-output",
+  "variant_base_commit": "f7a8a35a8e02e9e20d944d86162412441cc57ffe",
+  "variant_import_commit": "9eeb88c6b94e5360c8877218f64c7387a65d1e1e"
+}

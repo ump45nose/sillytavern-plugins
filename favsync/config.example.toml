@@ -1,0 +1,141 @@
+# 路径相对于配置文件；容器内使用下列绝对路径。
+state_dir = "/data/state"
+download_dir = "/downloads" # 所有平台共用；宿主机根目录由 .env 的 DOWNLOAD_ROOT 设置。
+timezone = "Asia/Taipei"
+interval_seconds = 28800
+command_timeout_seconds = 3600
+
+# 未单列的平台默认走代理；只有特殊应用在 applications 中设为 false。
+[proxy]
+url = "socks5://127.0.0.1:7890"
+default_enabled = true
+
+[proxy.applications]
+telegram = true
+x = true
+eh = true
+xhs = true
+pixiv = true
+wallabag = false
+cookiecloud = false # 本机 CookieCloud 默认直连。
+bili = false # B 站接口沿用 bili-sync 凭据，默认直连。
+
+[storage]
+min_free_bytes = 214748364800 # 200 GiB；低于该值暂停新文件。
+resume_free_bytes = 236223201280 # 220 GiB；恢复后继续。
+
+[telegram]
+enabled = true
+account = "personal"
+start_date = "" # 填 YYYY-MM-DD；为空时不下载，不以转发原文发布时间过滤。
+tdl_binary = "tdl"
+
+[telegram_notice]
+enabled = false # 从启用后开始读取发给 Bot 的新消息；需要同账号的 tdl 登录会话。
+account = "personal"
+chat = "@yuwk_notice_bot"
+
+# 可选：额外 Telegram 账号，独立会话、游标和下载目录；未写字段继承主账号。
+# [[telegram.accounts]]
+# account = "second"
+# enabled = true
+# start_date = "2026-08-10"
+
+[x_bookmarks]
+enabled = true
+account = "personal"
+start_date = "" # 填 YYYY-MM-DD；为空时不下载。
+
+[x_likes]
+# 填好凭据及 username 后开启。首次建立历史 ID 基线，不下载历史点赞。
+enabled = false
+account = "personal" # 必须与 x_bookmarks 一致。
+
+[x]
+username = "" # 自己的 X 用户名，不含 @；点赞开启时必填。
+
+[eh_favorites]
+enabled = false # 首次成功扫描只建基线，不下载旧收藏。
+account = "personal"
+
+[eh]
+output_dir = "/eh-downloads"
+strict_original = true
+
+[xhs_favorites]
+enabled = false # 受限增量同步；不自动回填整个历史收藏。
+account = "personal"
+
+[xhs_creators]
+enabled = false # 每轮两位作者、两条详情；固定八位生活素材源，90 天逐步回填。
+account = "personal" # 与收藏/点赞复用同一身份、节奏与持久熔断。
+
+[xhs_likes]
+enabled = false # 受限增量同步；不自动回填整个历史点赞。
+account = "personal"
+
+[xhs]
+output_dir = "/downloads/Xiaohongshu"
+cli_binary = "xhs"
+downloader_url = "http://127.0.0.1:5556"
+max_pages_per_run = 2
+max_new_items_per_run = 5
+max_detail_items_per_run = 5
+request_delay_min_seconds = 15
+request_delay_max_seconds = 30
+detail_cache_ttl_seconds = 86400
+
+[pixiv_art_public]
+enabled = false
+account = "personal"
+
+[pixiv_art_private]
+enabled = false
+account = "personal"
+
+[pixiv_novel_public]
+enabled = false
+account = "personal"
+
+[pixiv_novel_private]
+enabled = false
+account = "personal"
+
+[pixiv]
+uid = ""
+start_date = "" # YYYY-MM-DD；当天首次完整扫描仅建基线，之后下载新收藏。
+refresh_token_file = "/run/favsync-secrets/pixiv-refresh-token"
+cookie_file = ""
+picture_dir = "/downloads/Pixiv/picture"
+novel_dir = "/downloads/Pixiv/noval"
+ugoira_enabled = false
+novel_embeds = true
+
+[wallabag_entries]
+enabled = false
+account = "personal"
+
+[wallabag]
+base_url = "http://192.168.31.201:18081"
+credentials_file = "/run/favsync-secrets/wallabag.json"
+output_dir = "/downloads/Wallabag"
+tags = [] # 专用保存账号可留空；否则填写 ["novel"]。
+per_page = 50
+min_content_chars = 100
+export_timeout_seconds = 180
+
+[film_watchlist]
+enabled = false # 开启后只生成影视片单，不下载收藏夹里的 B 站视频。
+account = "personal"
+folder_id = 0 # 填 B 站收藏夹完整 ID；当前“电影”为 4117812456。
+bili_sync_db = "/data/state/bili-sync/data.sqlite" # 只读复用 bili-sync 登录态。
+
+[film_api]
+bind_host = "127.0.0.1" # NAS 部署可改成 192.168.31.201。
+port = 18082
+
+[cookiecloud]
+enabled = true
+url = "http://127.0.0.1:18088" # 可改为现有 CookieCloud 服务。
+credentials_file = "/run/favsync-secrets/cookiecloud.json"
+interval_seconds = 28800
