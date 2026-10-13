@@ -1,0 +1,7 @@
+{
+  "name": "TAILNET",
+  "hostname": "xiaomi-14-pro-mihomo",
+  "stateDir": "tailscale/android-mihomo",
+  "tailnetDomain": "tail0292a9.ts.net",
+  "homeSubnets": ["192.168.31.0/24"]
+}

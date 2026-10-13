@@ -1,0 +1,9 @@
+{
+  "name": "Tailnet 与 CPA 每日恢复（grokbot-2）",
+  "prompt": "这是用户授权的 Computer 恢复任务，只维护当前 Grok Bot Computer 的 Tailscale 和已有 CPA 文本适配器。\n直接使用 Computer 的终端工具执行：\npython3 /home/box/cli-config/grokbot/recover.py ensure\n然后执行：\npython3 /home/box/cli-config/grokbot/recover.py status\n若刚启动尚未就绪，等待 10 秒再检查一次。脚本是幂等的：保留已有 Tailscale 身份和 SSH、从持久化目录恢复二进制和服务，并修复当前系统启动入口。\n不要重新创建 Tailnet 身份，不要登出；不修改 DNS、防火墙、系统代理、Exit Node、OpenSSH 或其他服务；不要展示 token、state 文件内容或私有配置。\n正常且未发生恢复时保持静默，不要发送消息、创建汇报或输出例行状态。只有确实恢复了异常、发生错误、脚本或身份文件缺失、需要用户授权时才通知用户一次，说明实际结果。若缺失身份或文件，停止并报告，不要自行获取新凭据或下载陌生脚本。\n重建后的首次执行必须在 Computer 内执行终端命令，不能只检查网页或宣布完成。",
+  "trigger": {
+    "type": "cron",
+    "schedule": "CRON_TZ=Asia/Shanghai 30 6 * * *"
+  },
+  "isEnabled": true
+}

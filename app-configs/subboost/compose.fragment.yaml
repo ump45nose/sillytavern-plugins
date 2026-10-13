@@ -1,0 +1,7 @@
+# Merge only this service's image/label into the existing infra Compose.
+# Keep the existing env_file, container name, ports, user and networks.
+services:
+  app:
+    image: local/subboost:2.8.1-android-tailscale-v1
+    labels:
+      com.centurylinklabs.watchtower.enable: 'false'

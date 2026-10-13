@@ -1,0 +1,4 @@
+interface:
+  display_name: "fn 网页预览交付"
+  short_description: "将 HTML 设计预览交付到 fn 局域网固定入口，后续刷新即可查看修改"
+  default_prompt: "使用 $fn-web-preview-delivery 将本次 HTML 预览交付到 fn 的固定网页入口。"

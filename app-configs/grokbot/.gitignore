@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.state
+*.log
+config.json
+grokbot-bridge.json
+bin/
+*.tar
