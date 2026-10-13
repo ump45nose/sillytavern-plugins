@@ -31,6 +31,7 @@
     "gold_price_alert.py": "hermes/gold_price_alert.py",
     "ha-watchdog.sh": "hermes/ha-watchdog.sh",
     "health-data-freshness.py": "hermes/health-data-freshness.py",
+    "hub_collection_notice_daily.py": "hermes/hub_collection_notice_daily.py",
     "learning-candidates-local.sh": "model/learning-candidates-local.sh",
     "lingjun-companion-generator.py": "model/lingjun-companion-generator.py",
     "mcp-member-discover-two-rounds.sh": "hermes/mcp-member-discover-two-rounds.sh",

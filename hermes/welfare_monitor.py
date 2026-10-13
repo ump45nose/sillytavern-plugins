@@ -523,28 +523,25 @@ def metadata_suffix(item: Item) -> str:
 def format_output(items: list[Item], errors: list[str]) -> str:
     sections: list[str] = []
     if items:
-        lines = [f"【福利监测新增】共 {len(items)} 项", ""]
+        lines = ["**福利新增**"]
         shown = 0
         for item in items:
             labels = "/".join(sorted(item.labels))
-            block = (
-                f"[{labels}] {item.title}{metadata_suffix(item)}\n"
-                f"{item.url}"
-            )
-            candidate = "\n\n".join(lines + [block])
+            block = f"- [{item.title}]({item.url})（{labels}）{metadata_suffix(item)}"
+            candidate = "\n".join(lines + [block])
             if len(candidate) > MAX_MESSAGE_CHARS - 120:
                 break
             lines.append(block)
             shown += 1
         if shown < len(items):
-            lines.extend(["", f"另有 {len(items) - shown} 项因消息长度未展开。"])
-        sections.append("\n\n".join(lines))
+            lines.append(f"另有 {len(items) - shown} 项未展开。")
+        sections.append("\n".join(lines))
     if errors:
         sections.append(
-            "【福利采集源异常】\n\n"
-            + "\n".join(f"- {detail}" for detail in errors)
+            "**福利采集异常**\n"
+            + "\n".join(f"- {detail}" for detail in dict.fromkeys(errors))
         )
-    return "\n\n---\n\n".join(sections)
+    return "\n\n".join(sections)
 
 
 def run(*, baseline: bool = False) -> int:

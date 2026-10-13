@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -13,10 +15,19 @@ from typing import Any
 
 NOTICE_ENV = Path("/home/hermes/.hermes/.env")
 LOCAL_CONFIG = Path(os.environ.get("CRON_LOCAL_CONFIG", "/home/yuwk/cron/env/hermes.local.json"))
-EXPECTED_BOT = str(json.loads(LOCAL_CONFIG.read_text()).get("notice_bot_username", "")).lstrip("@").casefold()
-if not EXPECTED_BOT:
-    raise RuntimeError("notice_bot_username is missing from private cron config")
 MAX_MESSAGE_CHARS = 3900
+
+
+def markdown_parts(text: str) -> list[str]:
+    if not text.strip():
+        return []
+    sys.path.insert(0, "/home/hermes/.hermes/hermes-agent")
+    from plugins.platforms.telegram.adapter import TelegramAdapter
+    from gateway.platforms.base import utf16_len
+    formatted = TelegramAdapter.format_message(None, text.strip())
+    parts = TelegramAdapter.truncate_message(formatted, MAX_MESSAGE_CHARS, len_fn=utf16_len)
+    # The shared splitter adds plain-text part markers, which are not MarkdownV2.
+    return [re.sub(r" \(\d+/\d+\)$", "", part).rstrip() for part in parts] if len(parts) > 1 else parts
 
 
 def _token() -> str:
@@ -68,22 +79,8 @@ def _api(method: str, token: str, payload: dict[str, Any] | None = None) -> dict
     return result
 
 
-def _chunks(text: str) -> list[str]:
-    chunks: list[str] = []
-    remaining = text.strip()
-    while len(remaining) > MAX_MESSAGE_CHARS:
-        cut = remaining.rfind("\n", 0, MAX_MESSAGE_CHARS)
-        if cut < MAX_MESSAGE_CHARS // 2:
-            cut = MAX_MESSAGE_CHARS
-        chunks.append(remaining[:cut].rstrip())
-        remaining = remaining[cut:].lstrip()
-    if remaining:
-        chunks.append(remaining)
-    return chunks
-
-
 def send_report(chat_id: str, thread_id: str, text: str) -> int:
-    parts = _chunks(text)
+    parts = markdown_parts(text)
     if not parts:
         return 0
     token = _token()
@@ -91,15 +88,17 @@ def send_report(chat_id: str, thread_id: str, text: str) -> int:
     if not isinstance(identity, dict):
         raise RuntimeError("Telegram getMe returned an invalid bot identity")
     username = str(identity.get("username", "")).lstrip("@").casefold()
-    if username != EXPECTED_BOT:
+    expected = str(json.loads(LOCAL_CONFIG.read_text()).get("notice_bot_username", "")).lstrip("@").casefold()
+    if not expected or username != expected:
         raise RuntimeError("configured token does not identify the expected notice bot")
 
-    for index, part in enumerate(parts, start=1):
-        body = part if len(parts) == 1 else f"({index}/{len(parts)})\n{part}"
+    for part in parts:
         result = _api("sendMessage", token, {
             "chat_id": str(chat_id),
             "message_thread_id": str(thread_id),
-            "text": body,
+            "text": part,
+            "parse_mode": "MarkdownV2",
+            "disable_web_page_preview": "true",
             "disable_notification": "true",
         })
         message = result.get("result")

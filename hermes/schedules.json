@@ -321,6 +321,16 @@
     "source": "hermes/media_automation_notice_daily.py"
   },
   {
+    "name": "hub-collection-exceptions-daily",
+    "schedule": {
+      "kind": "cron",
+      "expr": "20 9 * * *",
+      "display": "20 9 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/hub_collection_notice_daily.py"
+  },
+  {
     "name": "benefits-steam-free-claim",
     "schedule": {
       "kind": "cron",

@@ -18,15 +18,21 @@ from common.telegram_notice import send_report
 TOPIC_CONFIG = Path("/home/hermes/.hermes/profiles/lingjun/cron/notice_topics.json")
 
 
+def deliver_report(topic: str, message: str) -> int:
+    if not message.strip():
+        return 0
+    config = json.loads(TOPIC_CONFIG.read_text(encoding="utf-8"))
+    sent = send_report(str(config["chat_id"]), str(config["threads"][topic]), message)
+    print(f"delivered {sent} message(s) to verified notice-bot topic {topic}")
+    return sent
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--topic", required=True)
     parser.add_argument("--report", required=True, type=Path)
     args = parser.parse_args()
 
-    config = json.loads(TOPIC_CONFIG.read_text(encoding="utf-8"))
-    chat_id = str(config["chat_id"])
-    thread_id = str(config["threads"][args.topic])
     report = args.report if args.report.is_absolute() else REPO_ROOT / args.report
     result = subprocess.run(
         [sys.executable, str(report)], capture_output=True, text=True, check=False
@@ -36,8 +42,7 @@ def main() -> int:
         if result.returncode:
             raise SystemExit(f"report process failed with exit code {result.returncode}")
         return 0
-    sent = send_report(chat_id, thread_id, message)
-    print(f"delivered {sent} message(s) to verified notice-bot topic {args.topic}")
+    deliver_report(args.topic, message)
     return 0
 
 

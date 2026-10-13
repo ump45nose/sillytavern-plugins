@@ -98,7 +98,7 @@ def run(root: Path, limit: int) -> dict:
                 remaining = limit
                 while remaining > 0:
                     result = consolidate_profile_candidates(
-                        db, profile=home.name, limit=min(10, remaining)
+                        db, profile=home.name, limit=min(5, remaining)
                     )
                     processed = int(result.get("processed") or 0)
                     report["processed"] += processed
@@ -169,45 +169,25 @@ def run(root: Path, limit: int) -> dict:
 
 
 def render(report: dict) -> str:
-    lines = [
-        "Hermes Skill/Tool 学习候选审核",
-        (
-            f"扫描 {report['profiles']} 个 Profile，处理 {report['processed']} 条 "
-            f"Episode，更新 {report['updates']} 个候选。"
-        ),
-    ]
+    from agent.redact import redact_sensitive_text
+    if not report["failed"] and not report["ready"]:
+        return ""
+    lines = ["**学习候选**"]
     if report["failed"]:
-        lines.append(f"失败 Profile：{report['failed']}（已保留待下次重试）")
         for failure in report.get("failures") or []:
-            lines.append(
-                "失败详情：{profile} {stage} {error_type}: {error}（可重试）".format(
-                    **failure
-                )
-            )
+            detail = redact_sensitive_text(str(failure["error"]), force=True)
+            lines.append(f"- {failure['profile']}：" + " ".join(detail.split())[:160])
     if not report["ready"]:
-        lines.append("本轮没有新的 ready_for_review 候选。")
         return "\n".join(lines)
     for item in report["ready"]:
         lines.extend(
             [
-                "",
-                (
-                    f"[{item['kind']}] {item['profile']}:{item['candidate_id']} "
-                    f"v={item['version']} 证据={item['evidence']}"
-                ),
-                item["title"],
-                item["summary"],
+                f"- **{item['title']}**（{item['kind']}，{item['profile']}，证据 {item['evidence']} 条）",
+                str(item["summary"])[:240],
+                f"`批准 {item['kind']} {item['profile']}:{item['candidate_id']} {item['version']}`",
+                f"`拒绝 {item['kind']} {item['profile']}:{item['candidate_id']} {item['version']}`",
             ]
         )
-    lines.extend(
-        [
-            "",
-            "回复示例：",
-            "批准 skill <profile>:<candidate_id> <version>",
-            "拒绝 tool <profile>:<candidate_id> <version>",
-            "批准只进入前台修改流程，cron 不会直接修改 Skill 或 Tool。",
-        ]
-    )
     return "\n".join(lines)
 
 
@@ -296,7 +276,10 @@ def main() -> int:
     receipt = delivery_receipt(report, args.root)
     if receipt:
         print(receipt)
-    return 1 if report["failed"] else 0
+    # Fail only if failures occurred and zero progress was made.
+    if report["failed"] and report["processed"] == 0:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

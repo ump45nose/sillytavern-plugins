@@ -44,6 +44,7 @@
 30 moviepilot
 30 benefits-steam-asf
 
+30 face-baseline
 40 qbit_manage qbittorrent
 40 IYUUPlus qbittorrent
 40 emby-theme-worker embyserver

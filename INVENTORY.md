@@ -41,6 +41,11 @@ plan at their former stop times and repair startup at their former start times.
 Their scheduler names describe the current behavior. All 48 recurring Hermes
 jobs were enabled on 2026-10-06; historical one-shot records are preserved.
 
+Hub collection exceptions run daily at 09:20 (Asia/Taipei), using
+`hermes/hub_collection_notice_daily.py` without an agent. Healthy runs stay
+silent; anomalies use the existing notice bot's private `hub-collection`
+topic. Source, deployment and alert rules are described in `README.md`.
+
 ### Containers
 Known container-native schedulers include:
 - Watchtower: daily update schedule inside container configuration;
@@ -58,3 +63,9 @@ Leave Debian/FNOS jobs in their package-owned paths:
 
 They include apt, dpkg, logrotate, exim, man-db, quota, samba, sysstat,
 fstrim, e2scrub and mdmonitor jobs.
+
+## Face baseline
+
+Scheduled scanning removed at the user's request. `/etc/cron.d/face-baseline`
+and its deployed wrapper are absent. The utilities service remains, with only
+manual web/API scanning. Other cron entries, Hermes jobs and timers are unchanged.

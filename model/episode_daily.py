@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import time
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -315,6 +316,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-segments", type=int, default=50)
     parser.add_argument("--max-seconds", type=int, default=1200)
+    parser.add_argument("--json", action="store_true", help="Print detailed diagnostics instead of the notification")
     parser.add_argument(
         "--backfill-since",
         default="",
@@ -344,11 +346,39 @@ def main() -> int:
         max_seconds=max(60, args.max_seconds),
         backfill_since=backfill_since,
     )
-    print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+    home = Path(os.environ.get("HERMES_HOME") or args.root / "profiles/lingjun")
+    output = home / "cron/output/episode-daily-latest.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".episode-report-", dir=output.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(report, stream, ensure_ascii=False, sort_keys=True)
+        os.replace(temporary, output)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    print(json.dumps(report, ensure_ascii=False, sort_keys=True) if args.json else render(report))
     return 1 if (
         report["failed"]
         or report["memory_failed"]
     ) else 0
+
+
+def render(report):
+    from agent.redact import redact_sensitive_text
+    lines = []
+    if report["succeeded"]:
+        lines.append(f"- 已归档 {report['succeeded']} 条")
+    if report["memory_writes"]:
+        lines.append(f"- 记忆更新 {report['memory_writes']} 条")
+    for profile, row in report["profiles"].items():
+        pending = int(row.get("backlog", 0)) + int(row.get("memory_backlog", 0))
+        if pending:
+            lines.append(f"- {profile}：待处理 {pending} 条")
+        for error in row.get("errors", []):
+            detail = redact_sensitive_text(str(error.get("error") or error.get("error_type") or "处理失败"), force=True)
+            lines.append(f"- {profile}：" + " ".join(detail.split())[:160])
+    return "\n".join(["**Episode 同步**", *dict.fromkeys(lines)]) if lines else ""
 
 
 if __name__ == "__main__":

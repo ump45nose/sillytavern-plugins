@@ -5,17 +5,14 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 
-TIMEZONE = ZoneInfo("Asia/Taipei")
 CONTAINER = "favsync-favsync-1"
 SOURCE_LABELS = {
     "telegram": "Telegram",
     "telegram_notice": "Telegram Bot 投递",
-    "x_bookmarks": "X 书签",
-    "x_likes": "X 点赞",
+    "x_bookmarks": "X书签",
+    "x_likes": "X点赞",
     "eh_favorites": "EH 收藏",
     "xhs_favorites": "小红书收藏",
     "xhs_likes": "小红书点赞",
@@ -27,15 +24,9 @@ SOURCE_LABELS = {
     "wallabag_entries": "Wallabag",
     "film_watchlist": "B 站影视片单",
 }
-KIND_LABELS = {
-    "content": "Favsync 内容同步",
-    "cookiecloud": "CookieCloud 同步",
-    "source:film_watchlist": "B 站影视片单",
-}
 NORMAL_STATES = {
     "complete", "disabled", "awaiting_start_date", "idle", "partial", "cached"
 }
-SUCCESS_RESULTS = {"success", "succeeded", "complete", "completed", "ok"}
 
 
 def clean_detail(value: object, fallback: str) -> str:
@@ -58,24 +49,13 @@ def load_status() -> dict:
         raise RuntimeError("Favsync status output is invalid JSON") from exc
 
 
-def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
+def collect_problems(status: dict) -> list[tuple[str, str]]:
     problems: list[tuple[str, str]] = []
-
-    for record in status.get("execution_history", []):
-        try:
-            finished = datetime.fromtimestamp(
-                float(record["finished_at"]), TIMEZONE
-            )
-        except (KeyError, TypeError, ValueError, OSError):
-            continue
-        result = str(record.get("result") or "failed").lower()
-        if finished >= since and result not in SUCCESS_RESULTS:
-            kind = str(record.get("kind") or "Favsync 执行")
-            platform = KIND_LABELS.get(kind, kind)
-            problems.append((platform, f"{finished:%m-%d %H:%M} 执行结果：{clean_detail(result, 'failed')}"))
 
     for source in status.get("sources", []):
         scan_status = str(source.get("scan_status") or "unknown")
+        if scan_status == "disabled":
+            continue
         error = source.get("error")
         if scan_status not in NORMAL_STATES or error:
             name = str(source.get("name") or "unknown")
@@ -87,9 +67,8 @@ def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
         if bundle.get("bundle_status") == "skipped_invalid":
             continue
         platform = clean_detail(bundle.get("platform"), "未知平台")
-        count = bundle.get("count", 0)
         detail = clean_detail(bundle.get("error"), "下载失败")
-        problems.append((platform, f"正文/附件处理失败：{detail}（{count} 条）"))
+        problems.append((SOURCE_LABELS.get(platform, platform), detail))
 
     for asset in status.get("download_errors", []):
         # The user explicitly excluded unavailable X content from alerts.
@@ -97,16 +76,15 @@ def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
         if asset.get("platform") == "x" and asset.get("error") == "content_unavailable":
             continue
         platform = clean_detail(asset.get("platform"), "未知平台")
-        count = asset.get("count", 0)
         detail = clean_detail(asset.get("error"), "附件失败")
-        problems.append((platform, f"附件下载失败：{detail}（{count} 个）"))
+        problems.append((SOURCE_LABELS.get(platform, platform), detail))
 
     if (status.get("storage") or {}).get("paused_low_disk"):
         problems.append(("Favsync 存储", "磁盘空间过低，下载已暂停"))
 
     for service, state in (status.get("external_services") or {}).items():
         if state != "ok":
-            problems.append((str(service), f"外部服务状态：{clean_detail(state, '异常')}"))
+            problems.append((str(service), clean_detail(state, "异常")))
 
     incomplete = sum(
         int(row.get("count", 0) or 0)
@@ -114,25 +92,27 @@ def collect_problems(status: dict, since: datetime) -> list[tuple[str, str]]:
         if row.get("attachment_status") == "incomplete"
     )
     if incomplete:
-        problems.append(("Wallabag", f"图片附件不完整（{incomplete} 条）"))
+        problems.append(("Wallabag", "图片附件不完整"))
 
-    return problems
+    grouped: dict[str, list[str]] = {}
+    for platform, detail in problems:
+        if detail not in grouped.setdefault(platform, []):
+            grouped[platform].append(detail)
+    return [(platform, "；".join(details)) for platform, details in grouped.items()]
 
 
 def main() -> int:
-    now = datetime.now(TIMEZONE)
     try:
         status = load_status()
-        problems = collect_problems(status, now - timedelta(hours=24))
-    except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
-        problems = [("Favsync 状态采集", clean_detail(exc, "无法读取运行状态"))]
+        problems = collect_problems(status)
+    except (OSError, subprocess.TimeoutExpired, RuntimeError, TypeError, ValueError):
+        problems = [("Favsync", "无法读取运行状态")]
 
     if not problems:
         return 0
 
-    print(f"Favsync 异常告警 {now:%Y-%m-%d %H:%M}（过去24小时执行记录及当前状态）")
     for platform, detail in problems:
-        print(f"问题平台：{platform}；问题：{detail}")
+        print(f"- {platform}：{detail}")
     return 0
 
 
