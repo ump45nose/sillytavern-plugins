@@ -189,6 +189,8 @@ docker compose exec favsync favsync --config /app/config.toml status
 
 `sync-once` 有失败返回非零；日期未填或来源关闭为正常待配置状态。`status` 展示来源扫描状态、点赞基线时间、附件状态数量、下载错误类别、待保存正文数和 Cookie 同步时间。它还展示最近 20 次内容同步及 CookieCloud 执行结果，只记录 `success` 或 `failed`；SQLite 最多保留 100 条。扫描完成不等于附件全部成功；请同时检查 `assets`、`download_errors` 和本地文件。
 
+X 列表扫描允许 gallery-dl 已确认的“作者因成人或暴力内容政策暂时不可用”资料警告继续执行，不将其视为整个来源故障。其他警告、接口错误、非零退出、终止错误事件和不完整媒体列表仍会使采集失败；只有完整采集成功后才清除旧异常，不直接改写状态来隐藏失败。
+
 当前 NAS 另由 Lingjun Hermes Cron `favsync-daily-summary`（ID `d11d29184eec`）每天
 09:10 将过去 24 小时的简单成功/失败和当前来源异常发送到 Telegram 运维 topic
 `telegram:1766985794:11829`。它是 no-agent 任务，不调用模型，也不触发下载；只通过
