@@ -181,7 +181,9 @@ def build_bundle(app, source, target, destination):
     core_sha = core["source"]["git"].split("#")[-1]
     # 使用已认证的宿主机检出锁定提交；不把 .git 或凭据复制进容器。
     staging = destination / "platform-source"
-    run(["git", "clone", "--no-checkout", target.platform_repo, staging], user=target.build_user)
+    platform_git = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                       cwd=target.platform_repo, user=target.build_user).strip()
+    run(["git", "clone", "--no-checkout", platform_git, staging], user=target.build_user)
     run(["git", "checkout", "--detach", core_sha], cwd=staging, user=target.build_user)
     wheels = destination / "wheels"
     run([target.uv, "build", "--wheel", "--out-dir", wheels], cwd=staging, user=target.build_user)
