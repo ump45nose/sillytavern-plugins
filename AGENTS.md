@@ -1,7 +1,5 @@
 # 聚合开发仓库
 
-禁止防御性编程，说人话，只在最终阶段测试。
-
 当前仓库统一管理下列项目源码和 worktree，通过 Git subtree 向各项目原仓库同步。
 
 ## 项目地图
@@ -21,13 +19,8 @@
 | `agent-skills/` | 自有 Codex/Claude 技能源码；安装位置独立维护。 |
 | `hermes-authoring/` | Hermes profile 模板、共享状态工具和编排草案；运行 profile 在仓库外。 |
 
-## 工作约定
+## 开发边界
 
-- 先读受影响项目的 `AGENTS.md`、README 和当前实现。以现状与任务范围为准，只改受影响对象，保留已有改动。
-- 一个任务使用一个聚合 worktree，在当前 worktree 内修改源码；跨项目源码引用使用相对路径。各项目独立安装依赖，不共享可写虚拟环境、`node_modules` 或运行数据。
-- 复用既有模块、依赖锁和设施。没有任务依据就不加兼容层、兜底分支、重试、默认值或公共抽象。
-- 源码、部署、数据分离。正式 NAS Compose 在 `/vol2/1000/Docker/stacks/<group>/compose.yaml`，cron 产物在 `/home/yuwk/cron/`；保留身份、密钥、授权、持久卷和媒体路径，私有文件不入库。
-- 涉及部署、目录或权限，先读 `fn-service-ops`；网络故障读 `fn-network-diagnostics`；MCP 公共运行时、清单和生成器读 `mcp-platform-maintenance`，网页连接读 `mcp-web-connection`。按实际场景读取资料。
-- 实现完成后只验证受影响路径，优先使用既有检查。说明实际变化、验证结果及未验证事项；运行脚本前确认它是否操作正式服务。
-- 跨项目改动可一起提交；用 `scripts/project.py` 拉取、拆分和逐项目推送，操作见根 README。推送和部署分别处理，项目版本锁仍引用原项目提交。
-- 旧 Git 元数据保存在根仓库公共 Git 目录的 `project-origins/` 下，已有独立 worktree 保留。普通项目目录统一使用聚合 Git；第三方贡献及模型参考仓库继续独立维护。
+- 聚合仓库只统一 Git 管理；各项目的业务、依赖与运行保持独立。
+- 只在当前聚合 worktree 内修改受影响源码。
+- 第三方贡献与模型参考仓库独立维护，不纳入聚合 Git。

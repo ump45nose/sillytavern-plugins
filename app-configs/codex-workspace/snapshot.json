@@ -1,12 +1,12 @@
 {
   "snapshot_date": "2026-10-13",
   "workspace_path": "/home/yuwk/code",
-  "source_revision": "a8abaad2d1149cc48610ef526e7cf09fd3246456",
+  "source_revision": "9a1b982ee4bc9b531f9c4c878a97f7862ed44deb",
   "files": [
     {
       "source": "AGENTS.md",
       "stored_at": "root/AGENTS.md",
-      "sha256": "f5313162fb56deb29fec0df21cc9943e41b3a3ab9d3709ad37dbb79f516d5f2f"
+      "sha256": "339af88aaa24623e946f6c6c93d3117eb188dc784bdbb7801c8a703d408d7eb7"
     },
     {
       "source": "README.md",
