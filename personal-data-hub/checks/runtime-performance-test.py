@@ -4,13 +4,13 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from sqlalchemy import delete, event, insert, select
+from sqlalchemy import delete, event, insert, select, text
 
-from personal_data_hub import runner
+from personal_data_hub import runner, scheduler
 from personal_data_hub.contracts import Batch, Record, instant, utcnow
-from personal_data_hub.processing.registry import COLLECTION_PROFILES
+from personal_data_hub.processing.registry import COLLECTION_PROFILES, PROFILES
 from personal_data_hub.processing.repository import ProcessingRepository
-from personal_data_hub.processing.schema import members
+from personal_data_hub.processing.schema import jobs, members, objects
 from personal_data_hub.storage import checkpoints, records, runs
 
 
@@ -70,6 +70,75 @@ class RuntimePerformanceTests(unittest.TestCase):
         self.assertIn(store.identity('memos', 'two'), str(body_reads[0][1]))
         self.assertNotIn(store.identity('memos', 'one'), str(body_reads[0][1]))
         self.assertEqual(store.cursor('processing:reading-backfill')['complete'], True)
+
+    def test_idle_scheduler_sleeps_between_batches_and_preserves_emby_sampling(self):
+        clock, spawned, queue_checks = [0], [], []
+
+        class Process:
+            def __init__(self, args, **kwargs):
+                self.pid = 100 + len(spawned)
+                spawned.append(args)
+
+            def poll(self):
+                return 0
+
+        def has_pending(repository):
+            queue_checks.append(clock[0])
+            return False
+
+        def sleep(_):
+            clock[0] += 30
+            if clock[0] >= 180:
+                raise KeyboardInterrupt
+
+        with patch.object(scheduler.subprocess, 'Popen', Process), \
+             patch.object(scheduler.time, 'monotonic', side_effect=lambda: clock[0]), \
+             patch.object(scheduler.time, 'sleep', side_effect=sleep), \
+             patch.object(scheduler, 'interrupted'), \
+             patch.object(ProcessingRepository, 'has_pending', has_pending):
+            scheduler.serve(None, {'sources': {'ordinary': {}, 'emby': {'interval_seconds': 60}}})
+        self.assertEqual(len(queue_checks), 1)
+        self.assertEqual(sum(args[-1] == 'ordinary' for args in spawned), 1)
+        self.assertGreater(sum(args[-1] == 'emby' for args in spawned), 1)
+        self.assertTrue(all('--skip-schema-init' in args for args in spawned))
+
+    def test_backlog_does_not_bypass_interval_after_success_or_failure(self):
+        for exit_code in (0, 1):
+            with self.subTest(exit_code=exit_code):
+                clock, spawned = [0], []
+
+                class Process:
+                    def __init__(self, args, **kwargs):
+                        self.pid = 100 + len(spawned)
+                        spawned.append((clock[0], args))
+
+                    def poll(self): return exit_code
+
+                def sleep(_):
+                    clock[0] += 10
+                    if clock[0] >= 180: raise KeyboardInterrupt
+
+                with patch.object(scheduler.subprocess, 'Popen', Process), \
+                     patch.object(scheduler.time, 'monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(scheduler.time, 'sleep', side_effect=sleep), \
+                     patch.object(scheduler, 'stop_worker'), \
+                     patch.object(ProcessingRepository, 'has_pending', return_value=True):
+                    scheduler.serve(None, {'sources': {}, 'processing_interval_seconds': 120})
+                self.assertEqual(len(spawned), 2)
+                self.assertGreaterEqual(spawned[1][0] - spawned[0][0], 120)
+                self.assertTrue(all(args[-4:] == ['--limit', '1000', '--max-seconds', '300'] for _, args in spawned))
+
+    def test_publication_does_not_take_global_archive_lock(self):
+        store = self.case.store
+        if store.engine.dialect.name != 'postgresql': self.skipTest('PostgreSQL publication locks')
+        self.case.put(body='发布不阻塞无关来源')
+        repository = self.case.repository
+        job = repository.claim(lease_seconds=180)
+        rows = repository.snapshot(job)
+        with store.writer_lock():
+            self.assertTrue(repository.publish(job, rows, PROFILES[job['processor']].process(rows)))
+        with store.engine.connect() as c:
+            self.assertEqual(c.scalar(text("SELECT current_setting('statement_timeout')")), '0')
 
 
 if __name__ == '__main__':

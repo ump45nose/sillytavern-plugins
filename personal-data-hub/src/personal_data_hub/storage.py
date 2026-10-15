@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
@@ -29,13 +30,15 @@ tombstones = Table("hub_tombstones", metadata, Column("record_id", String(64), p
 
 
 class Store:
-    def __init__(self, database_url: str, asset_root: str | Path):
+    def __init__(self, database_url: str, asset_root: str | Path, *, initialize=True):
         self.engine = create_engine(database_url, pool_pre_ping=True)
+        self._writer_state = threading.local()
         self.root = Path(asset_root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        metadata.create_all(self.engine)
-        from .processing.schema import migrate
-        migrate(self)
+        if initialize:
+            metadata.create_all(self.engine)
+            from .processing.schema import migrate
+            migrate(self)
 
     @contextlib.contextmanager
     def lock(self, key: str):
@@ -70,9 +73,15 @@ class Store:
     @contextlib.contextmanager
     def writer_lock(self, connection=None):
         if connection is not None and self.engine.dialect.name == "postgresql":
-            # CRM 的归档和原表共用事务；锁必须留到该事务提交，不能另开连接。
             connection.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": self.lock_id("hub-asset-and-record-writer")})
             yield
+        elif self.engine.dialect.name == 'sqlite':
+            depth = getattr(self._writer_state, 'depth', 0)
+            guard = contextlib.nullcontext() if depth else self.lock('hub-asset-and-record-writer')
+            with guard:
+                self._writer_state.depth = depth + 1
+                try: yield
+                finally: self._writer_state.depth = depth
         else:
             with self.lock("hub-asset-and-record-writer"):
                 yield
@@ -95,7 +104,8 @@ class Store:
         with self.engine.connect() as c:
             return c.scalar(select(checkpoints.c.value).where(checkpoints.c.source == source)) or {}
 
-    def put_asset(self, asset: Asset) -> dict:
+    @contextlib.contextmanager
+    def prepare_asset(self, asset: Asset):
         if (asset.path is None) == (asset.content is None):
             raise ValueError("asset_requires_exactly_one_input")
         h = hashlib.sha256()
@@ -115,24 +125,30 @@ class Store:
                 tmp.unlink(missing_ok=True)
                 raise
         key = h.hexdigest()
+        try:
+            yield tmp, dict(id=key, size=size, name=Path(asset.name).name, media_type=asset.media_type)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def publish_asset(self, prepared) -> dict:
+        tmp, info = prepared
+        key = info['id']
         final = self.root / key[:2] / key
         final.parent.mkdir(exist_ok=True, mode=0o700)
         if os.geteuid() == 0:
             owner = self.root.stat()
-            # Docker 和宿主采集器共用目录，文件归持久目录的原所有者。
             os.chown(tmp, owner.st_uid, owner.st_gid)
             os.chown(final.parent, owner.st_uid, owner.st_gid)
-        try:
-            if final.exists():
-                tmp.unlink()
-            else:
-                os.replace(tmp, final)
-                fd = os.open(final.parent, os.O_DIRECTORY)
-                try: os.fsync(fd)
-                finally: os.close(fd)
-        finally:
-            tmp.unlink(missing_ok=True)
-        return dict(id=key, size=size, name=Path(asset.name).name, media_type=asset.media_type)
+        if not final.exists():
+            os.replace(tmp, final)
+            fd = os.open(final.parent, os.O_DIRECTORY)
+            try: os.fsync(fd)
+            finally: os.close(fd)
+        return info
+
+    def put_asset(self, asset: Asset) -> dict:
+        with self.prepare_asset(asset) as prepared, self.writer_lock():
+            return self.publish_asset(prepared)
 
     def _purge(self, c, source: str, external_id: str):
         rid = self.identity(source, external_id)
@@ -170,7 +186,13 @@ class Store:
         keys = [self.identity("crm", alias) for alias in self.crm_event_aliases(source, event_key, message_key)]
         return bool(keys and connection.scalar(select(tombstones.c.record_id).where(tombstones.c.record_id.in_(keys)).limit(1)))
 
-    def ingest(self, source: str, batch: Batch, connection=None) -> dict:
+    def ingest(self, source: str, batch: Batch, connection=None, *, refresh_unchanged=True) -> dict:
+        with contextlib.ExitStack() as prepared_assets:
+            prepared = [[prepared_assets.enter_context(self.prepare_asset(a)) for a in item.assets]
+                        for item in batch.records]
+            return self._ingest_prepared(source, batch, prepared, connection, refresh_unchanged=refresh_unchanged)
+
+    def _ingest_prepared(self, source, batch, prepared, connection, *, refresh_unchanged):
         changed = duplicate = ignored = removed = 0
         with self.writer_lock(connection):
             with (self.engine.begin() if connection is None else contextlib.nullcontext(connection)) as c:
@@ -178,13 +200,13 @@ class Store:
                 existing = {row['id']: row for row in c.execute(select(records.c.id, records.c.hash, records.c.assets, records.c.kind).where(records.c.id.in_(identities))).mappings()} if identities else {}
                 deleted_ids = set(c.scalars(select(tombstones.c.record_id).where(tombstones.c.record_id.in_(identities)))) if identities else set()
                 duplicates = []
-                for item in batch.records:
+                for item, item_assets in zip(batch.records, prepared):
                     rid = self.identity(source, item.external_id)
                     if rid in deleted_ids:
                         ignored += 1
                         continue  # 旧备份/离线重放不能复活已删除内容。
                     old = existing.get(rid)
-                    attachments = [self.put_asset(a) for a in item.assets]
+                    attachments = [self.publish_asset(a) for a in item_assets]
                     if source == "crm" and item.kind == "interactions" and old:
                         # 正文镜像和周期采集不撤销独立补齐的微信媒体。
                         retained = {a["id"]: a for a in old["assets"]}
@@ -218,9 +240,9 @@ class Store:
                             c.execute(insert(asset_refs).values(record_id=rid, asset_id=a["id"]))
                     changed += 1
                     existing[rid] = values
-                if duplicates:
-                    # Unchanged content has unchanged previews. Touch freshness in
-                    # one statement per batch, without rereading large raw bodies.
+                if duplicates and refresh_unchanged:
+                    # Explicit observations/pushes can refresh per-record freshness.
+                    # Periodic collectors record checks in hub_runs instead.
                     now = utcnow()
                     c.execute(update(records).where(records.c.id.in_(duplicates)).values(observed_at=now))
                     c.execute(update(display_index).where(display_index.c.record_id.in_(duplicates)).values(observed_at=now))

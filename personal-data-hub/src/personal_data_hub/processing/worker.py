@@ -1,14 +1,20 @@
+import time
 from .registry import PROFILES
 from .repository import ProcessingRepository
 
 
-def drain(store, limit=50, lane='reading', config=None):
+def drain(store, limit=50, lane='reading', config=None, max_seconds=None):
     if not 1 <= limit <= 1000:
         raise ValueError('invalid_processing_limit')
+    deadline = time.monotonic() + max_seconds if max_seconds is not None else None
     repository = ProcessingRepository(store)
     result = {'claimed': 0, 'published': 0, 'superseded': 0, 'failed': 0}
     for _ in range(limit):
-        job = repository.claim(lease_seconds=900 if lane == 'model' else 120, lane=lane)
+        if deadline is not None and time.monotonic() >= deadline:
+            break
+        # Each job has its own lease; the batch budget stops new claims. The
+        # supervisor allows a final in-flight job to finish after that budget.
+        job = repository.claim(lease_seconds=900 if lane == 'model' else 180, lane=lane)
         if job is None:
             break
         result['claimed'] += 1

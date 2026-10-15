@@ -5,12 +5,16 @@
   "hub_viewer_token_file": "/run/hub/viewer-token",
   "health_webhook_token_file": "/run/hub/health-token",
   "autoaccounting_webhook_token_file": "/run/hub/accounting-token",
+  "processing_enabled": false,
+  "processing_interval_seconds": 21600,
+  "processing_backfill_on_start": false,
   "sources": {
     "crm": {
       "adapter": "crm_pg",
+      "enabled": false,
       "account": "owner",
       "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
-      "interval_seconds": 900,
+      "interval_seconds": 21600,
       "deletion_support": "authoritative_inventory"
     },
     "health": {
@@ -36,7 +40,7 @@
       "patterns": [
         "**/metadata.json"
       ],
-      "interval_seconds": 900,
+      "interval_seconds": 21600,
       "deletion_support": "explicit_only"
     },
     "skysight-summaries": {
@@ -46,7 +50,7 @@
       "patterns": [
         "*.md"
       ],
-      "interval_seconds": 900,
+      "interval_seconds": 21600,
       "deletion_support": "explicit_only"
     }
   }

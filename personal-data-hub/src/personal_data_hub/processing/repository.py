@@ -4,7 +4,9 @@ from contextlib import nullcontext
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, insert, or_, select, union_all, update
+from sqlalchemy.exc import OperationalError
+
+from sqlalchemy import delete, func, insert, or_, select, text, union_all, update
 
 from ..contracts import instant, utcnow
 from .contracts import SCHEMA_VERSION, object_id
@@ -18,7 +20,7 @@ class ProcessingRepository:
 
     @staticmethod
     def eligible(now):
-        return or_(jobs.c.state == 'pending',
+        return or_((jobs.c.state == 'pending') & (jobs.c.retry_at.is_(None) | (jobs.c.retry_at <= now)),
                    (jobs.c.state == 'failed') & (jobs.c.attempts < 5) & (jobs.c.retry_at <= now),
                    (jobs.c.state == 'running') & (jobs.c.lease_until <= now))
 
@@ -124,14 +126,35 @@ class ProcessingRepository:
                 return rows
 
     def publish(self, job, rows, content):
+        try:
+            return self._publish(job, rows, content)
+        except OperationalError as exc:
+            if getattr(exc.orig, 'sqlstate', None) != '55P03':
+                raise
+            # An input is being edited. NOWAIT avoids a job/input lock cycle;
+            # give the job back without consuming the failure retry budget.
+            with self.store.engine.begin() as c:
+                c.execute(update(jobs).where(jobs.c.id == job['id'], jobs.c.lease_token == job['lease_token']).values(
+                    state='pending', lease_token=None, lease_until=None, attempts=jobs.c.attempts - 1,
+                    retry_at=utcnow() + timedelta(seconds=5), updated_at=utcnow()))
+            return False
+
+    def _publish(self, job, rows, content):
         from ..storage import records, sources
-        # Same lock order as ingest/purge: source writer first, then job row.
-        with self.store.writer_lock(), self.store.engine.begin() as c:
+        # Ingest and deletion enqueue while holding this same job row. The
+        # generation check therefore serializes publication with invalidation;
+        # Input locks use NOWAIT so a concurrent edit cannot create a lock cycle.
+        # Publishing unrelated content does not take the archive/asset lock.
+        guard = self.store.writer_lock() if self.store.engine.dialect.name == 'sqlite' else nullcontext()
+        with guard, self.store.engine.begin() as c:
+            if c.dialect.name == 'postgresql':
+                c.execute(text("SET LOCAL statement_timeout = '60s'"))
             current = c.execute(select(jobs).where(jobs.c.id == job['id']).with_for_update()).mappings().one()
             if current['lease_token'] != job['lease_token']:
                 return False
             expected = {r['id']: r['hash'] for r in rows}
-            present = dict(c.execute(select(records.c.id, records.c.hash).where(records.c.id.in_(expected))).all()) if expected else {}
+            present = dict(c.execute(select(records.c.id, records.c.hash).where(records.c.id.in_(expected))
+                .order_by(records.c.id).with_for_update(read=True, nowait=True)).all()) if expected else {}
             current_members = set(c.scalars(select(members.c.record_id).where(members.c.job_id == job['id'])))
             frozen_members = {r['id'] for r in rows if PROFILES[job['processor']].accepts(r) and job['scope_key'] in scopes(PROFILES[job['processor']], r)}
             profile = PROFILES[job['processor']]
@@ -143,9 +166,9 @@ class ProcessingRepository:
                 c.execute(update(jobs).where(jobs.c.id == job['id']).values(state='pending', lease_token=None, lease_until=None))
                 return False
             identifier = job['id']
-            c.execute(delete(blocks).where(blocks.c.object_id == identifier))
-            c.execute(delete(inputs).where(inputs.c.object_id == identifier))
             if content is None:
+                c.execute(delete(blocks).where(blocks.c.object_id == identifier))
+                c.execute(delete(inputs).where(inputs.c.object_id == identifier))
                 c.execute(delete(objects).where(objects.c.id == identifier))
             else:
                 row = rows[0]
@@ -160,14 +183,30 @@ class ProcessingRepository:
                     c.execute(update(objects).where(objects.c.id == identifier).values(**values))
                 else:
                     c.execute(insert(objects).values(**values))
-                if content.blocks:
-                    # Search overlap covers matches crossing a transport block boundary.
-                    c.execute(insert(blocks), [dict(object_id=identifier, revision=values['revision'], ordinal=i,
-                        key=b.key, type=b.type, text=b.text, refs=b.refs, details=b.metadata,
+                # Unchanged blocks and input links do not churn the text index.
+                old_blocks = {r['ordinal']: dict(r) for r in c.execute(select(blocks).where(blocks.c.object_id == identifier)).mappings()}
+                replacements = []
+                for i, b in enumerate(content.blocks):
+                    value = dict(object_id=identifier, ordinal=i, key=b.key, type=b.type,
+                        text=b.text, refs=b.refs, details=b.metadata,
                         search_text=(content.blocks[i-1].text[-200:] if i and (b.type != 'message' or b.metadata.get('continuation')) else '') + b.text)
-                        for i, b in enumerate(content.blocks)])
-                if rows:
-                    c.execute(insert(inputs), [dict(object_id=identifier, record_id=r['id'], input_hash=r['hash']) for r in rows])
+                    old = old_blocks.get(i)
+                    if old is None or any(old[k] != v for k, v in value.items()):
+                        replacements.append(dict(value, revision=values['revision']))
+                removed = set(old_blocks) - set(range(len(content.blocks)))
+                replaced = {b['ordinal'] for b in replacements} & old_blocks.keys()
+                if removed or replaced:
+                    c.execute(delete(blocks).where(blocks.c.object_id == identifier, blocks.c.ordinal.in_(removed | replaced)))
+                if replacements:
+                    c.execute(insert(blocks), replacements)
+                old_inputs = dict(c.execute(select(inputs.c.record_id, inputs.c.input_hash).where(inputs.c.object_id == identifier)).all())
+                obsolete = {key for key, value in old_inputs.items() if expected.get(key) != value}
+                if obsolete:
+                    c.execute(delete(inputs).where(inputs.c.object_id == identifier, inputs.c.record_id.in_(obsolete)))
+                new_inputs = [dict(object_id=identifier, record_id=key, input_hash=value)
+                              for key, value in expected.items() if old_inputs.get(key) != value]
+                if new_inputs:
+                    c.execute(insert(inputs), new_inputs)
             c.execute(update(jobs).where(jobs.c.id == identifier).values(published_generation=job['desired_generation'],
                 state='ready', lease_token=None, lease_until=None, retry_at=None, error_code=None, updated_at=utcnow()))
             return True
@@ -201,10 +240,14 @@ class ProcessingRepository:
         selected = {processor} if processor else set(COLLECTION_PROFILES)
         kinds = {kind for name, profile in PROFILES.items() if name in selected for kind in profile.KINDS}
         with self.store.writer_lock(), self.store.engine.begin() as c:
+            scan_all = True
             if background_page:
                 profile_versions = {name: profile.PROFILE_VERSION for name, profile in COLLECTION_PROFILES.items()}
                 progress = c.scalar(select(checkpoints.c.value).where(checkpoints.c.source == 'processing:reading-backfill')) or {}
-                if progress.get('profiles') != profile_versions: progress = {}
+                scan_all = progress.get('scan_all', progress.get('profiles') != profile_versions)
+                if progress.get('profiles') != profile_versions:
+                    progress = {}
+                    scan_all = True
                 if progress.get('complete'):
                     return {'enqueued': 0, 'scanned': 0, 'next_after': None, 'complete': True}
                 after = progress.get('after')
@@ -217,7 +260,23 @@ class ProcessingRepository:
                 branches.append(select(branch.c.id))
             identifiers = union_all(*branches).subquery()
             keys = list(c.scalars(select(identifiers.c.id).order_by(identifiers.c.id).limit(limit + 1)))
-            rows = list(c.execute(select(records).where(records.c.id.in_(keys[:limit])).order_by(records.c.id)).mappings()) if keys else []
+            body_keys = keys[:limit]
+            if background_page and not scan_all and not force and body_keys:
+                # Ingest saves routing links transactionally. With the same rule
+                # versions, existing links do not need the original JSON again.
+                metadata_rows = list(c.execute(select(records.c.id, records.c.kind).where(records.c.id.in_(body_keys))))
+                kinds_by_id = {row.id: row.kind for row in metadata_rows}
+                linked = list(c.execute(select(members.c.record_id, jobs.c.processor, jobs.c.profile_version)
+                    .join(jobs, jobs.c.id == members.c.job_id).where(members.c.record_id.in_(body_keys), jobs.c.processor.in_(selected))))
+                covered, outdated = set(), set()
+                for link in linked:
+                    profile = PROFILES[link.processor]
+                    if link.profile_version != profile.PROFILE_VERSION:
+                        outdated.add(link.record_id)
+                    elif kinds_by_id[link.record_id] in profile.KINDS:
+                        covered.add(link.record_id)
+                body_keys = [key for key in body_keys if key not in covered or key in outdated]
+            rows = list(c.execute(select(records).where(records.c.id.in_(body_keys)).order_by(records.c.id)).mappings()) if body_keys else []
             batch = rows[:limit]
             wanted, record_routes = {}, {}
             for row in batch:
@@ -251,11 +310,11 @@ class ProcessingRepository:
                         timezone=row['timezone'], title=row['kind'], preview='', state='pending', details={}, warnings=[], coverage={}))
                 new_links = [dict(job_id=key, record_id=rid) for rid in repair for key in record_routes[rid]]
                 if new_links: c.execute(insert(members), new_links)
-            result = {'enqueued': len(affected), 'scanned': min(len(rows), limit),
+            result = {'enqueued': len(affected), 'scanned': min(len(keys), limit),
                       'next_after': keys[limit-1] if len(keys) > limit else None}
             if background_page:
                 result['complete'] = result['next_after'] is None
-                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete']}
+                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete'], 'scan_all': scan_all}
                 values = dict(source='processing:reading-backfill', value=value, updated_at=utcnow())
                 updated = c.execute(update(checkpoints).where(checkpoints.c.source == values['source']).values(**values))
                 if not updated.rowcount: c.execute(insert(checkpoints).values(**values))

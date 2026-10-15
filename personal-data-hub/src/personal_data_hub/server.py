@@ -238,8 +238,7 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
                     h.update(block); out.write(block)
                 out.flush(); os.fsync(out.fileno())
             if h.hexdigest() != asset_id: raise HTTPException(422, "asset_hash_mismatch")
-            with store.lock("hub-asset-and-record-writer"):
-                store.put_asset(Asset(asset_id, path=path))
+            store.put_asset(Asset(asset_id, path=path))
             return {"asset_id": asset_id, "size": size}
         finally: path.unlink(missing_ok=True)
 

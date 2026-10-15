@@ -13,12 +13,13 @@ from .runner import configuration, run, store_from
 def main():
     parser = argparse.ArgumentParser(description="个人信息采集与归档")
     parser.add_argument("--config")
+    parser.add_argument('--skip-schema-init', action='store_true', help='调度父进程已初始化数据库，子任务直接使用现有表')
     sub = parser.add_subparsers(dest="action", required=True)
     for action in ("collect", "backfill", "reconcile", "import-legacy"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
     sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
     sub.add_parser("processing-status")
-    p = sub.add_parser("process-pending"); p.add_argument("--limit", type=int, default=50); p.add_argument('--lane', choices=('reading', 'model'), default='reading')
+    p = sub.add_parser("process-pending"); p.add_argument("--limit", type=int, default=50); p.add_argument('--lane', choices=('reading', 'model'), default='reading'); p.add_argument('--max-seconds', type=int)
     p = sub.add_parser("rebuild-content"); p.add_argument("--source"); p.add_argument("--force", action="store_true"); p.add_argument("--after"); p.add_argument("--limit", type=int, default=250, help="每个事务的扫描条数"); p.add_argument("--one-page", action="store_true")
     p.add_argument('--background-page', action='store_true', help='后台单页回填；在同一事务保存进度')
     from .processing.registry import PROFILES
@@ -43,10 +44,10 @@ def main():
             print(canonical({"collection_error": error_detail(exc)}), file=sys.stderr)
             raise SystemExit(1) from None
         return
-    store = store_from(config)
+    store = store_from(config, initialize=not args.skip_schema_init)
     if args.action == "process-pending":
         from .processing.worker import drain
-        result = drain(store, args.limit, lane=args.lane, config=config)
+        result = drain(store, args.limit, lane=args.lane, config=config, max_seconds=args.max_seconds)
         print(canonical(result))
         if result['failed']: raise SystemExit(1)
         return
