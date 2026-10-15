@@ -13,8 +13,9 @@ from .runner import configuration, run, store_from
 def main():
     parser = argparse.ArgumentParser(description="个人信息采集与归档")
     parser.add_argument("--config")
+    parser.add_argument('--skip-schema-init', action='store_true', help='调度父进程已初始化数据库，子任务直接使用现有表')
     sub = parser.add_subparsers(dest="action", required=True)
-    for action in ("collect", "backfill", "reconcile", "import-legacy"):
+    for action in ("collect", "backfill", "reconcile"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
     sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
     sub.add_parser("processing-status")
@@ -25,25 +26,12 @@ def main():
     p.add_argument('--processor', choices=sorted(PROFILES))
     p = sub.add_parser("backfill-display"); p.add_argument("--rebuild", action="store_true"); p.add_argument("--kind")
     p = sub.add_parser("import-crm"); p.add_argument("path")
-    p = sub.add_parser("export-source"); p.add_argument("source", choices=["google"]); p.add_argument("--cursor-stdin", action="store_true")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
     p = sub.add_parser("ack-skysight"); p.add_argument("--source", choices=["skysight-raw", "skysight-summaries"], required=True); p.add_argument("--relative", required=True); p.add_argument("--expected-hash", required=True)
     sub.add_parser("ingest-network")
     args = parser.parse_args()
     config = configuration(args.config)
-    if args.action == "export-source":
-        from dataclasses import asdict
-        from .runner import adapter
-        request = json.load(sys.stdin) if args.cursor_stdin else {}
-        try:
-            for batch in adapter(config["sources"][args.source]).collect(request.get("cursor", {}), instant(request.get("since"))):
-                if any(r.assets for r in batch.records): raise ValueError("isolated_source_assets_unsupported")
-                print(canonical(asdict(batch)), flush=True)
-        except Exception as exc:
-            print(canonical({"collection_error": error_detail(exc)}), file=sys.stderr)
-            raise SystemExit(1) from None
-        return
-    store = store_from(config)
+    store = store_from(config, initialize=not args.skip_schema_init)
     if args.action == "process-pending":
         from .processing.worker import drain
         result = drain(store, args.limit, lane=args.lane, config=config)
@@ -108,7 +96,7 @@ def main():
     failed = False
     for source in selected:
         settings = config["sources"][source]
-        if args.action in ("import-legacy", "reconcile"):
+        if args.action == "reconcile":
             settings = dict(settings)
             settings["force_full"] = True
         if not settings.get("enabled", True): continue

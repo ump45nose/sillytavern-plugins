@@ -96,19 +96,10 @@ sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target 
 
 MCP 保留线上已有 `get_daily_chat_records`，支持按日期分页读取已同步微信聊天原文，不代发消息。公共基座的新增限流、超时及输出限制在本次 CRM 迁移中关闭，保留原成功返回结构。
 
-## Codex Skylight 与 Memos 日报
+## Skysight 摘要
 
-新增只读工具 `get_daily_codex_skylight` 和 `get_daily_memos_report`，`day` 均可省略，
-默认取 `Asia/Shanghai` 的今天，也支持 `YYYY-MM-DD` 历史查询。Skylight 读取现有
-Skysight 同步摘要，优先 6 小时摘要并用 10 分钟摘要补空档；`summary_type=all` 可读全部文件。
-Memos 按 `#日报 YYYY-MM-DD` 标题筛选指定作者的正常日报，补写日期不会改变业务日期。
-正文保留原样，长正文通过 `get_daily_review_content` 续读；当天无记录返回 `empty_day=true`，
-源未配置、不可读或损坏则明确报错。
+只读工具 `get_daily_codex_skylight` 读取已同步摘要，默认按 Asia/Shanghai 今天查询。preferred 优先 6h，用 10min 补空档，完整正文可通过 `get_daily_review_content` 续读，source 仅支持 `codex_skylight`。
 
-生产清单只读挂载已有摘要目录和 Memos 0.30 数据目录（包含 WAL/SHM），不改动源数据。
-清单启用每日北京时间 **23:00** 的 `crm.daily_codex_skylight.ready` 与
-`crm.daily_memos_report.ready`，沿用现有 `/mcp` 的 `events/list`、`events/subscribe` 和
-签名 Webhook 投递。订阅只对配置的 OAuth 所有者开放；事件提供当日不可变快照的读取参数，
-正文由 `get_daily_review_event_report` / `get_daily_review_event_content` 受保护读取。
-发布失败会重试同一快照，重启不重复生产已经完成的业务日，停机后按原业务日期补发。
-使用与配置示例见 [使用说明](docs/usage.md) 与 [部署说明](docs/deployment.md)。
+日报事件可显式启用 `crm.daily_codex_skylight.ready`，沿用已有身份和冻结快照读取；统一 Hub 当前关闭该独立事件，保留聊天事件。Memos 日报查询、源配置和事件生产已移除。旧快照文件及订阅状态保留，不重新生产旧事件。
+
+统一 Hub 入口及本次来源变化见仓库根 README 和 `docs/plans/2026-10-15-source-cleanup.md`。Mac 调整清单在 `docs/client-requirements/source-cleanup.md`。

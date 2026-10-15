@@ -74,23 +74,22 @@ class ArchiveDailyReviews:
     def __init__(self, store): self.store = store
 
     def snapshot(self, source, day=None, timezone="Asia/Shanghai", summary_type="preferred"):
-        from personal_crm.daily_review import business_date, DailyReviewService
+        from personal_crm.daily_review import business_date, SOURCES
+        if source not in SOURCES: raise ValueError("unknown daily review source")
         selected, zone = business_date(day, timezone)
         start = datetime.combine(selected, time.min, zone)
         rows = []
         offset = 0
-        kind = "computer_summary" if source == "codex_skylight" else "memo"
+        kind = "computer_summary"
         while True:
-            page = self.store.list_records(kind=kind, offset=offset, limit=1000, start=start if kind == "computer_summary" else None, end=start + timedelta(days=1) if kind == "computer_summary" else None)
+            page = self.store.list_records(kind=kind, offset=offset, limit=1000, start=start, end=start + timedelta(days=1))
             rows.extend(page)
             if len(page) < 1000: break
             offset += len(page)
         result = []
         for row in rows:
             normal = row["normalized"]
-            if kind == "memo":
-                if normal.get("state") != "NORMAL" or not normal.get("content", "").strip() or normal["content"].lstrip().splitlines()[0].strip() not in {f"#日报 {selected}", f"# 日报 {selected}"}: continue
-            elif summary_type in ("6h", "10min") and normal.get("interval") != summary_type: continue
+            if summary_type in ('6h', '10min') and normal.get('interval') != summary_type: continue
             result.append({"id": row["id"], "source": source, "content": normal.get("content", ""), "source_ref": normal.get("source_ref"), "started_at": row["occurred_at"].isoformat() if row["occurred_at"] else None, "summary_type": normal.get("interval"), "title": normal.get("content", "").splitlines()[0] if normal.get("content") else ""})
         if summary_type == "preferred" and kind == "computer_summary":
             # 使用原有 6h 覆盖 / 10min 补齐算法。

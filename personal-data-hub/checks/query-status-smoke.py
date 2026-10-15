@@ -42,12 +42,12 @@ with tempfile.TemporaryDirectory() as tmp:
         "database_url": "sqlite:///" + str(root / "archive.sqlite"),
         "asset_root": str(root / "assets"),
         "hub_viewer_token_file": str(root / "viewer"),
-        "sources": {"large": {"adapter": "files"}},
+        "sources": {"large": {"adapter": "skysight"}},
     }
     app = create_app(config, webhook_only=True)
     store = app.state.hub_store
     store.ingest("large", Batch(records=[
-        Record(str(i), "memo", {"title": "huge " + str(i), "events": "AX\x00" * 100_000},
+        Record(str(i), "computer_summary", {"title": "huge " + str(i), "events": "AX\x00" * 100_000},
                {"content": "long body " * 45_000}, instant("2026-10-06T01:00:00Z"),
                assets=[Asset("note.txt", content=b"original")]) for i in range(2)
     ]))

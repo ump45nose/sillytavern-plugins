@@ -62,12 +62,14 @@ def serve(store, config, config_path=None):
     limit = max(1, min(8, int(config.get('collector_workers', 3))))
     path = str(config_path or os.environ.get('HUB_CONFIG', '/home/yuwk/.config/personal-data-hub/config.json'))
     hub = str(Path(sys.executable).parent / 'hub')
+    worker_command = [hub, '--config', path, '--skip-schema-init']
     previous_handler = signal.getsignal(signal.SIGTERM)
     processing_worker = None
     processing_deadline = 0
     processing_kind = None
     processing_next = 'drain'
-    processing_backfill_pending = config.get('processing_backfill_on_start', True)
+    processing_backfill_pending = config.get('processing_backfill_on_start', False)
+    processing_interval = int(config.get('processing_interval_seconds', 6 * 60 * 60))
     model_worker = None
     model_deadline = 0
 
@@ -105,22 +107,22 @@ def serve(store, config, config_path=None):
                         processing_backfill_pending = not store.cursor('processing:reading-backfill').get('complete', False)
                     processing_next = 'drain' if processing_kind == 'rebuild' else 'rebuild'
                     processing_worker = None
-                    processing_deadline = now + (30 if code else 5)
+                    processing_deadline = now + processing_interval
             if config.get('processing_enabled', True) and processing_worker is None and now >= processing_deadline:
                 from .processing.repository import ProcessingRepository
                 command = None
                 has_pending = ProcessingRepository(store).has_pending()
                 if processing_backfill_pending and (processing_next == 'rebuild' or not has_pending):
-                    command = [hub, '--config', path, 'rebuild-content', '--limit', '50', '--background-page']
+                    command = worker_command + ['rebuild-content', '--limit', '50', '--background-page']
                     processing_kind = 'rebuild'
                 elif has_pending:
-                    command = [hub, '--config', path, 'process-pending', '--limit', '50']
+                    command = worker_command + ['process-pending', '--limit', '1']
                     processing_kind = 'drain'
                 if command:
                     process = subprocess.Popen(command, start_new_session=True)
                     processing_worker = Worker(process, now, 120)
                 else:
-                    processing_deadline = now + 5
+                    processing_deadline = now + processing_interval
             for source, worker in list(active.items()):
                 code = worker.process.poll()
                 if code is None and now - worker.started < worker.timeout:
@@ -130,7 +132,7 @@ def serve(store, config, config_path=None):
                     interrupted(store, source, '采集超过执行时限，已结束进程并安排自动重试')
                     code = 1
                 del active[source]
-                interval = int(selected[source].get('interval_seconds', 3600))
+                interval = int(selected[source].get('interval_seconds', 6 * 60 * 60))
                 failures[source] = failures.get(source, 0) + 1 if code else 0
                 delay = retry_delay(failures[source], interval) if code else interval
                 deadlines[source] = now + delay
@@ -142,7 +144,7 @@ def serve(store, config, config_path=None):
                     continue
                 settings = selected[source]
                 timeout = max(30, int(settings.get('run_timeout_seconds', 900)))
-                process = subprocess.Popen([hub, '--config', path, 'collect', source], start_new_session=True)
+                process = subprocess.Popen(worker_command + ['collect', source], start_new_session=True)
                 active[source] = Worker(process, now, timeout)
             time.sleep(1)
     except KeyboardInterrupt:

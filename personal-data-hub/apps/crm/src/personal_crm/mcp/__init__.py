@@ -53,8 +53,8 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None,
     runtime = _runtime(settings)
     server = create_server(
         runtime,
-        instructions=("可读取指定日期的微信聊天原文，以及已同步 Codex Skylight 和 Memos 日报。"
-                      "Skylight、Memos 默认查询北京时间今天；长正文可续读。"
+        instructions=("可读取指定日期的微信聊天原文，以及已同步 Codex Skylight 摘要。"
+                      "Skylight 默认查询北京时间今天；长正文可续读。"
                       "每日事件提供冻结快照的读取参数。不代发消息；"
                       "仅采集归档与只读查询，不执行提醒或其他业务处理。"),
     )
@@ -170,8 +170,6 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None,
 
         daily_reviews = DailyReviewService(
             skylight_path=settings.codex_skylight_path,
-            memos_database_path=settings.memos_database_path,
-            memos_creator_id=settings.memos_creator_id,
         )
     from personal_crm.daily_review import register_daily_review_tools
 

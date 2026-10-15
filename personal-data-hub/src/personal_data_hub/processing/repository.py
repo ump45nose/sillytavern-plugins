@@ -4,9 +4,10 @@ from contextlib import nullcontext
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, insert, or_, select, union_all, update
+from sqlalchemy import delete, func, insert, or_, select, text, union_all, update
 
 from ..contracts import instant, utcnow
+from ..storage import active_sources
 from .contracts import SCHEMA_VERSION, object_id
 from .registry import PROFILES, COLLECTION_PROFILES, routes, scopes, header
 from .schema import blocks, inputs, jobs, members, model_results, objects
@@ -25,15 +26,15 @@ class ProcessingRepository:
     def has_pending(self, lane='reading'):
         processors = [name for name, profile in PROFILES.items() if getattr(profile, 'LANE', 'reading') == lane]
         with self.store.engine.connect() as c:
-            return c.scalar(select(jobs.c.id).where(self.eligible(utcnow()), jobs.c.processor.in_(processors)).limit(1)) is not None
+            return c.scalar(select(jobs.c.id).where(self.eligible(utcnow()), jobs.c.processor.in_(processors), jobs.c.source.in_(active_sources())).limit(1)) is not None
 
     def affected(self, c, record_id):
         result = {(r.processor, r.source, r.scope_key) for r in c.execute(
             select(jobs.c.processor, jobs.c.source, jobs.c.scope_key).join(inputs, inputs.c.object_id == jobs.c.id)
-            .where(inputs.c.record_id == record_id))}
+            .where(inputs.c.record_id == record_id, jobs.c.processor.in_(PROFILES), jobs.c.source.in_(active_sources())))}
         result.update((r.processor, r.source, r.scope_key) for r in c.execute(
             select(jobs.c.processor, jobs.c.source, jobs.c.scope_key).join(members, members.c.job_id == jobs.c.id)
-            .where(members.c.record_id == record_id)))
+            .where(members.c.record_id == record_id, jobs.c.processor.in_(PROFILES), jobs.c.source.in_(active_sources()))))
         return result
 
     def enqueue(self, c, processor, source, scope_key):
@@ -94,7 +95,7 @@ class ProcessingRepository:
         guard = self.store.writer_lock() if self.store.engine.dialect.name == 'sqlite' else nullcontext()
         with guard, self.store.engine.begin() as c:
             processors = [name for name, profile in PROFILES.items() if getattr(profile, 'LANE', 'reading') == lane]
-            statement = select(jobs).where(eligible, jobs.c.processor.in_(processors)).order_by(jobs.c.updated_at, jobs.c.id).limit(1).with_for_update(skip_locked=True)
+            statement = select(jobs).where(eligible, jobs.c.processor.in_(processors), jobs.c.source.in_(active_sources())).order_by(jobs.c.updated_at, jobs.c.id).limit(1).with_for_update(skip_locked=True)
             job = c.execute(statement).mappings().first()
             if not job:
                 return None
@@ -125,8 +126,18 @@ class ProcessingRepository:
 
     def publish(self, job, rows, content):
         from ..storage import records, sources
-        # Same lock order as ingest/purge: source writer first, then job row.
-        with self.store.writer_lock(), self.store.engine.begin() as c:
+        # Preserve the ingest/purge lock order. Background publication yields to
+        # an active writer and uses one connection for the lock and transaction.
+        guard = self.store.writer_lock() if self.store.engine.dialect.name == 'sqlite' else nullcontext()
+        with guard, self.store.engine.begin() as c:
+            if c.dialect.name == 'postgresql':
+                c.execute(text("SET LOCAL transaction_timeout = '10s'"))
+                acquired = c.scalar(text('SELECT pg_try_advisory_xact_lock(:key)'),
+                                    {'key': self.store.lock_id('hub-asset-and-record-writer')})
+                if not acquired:
+                    c.execute(update(jobs).where(jobs.c.id == job['id'], jobs.c.lease_token == job['lease_token']).values(
+                        state='pending', lease_token=None, lease_until=None))
+                    return False
             current = c.execute(select(jobs).where(jobs.c.id == job['id']).with_for_update()).mappings().one()
             if current['lease_token'] != job['lease_token']:
                 return False
@@ -174,7 +185,7 @@ class ProcessingRepository:
 
     def fail(self, job, error):
         # Exception text may include private body text. Expose only stable, known error codes.
-        allowed = {'document_body_missing', 'document_requires_one_record', 'conversation_scope_mismatch',
+        allowed = {'conversation_scope_mismatch',
                    'model_not_configured', 'model_response_invalid', 'model_citation_invalid', 'model_response_too_large',
                    'model_budget_exceeded', 'model_credential_missing', 'model_incomplete_response', 'model_input_too_large'}
         import re
@@ -201,23 +212,43 @@ class ProcessingRepository:
         selected = {processor} if processor else set(COLLECTION_PROFILES)
         kinds = {kind for name, profile in PROFILES.items() if name in selected for kind in profile.KINDS}
         with self.store.writer_lock(), self.store.engine.begin() as c:
+            scan_all = True
             if background_page:
                 profile_versions = {name: profile.PROFILE_VERSION for name, profile in COLLECTION_PROFILES.items()}
                 progress = c.scalar(select(checkpoints.c.value).where(checkpoints.c.source == 'processing:reading-backfill')) or {}
-                if progress.get('profiles') != profile_versions: progress = {}
+                scan_all = progress.get('scan_all', progress.get('profiles') != profile_versions)
+                if progress.get('profiles') != profile_versions:
+                    progress = {}
+                    scan_all = True
                 if progress.get('complete'):
                     return {'enqueued': 0, 'scanned': 0, 'next_after': None, 'complete': True}
                 after = progress.get('after')
             branches = []
             for kind in sorted(kinds):
-                branch = select(records.c.id).where(records.c.kind == kind).order_by(records.c.id).limit(limit + 1)
+                branch = select(records.c.id).where(records.c.kind == kind, records.c.source.in_(active_sources())).order_by(records.c.id).limit(limit + 1)
                 if source: branch = branch.where(records.c.source == source)
                 if after: branch = branch.where(records.c.id > after)
                 branch = branch.subquery()
                 branches.append(select(branch.c.id))
             identifiers = union_all(*branches).subquery()
             keys = list(c.scalars(select(identifiers.c.id).order_by(identifiers.c.id).limit(limit + 1)))
-            rows = list(c.execute(select(records).where(records.c.id.in_(keys[:limit])).order_by(records.c.id)).mappings()) if keys else []
+            body_keys = keys[:limit]
+            if background_page and not scan_all and not force and body_keys:
+                # Ingest saves routing links transactionally. With the same rule
+                # versions, existing links do not need the original JSON again.
+                metadata_rows = list(c.execute(select(records.c.id, records.c.kind).where(records.c.id.in_(body_keys))))
+                kinds_by_id = {row.id: row.kind for row in metadata_rows}
+                linked = list(c.execute(select(members.c.record_id, jobs.c.processor, jobs.c.profile_version)
+                    .join(jobs, jobs.c.id == members.c.job_id).where(members.c.record_id.in_(body_keys), jobs.c.processor.in_(selected))))
+                covered, outdated = set(), set()
+                for link in linked:
+                    profile = PROFILES[link.processor]
+                    if link.profile_version != profile.PROFILE_VERSION:
+                        outdated.add(link.record_id)
+                    elif kinds_by_id[link.record_id] in profile.KINDS:
+                        covered.add(link.record_id)
+                body_keys = [key for key in body_keys if key not in covered or key in outdated]
+            rows = list(c.execute(select(records).where(records.c.id.in_(body_keys)).order_by(records.c.id)).mappings()) if body_keys else []
             batch = rows[:limit]
             wanted, record_routes = {}, {}
             for row in batch:
@@ -251,11 +282,11 @@ class ProcessingRepository:
                         timezone=row['timezone'], title=row['kind'], preview='', state='pending', details={}, warnings=[], coverage={}))
                 new_links = [dict(job_id=key, record_id=rid) for rid in repair for key in record_routes[rid]]
                 if new_links: c.execute(insert(members), new_links)
-            result = {'enqueued': len(affected), 'scanned': min(len(rows), limit),
+            result = {'enqueued': len(affected), 'scanned': min(len(keys), limit),
                       'next_after': keys[limit-1] if len(keys) > limit else None}
             if background_page:
                 result['complete'] = result['next_after'] is None
-                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete']}
+                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete'], 'scan_all': scan_all}
                 values = dict(source='processing:reading-backfill', value=value, updated_at=utcnow())
                 updated = c.execute(update(checkpoints).where(checkpoints.c.source == values['source']).values(**values))
                 if not updated.rowcount: c.execute(insert(checkpoints).values(**values))
@@ -264,18 +295,18 @@ class ProcessingRepository:
     def status(self):
         from ..storage import records
         with self.store.engine.connect() as c:
-            counts = {r.state: r.count for r in c.execute(select(jobs.c.state, func.count().label('count')).where(jobs.c.processor.in_(COLLECTION_PROFILES)).group_by(jobs.c.state))}
-            obj_counts = {r.state: r.count for r in c.execute(select(objects.c.state, func.count().label('count')).where(objects.c.processor.in_(COLLECTION_PROFILES)).group_by(objects.c.state))}
+            counts = {r.state: r.count for r in c.execute(select(jobs.c.state, func.count().label('count')).where(jobs.c.processor.in_(COLLECTION_PROFILES), jobs.c.source.in_(active_sources())).group_by(jobs.c.state))}
+            obj_counts = {r.state: r.count for r in c.execute(select(objects.c.state, func.count().label('count')).where(objects.c.processor.in_(COLLECTION_PROFILES), objects.c.source.in_(active_sources())).group_by(objects.c.state))}
             coverage = []
-            for row in c.execute(select(records.c.source, records.c.kind, func.count().label('count')).group_by(records.c.source, records.c.kind)):
+            for row in c.execute(select(records.c.source, records.c.kind, func.count().label('count')).where(records.c.source.in_(active_sources())).group_by(records.c.source, records.c.kind)):
                 supported = any(row.kind in p.KINDS for p in COLLECTION_PROFILES.values())
                 coverage.append(dict(source=row.source, kind=row.kind, records=row.count, supported=supported,
                     processors=[p.PROCESSOR for p in COLLECTION_PROFILES.values() if row.kind in p.KINDS],
-                    reading_policy='unsupported' if not supported else 'auxiliary' if row.kind in ('recording_artifact','legacy_source_evidence','source_artifact','collector_meta','collector_gaps','sync_clients','subscription_config','token_device','computer_segment_invalid','recording_processing_status') else 'business' if supported else 'unsupported'))
+                    reading_policy='unsupported' if not supported else 'auxiliary' if row.kind in ('recording_artifact','collector_meta','collector_gaps','sync_clients','computer_segment_invalid','recording_processing_status') else 'business' if supported else 'unsupported'))
             errors = [dict(r) for r in c.execute(select(jobs.c.id, jobs.c.source, jobs.c.state, jobs.c.error_code,
-                jobs.c.attempts, jobs.c.retry_at).where(jobs.c.state == 'failed', jobs.c.processor.in_(COLLECTION_PROFILES)).order_by(jobs.c.updated_at).limit(50)).mappings()]
+                jobs.c.attempts, jobs.c.retry_at).where(jobs.c.state == 'failed', jobs.c.processor.in_(COLLECTION_PROFILES), jobs.c.source.in_(active_sources())).order_by(jobs.c.updated_at).limit(50)).mappings()]
             lanes = {}
-            for row in c.execute(select(jobs.c.processor, jobs.c.state, func.count().label('count')).where(jobs.c.processor.in_(COLLECTION_PROFILES)).group_by(jobs.c.processor, jobs.c.state)):
+            for row in c.execute(select(jobs.c.processor, jobs.c.state, func.count().label('count')).where(jobs.c.processor.in_(COLLECTION_PROFILES), jobs.c.source.in_(active_sources())).group_by(jobs.c.processor, jobs.c.state)):
                 lane = getattr(PROFILES.get(row.processor), 'LANE', 'reading')
                 counts_for_lane = lanes.setdefault(lane, {})
                 counts_for_lane[row.state] = counts_for_lane.get(row.state, 0) + row.count

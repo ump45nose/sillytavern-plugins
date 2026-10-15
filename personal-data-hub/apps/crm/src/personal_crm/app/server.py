@@ -31,8 +31,6 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
     daily_review_reports = {}
     daily_reviews = DailyReviewService(
         skylight_path=runtime.codex_skylight_path,
-        memos_database_path=runtime.memos_database_path,
-        memos_creator_id=runtime.memos_creator_id,
     )
     if hub_store is not None:
         from personal_data_hub.mcp import ArchiveDailyReviews
@@ -67,11 +65,11 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
             daily_data=daily_data,
         )
     if runtime.daily_review_events_enabled:
-        if not runtime.codex_skylight_path or not runtime.memos_database_path:
-            raise ValueError("daily review events require both read-only source paths")
+        if not runtime.codex_skylight_path:
+            raise ValueError("daily review events require the Skysight read-only source path")
         from personal_crm.daily_review_events import DailyReviewEventProducer
 
-        for source in ("codex_skylight", "memos"):
+        for source in ("codex_skylight",):
             daily_review_reports[source] = DailyReviewEventProducer(
                 daily_reviews, events, source=source, owner=runtime.daily_review_event_owner,
                 storage_path=runtime.daily_review_event_storage_path,
@@ -134,25 +132,25 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
     def personal_review_home() -> str:
         """提供 Personal Review OAuth 的公开用途说明与隐私政策入口。"""
 
-        # 页面不暴露内部部署信息，只解释 Google 只读数据的用途与边界。
+        # 页面不暴露内部部署信息，说明本服务归档信息的用途与边界。
         return """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Personal Review</title></head><body><main>
 <h1>Personal Review</h1>
-<p>Personal Review 是个人复盘工具，仅以只读方式获取本人 Google Calendar 与 Google Tasks 的当日摘要，用于生成待人工确认的日报材料。</p>
-<p>Google 数据不会公开分享、出售或用于广告；最终记录由用户确认后才进入个人账本。</p>
+<p>Personal Data Hub 保存本人同步的微信对话、电脑历史、录音与转录、健康、账单和网络流量，并提供授权后的只读查询。</p>
+<p>归档信息仅供本人使用，不公开分享、出售或用于广告。</p>
 <nav><a href="/personal-review/privacy">隐私政策</a> · <a href="/personal-review/terms">服务条款</a></nav>
 </main></body></html>"""
 
     @app.get("/personal-review/privacy", response_class=HTMLResponse, include_in_schema=False)
     def personal_review_privacy() -> str:
-        """公开说明 Personal Review 对 Google 用户数据的访问和处理方式。"""
+        """公开说明个人信息归档的访问和处理方式。"""
 
         return """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Personal Review 隐私政策</title></head><body><main>
 <h1>Personal Review 隐私政策</h1>
-<p>Personal Review 仅访问授权账号的 Google Calendar 与 Google Tasks 只读数据，并只提取生成个人日报所需的当日摘要。</p>
+<p>Personal Data Hub 只保存本人明确接入的六类信息；已退出来源不再采集。历史归档的删除由用户明确决定。</p>
 <p>数据保存在用户自主管理的私有设备中，不出售、不用于广告，也不向第三方共享。用户可以随时在 Google 账号中撤销授权，并删除本地凭据与摘要。</p>
 <p>本应用对 Google API 数据的使用遵守 Google API Services User Data Policy，包括 Limited Use 要求。</p>
 <p><a href="/personal-review">返回首页</a></p>

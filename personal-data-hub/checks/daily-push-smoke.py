@@ -36,7 +36,7 @@ async def check():
         (root / "viewer").write_text("daily-read")
         config = {"database_url": "sqlite:///" + str(root / "hub.db"),
                   "asset_root": str(root / "assets"), "hub_viewer_token_file": str(root / "viewer"),
-                  "sources": {}}
+                  "sources": {"health":{"adapter":"health"},"finance":{"adapter":"bills"}}}
         app = create_app(config, webhook_only=True)
         store = app.state.hub_store
         repo = CrmRepository(config["database_url"])
@@ -53,7 +53,7 @@ async def check():
             service.record_interaction(person_id=person.id, occurred_at=instant(stamp),
                 direction=direction, channel="wechat", summary="消息内容：" + text)
         def put(eid, kind, raw, normal=None, stamp="2026-10-09T12:00:00+08:00"):
-            store.ingest("daily-test", Batch(records=[Record(eid, kind, raw, normal or {}, instant(stamp))]))
+            store.ingest("health" if kind == "health_payloads" else "finance", Batch(records=[Record(eid, kind, raw, normal or {}, instant(stamp))]))
         payload = {"steps": [{"count": 900, "start_time": "2026-10-09T00:00:00+08:00", "end_time": "2026-10-09T12:00:00+08:00"}],
                    "sleep": [{"duration_seconds": 28800, "session_end_time": "2026-10-09T07:00:00+08:00"}],
                    "resting_heart_rate": [{"bpm": 66, "time": "2026-10-08T08:00:00+08:00"}],

@@ -1,3 +1,17 @@
+# 2026-10-15 来源清理集成要求
+
+当前清理在独立聚合 worktree，尚未覆盖主工作区或部署。主工作区已有未提交修改，另有 P1 性能修复分支；先核对归属、合并差异并完成相关验证，再构建发布。不得将本轮清理直接覆盖 P1 的 CRM、发布锁或调度改动。
+
+1. 分别用 `deployment/cleanup-source-config.py` 为宿主和容器私有配置生成独立候选。它只移除不再支持的来源条目；不复制密钥到仓库、不改变保留来源的设置和后台暂停状态。
+2. 新镜像拒绝含已退出适配器的配置；部署必须使用候选。历史数据库行、任务、水位、附件和 OAuth 状态保留。原系统的独立服务与任务不调整。
+3. `deployment/build-image.sh` 不再打包或依赖 usage-monitor-mcp。公共 SDK、认证、镜像基线和既有挂载沿用现有流程。
+4. 指定正式 mcp 组的 crm 服务更新；不启动已禁用的轮询/加工，不运行全库回填或旧 collect all。
+5. 最终检查保留来源推送、认证查询和工具发现，确认 Memos 日报工具不再发现。Mac 按 [调整清单](client-requirements/source-cleanup.md) 在部署后联调。实际部署后才执行启动登记检查。
+
+本轮范围和验证结果见 [清理计划](plans/2026-10-15-source-cleanup.md)。以下保留的是迁移及历次发布记录，其中已移除来源的旧命令不再执行。
+
+---
+
 # 部署与维护
 
 ## 当前 NAS 入口
@@ -170,3 +184,25 @@ insights 读取入口返回 disabled / deferred_to_analysis_module。processing/
 发布后 crm healthy，两项既有宿主服务 active，实际回填位置已推进。31 种阅读类型的正文/依据核对及隔离库的回填续跑检查通过；实际正文搜索仍超时，CRM 全量同步达到执行限时，M5 尚未整体完成。同期其他项目出现的 Face Baseline QA 未登记运行项保留在最终启动检查记录中，不归入本任务修复范围。完整结果见 [M5 记录](collection-m5-validation.md)。
 
 私有回退资料位于 `/home/yuwk/.config/personal-data-hub/releases/collection-m5-20261012/`。只恢复对应的受影响源码和 crm 镜像，保留采集数据、来源与内部回填位置、索引和原凭据；不恢复旧数据库快照。
+
+## 后台负载修复（2026-10-13）
+
+该轮发布 crm 镜像为 `local/personal-data-hub:0.4.8-runtime-performance-20261013`。正式 Compose 仅替换 crm.image，重启原采集及健康 webhook 两项宿主服务。保留 1000:1001 身份、认证、两个持久卷、只读配置挂载及 data_net，没有新增服务或修改客户端。
+
+宿主私有配置中，普通来源 interval_seconds 与 processing_interval_seconds 均为 21,600：成功采集后约每 6 小时再次运行，加工窗口持续处理已有队列，空闲后等待 6 小时。processing_backfill_on_start 显式为 false；历史加工通过定向 rebuild-content 维护，不再自动遍历。Emby 当前只有 /Sessions 观察接口，保持 60 秒采样；既有推送仍正常接收。
+
+周期拉取的相同内容不再更新原件和展示索引的 observed_at，来源是否检查过以 last_run.ended_at 为准；逐条 observed_at 表示最近真实归档或变更时间。显式设备推送保留原观察时间语义。调度父进程初始化数据库一次，子任务带 --skip-schema-init，省去重复 DDL；独立 CLI 默认仍初始化。没有 schema 或来源水位变更，微信模型保持暂停。
+
+Hub healthy、两项宿主服务 active，健康与鉴权阅读接口返回 200，3 项针对性隔离检查通过。发布后没有历史扫描日志，CRM 核对 27,328 条重复记录成功，单轮仍约 321 秒；正文搜索性能及未完成历史加工继续见 [M5 记录](collection-m5-validation.md)。启动检查通过，同期 token-monitor-hub 的独立变更不归入本轮部署。
+
+私有回退资料位于 `/home/yuwk/.config/personal-data-hub/releases/runtime-performance-20261013/`。只恢复受影响源码和 crm 镜像，保留本次确定的每 6 小时调度、自动回填关闭、模型暂停设置及全部业务数据，不恢复旧数据库或旧同步频率。
+
+## 性能止血（2026-10-13）
+
+最终镜像为 `local/personal-data-hub:0.4.9-performance-relief-20261013`。关闭后台加工、自动回填和 CRM 全量轮询；其他轮询单 worker 仍影响响应，因此最终停止并禁用宿主轮询调度器。微信、健康、账单及已有设备推送继续归档，阅读结果、任务和来源水位保留；依赖轮询的来源及阅读加工保持暂停。
+
+代码修正积压绕过加工间隔的行为：成功、失败和超时后均等待配置间隔，每批最多一个任务。发布在单连接事务中尝试取得全局写锁，有入库占用时让位；PostgreSQL 17 的事务内超时将发布限制为 10 秒。保留原件、删除与版本一致性保护，不修改共享数据库全局参数。
+
+宿主连接因 NAS 重启后容器 IP 改变而失败，已将本机两处数据库引用修正为实际 data_net 地址；容器保留原 `postgresql` 服务名。只有 crm 镜像与已有两项宿主服务更新，数据库、身份、授权、挂载和网络保持。临时宿主 IP 不是长期固定入口，后续网络重建需要核对。
+
+四项针对性隔离 PostgreSQL 检查通过，覆盖积压/失败的真实间隔、发布让位及本地超时、更新和删除的旧任务屏障。正式运行结果及恢复边界见 [性能止血记录](performance-relief-20261013.md)。回退继续保持本轮停用设置和新数据，不照搬旧连接 IP 或旧持续加工策略。

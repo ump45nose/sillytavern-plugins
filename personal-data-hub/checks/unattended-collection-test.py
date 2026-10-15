@@ -29,21 +29,21 @@ class UnattendedTests(unittest.TestCase):
    store=Store('sqlite:///'+tmp+'/db',tmp+'/assets')
    with store.engine.begin() as c:c.execute(insert(runs).values(id='old',source='example',started_at=utcnow(),status='running',records=0))
    def fail(*args):
-    yield Batch(records=[Record('one','note',{}, {})],next_cursor={'wrong':True})
+    yield Batch(records=[Record('one','computer_summary',{}, {})],next_cursor={'wrong':True})
     raise TimeoutError()
    with patch.object(runner,'adapter') as a:
     a.return_value.collect.side_effect=fail
-    with self.assertRaises(TimeoutError):runner.run(store,'example',{'adapter':'files'})
+    with self.assertRaises(TimeoutError):runner.run(store,'example',{'adapter':'skysight'})
    self.assertEqual(store.cursor('example'),{})
    with patch.object(runner,'adapter') as a:
     a.return_value.collect.return_value=[Batch(next_cursor={'complete':True})]
-    runner.run(store,'example',{'adapter':'files'})
+    runner.run(store,'example',{'adapter':'skysight'})
    with store.engine.connect() as c:states=c.execute(select(runs.c.status)).scalars().all()
    self.assertEqual(states,['failed','failed','ok']);self.assertEqual(store.cursor('example'),{'complete':True})
  def test_duplicate_batch_touches_freshness_without_reloading_bodies(self):
   with tempfile.TemporaryDirectory() as tmp:
-   store=Store('sqlite:///'+tmp+'/db',tmp+'/assets');store.register('s','owner','files','explicit_only')
-   batch=Batch([Record(str(i),'note',{'text':'content'}, {}) for i in range(20)])
+   store=Store('sqlite:///'+tmp+'/db',tmp+'/assets');store.register('s','owner','skysight','explicit_only')
+   batch=Batch([Record(str(i),'computer_summary',{'text':'content'}, {}) for i in range(20)])
    self.assertEqual(store.ingest('s',batch)['changed'],20)
    queries=[]
    event.listen(store.engine,'before_cursor_execute',lambda c,cur,q,p,ctx,m:queries.append(q))
@@ -54,8 +54,8 @@ class UnattendedTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    store=Store('sqlite:///'+tmp+'/db',tmp+'/assets')
    for source in ('one','two'):
-    store.register(source,'owner','files','explicit_only')
-    store.ingest(source,Batch([Record('same','note',{}, {})]))
+    store.register(source,'owner','skysight','explicit_only')
+    store.ingest(source,Batch([Record('same','computer_summary',{}, {})]))
     with store.engine.begin() as c:c.execute(insert(runs).values(id=source,source=source,started_at=utcnow(),status='ok',records=1))
    queries=[]
    event.listen(store.engine,'before_cursor_execute',lambda c,cur,q,p,ctx,m:queries.append(q))

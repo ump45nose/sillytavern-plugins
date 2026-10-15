@@ -84,10 +84,6 @@ def migrate(store):
         if c.scalar(select(versions.c.version).where(versions.c.version == 2)) is None:
             c.execute(insert(versions).values(version=2))
         if c.scalar(select(versions.c.version).where(versions.c.version == 3)) is None:
-            from ..storage import records
-            # Existing single-record jobs gain membership without rebuilding documents.
-            statement = select(jobs.c.id, records.c.id).join(records, records.c.id == jobs.c.scope_key).where(
-                jobs.c.processor == 'document-v1', records.c.kind.in_(('memo', 'hermes_execution_report')), ~select(members.c.job_id).where(
-                    members.c.job_id == jobs.c.id, members.c.record_id == records.c.id).exists())
-            c.execute(members.insert().from_select(['job_id', 'record_id'], statement))
+            # v3 only repaired the removed document processor's historical jobs.
+            # Retain the schema marker without resuming that pipeline.
             c.execute(insert(versions).values(version=3))

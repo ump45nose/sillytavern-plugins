@@ -1,17 +1,16 @@
-"""只读查询已同步的 Codex Skysight 摘要与 Hermes Memos 日报。"""
+"""只读查询已同步的 Codex Skysight 摘要。"""
 
 from __future__ import annotations
 
 import json
 import re
-import sqlite3
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from personal_crm.core.domain import utcnow
 
-SOURCES = {"codex_skylight", "memos"}
+SOURCES = {"codex_skylight"}
 PAGE_BYTES = 64 * 1024
 SUMMARY_NAME = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-.+-(6h|10min)-memory-summary\.md$"
@@ -88,15 +87,9 @@ class DailyReviewService:
         self,
         *,
         skylight_path: str,
-        memos_database_path: str,
-        memos_creator_id: int = 1,
         clock=utcnow,
     ):
-        if memos_creator_id < 1:
-            raise ValueError("memos creator id must be positive")
         self.skylight_path = skylight_path
-        self.memos_database_path = memos_database_path
-        self.memos_creator_id = memos_creator_id
         self.clock = clock
 
     def _skylight(self, day: date, zone: ZoneInfo, summary_type: str) -> list[dict]:
@@ -138,39 +131,6 @@ class DailyReviewService:
             )
         return records
 
-    def _memos(self, day: date) -> list[dict]:
-        if not self.memos_database_path or not Path(self.memos_database_path).is_file():
-            raise ValueError("Memos daily report source is not configured or unavailable")
-        # 整个源目录需只读挂载，保留 WAL/SHM 的可见性；不得使用 immutable 忽略 WAL。
-        uri = Path(self.memos_database_path).absolute().as_uri() + "?mode=ro"
-        with sqlite3.connect(uri, uri=True, timeout=5) as connection:
-            connection.execute("PRAGMA query_only=ON")
-            rows = connection.execute(
-                "SELECT uid, created_ts, updated_ts, content FROM memo "
-                "WHERE creator_id=? AND row_status='NORMAL' "
-                "AND (content LIKE ? OR content LIKE ?) ORDER BY created_ts, id",
-                (
-                    self.memos_creator_id,
-                    f"%#日报 {day.isoformat()}%",
-                    f"%# 日报 {day.isoformat()}%",
-                ),
-            ).fetchall()
-        records = []
-        for uid, created, updated, content in rows:
-            heading = content.lstrip().splitlines()[0] if content.strip() else ""
-            # 业务日期取日报标题，不把次日补写的日报误归到创建日。
-            if heading.strip() not in {f"#日报 {day}", f"# 日报 {day}"}:
-                continue
-            records.append(
-                {
-                    "id": f"memos/{uid}",
-                    "created_at": datetime.fromtimestamp(created, UTC).isoformat(),
-                    "updated_at": datetime.fromtimestamp(updated, UTC).isoformat(),
-                    "content": content,
-                }
-            )
-        return records
-
     def snapshot(
         self,
         source: str,
@@ -181,11 +141,7 @@ class DailyReviewService:
         if source not in SOURCES:
             raise ValueError("unknown daily review source")
         selected, zone = business_date(day, timezone, self.clock)
-        records = (
-            self._skylight(selected, zone, summary_type)
-            if source == "codex_skylight"
-            else self._memos(selected)
-        )
+        records = self._skylight(selected, zone, summary_type)
         return {
             "metadata": {
                 "source": source,
@@ -243,16 +199,6 @@ def register_daily_review_tools(server, service: DailyReviewService, *, auth):
         return service.query("codex_skylight", day, timezone, offset, limit, summary_type)
 
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
-    def get_daily_memos_report(
-        day: str | None = None, timezone: str = "Asia/Shanghai", offset: int = 0, limit: int = 20
-    ) -> dict:
-        """查询 Hermes 日报流程写入 Memos 的 #日报 YYYY-MM-DD 正文，默认今天。
-
-        按标题业务日期读取指定作者的正常日报，保留全文；empty_day 表示当天尚无日报。
-        """
-        return service.query("memos", day, timezone, offset, limit)
-
-    @server.tool(auth=auth, annotations={"readOnlyHint": True})
     def get_daily_review_content(
         source: str,
         record_id: str,
@@ -261,7 +207,7 @@ def register_daily_review_tools(server, service: DailyReviewService, *, auth):
         offset: int = 0,
         limit: int = 12000,
     ) -> dict:
-        """续读查询结果的完整正文；source 为 codex_skylight 或 memos。
+        """续读查询结果的完整正文；source 为 codex_skylight。
 
         使用查询返回的明确 day；源正文可能更新。事件快照请使用事件正文读取工具。
         """

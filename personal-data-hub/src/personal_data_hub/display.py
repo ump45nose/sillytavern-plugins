@@ -10,14 +10,13 @@ from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, or_, select
-from .storage import display_index as idx
+from .storage import active_sources, display_index as idx
 
-DOMAINS = {"calendar_event": "agenda", "google_task": "agenda", "health_payloads": "health",
-           "people": "social", "interactions": "social", "facts": "social", "computer_summary": "activity",
-           "recording": "recordings", "hermes_execution_report": "reports", "email": "mail", "git_commit": "git", "git_pull_request": "git", "media_playback_snapshot": "activity", "music_playback_event": "activity",
-           "memo": "notes", "memory": "notes", "bill": "finance", "token_day": "usage", "traffic_hourly": "network",
-           "recording_transcript": "recordings", "recording_daily_report": "reports", "recording_summary": "reports", "recording_processing_status": "recordings"}
-MODULES = {"agenda", "health", "social", "activity", "recordings", "reports", "mail", "git", "notes", "finance", "usage", "network"}
+DOMAINS = {'health_payloads': 'health', 'people': 'social', 'interactions': 'social', 'facts': 'social',
+           'computer_summary': 'activity', 'recording': 'recordings', 'bill': 'finance', 'traffic_hourly': 'network',
+           'recording_transcript': 'recordings', 'recording_daily_report': 'reports',
+           'recording_summary': 'reports', 'recording_processing_status': 'recordings'}
+MODULES = {'health', 'social', 'activity', 'recordings', 'reports', 'finance', 'network'}
 
 def clean(v, size=160):
     return str(v or "").replace("\x00", "")[:size]
@@ -36,18 +35,6 @@ def index_value(kind, external_id, raw, n):
         p["title"] = (front("title") or "电脑活动摘要")[:160]
         p["preview"] = front("description") or clean(content, 500)
         d = {"interval": n.get("interval")}
-    elif kind in ('media_playback_snapshot', 'music_playback_event'):
-        d = {key:n.get(key) for key in ('service','instance_id','source_user_id','item_id','title','artist','album','player','device','paused','position_seconds','observed_at','time_basis','capture','link')}
-        p = {'title':clean(n.get('title')), 'preview':clean(' · '.join(str(n[key]) for key in ('artist','album','player','device') if n.get(key)), 500)}
-    elif kind == 'git_pull_request':
-        d = {key:n.get(key) for key in ('repo','number','state','draft','merged','updated_at','url')}
-        p = {'title':clean(n.get('title')), 'preview':clean(n.get('body'), 500)}
-    elif kind == "google_task":
-        tl = raw.get("tasklist", {})
-        d = {k: clean(raw.get(k), 200) for k in ("status", "due", "completed", "parent", "position", "webViewLink")}
-        d.update(external_id=clean(raw.get("id")), list_id=clean(n.get("tasklist_id")), list_title=clean(tl.get("title")))
-    elif kind == "calendar_event":
-        d = {"start": raw.get("start", {}), "end": raw.get("end", {}), "calendar": clean(n.get("calendar")), "status": clean(raw.get("status")), "link": clean(raw.get("htmlLink"), 1000)}
     elif kind in ("people", "interactions", "facts"):
         d = {k: clean(raw.get(k), 300) for k in ("id", "person_id", "display_name", "relationship_to_me", "channel", "direction", "status", "last_interaction_at")}
         if kind == "interactions": p["title"] = "交流记录"
@@ -61,9 +48,6 @@ def index_value(kind, external_id, raw, n):
         d = {k: clean(bill.get(k), 200) for k in ("type", "state", "currency", "cateName", "shopName")}
         d["amount"] = clean(bill.get("money", n.get("amount")))
         p = {"title": clean(bill.get("shopName") or bill.get("cateName") or "账单"), "preview": clean(bill.get("remark"), 500)}
-    elif kind == "token_day":
-        d = {k: n.get(k) for k in ("tokens", "estimated_cost_usd", "device", "date", "source_timezone")}
-        p = {"title": "AI 用量 · " + clean(n.get("device")), "preview": clean(n.get("date"))}
     elif kind == "traffic_hourly":
         d = {k: number(n.get(k)) or 0 for k in ("upload_bytes", "download_bytes")}
         d.update({k: clean(n.get(k, raw.get(k))) for k in ("device_id", "collector_id", "measurement_scope", "measurement_point", "host", "process", "category", "exit_node", "rule")})
@@ -72,10 +56,6 @@ def index_value(kind, external_id, raw, n):
         d = {"duration_ms": number(n.get("duration_ms")), "date": clean(n.get("date")), "download_state": clean(n.get("download_state")),
              "transcription_status": n.get("transcription_status"), "summary_status": n.get("summary_status")}
         p = {"title": "Plaud 录音 · " + d["date"], "preview": clean(n.get("summary") or n.get("transcript"), 500) or f"{int((d['duration_ms'] or 0) / 60000)} 分钟"}
-    elif kind in ("hermes_execution_report", "memo", "memory"):
-        content = n.get("content", raw.get("content", ""))
-        heading = re.search(r"^#\s+(.+)$", content[:5000], re.M) if isinstance(content, str) else None
-        p["title"] = clean(heading.group(1) if heading else p["title"])
     return dict(domain=DOMAINS.get(kind, "technical"), title=p["title"][:160], preview=p["preview"][:500], data=d)
 
 def card(row, people=None):
@@ -95,9 +75,9 @@ class Display:
 
     def rows(self, domains):
         with self.store.engine.connect() as c:
-            return [dict(r) for r in c.execute(select(idx).where(idx.c.domain.in_(domains))).mappings()]
+            return [dict(r) for r in c.execute(select(idx).where(idx.c.domain.in_(domains), idx.c.source.in_(active_sources()))).mappings()]
 
-    def overview(self, day, tz="Asia/Shanghai", modules="agenda,health,social", _rows=None):
+    def overview(self, day, tz="Asia/Shanghai", modules="health,social", _rows=None):
         start, end, zone = self.window(day, tz)
         selected = modules.split(",")
         if not set(selected) <= MODULES: raise ValueError("invalid_modules")
@@ -113,20 +93,7 @@ class Display:
                 updated = max((r["observed_at"] for r in group if r["record_id"] in references), key=when, default=None)
                 metrics.append({"id": key, "label": label, "value": value, "unit": unit, "date": data_date, "updated_at": updated, "record_ids": list(dict.fromkeys(refs or []))[:10]})
             items = []
-            if module == "agenda":
-                events = []
-                for r in group:
-                    if r["kind"] != "calendar_event": continue
-                    d = r["data"]; a = d.get("start", {}); b = d.get("end", {})
-                    s = when(a.get("dateTime")) if a.get("dateTime") else (datetime.combine(date.fromisoformat(a["date"]), datetime.min.time(), zone) if a.get("date") else None)
-                    e = when(b.get("dateTime")) if b.get("dateTime") else (datetime.combine(date.fromisoformat(b["date"]), datetime.min.time(), zone) if b.get("date") else None)
-                    if s and e and s < end and e > start: events.append(r)
-                tasks = [r for r in group if r["kind"] == "google_task" and r["data"].get("status") != "completed"]
-                tasks.sort(key=lambda r: (r["data"].get("due") or "9999", r["title"]))
-                metric("tasks", "待办任务", len(tasks), "项", refs=[r["record_id"] for r in tasks])
-                metric("events", "今日日程", len(events), "项", refs=[r["record_id"] for r in events])
-                items = [card(r) for r in sorted(events, key=lambda r: when(r["occurred_at"]) or start)[:10] + tasks[:12]]
-            elif module == "health":
+            if module == "health":
                 for key, label, unit, factor in [("steps", "步数", "步", 1), ("sleep", "睡眠", "小时", 1/3600), ("resting_heart_rate", "静息心率", "次/分", 1), ("active_calories", "活动热量", "千卡", 1)]:
                     samples = {}
                     for r in sorted(group, key=lambda r: when(r["observed_at"])):
@@ -163,15 +130,12 @@ class Display:
                     for k, label in [("expense", "支出"), ("income", "收入"), ("transfer", "转账")]: metric(k+":"+currency, label, str(totals[k]), currency, refs=refs)
                     metric("pending:"+currency, "待确认", pending, "笔", refs=refs)
                 items = [card(r) for r in sorted(current, key=lambda r: when(r["occurred_at"]), reverse=True)[:8]]
-            elif module in ("usage", "network"):
-                selected_rows = [r for r in group if r["data"].get("date") == day] if module == "usage" else current
-                if module == "network":
-                    # Different proxy layers can observe the same transfer.
-                    default_source = "shellcrash" if any(r["source"] == "shellcrash" for r in selected_rows) else next((r["source"] for r in selected_rows), None)
-                    selected_rows = [r for r in selected_rows if r["source"] == default_source]
-                fields = [("tokens", "Token", "tokens"), ("estimated_cost_usd", "估算费用", "USD")] if module == "usage" else [("upload_bytes", "代理上传", "bytes"), ("download_bytes", "代理下载", "bytes")]
-                for key, label, unit in fields: metric(key, label, sum_field([r["data"] for r in selected_rows], key), unit, refs=[r["record_id"] for r in selected_rows])
-                items = [card(r) for r in selected_rows[:5]] if module == "usage" else []
+            elif module == 'network':
+                selected_rows = current
+                default_source = 'shellcrash' if any(r['source'] == 'shellcrash' for r in selected_rows) else next((r['source'] for r in selected_rows), None)
+                selected_rows = [r for r in selected_rows if r['source'] == default_source]
+                for key, label in [('upload_bytes', '代理上传'), ('download_bytes', '代理下载')]:
+                    metric(key, label, sum_field([r['data'] for r in selected_rows], key), 'bytes', refs=[r['record_id'] for r in selected_rows])
             else:
                 metric("count", "今日记录", len(current) if any(r["occurred_at"] for r in group) else None, "条", refs=[r["record_id"] for r in current])
                 readable = current or [r for r in group if r["occurred_at"] is None]
@@ -211,18 +175,15 @@ class Display:
             for module in value["modules"]:
                 module["items"] = []
                 for metric in module["metrics"]:
-                    if module["id"] == "agenda" and metric["id"] == "tasks":
-                        metric["label"] = "到期待办（当前未完成）"
-                        metric["value"] = sum(r["kind"] == "google_task" and r["data"].get("status") != "completed" and (r["data"].get("due") or "")[:10] == value["date"] for r in rows)
                     metric["record_ids"] = []
                     if metric["date"] != value["date"]: metric["value"] = None
             values.append(value)
         return {"days": values}
 
-    def timeline(self, domains="social,activity,recordings,reports,mail,git,notes", cursor=None, limit=30, query="", start=None, end=None, person=None, kind=None):
+    def timeline(self, domains="social,activity,recordings,reports", cursor=None, limit=30, query="", start=None, end=None, person=None, kind=None):
         selected = domains.split(",")
         if not set(selected) <= MODULES | {"technical"} or not 1 <= limit <= 100 or len(query) > 200: raise ValueError("invalid_timeline")
-        conditions = [idx.c.domain.in_(selected)]
+        conditions = [idx.c.domain.in_(selected), idx.c.source.in_(active_sources())]
         if kind: conditions.append(idx.c.kind == kind)
         if query: conditions.append((idx.c.title + " " + idx.c.preview).icontains(query, autoescape=True))
         if start: conditions.append(idx.c.occurred_at >= start)

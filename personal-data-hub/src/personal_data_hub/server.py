@@ -38,6 +38,8 @@ class BatchInput(BaseModel):
 
 def create_app(config=None, crm_settings=None, webhook_only=False):
     config = config or configuration()
+    from .source_policy import validate_sources
+    validate_sources(config)
     store = store_from(config)
     from sqlalchemy import Sequence, select
     from .storage import records as archive_records
@@ -155,13 +157,13 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
             raise HTTPException(422, "invalid_daily_parameters") from None
 
     @api.get("/api/v1/dashboard")
-    def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "agenda,health,social", authorization: str | None = Header(default=None)):
+    def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social", authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         try: return display.overview(date, tz, modules)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
 
     @api.get("/api/v1/trends")
-    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social,usage", days: int = 7, authorization: str | None = Header(default=None)):
+    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social,network", days: int = 7, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         try: return display.trends(date, tz, modules, days)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
@@ -173,7 +175,7 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_network_parameters") from None
 
     @api.get("/api/v1/timeline")
-    def timeline(domains: str = "social,activity,recordings,reports,mail,git,notes", cursor: str | None = None, limit: int = 30, query: str = "", start: datetime | None = None, end: datetime | None = None, person: str | None = None, kind: str | None = None, authorization: str | None = Header(default=None)):
+    def timeline(domains: str = "social,activity,recordings,reports", cursor: str | None = None, limit: int = 30, query: str = "", start: datetime | None = None, end: datetime | None = None, person: str | None = None, kind: str | None = None, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         if (start and not start.tzinfo) or (end and not end.tzinfo) or (start and end and start >= end): raise HTTPException(422, "invalid_time_range")
         try: return display.timeline(domains, cursor, limit, query, start, end, person, kind)
@@ -258,7 +260,11 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
                 attachments.append(Asset(a.get("name", key), path=p, media_type=a.get("media_type", "application/octet-stream")))
             items.append(Record(item.external_id, item.kind, item.raw, item.normalized, instant(item.occurred_at), instant(item.updated_at), item.timezone, attachments))
         with store.lock("source:" + payload.source):
-            result = store.ingest(payload.source, Batch(items, payload.deletions, payload.next_cursor))
+            try:
+                result = store.ingest(payload.source, Batch(items, payload.deletions, payload.next_cursor))
+            except ValueError as exc:
+                if str(exc) not in {"unsupported_source", "unsupported_record_kind"}: raise
+                raise HTTPException(422, str(exc)) from None
         return {"batch_id": payload.batch_id, "accepted": len(items), "committed": True, **result}
 
     @api.get("/health")

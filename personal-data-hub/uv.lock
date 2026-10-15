@@ -1015,7 +1015,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "sqlalchemy" },
-    { name = "usage-monitor-mcp" },
     { name = "uvicorn" },
 ]
 
@@ -1028,7 +1027,6 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
-    { name = "usage-monitor-mcp", editable = "apps/usage-monitor" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 

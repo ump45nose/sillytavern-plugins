@@ -10,12 +10,12 @@ from .reading import content, fields_block, ref
 
 PROCESSOR = 'metric-day-v1'
 PROFILE_VERSION = 1
-KINDS = ('health_payloads', 'bill', 'token_day', 'traffic_hourly')
+KINDS = ('health_payloads', 'bill', 'traffic_hourly')
 
 
 def accepts(row): return row['kind'] in KINDS
 
-def header(row, scope=None): return 'metric_day', {'health_payloads': 'health_day', 'bill': 'finance_day', 'token_day': 'usage_day', 'traffic_hourly': 'network_day'}[row['kind']]
+def header(row, scope=None): return 'metric_day', {'health_payloads': 'health_day', 'bill': 'finance_day', 'traffic_hourly': 'network_day'}[row['kind']]
 
 
 def zone(row):
@@ -27,10 +27,8 @@ def scopes(row):
     if kind == 'health_payloads':
         samples = health_samples(row['normalized']['payload'])
         days = sorted({(when(s.get('day_time')) or when(s['time'])).astimezone(ZoneInfo(z)).date().isoformat() for values in samples.values() for _,s in values})
-    elif kind == 'token_day': days = [row['normalized']['date']]
     else: days = [instant(row['occurred_at']).astimezone(ZoneInfo(z)).date().isoformat()] if row['occurred_at'] else []
     measurement = [row['normalized'].get(k) for k in ('measurement_scope', 'measurement_point', 'device_id', 'collector_id')] if kind == 'traffic_hourly' else []
-    # Unknown-zone token exports retain their declared day, without fabricating UTC time.
     return [canonical([kind, z, day, measurement]) for day in days] or [canonical([kind,z,None,measurement,row['id']])]
 
 
@@ -66,17 +64,6 @@ def process_scope(rows, scope_key):
             data = {k:bill.get(k) for k in ('type','state','currency','cateName','shopName','remark')}; data['amount']=amount
             bills.append(data); blocks.append(fields_block(r,data,key='bill:'+r['id'],field='raw.bill' if 'bill' in raw else 'raw.payload' if 'payload' in raw else 'raw'))
         values=finance_totals(bills); title='账单 · ' + str(day or '日期未取得')
-    elif kind == 'token_day':
-        devices={r['normalized']['device']:r for r in rows}
-        for r in devices.values():
-            n=r['normalized']; data={k:n.get(k) for k in ('device','date','tokens','estimated_cost_usd','cache_read_tokens','cache_write_tokens','output_tokens','unclassified_tokens')}
-            blocks.append(fields_block(r,data,key='device:'+r['id'],field='normalized'))
-            for dimension in ('models','tools'):
-                for index,item in enumerate(n.get(dimension, [])):
-                    blocks.append(fields_block(r,item,key=f'{dimension}:{r["id"]}:{index}',field=f'normalized.{dimension}[{index}]'))
-        items=[r['normalized'] for r in devices.values()]
-        values=[{'metric':key,'value':sum_field(items,key),'unit':unit} for key,unit in [('tokens','tokens'),('estimated_cost_usd','USD')]]
-        details.update(cost_basis='estimated',aggregation='latest_cumulative_per_device',devices=len(devices)); title='AI 用量 · ' + str(day)
     else:
         # Source identity already fixes hour+destination+process+route; input updates replace each cumulative grain.
         for r in rows:

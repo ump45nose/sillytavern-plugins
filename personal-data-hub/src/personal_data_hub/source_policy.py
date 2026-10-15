@@ -1,0 +1,18 @@
+"""Hub 当前承担同步或持久化的来源范围。"""
+
+SOURCE_KINDS = {
+    'crm': frozenset(('people', 'interactions', 'facts', 'reminders', 'sync_clients')),
+    'crm_pg': frozenset(('people', 'interactions', 'facts', 'reminders', 'sync_clients')),
+    'health': frozenset(('health_payloads',)),
+    'bills': frozenset(('bill',)),
+    'skysight': frozenset(('computer_segment', 'computer_segment_invalid', 'computer_summary')),
+    'plaud': frozenset(('recording', 'recording_transcript', 'recording_daily_report',
+                        'recording_summary', 'recording_processing_status', 'recording_artifact')),
+    'shellcrash': frozenset(('traffic_hourly', 'collector_gaps', 'collector_meta')),
+}
+
+
+def validate_sources(config):
+    for source, settings in config['sources'].items():
+        if settings['adapter'] not in SOURCE_KINDS:
+            raise ValueError(f'unsupported_source_adapter: {source}')

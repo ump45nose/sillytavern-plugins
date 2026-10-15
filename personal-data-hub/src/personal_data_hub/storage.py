@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
 
 from .contracts import Asset, Batch, digest, utcnow
+from .source_policy import SOURCE_KINDS
 
 metadata = MetaData()
 # 原始 UI/AX 事件可能带 NUL；PostgreSQL JSONB 拒绝它，JSON 能原样归档转义值。
@@ -28,14 +29,19 @@ runs = Table("hub_runs", metadata, Column("id", String, primary_key=True), Colum
 tombstones = Table("hub_tombstones", metadata, Column("record_id", String(64), primary_key=True), Column("source", String, nullable=False), Column("deleted_at", DateTime(timezone=True), nullable=False))
 
 
+def active_sources():
+    return select(sources.c.id).where(sources.c.adapter.in_(SOURCE_KINDS))
+
+
 class Store:
-    def __init__(self, database_url: str, asset_root: str | Path):
+    def __init__(self, database_url: str, asset_root: str | Path, *, initialize=True):
         self.engine = create_engine(database_url, pool_pre_ping=True)
         self.root = Path(asset_root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        metadata.create_all(self.engine)
-        from .processing.schema import migrate
-        migrate(self)
+        if initialize:
+            metadata.create_all(self.engine)
+            from .processing.schema import migrate
+            migrate(self)
 
     @contextlib.contextmanager
     def lock(self, key: str):
@@ -82,6 +88,8 @@ class Store:
         return digest([source, str(external_id)])
 
     def register(self, source: str, account: str, adapter: str, deletion_support: str):
+        if adapter not in SOURCE_KINDS:
+            raise ValueError("unsupported_source_adapter")
         values = dict(id=source, account=account, adapter=adapter, deletion_support=deletion_support)
         with self.engine.begin() as c:
             existing = c.execute(select(sources).where(sources.c.id == source)).mappings().first()
@@ -170,7 +178,13 @@ class Store:
         keys = [self.identity("crm", alias) for alias in self.crm_event_aliases(source, event_key, message_key)]
         return bool(keys and connection.scalar(select(tombstones.c.record_id).where(tombstones.c.record_id.in_(keys)).limit(1)))
 
-    def ingest(self, source: str, batch: Batch, connection=None) -> dict:
+    def ingest(self, source: str, batch: Batch, connection=None, *, refresh_unchanged=True) -> dict:
+        with (self.engine.connect() if connection is None else contextlib.nullcontext(connection)) as c:
+            adapter = c.scalar(select(sources.c.adapter).where(sources.c.id == source))
+        if adapter not in SOURCE_KINDS:
+            raise ValueError('unsupported_source')
+        if any(item.kind not in SOURCE_KINDS[adapter] for item in batch.records):
+            raise ValueError('unsupported_record_kind')
         changed = duplicate = ignored = removed = 0
         with self.writer_lock(connection):
             with (self.engine.begin() if connection is None else contextlib.nullcontext(connection)) as c:
@@ -218,9 +232,9 @@ class Store:
                             c.execute(insert(asset_refs).values(record_id=rid, asset_id=a["id"]))
                     changed += 1
                     existing[rid] = values
-                if duplicates:
-                    # Unchanged content has unchanged previews. Touch freshness in
-                    # one statement per batch, without rereading large raw bodies.
+                if duplicates and refresh_unchanged:
+                    # Explicit observations/pushes can refresh per-record freshness.
+                    # Periodic collectors record checks in hub_runs instead.
                     now = utcnow()
                     c.execute(update(records).where(records.c.id.in_(duplicates)).values(observed_at=now))
                     c.execute(update(display_index).where(display_index.c.record_id.in_(duplicates)).values(observed_at=now))
@@ -251,7 +265,7 @@ class Store:
     def list_records(self, source=None, kind=None, offset=0, limit=100, start=None, end=None):
         if offset < 0 or not 1 <= limit <= 1000:
             raise ValueError("invalid_pagination")
-        statement = select(records).order_by(records.c.occurred_at.desc().nulls_last(), records.c.id).offset(offset).limit(limit)
+        statement = select(records).where(records.c.source.in_(active_sources())).order_by(records.c.occurred_at.desc().nulls_last(), records.c.id).offset(offset).limit(limit)
         if source: statement = statement.where(records.c.source == source)
         if kind: statement = statement.where(records.c.kind == kind)
         if start: statement = statement.where(records.c.occurred_at >= start)
@@ -278,7 +292,7 @@ class Store:
         title = func.coalesce(previews.c.title, records.c.kind)
         preview = func.coalesce(previews.c.preview, records.c.external_id)
         joined = records.outerjoin(previews, records.c.id == previews.c.record_id)
-        conditions = []
+        conditions = [records.c.source.in_(active_sources())]
         if source: conditions.append(records.c.source == source)
         if kind: conditions.append(records.c.kind == kind)
         if start: conditions.append(records.c.occurred_at >= start)
@@ -337,7 +351,7 @@ class Store:
         count = 0
         while True:
             with self.engine.connect() as c:
-                statement = select(records.c.id).outerjoin(display_index, records.c.id == display_index.c.record_id).where(display_index.c.record_id.is_(None))
+                statement = select(records.c.id).outerjoin(display_index, records.c.id == display_index.c.record_id).where(display_index.c.record_id.is_(None), records.c.source.in_(active_sources()))
                 if kind: statement = statement.where(records.c.kind == kind)
                 ids = list(c.scalars(statement.order_by(records.c.id).limit(100)))
             if not ids: return count
@@ -355,7 +369,7 @@ class Store:
         count = 0
         while True:
             with self.engine.connect() as c:
-                rows = list(c.execute(select(records).outerjoin(previews, records.c.id == previews.c.record_id).where(previews.c.record_id.is_(None)).order_by(records.c.id).limit(20)).mappings())
+                rows = list(c.execute(select(records).outerjoin(previews, records.c.id == previews.c.record_id).where(previews.c.record_id.is_(None), records.c.source.in_(active_sources())).order_by(records.c.id).limit(20)).mappings())
             if not rows: return count
             with self.writer_lock():
                 with self.engine.begin() as c:
@@ -377,7 +391,7 @@ class Store:
                 "daily_report": {"record_id": daily["id"], **daily["normalized"]} if daily else None}
 
     def kinds(self, source=None):
-        statement = select(records.c.kind, func.count().label("count")).group_by(records.c.kind).order_by(records.c.kind)
+        statement = select(records.c.kind, func.count().label("count")).where(records.c.source.in_(active_sources())).group_by(records.c.kind).order_by(records.c.kind)
         if source: statement = statement.where(records.c.source == source)
         with self.engine.connect() as c:
             return [dict(row) for row in c.execute(statement).mappings()]
@@ -398,13 +412,13 @@ class Store:
             # narrow columns once instead of rescanning each source twice.
             statistics = {row['source']: row for row in c.execute(
                 select(records.c.source, func.count().label('count'),
-                       func.max(records.c.observed_at).label('last_observed_at')).group_by(records.c.source)).mappings()}
+                       func.max(records.c.observed_at).label('last_observed_at')).where(records.c.source.in_(active_sources())).group_by(records.c.source)).mappings()}
             ranked = select(runs, func.row_number().over(partition_by=runs.c.source,
                             order_by=(runs.c.started_at.desc(), runs.c.id.desc())).label('position')).subquery()
             latest_runs = {row['source']: {k:v for k,v in row.items() if k != 'position'}
                            for row in c.execute(select(ranked).where(ranked.c.position == 1)).mappings()}
             invalid_counts = dict(c.execute(select(records.c.source, func.count()).where(records.c.kind == "computer_segment_invalid").group_by(records.c.source)).all())
-            for row in c.execute(select(sources)).mappings():
+            for row in c.execute(select(sources).where(sources.c.id.in_(active_sources()))).mappings():
                 source = row["id"]
                 latest = latest_runs.get(source)
                 stats = statistics.get(source, {'count':0, 'last_observed_at':None})

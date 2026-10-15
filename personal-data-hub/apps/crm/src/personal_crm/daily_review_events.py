@@ -20,7 +20,6 @@ from personal_crm.daily_review import SOURCES, content_page, report_page
 
 EVENT_NAMES = {
     "codex_skylight": "crm.daily_codex_skylight.ready",
-    "memos": "crm.daily_memos_report.ready",
 }
 
 
@@ -70,11 +69,7 @@ class DailyReviewEventProducer:
         }
         events.register_event(
             EVENT_NAMES[source],
-            (
-                "每日已同步的 Codex Skylight 摘要快照，可分页读取上游正文。"
-                if source == "codex_skylight"
-                else "每日 Hermes Memos 日报快照；empty_day 表示该业务日尚无日报。"
-            ),
+            '每日已同步的 Codex Skylight 摘要快照，可分页读取上游正文。',
             {"type": "object", "properties": {}, "additionalProperties": False},
             {
                 "type": "object",
@@ -247,7 +242,7 @@ def register_daily_review_event_tools(server, producers: dict, *, auth):
     def get_daily_review_event_report(
         source: str, report_id: str, offset: int = 0, limit: int = 20
     ) -> dict:
-        """分页读取每日事件冻结的 Skylight 或 Memos 日报正文，仅报告所有者可读。"""
+        """分页读取每日事件冻结的 Skylight 摘要正文，仅报告所有者可读。"""
         selected = producer(source)
         return selected.read_page(
             report_id, subject=selected.events.authenticated_subject(), offset=offset, limit=limit

@@ -83,27 +83,10 @@ launchctl kickstart -k "gui/$(id -u)/com.personal-crm.wechat"
 launchctl bootout "gui/$(id -u)/com.personal-crm.wechat"
 ```
 
-## Skylight 与 Memos 日报数据源及定时事件
+## Skysight 摘要
 
-`mcp.app.yaml` 增加两个只读绑定挂载，分别指向 NAS 上已有的
-`/vol2/1000/Docker/personal-review/data/derived/skysight/source-summaries` 和
-`/vol2/1000/Docker/memos/data`。Memos 使用 0.30 的 SQLite 表结构，整个目录只读挂载，
-使活动 WAL/SHM 一并可见；不得只复制主数据库，也不得用 `immutable=1` 忽略 WAL。
-容器用户必须能读取源文件。查询使用 SQLite `mode=ro` 和 `query_only=ON`，不创建源库。
+只读工具 `get_daily_codex_skylight` 读取已同步摘要，默认按 Asia/Shanghai 今天查询。preferred 优先 6h，用 10min 补空档，完整正文可通过 `get_daily_review_content` 续读，source 仅支持 `codex_skylight`。
 
-配置为 `CODEX_SKYLIGHT_PATH=/sources/codex-skylight`、
-`MEMOS_DATABASE_PATH=/sources/memos/memos_prod.db`、`MEMOS_CREATOR_ID=1`。
-本地冒烟可指定独立测试目录和测试 SQLite，不必挂载生产资料。
+日报事件可显式启用 `crm.daily_codex_skylight.ready`，沿用已有身份和冻结快照读取；统一 Hub 当前关闭该独立事件，保留聊天事件。Memos 日报查询、源配置和事件生产已移除。旧快照文件及订阅状态保留，不重新生产旧事件。
 
-清单启用 `DAILY_REVIEW_EVENTS_ENABLED=true`，所有者为已有授权用户名 `yuwk`；
-修改所有者需同步检查 `OIDC_AUTHORIZED_USERNAMES`。设置
-`DAILY_REVIEW_EVENT_TIMEZONE=Asia/Shanghai`、`DAILY_REVIEW_EVENT_TIME=23:00`。
-程序默认关闭事件，需要显式配置所有者和两个源路径；匿名开发模式不能启用事件。
-
-新快照及生产水位保存在 `/data/events/daily-reviews`，与原聊天报告分开，复用 `/data`
-持久卷和同一个 MCP EventService 投递队列。每天两个源独立运行；一个源读取失败不影响
-另一个源。首次启动从当前业务日开始，随后停机遗漏的日期逐日补发；已发布日期不重新推送。
-修改所有者或时区时需要显式迁移对应水位，避免无意复用其他身份的报告。
-
-部署仍使用上文的公共基座流程。更新后需客户端支持 `events/subscribe` 并完成订阅，
-才会收到每日签名 Webhook；生成代码或插件包不会替客户端创建订阅。
+统一 Hub 入口及本次来源变化见仓库根 README 和 `docs/plans/2026-10-15-source-cleanup.md`。Mac 调整清单在 `docs/client-requirements/source-cleanup.md`。

@@ -2,7 +2,6 @@
 
 import base64
 import json
-import sqlite3
 from datetime import datetime
 
 import pytest
@@ -32,34 +31,8 @@ def sources(tmp_path):
         "2026-10-05T02-00-00-test-10min-memory-summary.md",
     ):
         (directory / name).write_text(body, encoding="utf-8")
-    database = tmp_path / "memos.db"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            "CREATE TABLE memo (id INTEGER, uid TEXT, creator_id INTEGER, row_status TEXT, "
-            "created_ts INTEGER, updated_ts INTEGER, content TEXT)"
-        )
-        for i, owner, status, content in (
-            (1, 1, "NORMAL", "#日报 2026-10-05\n今天的 Hermes 日报"),
-            (2, 1, "NORMAL", "#日报 2026-10-04\n昨日补写"),
-            (3, 2, "NORMAL", "#日报 2026-10-05\n其他作者"),
-            (4, 1, "ARCHIVED", "#日报 2026-10-05\n已归档"),
-            (5, 1, "NORMAL", "普通 Memo 引用了 #日报 2026-10-05"),
-        ):
-            connection.execute(
-                "INSERT INTO memo VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    i,
-                    f"memo-{i}",
-                    owner,
-                    status,
-                    int(at("2026-10-06T08:00").timestamp()),
-                    int(at("2026-10-06T08:00").timestamp()),
-                    content,
-                ),
-            )
     service = DailyReviewService(
         skylight_path=str(directory),
-        memos_database_path=str(database),
         clock=lambda: at("2026-10-05T00:01"),
     )
     return service, directory, body
@@ -82,14 +55,7 @@ async def test_mcp_default_today_business_date_and_full_content(tmp_path):
         record["content_read_tool"], record["content_read_arguments"], run_middleware=False
     )
     assert record["content"] + tail.structured_content["content"] == body
-    memos = await server.call_tool("get_daily_memos_report", {}, run_middleware=False)
-    assert memos.structured_content["total_count"] == 1
-    assert memos.structured_content["records"][0]["id"] == "memos/memo-1"
-    assert memos.structured_content["records"][0]["created_at"].startswith("2026-10-06")
-    empty = await server.call_tool(
-        "get_daily_memos_report", {"day": "2026-10-07"}, run_middleware=False
-    )
-    assert empty.structured_content["empty_day"] is True
+    assert 'get_daily_memos_report' not in {tool.name for tool in await server.list_tools()}
 
 
 @pytest.mark.asyncio
@@ -157,7 +123,7 @@ async def test_daily_events_coexist_retry_snapshot_and_signed_delivery(tmp_path)
         await bus.subscribe(
             "other",
             {
-                "name": EVENT_NAMES["memos"],
+                "name": EVENT_NAMES["codex_skylight"],
                 "arguments": {},
                 "delivery": {},
             },
@@ -182,7 +148,6 @@ async def test_daily_events_coexist_retry_snapshot_and_signed_delivery(tmp_path)
     assert record["content"] + tail["content"] == body
     with pytest.raises(PermissionError):
         skylight.read_page(result["report_id"], subject="other")
-    await producers["memos"].run_once(at("2026-10-05T23:01"))
     # 重建总线模拟进程重启，保留源快照和事件投递队列。
     reopened_bus = EventService(
         config, storage_path=str(tmp_path / "events"), transport=callback, clock=bus.clock
@@ -199,7 +164,7 @@ async def test_daily_events_coexist_retry_snapshot_and_signed_delivery(tmp_path)
     }
     restarted = reopened["codex_skylight"]
     assert await restarted.run_once(at("2026-10-05T23:02")) is None
-    assert (await reopened_bus.run_delivery_once())["accepted"] == 2
+    assert (await reopened_bus.run_delivery_once())["accepted"] == 1
     events = [value for value, _ in callback.posts if value.get("type") != "verification"]
     assert {value["name"] for value in events} == set(EVENT_NAMES.values())
     assert body not in json.dumps(events, ensure_ascii=False)

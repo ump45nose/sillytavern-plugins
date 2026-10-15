@@ -82,58 +82,10 @@ CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --watch
 Alembic 版本表时，先备份，再执行 `database/003_wechat_messages.sql` 中的
 可空 `message JSON` 加列语句，不回放初始建表迁移。
 
-## Codex Skylight 与 Memos 日报查询和事件
+## Skysight 摘要
 
-两个新增查询工具均支持省略 `day`，默认查询北京时间今天：
+只读工具 `get_daily_codex_skylight` 读取已同步摘要，默认按 Asia/Shanghai 今天查询。preferred 优先 6h，用 10min 补空档，完整正文可通过 `get_daily_review_content` 续读，source 仅支持 `codex_skylight`。
 
-```json
-{"name":"get_daily_codex_skylight","arguments":{}}
-```
+日报事件可显式启用 `crm.daily_codex_skylight.ready`，沿用已有身份和冻结快照读取；统一 Hub 当前关闭该独立事件，保留聊天事件。Memos 日报查询、源配置和事件生产已移除。旧快照文件及订阅状态保留，不重新生产旧事件。
 
-```json
-{"name":"get_daily_memos_report","arguments":{}}
-```
-
-```json
-{"name":"get_daily_memos_report","arguments":{"day":"2026-10-03"}}
-```
-
-日期参数必须是 `YYYY-MM-DD`。`timezone` 默认为 `Asia/Shanghai`；Skylight 按源文件
-UTC 开始时间转换后归属业务日期，Memos 按日报首行 `#日报 YYYY-MM-DD`（兼容
-`# 日报 YYYY-MM-DD`）归属日期。Memos 只读配置作者的 `NORMAL` 日报，排除归档和其他 Memo。
-
-Skylight 的源目录实际名为 Skysight。`summary_type` 支持 `preferred`（默认，优先 6h，
-10min 补空档）、`all`、`6h`、`10min`。查询返回同步摘要文件的完整 Markdown 正文，
-不重新生成摘要。分页参数 `offset=0, limit=20`，`next_offset` 非空时继续下一页。
-正文首段最长 4000 字符；`next_content_offset` 非空时按 `content_read_tool` 和
-`content_read_arguments` 调用 `get_daily_review_content`，直到 `next_offset=null`。
-续读使用结果返回的明确日期，避免跨午夜跳到另一业务日。普通查询读取当前源文件，
-可能随上游修订变化；事件查询读取冻结快照。
-
-生产启用两个每天北京时间 23:00 的独立事件：
-
-- `crm.daily_codex_skylight.ready`
-- `crm.daily_memos_report.ready`
-
-在已认证的 `/mcp` 请求中调用 `events/list` 查看事件，再用 `events/subscribe` 订阅。
-事件参数是空对象，订阅需要支持 MCP Events 的客户端及公网 HTTPS Webhook：
-
-```json
-{
-  "name": "crm.daily_memos_report.ready",
-  "arguments": {},
-  "delivery": {
-    "mode": "webhook",
-    "url": "https://your-callback.example.com/events",
-    "secret": "whsec_<base64-encoded-24-to-64-byte-secret>"
-  }
-}
-```
-
-这是 `events/subscribe` 的参数示例；MCP 请求信封由客户端按协商的协议版本构造。
-回调需处理验证 challenge，并校验基座发送的签名。未订阅时不会收到定时 Webhook。
-事件仅含日期、数量、是否空日和 `read_tool` / `read_arguments`，据此调用
-`get_daily_review_event_report` 获取正文；长正文使用 `get_daily_review_event_content`。
-事件及快照仅其配置的 OAuth 所有者可访问。当天没有日报时返回 `empty_day=true`，
-不改读昨天；晚于 23:00 的新文件或日报修改可用普通日期查询获取，不自动修订已推送快照。
-源不可用时保留待生产日期，恢复后补发；投递失败由现有持久化事件队列重试。
+统一 Hub 入口及本次来源变化见仓库根 README 和 `docs/plans/2026-10-15-source-cleanup.md`。Mac 调整清单在 `docs/client-requirements/source-cleanup.md`。

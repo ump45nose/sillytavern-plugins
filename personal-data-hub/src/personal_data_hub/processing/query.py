@@ -6,6 +6,7 @@ import json
 from sqlalchemy import exists, func, or_, select, text
 
 from ..contracts import canonical, instant
+from ..storage import active_sources
 from .contracts import PAGE_BYTES
 from .schema import blocks, inputs, objects
 
@@ -34,14 +35,14 @@ class ReadingQuery:
     def page(self, source=None, variant=None, query='', cursor=None, limit=50, start=None, end=None, content_type=None):
         if not 1 <= limit <= 50 or len(query) > 200 or (cursor and len(cursor) > 4096):
             raise ValueError('invalid_content_parameters')
-        conditions = []
+        conditions = [objects.c.source.in_(active_sources())]
         filters = [source, variant, query, str(start), str(end)] + ([content_type] if content_type is not None else [])
         if content_type: conditions.append(objects.c.type == content_type)
         if variant != 'wechat_insights' and content_type != 'analysis': conditions.append(objects.c.type != 'analysis')
         if source: conditions.append(objects.c.source == source)
         if variant: conditions.append(objects.c.variant == variant)
         elif not source and content_type != 'status':
-            conditions.extend((objects.c.variant.not_in(('execution_log', 'activity_observations')), objects.c.type != 'status'))
+            conditions.extend((objects.c.variant.not_in(('activity_observations',)), objects.c.type != 'status'))
         if start: conditions.append(objects.c.occurred_at >= start)
         if end: conditions.append(objects.c.occurred_at < end)
         if query:

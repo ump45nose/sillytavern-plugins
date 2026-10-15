@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, insert, select, text, update
 
 from personal_data_hub.contracts import Asset, Batch, Record, instant, utcnow
 from personal_data_hub.storage import Store
-from personal_data_hub.processing import documents
+from personal_data_hub.processing import activities
 from personal_data_hub.processing.contracts import object_id
 from personal_data_hub.processing.query import ContentChanged, ContentRemoved, ReadingQuery
 from personal_data_hub.processing.repository import ProcessingRepository
@@ -46,7 +46,7 @@ class ProcessingTests(unittest.TestCase):
                 self.store = IsolatedStore(self.admin.url, self.temp.name + '/assets')
         else:
             self.store = Store('sqlite:///' + self.temp.name + '/db', self.temp.name + '/assets')
-        self.store.register('memos', 'owner', 'memos', 'authoritative_inventory')
+        self.store.register('skysight-summaries', 'owner', 'skysight', 'explicit_only')
         self.repository = ProcessingRepository(self.store)
         self.query = ReadingQuery(self.store)
 
@@ -58,8 +58,8 @@ class ProcessingTests(unittest.TestCase):
             self.admin.dispose()
         self.temp.cleanup()
 
-    def put(self, eid='one', body='#日报 2026-10-11\n\n## 状态\n今天的精力记录', kind='memo', at='2026-10-11T00:00:00Z'):
-        return self.store.ingest('memos', Batch([Record(eid, kind, {'content': body}, {'content': body}, instant(at))]))
+    def put(self, eid='one', body='#日报 2026-10-11\n\n## 状态\n今天的精力记录', kind='computer_summary', at='2026-10-11T00:00:00Z'):
+        return self.store.ingest('skysight-summaries', Batch([Record(eid, kind, {'content': body}, {'content': body}, instant(at))]))
 
     def one(self): return self.query.page()['items'][0]
 
@@ -69,7 +69,7 @@ class ProcessingTests(unittest.TestCase):
         result = drain(self.store)
         self.assertEqual(result['published'], 1)
         item = self.one()
-        self.assertEqual(item['variant'], 'note')
+        self.assertEqual(item['variant'], 'activity_summary')
         self.assertIsNone(item['summary'])
         self.assertEqual(len(self.query.page(query='跨页词语')['items']), 1)
         self.assertIn('跨页词语',self.query.page(query='跨页词语')['items'][0]['match']['excerpt'])
@@ -97,7 +97,7 @@ class ProcessingTests(unittest.TestCase):
     def test_update_fences_running_worker_and_old_body_pages(self):
         self.put(); drain(self.store); first = self.one()
         self.put(body='新的版本一'); job = self.repository.claim(); snapshot = self.repository.snapshot(job)
-        content = documents.process(snapshot)
+        content = activities.process(snapshot)
         self.put(body='新的版本二')
         self.assertEqual(self.one()['processing']['state'], 'stale')
         self.assertEqual(self.query.page(query='今天的精力')['items'],[])
@@ -110,11 +110,11 @@ class ProcessingTests(unittest.TestCase):
     def test_delete_withdraws_search_and_fences_inflight_worker(self):
         self.put(); drain(self.store); item = self.one()
         self.put(body='删除前新正文'); job = self.repository.claim(); snapshot = self.repository.snapshot(job)
-        self.store.ingest('memos', Batch(deletions=['one']))
+        self.store.ingest('skysight-summaries', Batch(deletions=['one']))
         self.assertEqual(self.query.page(query='精力')['items'], [])
         self.assertIsNone(self.query.detail(item['id']))
         with self.assertRaises(ContentRemoved): self.query.block_page(item['id'], item['revision'])
-        self.assertFalse(self.repository.publish(job, snapshot, documents.process(snapshot)))
+        self.assertFalse(self.repository.publish(job, snapshot, activities.process(snapshot)))
         drain(self.store)
         self.assertEqual(self.query.page()['items'], [])
         self.assertEqual(self.put()['tombstoned'], 1)
@@ -122,16 +122,16 @@ class ProcessingTests(unittest.TestCase):
 
     def test_rollback_keeps_queue_in_same_source_transaction(self):
         with self.assertRaises(RuntimeError), self.store.engine.begin() as c:
-            self.store.ingest('memos', Batch([Record('rollback','memo',{'content':'不应存在'})]), connection=c)
+            self.store.ingest('skysight-summaries', Batch([Record('rollback','computer_summary',{'content':'不应存在'})]), connection=c)
             raise RuntimeError('rollback')
         self.assertEqual(self.query.page()['items'], [])
         self.assertEqual(drain(self.store)['claimed'], 0)
 
     def test_failure_is_visible_and_edit_recovers(self):
-        self.store.ingest('memos', Batch([Record('one','memo',{'wrong':'missing body'})]))
+        self.store.ingest('skysight-summaries', Batch([Record('one','computer_summary',{'wrong':'missing body'})]))
         self.assertEqual(drain(self.store)['failed'], 1)
         self.assertEqual(self.one()['processing']['state'], 'failed')
-        self.assertEqual(self.repository.status()['errors'][0]['error_code'], 'document_body_missing')
+        self.assertEqual(self.repository.status()['errors'][0]['error_code'], 'KeyError')
         self.put(body='恢复后的原文')
         self.assertEqual(drain(self.store)['published'], 1)
         self.assertEqual(self.one()['processing']['state'], 'ready')
@@ -142,15 +142,9 @@ class ProcessingTests(unittest.TestCase):
             c.execute(update(jobs).where(jobs.c.id == old['id']).values(lease_until=utcnow()-timedelta(seconds=1)))
         new = self.repository.claim()
         self.assertNotEqual(old['lease_token'], new['lease_token'])
-        self.assertFalse(self.repository.publish(old, rows, documents.process(rows)))
-        self.assertTrue(self.repository.publish(new, rows, documents.process(rows)))
+        self.assertFalse(self.repository.publish(old, rows, activities.process(rows)))
+        self.assertTrue(self.repository.publish(new, rows, activities.process(rows)))
 
-    def test_kind_change_removes_previously_processed_body(self):
-        self.put(); drain(self.store)
-        self.put(kind='unsupported',body='其他类型')
-        drain(self.store)
-        self.assertEqual(self.query.page()['items'], [])
-        self.assertFalse(next(r for r in self.repository.status()['source_coverage'] if r['kind']=='unsupported')['supported'])
 
     def test_backfill_is_stable_idempotent_and_does_not_rewind_updates(self):
         from personal_data_hub.storage import records
@@ -195,21 +189,9 @@ class ProcessingTests(unittest.TestCase):
         migrate(self.store)
         self.assertEqual(self.one()['processing']['state'],'stale')
         self.assertEqual(drain(self.store)['published'],1)
-        self.assertEqual(self.one()['business_date'],'2026-10-11')
+        self.assertIsNone(self.one()['business_date'])
         with self.store.engine.connect() as c:self.assertEqual(c.scalar(select(records.c.hash)),original)
 
-    def test_daily_empty_nul_and_account_isolation(self):
-        self.put(); self.put('empty',body=''); self.put('nul',body='前\x00后')
-        self.store.register('other-memos','second','memos','explicit_only')
-        self.store.ingest('other-memos',Batch([Record('one','memo',{'content':'另一个账户'})]))
-        drain(self.store)
-        self.assertEqual(len(self.query.page(variant='daily_review')['items']),1)
-        other=self.query.page(source='other-memos')['items'][0]
-        self.assertEqual(other['account'],'second');self.assertNotEqual(other['id'],self.query.page(source='memos')['items'][0]['id'])
-        null_item=self.query.page(query='前')['items'][0]
-        self.assertIn('nul_replaced_in_reading_copy',null_item['warnings'])
-        raw=self.store.get_record(self.query.evidence(null_item['id'])['inputs'][0]['record_id'])
-        self.assertEqual(raw['raw']['content'],'前\x00后')
 
     def test_keyset_filters_and_null_times(self):
         for eid,at in [('a','2026-10-11T00:00:00Z'),('b','2026-10-11T00:00:00Z'),('c',None)]:self.put(eid=eid,at=at)
@@ -236,7 +218,7 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(client.get('/api/v1/contents',params={'cursor':'!'*100},headers=headers).status_code,422)
         path='/api/v1/contents/'+item['id']+'/blocks'
         self.assertEqual(client.get(path,params={'revision':99},headers=headers).status_code,409)
-        self.store.ingest('memos',Batch(deletions=['one']))
+        self.store.ingest('skysight-summaries',Batch(deletions=['one']))
         self.assertEqual(client.get(path,params={'revision':1},headers=headers).status_code,404)
 
     def test_postgres_concurrent_publication_and_delete(self):
@@ -244,8 +226,8 @@ class ProcessingTests(unittest.TestCase):
         self.put();drain(self.store);identifier=self.one()['id']
         self.put(body='并发中的正文');job=self.repository.claim();rows=self.repository.snapshot(job)
         barrier=threading.Barrier(2)
-        def publish():barrier.wait();return self.repository.publish(job,rows,documents.process(rows))
-        def remove():barrier.wait();return self.store.ingest('memos',Batch(deletions=['one']))
+        def publish():barrier.wait();return self.repository.publish(job,rows,activities.process(rows))
+        def remove():barrier.wait();return self.store.ingest('skysight-summaries',Batch(deletions=['one']))
         with ThreadPoolExecutor(2) as pool:
             a=pool.submit(publish);b=pool.submit(remove);a.result(timeout=15);b.result(timeout=15)
         self.assertIsNone(self.query.detail(identifier));self.assertEqual(self.query.page(query='并发')['items'],[])

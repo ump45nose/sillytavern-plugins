@@ -1,8 +1,8 @@
 """已声明阅读方式的来源加工规则。"""
-from . import activities, conversations, documents, emails, git_pull_requests, insights, metrics, nas_activity, recordings, statuses, structured
+from . import activities, conversations, insights, metrics, recordings, statuses, structured
 
 PROFILES = {profile.PROCESSOR: profile for profile in
-            (documents, conversations, insights, emails, git_pull_requests, activities, nas_activity, recordings, metrics, structured, statuses)}
+            (conversations, insights, activities, recordings, metrics, structured, statuses)}
 
 
 # 保留旧 profile 用于既有结果的失效/删除维护；采集阶段不再为提炼创建新 scope。
@@ -21,4 +21,4 @@ def routes(record):
 def header(profile, record, scope_key):
     if hasattr(profile, 'header'): return profile.header(record, scope_key)
     if hasattr(profile, 'scope'): return 'conversation', 'wechat_day'
-    return 'document', 'execution_log' if record['kind'] == 'hermes_execution_report' else 'memory' if record['kind'] == 'memory' else 'legacy_review' if record['kind'] == 'legacy_review_report' else 'note'
+    raise ValueError('profile_header_missing')
