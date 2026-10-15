@@ -1,45 +1,234 @@
-import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
-import {launch,session} from './browser.mjs';
-const base='http://192.168.31.201:18321';
-const password=readFileSync('/vol2/1000/Docker/ai-resource-center/data/admin-password','utf8').trim();
-const login=await fetch(base+'/api/v1/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password})});
-const cookie=login.headers.get('set-cookie').split(';')[0];
-const api=async(path,body,method='POST')=>{const r=await fetch(base+'/api/v1/'+path,{method,headers:{cookie,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const result=await r.json();if(!r.ok)throw Error(result.error);return result;};
-const before=await api('state',null,'GET');
-const existing=before.channels.find(c=>c.name==='RP 联调验收'&&before.sites.find(s=>s.id===c.siteId)?.url==='https://arc-acceptance.invalid');
-const channel=existing||await api('channels',{site:{name:'隔离联调验收',url:'https://arc-acceptance.invalid'},account:'隔离联调',name:'RP 联调验收',baseUrl:'https://arc-acceptance.invalid/v1',models:['kimi'],key:'local-fixture-only',category:'rp',enabled:true});
-const token=(await api('access-tokens',{role:'rp',channelIds:[channel.id]})).token;
-await api('sources',{id:'rp-acceptance',name:'RP 隔离验收',kind:'sillytavern',url:'http://127.0.0.1:32014'});
-writeFileSync('/vol2/1000/Docker/ai-resource-center/rp-acceptance/cleanup.json',JSON.stringify({channelId:channel.id,accountId:channel.accountId,siteId:channel.siteId,token,received:before.received.sillyTavern}),{mode:0o600});
-const browser=await launch();let observed=[];
-try{
- const {page}=await session(browser,{probe:false,timings:true,helper:false});
- await page.route('**/api/backends/**',r=>{observed.push(r.request().url());return r.abort();});
- await page.route('**/api/settings/get',async route=>{const r=await route.fetch();const d=await r.json();const settings=JSON.parse(d.settings||'{}');settings.firstRun=false;if(settings.extension_settings){delete settings.extension_settings.aiResourceCenter;if(settings.extension_settings.workbench)delete settings.extension_settings.workbench.resourceCenter;}d.settings=JSON.stringify(settings);await route.fulfill({response:r,json:d});});
- await page.goto('http://127.0.0.1:32014',{waitUntil:'domcontentloaded'});
- await page.waitForSelector('#ai-resource-center-rp',{state:'attached',timeout:60000});
- await page.waitForFunction(()=>Number.isFinite(window.baselineMetrics?.appReadyMs),null,{timeout:60000});
- await page.evaluate(async()=>{
-  const c=SillyTavern.getContext();c.extensionSettings.connectionManager??={profiles:[],selectedProfile:''};
-  c.extensionSettings.connectionManager.profiles=c.extensionSettings.connectionManager.profiles.filter(p=>p.id!=='arc-rp-fixture');
-  c.extensionSettings.connectionManager.profiles.push({id:'arc-rp-fixture',mode:'cc',exclude:[],api:'custom','api-url':'https://arc-acceptance.invalid/v1',model:'kimi',name:'RP 原生验收',vendor_field:{keep:true}});
-  c.extensionSettings.connectionManager.selectedProfile='arc-rp-fixture';
-  await (await import('/script.js')).saveSettings();
- });
- await page.locator('#extensions-settings-button .drawer-toggle').click();
- const panel=page.locator('#ai-resource-center-rp');await panel.locator('.inline-drawer-toggle').click();
- await panel.locator('[data-field=url]').fill(base);await panel.locator('[data-field=token]').fill(token);await panel.locator('[data-action=configure]').click();
- await panel.locator('[data-channels]').selectOption(channel.id);await panel.locator('[data-action=bind]').click();
- await page.waitForFunction(()=>SillyTavern.getContext().extensionSettings.aiResourceCenter?.bindings['arc-rp-fixture']);
- const changed=await api('channels/'+channel.id,{expectedVersion:channel.version,patch:{models:['claude'],baseUrl:'https://arc-new-acceptance.invalid/v1'}},'PATCH');
- observed=[];await panel.locator('[data-action=apply]').click();
- await page.waitForFunction(()=>SillyTavern.getContext().extensionSettings.connectionManager.profiles.find(p=>p.id==='arc-rp-fixture')?.model==='claude',null,{timeout:5000}).catch(async e=>{console.log('DIAGNOSTIC',await panel.locator('[data-error]').textContent(),await page.evaluate(()=>({main:SillyTavern.getContext().mainApi,profile:SillyTavern.getContext().extensionSettings.connectionManager.profiles.find(p=>p.id==='arc-rp-fixture')?.model})));throw e;});
- await page.waitForFunction(()=>SillyTavern.getContext().extensionSettings.aiResourceCenter?.lastAck);
- const saved=await page.evaluate(()=>{const c=SillyTavern.getContext(),p=c.extensionSettings.connectionManager.profiles.find(p=>p.id==='arc-rp-fixture');return {model:p.model,baseUrl:p['api-url'],vendor:p.vendor_field,loaded:c.chatCompletionSettings.custom_model,mainApi:c.mainApi,queue:c.extensionSettings.aiResourceCenter.outbox.length};});
- assert.deepEqual(saved,{model:'claude',baseUrl:'https://arc-new-acceptance.invalid/v1',vendor:{keep:true},loaded:'claude',mainApi:'openai',queue:0});assert.equal(observed.length,0);
- const state=await api('state',null,'GET'),receipt=state.channels.find(x=>x.id===channel.id);assert.equal(receipt.apply,'synced');assert.equal(receipt.tavern.profileId,'arc-rp-fixture');
- const stopped=await page.evaluate(async()=>{SillyTavern.getContext().extensionSettings.aiResourceCenter.bindings['arc-rp-fixture'].enabled=false;return (await import('/scripts/extensions.js')).runGenerationInterceptors([],100,'normal');});assert.equal(stopped,true);assert.equal(observed.length,0);
- const report={passed:true,checks:['native saved profile and next-request settings agree','unknown native fields preserved','fn receipt acknowledged and queue removed','pause aborts native generation before inference','zero backend or model probes during apply'],channelId:channel.id,acceptedVersion:receipt.version,upstreamRequests:observed.length};
- writeFileSync('artifacts/resource-center-rp.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}finally{await browser.close();}
+import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { launch, session } from "./browser.mjs";
+const base = "http://192.168.31.201:18321";
+const password = readFileSync(
+  "/vol2/1000/Docker/ai-resource-center/data/admin-password",
+  "utf8",
+).trim();
+const login = await fetch(base + "/api/v1/session", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ password }),
+});
+const cookie = login.headers.get("set-cookie").split(";")[0];
+const api = async (path, body, method = "POST") => {
+  const r = await fetch(base + "/api/v1/" + path, {
+    method,
+    headers: { cookie, "content-type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const result = await r.json();
+  if (!r.ok) throw Error(result.error);
+  return result;
+};
+const before = await api("state", null, "GET");
+const existing = before.channels.find(
+  (c) =>
+    c.name === "RP 联调验收" &&
+    before.sites.find((s) => s.id === c.siteId)?.url ===
+      "https://arc-acceptance.invalid",
+);
+const channel =
+  existing ||
+  (await api("channels", {
+    site: { name: "隔离联调验收", url: "https://arc-acceptance.invalid" },
+    account: "隔离联调",
+    name: "RP 联调验收",
+    baseUrl: "https://arc-acceptance.invalid/v1",
+    models: ["kimi"],
+    key: "local-fixture-only",
+    category: "rp",
+    enabled: true,
+  }));
+const token = (
+  await api("access-tokens", { role: "rp", channelIds: [channel.id] })
+).token;
+await api("sources", {
+  id: "rp-acceptance",
+  name: "RP 隔离验收",
+  kind: "sillytavern",
+  url: "http://127.0.0.1:32014",
+});
+writeFileSync(
+  "/vol2/1000/Docker/ai-resource-center/rp-acceptance/cleanup.json",
+  JSON.stringify({
+    channelId: channel.id,
+    accountId: channel.accountId,
+    siteId: channel.siteId,
+    token,
+    received: before.received.sillyTavern,
+  }),
+  { mode: 0o600 },
+);
+const browser = await launch();
+let observed = [];
+try {
+  const { page } = await session(browser, {
+    probe: false,
+    timings: true,
+    helper: false,
+  });
+  await page.route("**/api/backends/**", (r) => {
+    observed.push(r.request().url());
+    return r.abort();
+  });
+  await page.route("**/api/settings/get", async (route) => {
+    const r = await route.fetch();
+    const d = await r.json();
+    const settings = JSON.parse(d.settings || "{}");
+    settings.firstRun = false;
+    if (settings.extension_settings) {
+      delete settings.extension_settings.aiResourceCenter;
+      if (settings.extension_settings.workbench)
+        delete settings.extension_settings.workbench.resourceCenter;
+    }
+    d.settings = JSON.stringify(settings);
+    await route.fulfill({ response: r, json: d });
+  });
+  await page.goto("http://127.0.0.1:32014", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#ai-resource-center-rp", {
+    state: "attached",
+    timeout: 60000,
+  });
+  await page.waitForFunction(
+    () => Number.isFinite(window.baselineMetrics?.appReadyMs),
+    null,
+    { timeout: 60000 },
+  );
+  await page.evaluate(async () => {
+    const c = SillyTavern.getContext();
+    c.extensionSettings.connectionManager ??= {
+      profiles: [],
+      selectedProfile: "",
+    };
+    c.extensionSettings.connectionManager.profiles =
+      c.extensionSettings.connectionManager.profiles.filter(
+        (p) => p.id !== "arc-rp-fixture",
+      );
+    c.extensionSettings.connectionManager.profiles.push({
+      id: "arc-rp-fixture",
+      mode: "cc",
+      exclude: [],
+      api: "custom",
+      "api-url": "https://arc-acceptance.invalid/v1",
+      model: "kimi",
+      name: "RP 原生验收",
+      vendor_field: { keep: true },
+    });
+    c.extensionSettings.connectionManager.selectedProfile = "arc-rp-fixture";
+    await (await import("/script.js")).saveSettings();
+  });
+  await page.locator("#extensions-settings-button .drawer-toggle").click();
+  const panel = page.locator("#ai-resource-center-rp");
+  await panel.locator(".inline-drawer-toggle").click();
+  await panel.locator("[data-field=url]").fill(base);
+  await panel.locator("[data-field=token]").fill(token);
+  await panel.locator("[data-action=configure]").click();
+  await panel.locator("[data-channels]").selectOption(channel.id);
+  await panel.locator("[data-action=bind]").click();
+  await page.waitForFunction(
+    () =>
+      SillyTavern.getContext().extensionSettings.aiResourceCenter?.bindings[
+        "arc-rp-fixture"
+      ],
+  );
+  const changed = await api(
+    "channels/" + channel.id,
+    {
+      expectedVersion: channel.version,
+      patch: {
+        models: ["claude"],
+        baseUrl: "https://arc-new-acceptance.invalid/v1",
+      },
+    },
+    "PATCH",
+  );
+  observed = [];
+  await panel.locator("[data-action=apply]").click();
+  await page
+    .waitForFunction(
+      () =>
+        SillyTavern.getContext().extensionSettings.connectionManager.profiles.find(
+          (p) => p.id === "arc-rp-fixture",
+        )?.model === "claude",
+      null,
+      { timeout: 5000 },
+    )
+    .catch(async (e) => {
+      console.log(
+        "DIAGNOSTIC",
+        await panel.locator("[data-error]").textContent(),
+        await page.evaluate(() => ({
+          main: SillyTavern.getContext().mainApi,
+          profile:
+            SillyTavern.getContext().extensionSettings.connectionManager.profiles.find(
+              (p) => p.id === "arc-rp-fixture",
+            )?.model,
+        })),
+      );
+      throw e;
+    });
+  await page.waitForFunction(
+    () => SillyTavern.getContext().extensionSettings.aiResourceCenter?.lastAck,
+  );
+  const saved = await page.evaluate(() => {
+    const c = SillyTavern.getContext(),
+      p = c.extensionSettings.connectionManager.profiles.find(
+        (p) => p.id === "arc-rp-fixture",
+      );
+    return {
+      model: p.model,
+      baseUrl: p["api-url"],
+      vendor: p.vendor_field,
+      loaded: c.chatCompletionSettings.custom_model,
+      mainApi: c.mainApi,
+      queue: c.extensionSettings.aiResourceCenter.outbox.length,
+    };
+  });
+  assert.deepEqual(saved, {
+    model: "claude",
+    baseUrl: "https://arc-new-acceptance.invalid/v1",
+    vendor: { keep: true },
+    loaded: "claude",
+    mainApi: "openai",
+    queue: 0,
+  });
+  assert.equal(observed.length, 0);
+  const state = await api("state", null, "GET"),
+    receipt = state.channels.find((x) => x.id === channel.id);
+  assert.equal(receipt.apply, "synced");
+  assert.equal(receipt.tavern.profileId, "arc-rp-fixture");
+  const stopped = await page.evaluate(async () => {
+    SillyTavern.getContext().extensionSettings.aiResourceCenter.bindings[
+      "arc-rp-fixture"
+    ].enabled = false;
+    return (await import("/scripts/extensions.js")).runGenerationInterceptors(
+      [],
+      100,
+      "normal",
+    );
+  });
+  assert.equal(stopped, true);
+  assert.equal(observed.length, 0);
+  const report = {
+    passed: true,
+    checks: [
+      "native saved profile and next-request settings agree",
+      "unknown native fields preserved",
+      "fn receipt acknowledged and queue removed",
+      "pause aborts native generation before inference",
+      "zero backend or model probes during apply",
+    ],
+    channelId: channel.id,
+    acceptedVersion: receipt.version,
+    upstreamRequests: observed.length,
+  };
+  writeFileSync(
+    "artifacts/resource-center-rp.json",
+    JSON.stringify(report, null, 2),
+  );
+  console.log(JSON.stringify(report));
+} finally {
+  await browser.close();
+}
