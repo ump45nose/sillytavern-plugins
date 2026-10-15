@@ -20,7 +20,7 @@ class ConnectorConfig:
     chatlog_page_size: int = 200
     chatlog_window_seconds: int = 86400
     chatlog_overlap_seconds: int = 300
-    media_enabled: bool = False
+    media_enabled: bool = True
     media_queue_path: str = ""
     poll_seconds: float = 60.0
     webhook_url: str = ""
@@ -62,7 +62,7 @@ class ConnectorConfig:
             chatlog_page_size=int(os.getenv("CHATLOG_PAGE_SIZE", "200")),
             chatlog_window_seconds=int(os.getenv("CHATLOG_WINDOW_SECONDS", "86400")),
             chatlog_overlap_seconds=int(os.getenv("CHATLOG_OVERLAP_SECONDS", "300")),
-            media_enabled=enabled("WECHAT_MEDIA_ENABLED"),
+            media_enabled=enabled("WECHAT_MEDIA_ENABLED", True),
             media_queue_path=os.getenv("WECHAT_MEDIA_QUEUE", ""),
             poll_seconds=float(os.getenv("CHATLOG_POLL_SECONDS", "60")),
             webhook_url=os.getenv("CRM_WEBHOOK_URL", "").replace(

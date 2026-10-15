@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import MetaData, Table, func, insert, inspect, select, update
 
+from personal_crm.connector.presentation import short_name
 from personal_crm.core.domain import ensure_utc, utcnow, uuid7
 
 from .models import (
@@ -81,7 +82,7 @@ def migrate_legacy(archive, *, source_schema=None):
             c.execute(
                 insert(people).values(
                     id=pid,
-                    name=old["display_name"],
+                    name=short_name(old["display_name"]),
                     aliases=old.get("aliases") or [],
                     relationship=old.get("relationship_to_me"),
                     contacts=contacts,

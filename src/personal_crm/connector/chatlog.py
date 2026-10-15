@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConnectorConfig, as_datetime
+from .presentation import directory_name
 
 
 class ChatlogSourceError(RuntimeError):
@@ -80,11 +81,7 @@ class ChatlogMessageSource:
             scopes.append(
                 dict(
                     requested_id=peer,
-                    person_name=override.get("person_name")
-                    or item.get("remark")
-                    or item.get("label")
-                    or item.get("nickname")
-                    or peer,
+                    person_name=directory_name(item),
                     account_id=account,
                     account_namespace=override.get("account_namespace")
                     or self.config.account_namespace

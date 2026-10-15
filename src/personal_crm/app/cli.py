@@ -11,8 +11,13 @@ from .settings import Settings
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["migrate", "migrate-legacy", "integrity", "backup"])
+    parser.add_argument(
+        "command", choices=["migrate", "migrate-legacy", "repair-wechat", "integrity", "backup"]
+    )
     parser.add_argument("path", nargs="?")
+    parser.add_argument("--accounts", default="wechat-main,legacy")
+    parser.add_argument("--backup")
+    parser.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
     settings = Settings()
     if args.command == "migrate":
@@ -46,6 +51,22 @@ def main(argv=None):
         from personal_crm.archive.migration import migrate_legacy
 
         print(json.dumps(migrate_legacy(archive)))
+    elif args.command == "repair-wechat":
+        from personal_crm.archive.repair import repair_wechat
+
+        if not args.path:
+            parser.error("repair-wechat requires a directory JSON path")
+        print(
+            json.dumps(
+                repair_wechat(
+                    archive,
+                    json.loads(Path(args.path).read_text()),
+                    accounts=args.accounts.split(","),
+                    backup=args.backup,
+                    apply=args.apply,
+                )
+            )
+        )
     elif args.command == "integrity":
         print(archive.integrity_check())
     else:

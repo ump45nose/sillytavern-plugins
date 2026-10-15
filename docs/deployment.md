@@ -31,10 +31,22 @@ SQLite 备份：`uv run personal-crm backup /safe/path/crm.db`；PostgreSQL 使�
 
 `connector.env.example` 是采集配置样例。`CRM_CLIENT_ID`、`CRM_ACCOUNT_NAMESPACE`、`CRM_CHECKPOINT` 和可选的 `CHATLOG_SCOPES` 沿用原值；来源身份不靠备注名匹配。只需要 `CRM_ENV_FILE` 指向实际文件即可运行采集 CLI，不依赖 Hub 客户端安装器。
 
-只有需要保留能读取的媒体时才启用 `WECHAT_MEDIA_ENABLED=true`，并安装原媒体读取依赖：
+媒体采集默认开启（`WECHAT_MEDIA_ENABLED=true`），部署采集器时安装原媒体读取依赖：
 
 ```bash
 uv pip install -r requirements-wechat-media.txt
 ```
 
 媒体读取只复用已有数据库密钥缓存；保留可取得的原文件，不增加 OCR、转写或解密能力。文件暂时缺失时元数据和 attachment:// 引用仍保留，后续补文件不重写正文。
+
+## 修整既有微信展示数据
+
+从已有读取器导出 `directory --source wechat` 的 JSON 到私有文件后运行：
+
+```bash
+personal-crm repair-wechat /private/wechat-directory.json --accounts wechat-main,legacy
+personal-crm repair-wechat /private/wechat-directory.json --accounts wechat-main,legacy \
+  --apply --backup /private/backups/wechat-text-before.json
+```
+
+默认仅报告变更数量。执行时先保存受影响行，再在一个事务中修改机器生成的复合姓名、技术身份姓名、发言人和重复媒体占位；手工姓名及正文其余部分保留，不改变来源身份、水位、分段或附件 ID。`--accounts` 应明确列出本目录对应的来源账号，不能混用不同账号的目录。备份文件不能已存在。

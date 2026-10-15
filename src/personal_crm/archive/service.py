@@ -29,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.pool import StaticPool
 
+from personal_crm.connector.presentation import attachment_content, short_name
 from personal_crm.core.domain import ensure_utc, utcnow, uuid7
 
 from .models import (
@@ -734,7 +735,7 @@ class Archive:
                 c.execute(
                     insert(people).values(
                         id=pid,
-                        name=msg.name or msg.peer,
+                        name=short_name(msg.name) or msg.peer,
                         aliases=[],
                         relationship=None,
                         contacts=[],
@@ -788,7 +789,7 @@ class Archive:
                         created_at=now,
                     )
                 )
-                content += f" [{msg.attachment.name}](attachment://{aid})"
+                content = attachment_content(content, msg.attachment.name, aid)
             if iid:
                 if iid not in segments:
                     segments[iid] = {**self._require(c, interactions, iid), "lines": []}
@@ -800,7 +801,8 @@ class Archive:
                 first = last = sent
                 cross_day = False
             stamp = sent.astimezone(ZONE).strftime("%Y-%m-%d %H:%M" if cross_day else "%H:%M")
-            line = f"{stamp} {'我' if msg.is_self else (msg.sender or msg.name or msg.peer)}：{content}"
+            speaker = "我" if msg.is_self else short_name(msg.sender or msg.name or msg.peer)
+            line = f"{stamp} {speaker}：{content}"
             if iid:
                 old["lines"].append(line)
                 old["started_at"], old["ended_at"] = first, last
