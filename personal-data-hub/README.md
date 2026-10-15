@@ -19,11 +19,11 @@ Mem0、Hermes 报告不再采集。Memos、GitHub、Emby、Navidrome、Google Ca
 
 ## 数据与运行
 
-当前原件仍存在 `hub_records`，包含稳定来源身份、原始载荷、适配字段、时间和附件引用；版本在 `hub_revisions`，阅读内容在 `hub_content_*`。结构重设计不在本轮来源清理中执行。
+当前原件仍存在 `hub_records`，包含稳定来源身份、原始载荷、适配字段、时间和附件引用；版本在 `hub_revisions`，阅读内容在 `hub_content_*`。结构重设计另行推进。集成的 P1 修复保留已发布旧版阅读，发布不占用归档全局写锁，附件在锁外准备，CRM 变更同事务归档并用短事务补漏核对。
 
 结构化数据使用独立数据库 `personal_data_hub`；文件按 SHA-256 存在 `/vol1/1000/personal-data-hub/assets`。设备身份、凭据、配置、数据库和附件均在 Git 外。显式删除保留墓碑，阻止旧备份重新导入已删除数据。
 
-2026-10-13 止血措施继续保留：`personal-data-hub-collectors.service` 停止并禁用，后台轮询和阅读加工暂停；微信、健康、账单、设备推送与显式文件确认入口保留。来源清理不会自动恢复后台。现有部署仍是 0.4.9，清理分支在完成主工作区归并前不部署。见 [止血记录](docs/performance-relief-20261013.md) 和 [清理计划](docs/plans/2026-10-15-source-cleanup.md)。
+2026-10-13 止血措施继续保留：`personal-data-hub-collectors.service` 停止并禁用，后台轮询和阅读加工暂停；微信、健康、账单、设备推送与显式文件确认入口保留。来源清理不会自动恢复后台。来源清理与 P1 性能修复已合入 main；生产最近核对为 0.4.9，本次代码合并不执行部署。见 [止血记录](docs/performance-relief-20261013.md) 和 [清理计划](docs/plans/2026-10-15-source-cleanup.md)。
 
 ## 维护
 

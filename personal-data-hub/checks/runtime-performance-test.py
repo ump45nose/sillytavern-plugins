@@ -126,36 +126,19 @@ class RuntimePerformanceTests(unittest.TestCase):
                     scheduler.serve(None, {'sources': {}, 'processing_interval_seconds': 120})
                 self.assertEqual(len(spawned), 2)
                 self.assertGreaterEqual(spawned[1][0] - spawned[0][0], 120)
-                self.assertTrue(all(args[-2:] == ['--limit', '1'] for _, args in spawned))
+                self.assertTrue(all(args[-4:] == ['--limit', '1000', '--max-seconds', '300'] for _, args in spawned))
 
-    def test_publication_yields_to_ingest_and_keeps_timeout_local(self):
+    def test_publication_does_not_take_global_archive_lock(self):
         store = self.case.store
         if store.engine.dialect.name != 'postgresql': self.skipTest('PostgreSQL publication locks')
-        self.case.put(body='发布让位后仍能正确完成同一份正文')
+        self.case.put(body='发布不阻塞无关来源')
         repository = self.case.repository
         job = repository.claim(lease_seconds=180)
         rows = repository.snapshot(job)
-        content = PROFILES[job['processor']].process(rows)
         with store.writer_lock():
-            self.assertFalse(repository.publish(job, rows, content))
+            self.assertTrue(repository.publish(job, rows, PROFILES[job['processor']].process(rows)))
         with store.engine.connect() as c:
-            state = c.execute(select(jobs.c.state, jobs.c.lease_token).where(jobs.c.id == job['id'])).one()
-            self.assertEqual(state.state, 'pending')
-            self.assertIsNone(state.lease_token)
-            self.assertEqual(c.scalar(select(objects.c.revision)), 0)
-        limits = []
-
-        def inspect_limit(connection, cursor, statement, params, context, many):
-            if statement.startswith('INSERT INTO hub_content_blocks'):
-                cursor.execute("SELECT current_setting('transaction_timeout')")
-                limits.append(cursor.fetchone()[0])
-
-        event.listen(store.engine, 'before_cursor_execute', inspect_limit)
-        job = repository.claim(lease_seconds=180)
-        self.assertTrue(repository.publish(job, rows, content))
-        self.assertEqual(limits, ['10s'])
-        with store.engine.connect() as c:
-            self.assertEqual(c.scalar(text("SELECT current_setting('transaction_timeout')")), '0')
+            self.assertEqual(c.scalar(text("SELECT current_setting('statement_timeout')")), '0')
 
 
 if __name__ == '__main__':

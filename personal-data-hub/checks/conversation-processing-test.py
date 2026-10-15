@@ -105,7 +105,7 @@ class ConversationTests(runpy.run_path(str(Path(__file__).with_name('processing-
         second=self.query.evidence(item['id'],item['revision'],after=first['next_after'],limit=1)
         self.assertEqual(len(first['inputs']+second['inputs']),2)
         self.store.ingest('wechat-test',Batch([Record('people:p1','people',{'id':'p1','display_name':'姓名乙'})]))
-        with self.assertRaises(ContentChanged):self.query.evidence(item['id'],item['revision'])
+        self.assertTrue(any(not r['current_matches'] for r in self.query.evidence(item['id'],item['revision'])['inputs']))
         drain(self.store);self.assertIn('姓名乙',self.chats()[0]['title'])
 
     def test_model_citations_budget_configuration_and_deletion(self):

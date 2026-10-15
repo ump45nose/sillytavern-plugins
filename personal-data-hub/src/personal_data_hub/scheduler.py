@@ -116,11 +116,11 @@ def serve(store, config, config_path=None):
                     command = worker_command + ['rebuild-content', '--limit', '50', '--background-page']
                     processing_kind = 'rebuild'
                 elif has_pending:
-                    command = worker_command + ['process-pending', '--limit', '1']
+                    command = worker_command + ['process-pending', '--limit', '1000', '--max-seconds', '300']
                     processing_kind = 'drain'
                 if command:
                     process = subprocess.Popen(command, start_new_session=True)
-                    processing_worker = Worker(process, now, 120)
+                    processing_worker = Worker(process, now, 480 if processing_kind == 'drain' else 120)
                 else:
                     processing_deadline = now + processing_interval
             for source, worker in list(active.items()):

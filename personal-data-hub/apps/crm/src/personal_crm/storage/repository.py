@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,9 @@ class CrmRepository:
         self.engine = create_engine(url, **engine_options)
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
         self._configure_sqlite(self.engine)
+        if hub_store is not None:
+            from personal_data_hub.crm_archive import install_mirror
+            install_mirror(self)
         if create_schema:
             Base.metadata.create_all(self.engine)
 
@@ -75,14 +78,13 @@ class CrmRepository:
     def transaction(self, *, immediate: bool = False) -> Iterator[Session]:
         """提供统一的提交/回滚边界。"""
 
-        with self._sessions() as session:
+        guard = self.hub_store.writer_lock() if self.hub_store is not None and self.engine.dialect.name == 'sqlite' else nullcontext()
+        with guard, self._sessions() as session:
             with session.begin():
                 if immediate and self.engine.dialect.name == "sqlite":
                     # 在去重查询之前取得写锁，防止两个客户端同时创建人物和事件。
                     session.execute(text("BEGIN IMMEDIATE"))
                 if immediate and self.engine.dialect.name == "postgresql":
-                    if self.hub_store is not None:
-                        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": self.hub_store.lock_id("source:crm")})
                     session.execute(text("SELECT pg_advisory_xact_lock(214173812)"))
                 yield session
 
@@ -263,7 +265,7 @@ class CrmRepository:
             ):
                 # 较老的补录消息不能让 last_interaction_at 倒退。
                 person.last_interaction_at = interaction.occurred_at
-            completed = None if self.hub_store is not None else self._complete_eligible_reminders(session, interaction)
+            completed = [] if self.hub_store is not None else self._complete_eligible_reminders(session, interaction)
             session.flush()
             return interaction, True, len(completed)
 
@@ -784,28 +786,20 @@ class CrmRepository:
                     client.synced_through = watermark
             client.accepted_total += accepted
             client.duplicate_total += duplicates
-            if self.hub_store is not None:
-                from personal_data_hub.contracts import Batch, Record, instant
-                session.flush()
-                archive = []
-                ids = {x.id for x in interaction_by_key.values()}
-                for model, condition in [(Interaction, Interaction.id.in_(ids)), (Person, Person.id.in_({x.person_id for x in interaction_by_key.values()})), (SyncClient, (SyncClient.source == source) & (SyncClient.client_id == client_id))]:
-                    for entity in session.scalars(select(model).where(condition)):
-                        raw = self.to_dict(entity)
-                        eid = model.__tablename__ + ":" + entity.id if model is not SyncClient else "client:" + __import__("personal_data_hub.contracts", fromlist=["digest"]).digest([source, client_id])
-                        archive.append(Record(eid, model.__tablename__, raw, {"table": model.__tablename__}, instant(raw.get("occurred_at", raw.get("created_at"))), instant(raw.get("updated_at"))))
-                self.hub_store.ingest("crm", Batch(records=archive), connection=session.connection())
         return accepted, duplicates
 
     def attach_wechat_media(self, event_key: str, message_key: str | None, asset) -> dict:
         """在已归档消息上补齐附件；正文、水位和删除状态保持原样。"""
         if self.hub_store is None:
             raise ValueError("media archive unavailable")
-        from personal_data_hub.contracts import Batch, Record
+        from personal_data_hub.contracts import Batch, Record, instant
         from personal_data_hub.storage import records
 
-        with self.transaction(immediate=True) as session:
+        with self.hub_store.prepare_asset(asset) as prepared, self.transaction(immediate=True) as session:
             connection = session.connection()
+            if connection.dialect.name == "postgresql":
+                with self.hub_store.writer_lock(connection):
+                    pass
             if self.hub_store.crm_event_deleted(connection, "chatlog", event_key, message_key):
                 return {"status": "deleted"}
             identity = Interaction.source_event_key == event_key
@@ -825,10 +819,10 @@ class CrmRepository:
             )).mappings().first()
             if row is None:
                 return {"status": "pending"}
-            self.hub_store.ingest("crm", Batch(records=[Record(
+            self.hub_store._ingest_prepared("crm", Batch(records=[Record(
                 external_id, "interactions", row["raw"], row["normalized"],
-                row["occurred_at"], row["updated_at"], row["timezone"], [asset],
-            )]), connection=connection)
+                instant(row["occurred_at"]), instant(row["updated_at"]), row["timezone"],
+            )]), [[prepared]], connection, refresh_unchanged=True)
             return {"status": "attached"}
 
     def list_sync_clients(self) -> list[dict[str, Any]]:

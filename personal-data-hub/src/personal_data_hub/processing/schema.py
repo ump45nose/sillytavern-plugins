@@ -19,6 +19,7 @@ Index("ix_hub_content_time_id", objects.c.occurred_at, objects.c.id)
 Index('ix_hub_content_reading_order', objects.c.occurred_at.desc().nulls_last(), objects.c.id).ddl_if(dialect='postgresql')
 blocks = Table("hub_content_blocks", metadata,
     Column("object_id", ForeignKey("hub_content_objects.id", ondelete="CASCADE"), primary_key=True),
+    # Block revision is its last replacement; the object revision governs read pagination.
     Column("ordinal", Integer, primary_key=True), Column("revision", Integer, nullable=False),
     Column("key", String, nullable=False), Column("type", String, nullable=False),
     Column("text", Text, nullable=False), Column("refs", JSON, nullable=False),

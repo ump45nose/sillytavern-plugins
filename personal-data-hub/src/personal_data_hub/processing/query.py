@@ -46,7 +46,7 @@ class ReadingQuery:
         if start: conditions.append(objects.c.occurred_at >= start)
         if end: conditions.append(objects.c.occurred_at < end)
         if query:
-            conditions.append(objects.c.state == 'ready')
+            conditions.extend((objects.c.revision > 0, objects.c.state.in_(('ready', 'stale'))))
             # Find matching bodies once through the text index, rather than reading
             # every object's blocks in a separate correlated search.
             if len(query) < 3:
@@ -132,7 +132,7 @@ class ReadingQuery:
             rows = list(c.execute(select(*columns).select_from(joined).where(objects.c.id == identifier)
                                   .order_by(blocks.c.ordinal).limit(limit + 1)).mappings())
         if not rows: raise ContentRemoved('content_removed')
-        if rows[0]['head_revision'] != revision or rows[0]['head_state'] == 'stale':
+        if rows[0]['head_revision'] != revision:
             raise ContentChanged('content_changed')
         result, budget = [], 1024
         has_more = False
@@ -146,7 +146,8 @@ class ReadingQuery:
             result.append(block); budget += size
         if not result and has_more: raise ValueError('block_exceeds_page_budget')
         return {'id': identifier, 'revision': revision, 'blocks': result,
-                'next_after': result[-1]['ordinal'] if has_more else None}
+                'next_after': result[-1]['ordinal'] if has_more else None,
+                'processing': {'state': rows[0]['head_state']}}
 
     def evidence(self, identifier, revision=None, after=None, limit=100):
         from ..storage import records
@@ -160,7 +161,7 @@ class ReadingQuery:
                                          records.c.hash.label('current_hash')).select_from(joined)
                                   .where(objects.c.id == identifier).order_by(inputs.c.record_id).limit(limit + 1)).mappings())
         if not rows: return None
-        if revision is not None and (rows[0]['revision'] != revision or rows[0]['state'] != 'ready'):
+        if revision is not None and (rows[0]['revision'] != revision or rows[0]['state'] not in ('ready', 'stale')):
             raise ContentChanged('content_changed')
         return {'id': identifier, 'revision': rows[0]['revision'], 'inputs': [
             {'record_id': r['record_id'], 'input_hash': r['input_hash'], 'current_hash': r['current_hash'],

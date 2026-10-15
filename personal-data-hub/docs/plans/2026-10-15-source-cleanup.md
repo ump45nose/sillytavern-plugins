@@ -1,5 +1,7 @@
 # 来源与镜像链路清理
 
+> 2026-10-15 合并更新：用户已明确要求合并；本任务与另一分支已集成到 main，生产部署单独处理。下文的原未集成边界为当时记录，最终结果见 [合并记录](2026-10-15-integration.md)。
+
 ## 范围
 
 保留 CRM/微信、Skysight 原始片段与摘要、Plaud、Health、AutoAccounting、NAS/Mac 网络流量。移除 Mem0、Hermes 报告、Memos、GitHub、Emby、Navidrome、Google Calendar/Tasks、Token Monitor 和邮件在 Hub 内的采集、镜像加工、来源展示与专属接口。原系统的存储、接口、独立任务与凭据保持；Mac 客户端由用户在 Mac 修改，本轮提供接口变更清单。

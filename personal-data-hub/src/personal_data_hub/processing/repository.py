@@ -4,6 +4,8 @@ from contextlib import nullcontext
 from datetime import timedelta
 from uuid import uuid4
 
+from sqlalchemy.exc import OperationalError
+
 from sqlalchemy import delete, func, insert, or_, select, text, union_all, update
 
 from ..contracts import instant, utcnow
@@ -19,7 +21,7 @@ class ProcessingRepository:
 
     @staticmethod
     def eligible(now):
-        return or_(jobs.c.state == 'pending',
+        return or_((jobs.c.state == 'pending') & (jobs.c.retry_at.is_(None) | (jobs.c.retry_at <= now)),
                    (jobs.c.state == 'failed') & (jobs.c.attempts < 5) & (jobs.c.retry_at <= now),
                    (jobs.c.state == 'running') & (jobs.c.lease_until <= now))
 
@@ -125,24 +127,35 @@ class ProcessingRepository:
                 return rows
 
     def publish(self, job, rows, content):
+        try:
+            return self._publish(job, rows, content)
+        except OperationalError as exc:
+            if getattr(exc.orig, 'sqlstate', None) != '55P03':
+                raise
+            # An input is being edited. NOWAIT avoids a job/input lock cycle;
+            # give the job back without consuming the failure retry budget.
+            with self.store.engine.begin() as c:
+                c.execute(update(jobs).where(jobs.c.id == job['id'], jobs.c.lease_token == job['lease_token']).values(
+                    state='pending', lease_token=None, lease_until=None, attempts=jobs.c.attempts - 1,
+                    retry_at=utcnow() + timedelta(seconds=5), updated_at=utcnow()))
+            return False
+
+    def _publish(self, job, rows, content):
         from ..storage import records, sources
-        # Preserve the ingest/purge lock order. Background publication yields to
-        # an active writer and uses one connection for the lock and transaction.
+        # Ingest and deletion enqueue while holding this same job row. The
+        # generation check therefore serializes publication with invalidation;
+        # Input locks use NOWAIT so a concurrent edit cannot create a lock cycle.
+        # Publishing unrelated content does not take the archive/asset lock.
         guard = self.store.writer_lock() if self.store.engine.dialect.name == 'sqlite' else nullcontext()
         with guard, self.store.engine.begin() as c:
             if c.dialect.name == 'postgresql':
-                c.execute(text("SET LOCAL transaction_timeout = '10s'"))
-                acquired = c.scalar(text('SELECT pg_try_advisory_xact_lock(:key)'),
-                                    {'key': self.store.lock_id('hub-asset-and-record-writer')})
-                if not acquired:
-                    c.execute(update(jobs).where(jobs.c.id == job['id'], jobs.c.lease_token == job['lease_token']).values(
-                        state='pending', lease_token=None, lease_until=None))
-                    return False
+                c.execute(text("SET LOCAL statement_timeout = '60s'"))
             current = c.execute(select(jobs).where(jobs.c.id == job['id']).with_for_update()).mappings().one()
             if current['lease_token'] != job['lease_token']:
                 return False
             expected = {r['id']: r['hash'] for r in rows}
-            present = dict(c.execute(select(records.c.id, records.c.hash).where(records.c.id.in_(expected))).all()) if expected else {}
+            present = dict(c.execute(select(records.c.id, records.c.hash).where(records.c.id.in_(expected))
+                .order_by(records.c.id).with_for_update(read=True, nowait=True)).all()) if expected else {}
             current_members = set(c.scalars(select(members.c.record_id).where(members.c.job_id == job['id'])))
             frozen_members = {r['id'] for r in rows if PROFILES[job['processor']].accepts(r) and job['scope_key'] in scopes(PROFILES[job['processor']], r)}
             profile = PROFILES[job['processor']]
@@ -154,9 +167,9 @@ class ProcessingRepository:
                 c.execute(update(jobs).where(jobs.c.id == job['id']).values(state='pending', lease_token=None, lease_until=None))
                 return False
             identifier = job['id']
-            c.execute(delete(blocks).where(blocks.c.object_id == identifier))
-            c.execute(delete(inputs).where(inputs.c.object_id == identifier))
             if content is None:
+                c.execute(delete(blocks).where(blocks.c.object_id == identifier))
+                c.execute(delete(inputs).where(inputs.c.object_id == identifier))
                 c.execute(delete(objects).where(objects.c.id == identifier))
             else:
                 row = rows[0]
@@ -171,14 +184,30 @@ class ProcessingRepository:
                     c.execute(update(objects).where(objects.c.id == identifier).values(**values))
                 else:
                     c.execute(insert(objects).values(**values))
-                if content.blocks:
-                    # Search overlap covers matches crossing a transport block boundary.
-                    c.execute(insert(blocks), [dict(object_id=identifier, revision=values['revision'], ordinal=i,
-                        key=b.key, type=b.type, text=b.text, refs=b.refs, details=b.metadata,
+                # Unchanged blocks and input links do not churn the text index.
+                old_blocks = {r['ordinal']: dict(r) for r in c.execute(select(blocks).where(blocks.c.object_id == identifier)).mappings()}
+                replacements = []
+                for i, b in enumerate(content.blocks):
+                    value = dict(object_id=identifier, ordinal=i, key=b.key, type=b.type,
+                        text=b.text, refs=b.refs, details=b.metadata,
                         search_text=(content.blocks[i-1].text[-200:] if i and (b.type != 'message' or b.metadata.get('continuation')) else '') + b.text)
-                        for i, b in enumerate(content.blocks)])
-                if rows:
-                    c.execute(insert(inputs), [dict(object_id=identifier, record_id=r['id'], input_hash=r['hash']) for r in rows])
+                    old = old_blocks.get(i)
+                    if old is None or any(old[k] != v for k, v in value.items()):
+                        replacements.append(dict(value, revision=values['revision']))
+                removed = set(old_blocks) - set(range(len(content.blocks)))
+                replaced = {b['ordinal'] for b in replacements} & old_blocks.keys()
+                if removed or replaced:
+                    c.execute(delete(blocks).where(blocks.c.object_id == identifier, blocks.c.ordinal.in_(removed | replaced)))
+                if replacements:
+                    c.execute(insert(blocks), replacements)
+                old_inputs = dict(c.execute(select(inputs.c.record_id, inputs.c.input_hash).where(inputs.c.object_id == identifier)).all())
+                obsolete = {key for key, value in old_inputs.items() if expected.get(key) != value}
+                if obsolete:
+                    c.execute(delete(inputs).where(inputs.c.object_id == identifier, inputs.c.record_id.in_(obsolete)))
+                new_inputs = [dict(object_id=identifier, record_id=key, input_hash=value)
+                              for key, value in expected.items() if old_inputs.get(key) != value]
+                if new_inputs:
+                    c.execute(insert(inputs), new_inputs)
             c.execute(update(jobs).where(jobs.c.id == identifier).values(published_generation=job['desired_generation'],
                 state='ready', lease_token=None, lease_until=None, retry_at=None, error_code=None, updated_at=utcnow()))
             return True

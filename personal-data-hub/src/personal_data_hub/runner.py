@@ -50,23 +50,28 @@ def run(store, source, settings, since=None):
                 ended_at=utcnow(), status="failed", error=canonical({"type": "InterruptedError", "reason": "上次采集进程中断，已自动重新采集"})))
             c.execute(insert(runs).values(id=rid, source=source, started_at=utcnow(), status="running", records=0))
         try:
-            pending = Batch()
-            cursor = None
-            batches = adapter(settings).collect({} if settings.get('force_full') else store.cursor(source), since)
-            for batch in batches:
-                invalid += sum(r.kind == "computer_segment_invalid" for r in batch.records)
-                pending.records.extend(batch.records)
-                pending.deletions.extend(batch.deletions)
-                if batch.next_cursor is not None: cursor = batch.next_cursor
-                if len(pending.records) >= 250 or batch.authoritative:
-                    pending.authoritative = batch.authoritative
-                    pending.seen_ids = batch.seen_ids
-                    result = store.ingest(source, pending, refresh_unchanged=False)
-                    for key in totals: totals[key] += result[key]
-                    pending = Batch()
-            pending.next_cursor = cursor
-            result = store.ingest(source, pending, refresh_unchanged=False)
-            for key in totals: totals[key] += result[key]
+            if settings['adapter'] == 'crm_pg':
+                from .crm_archive import reconcile
+                totals = reconcile(store)
+                store.ingest(source, Batch(next_cursor={'collected_at': utcnow().isoformat()}), refresh_unchanged=False)
+            else:
+                pending = Batch()
+                cursor = None
+                batches = adapter(settings).collect({} if settings.get('force_full') else store.cursor(source), since)
+                for batch in batches:
+                    invalid += sum(r.kind == "computer_segment_invalid" for r in batch.records)
+                    pending.records.extend(batch.records)
+                    pending.deletions.extend(batch.deletions)
+                    if batch.next_cursor is not None: cursor = batch.next_cursor
+                    if len(pending.records) >= 250 or batch.authoritative:
+                        pending.authoritative = batch.authoritative
+                        pending.seen_ids = batch.seen_ids
+                        result = store.ingest(source, pending, refresh_unchanged=False)
+                        for key in totals: totals[key] += result[key]
+                        pending = Batch()
+                pending.next_cursor = cursor
+                result = store.ingest(source, pending, refresh_unchanged=False)
+                for key in totals: totals[key] += result[key]
         except Exception as exc:
             with store.engine.begin() as c:
                 c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="failed", records=totals["changed"], error=canonical(error_detail(exc))))

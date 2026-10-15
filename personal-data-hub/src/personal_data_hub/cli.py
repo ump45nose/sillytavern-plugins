@@ -19,7 +19,7 @@ def main():
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
     sub.add_parser("status"); sub.add_parser("serve-collectors"); sub.add_parser("backfill-previews")
     sub.add_parser("processing-status")
-    p = sub.add_parser("process-pending"); p.add_argument("--limit", type=int, default=50); p.add_argument('--lane', choices=('reading', 'model'), default='reading')
+    p = sub.add_parser("process-pending"); p.add_argument("--limit", type=int, default=50); p.add_argument('--lane', choices=('reading', 'model'), default='reading'); p.add_argument('--max-seconds', type=int)
     p = sub.add_parser("rebuild-content"); p.add_argument("--source"); p.add_argument("--force", action="store_true"); p.add_argument("--after"); p.add_argument("--limit", type=int, default=250, help="每个事务的扫描条数"); p.add_argument("--one-page", action="store_true")
     p.add_argument('--background-page', action='store_true', help='后台单页回填；在同一事务保存进度')
     from .processing.registry import PROFILES
@@ -34,7 +34,7 @@ def main():
     store = store_from(config, initialize=not args.skip_schema_init)
     if args.action == "process-pending":
         from .processing.worker import drain
-        result = drain(store, args.limit, lane=args.lane, config=config)
+        result = drain(store, args.limit, lane=args.lane, config=config, max_seconds=args.max_seconds)
         print(canonical(result))
         if result['failed']: raise SystemExit(1)
         return
