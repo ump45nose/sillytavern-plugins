@@ -11,6 +11,7 @@ export interface Item {
   data?: Data;
 }
 export interface Preferences {
+  resourceCenter?: import("./resource-center").CenterLinkSettings;
   left: boolean;
   layout?: "novel" | "rp";
   rpTopAuto?: boolean;

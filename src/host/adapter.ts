@@ -1,3 +1,5 @@
+import {applyNativeConnection,activateSavedConnection} from "./resource-center-native";
+import {ResourceCenterLink,centerDefaults,profileConnection,type RpConnection} from "./resource-center";
 import type { Data, HostSnapshot, Item, Preferences, Resource } from "./types";
 import { clone, mergeBook, mergeEdits, validateBook, validatePreset } from "./model";
 import { nativeMenuItems } from "./tools";
@@ -29,6 +31,25 @@ export class HostAdapter {
   resourceAction = false;
   chatsVersion = 0;
   private bindingRun = false;
+  center!: ResourceCenterLink;
+  centerSettings(){const c=ctx();c.extensionSettings.aiResourceCenter??=c.extensionSettings.workbench.resourceCenter||centerDefaults();delete c.extensionSettings.workbench.resourceCenter;return c.extensionSettings.aiResourceCenter;}
+  isManagedRp(){return !!this.centerSettings().bindings[this.snapshot().current.connection];}
+  async configureCenter(url:string,token:string){Object.assign(this.centerSettings(),{url,token});await this.center.saveSettings();await this.center.read();}
+  async bindCenter(profileId:string,channelId:string){const remote=this.center.connections.find(c=>c.id===channelId);if(!remote)throw new Error("请先读取中心连接");const profile=this.snapshot().resources.connection.find(p=>p.id===profileId)?.data;if(!profile)throw new Error("酒馆连接不存在");const patch=profileConnection(profile,this.openai.proxies);this.centerSettings().bindings[profileId]={channelId,version:remote.version,enabled:remote.enabled,signature:JSON.stringify([patch,this.snapshot().current.connection===profileId])};await this.center.saveSettings();}
+  async applyCenter(profileId:string){
+    if(this.snapshot().busy)throw new Error("当前生成结束后再应用连接修改");
+    if(this.drafts.has(`connection:${profileId}`)&&this.dirtyDraftKeys().includes(`connection:${profileId}`))throw new Error("该连接有未保存草稿，请先保存或关闭草稿");
+    const binding=this.centerSettings().bindings[profileId];if(!binding)throw new Error("连接尚未绑定中心");
+    const remote:RpConnection=await this.center.request(binding.channelId+'/config');
+    const current=this.snapshot().resources.connection.find(p=>p.id===profileId)?.data;if(!current)throw new Error("原生连接已删除");
+    const patch=await applyNativeConnection(current,remote,ctx(),this.openai);
+    binding.version=remote.version;binding.enabled=remote.enabled;binding.signature=undefined;
+    this.centerSettings().outbox=this.centerSettings().outbox.filter((e:any)=>e.profileId!==profileId);
+    if(this.snapshot().current.connection===profileId)await activateSavedConnection(patch,ctx(),this.openai);
+    await this.saveProfile(profileId,clone(current),patch);
+    await this.center.queueSavedProfiles();
+  }
+
   private suspendedDialogs: HTMLDialogElement[] = [];
   async init() {
     generating = Boolean(ctx().streamingProcessor);
@@ -117,6 +138,12 @@ export class HostAdapter {
     this.cleanup.push(() => document.removeEventListener("change", handler));
     // Same settings object as the host; this contains no connection credentials.
     c.extensionSettings.workbench ??= clone(defaults);
+    (globalThis as any).aiResourceCenterRpGuard=(_chat:any,_size:any,abort:(immediately:boolean)=>void)=>{const binding=this.centerSettings().bindings[ctx().extensionSettings.connectionManager?.selectedProfile||""];if(binding?.enabled===false){abort(true);this.report(new Error("当前 RP 连接已暂停，请恢复或选择其他连接"));}};
+    this.center=new ResourceCenterLink(()=>this.centerSettings(),()=>ctx().extensionSettings.connectionManager?.profiles||[],()=>this.openai.proxies,()=>this.persistSettings(),()=>this.refresh(),()=>ctx().extensionSettings.connectionManager?.selectedProfile||'');
+    this.listen("SETTINGS_UPDATED",()=>{if(!this.center.persisting)void this.center.queueSavedProfiles().catch(e=>this.report(e));});
+    void this.center.queueSavedProfiles().catch(e=>this.report(e));
+    const online=()=>void this.center.deliver().catch(e=>this.report(e));window.addEventListener('online',online);this.cleanup.push(()=>window.removeEventListener('online',online));
+
     const guard=(e:Event)=>{
       if(this.resourceAction){e.preventDefault();return;}
       if((e as CustomEvent).detail?.preserveDrafts)return;
