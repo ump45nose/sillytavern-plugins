@@ -47,9 +47,7 @@ class SQLiteCollector:
         kind = self.settings["adapter"]
         seen = []
         with snapshot(self.settings["path"]) as c:
-            if kind == "crm":
-                tables = ["people", "interactions", "facts", "reminders", "sync_clients"]
-            elif kind == "health":
+            if kind == "health":
                 tables = ["health_payloads"]
             else:
                 tables = ["traffic_hourly", "collector_gaps", "collector_meta"]
@@ -63,11 +61,10 @@ class SQLiteCollector:
                     statement += " WHERE bucket >= ?"; params = (since_bucket,)
                 for row in c.execute(statement, params):
                     raw = dict(row)
-                    for name in ("aliases", "organizations", "contact_methods", "tags", "payload_json"):
+                    for name in ("payload_json",):
                         if isinstance(raw.get(name), str): raw[name] = json.loads(raw[name])
                     if table == "traffic_hourly":
                         eid = "hour:" + digest({k: v for k, v in raw.items() if k not in ("upload_bytes", "download_bytes")})
-                    elif table == "sync_clients": eid = "client:" + digest([raw["source"], raw["client_id"]])
                     else: eid = table + ":" + str(raw.get("id", raw.get("key")))
                     seen.append(eid)
                     event = raw.get("occurred_at", raw.get("observed_at", raw.get("received_at", raw.get("bucket", raw.get("started_at", raw.get("created_at"))))))
@@ -82,7 +79,7 @@ class SQLiteCollector:
                         yield Batch(records=items); items = []
                 if items: yield Batch(records=items)
         # Health 的历史 webhook 快照和流量保留窗口缺失不代表设备删除。
-        yield Batch(next_cursor={"collected_at": utcnow().isoformat()}, authoritative=kind == "crm", seen_ids=seen if kind == "crm" else None)
+        yield Batch(next_cursor={"collected_at": utcnow().isoformat()})
 
 
 class MemosCollector:
@@ -253,24 +250,3 @@ class PlaudCollector:
             if (root / directory).is_dir():
                 yield from FilesCollector({"adapter": "files", "path": str(root), "kind": "recording_artifact", "patterns": [directory + "/**/*.json", directory + "/**/*.jsonl", directory + "/**/*.md", directory + "/**/*.wav"]}).collect({})
         yield Batch(next_cursor={"collected_at": utcnow().isoformat()})
-
-
-class PostgreSQLCrmCollector:
-    def __init__(self, settings): self.settings = settings
-
-    def collect(self, cursor, since=None):
-        from sqlalchemy import create_engine, select
-        from personal_crm.storage.models import Base
-        from .contracts import canonical
-        seen = []
-        engine = create_engine(self.settings["database_url"])
-        try:
-            with engine.connect().execution_options(isolation_level="REPEATABLE READ") as c, c.begin():
-                for name in ("people", "interactions", "facts", "reminders", "sync_clients"):
-                    for row in c.execute(select(Base.metadata.tables[name])).mappings():
-                        raw = json.loads(canonical(dict(row)))
-                        eid = "client:" + digest([raw["source"], raw["client_id"]]) if name == "sync_clients" else name + ":" + raw["id"]
-                        seen.append(eid)
-                        yield Batch(records=[Record(eid, name, raw, {"table": name}, instant(raw.get("occurred_at", raw.get("observed_at", raw.get("created_at")))), instant(raw.get("updated_at")))])
-            yield Batch(next_cursor={"collected_at": utcnow().isoformat()}, authoritative=True, seen_ids=seen)
-        finally: engine.dispose()

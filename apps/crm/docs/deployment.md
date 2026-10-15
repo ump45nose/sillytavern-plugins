@@ -1,109 +1,42 @@
-# 部署说明
+# 部署与一次性迁移
 
-## NAS 公共基座部署
+沿用现有容器、PostgreSQL、OAuth 状态、API/viewer 令牌和附件卷。新业务表使用 crm_ 前缀；旧表只用于迁移和备份，不再写入或镜像。
 
-CRM 使用私有 `ump45nose/mcp-platform` 的版本依赖，`uv.lock` 锁定 SDK 的完整 Git 提交。生产配置集中在本仓库 `mcp.app.yaml`；NAS 目标配置、GitHub 凭据及业务秘密保存在仓库外。
+## 切换顺序
 
-已迁移的生产地址为 `https://crm-home.172906573.xyz/mcp`。业务进程由共享 Cloudflare Tunnel 直接访问 NAS 的 `192.168.31.201:18086`，不增加数据库或网关进程。原 NPM 配置保留作为迁移回退路径。
+1. 备份数据库及现有配置，暂停微信采集和 CRM 镜像任务；保留原成功 checkpoint、媒体队列和 spool。
+2. 使用候选镜像执行 `personal-crm migrate` 创建新表。
+3. 设置 `CRM_ASSET_ROOT` 为既有 Hub 附件卷目录（统一服务直接使用其 asset_root），执行 `personal-crm migrate-legacy`。
+4. 核对转换报告中的人物、消息、手工记录、跳过记录与交互数，检查关键内容和附件。
+5. 关闭 sources 中的 crm / crm_pg 镜像来源，启动候选服务；微信采集改用新入口并接续原 checkpoint。
+6. 验证读写权限、真实私聊新增、分段及 MCP 读取，再恢复其余原运行入口。
 
-NAS 本机执行：
+迁移不删除旧记录。归档非空时拒绝重复转换，以免覆盖用户新写入；失败事务回滚后可以修复再跑。没有读取微信历史、猜测人物或复杂迁移框架。
 
-```bash
-sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl doctor --target nas
-sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl plan personal-crm --target nas
-sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl deploy personal-crm --target nas
-```
+## 配置
 
-更新前提交业务修改，并检查 `plan`。构建步骤使用宿主机 GitHub 凭据获取锁定版本，生成 wheel 后注入镜像；镜像和构建上下文不包含凭据、生产 env 或数据。旧 `Dockerfile`、`compose.yml` 与 Nginx 样例保留用于历史部署参考，生产更新以公共基座 CLI 为准，不再直接运行旧目录的 `docker compose build`。
+- `WECHAT_INTERACTION_GAP_MINUTES=30`：服务端分段间隔，改配置不重组既有正文。
+- `CRM_ASSET_ROOT`：独立 CRM 服务附件目录；统一服务使用 Hub 既有 asset_root。
+- `CRM_WEBHOOK_URL=https://你的域名/api/v1/crm/ingest/wechat`：Mac 出站地址，沿用原 webhook token。
+- `CRM_CHECKPOINT` / `CRM_CLIENT_ID` / `CRM_ACCOUNT_NAMESPACE`：沿用原值。新的无水位设备从启用时间起采集，不默认回填。
+- `WECHAT_MEDIA_ENABLED=true`：复用原媒体队列和被动读取能力，不增加 OCR、转写或解密。
 
-部署保留 `personal-crm_crm-data`、`/data/oauth`、签名及加密密钥、`personal-crm-oauth-v1` 盐。Authelia 客户端 `personal-crm`、原 discovery/issuer、`28443` 授权与 token 端点以及 `/auth/callback` 不变。共享 Tunnel 的其他路由不变；ddns-go 只停止管理 CRM 的 A/AAAA 记录。
+旧 URL 配置在采集器启动时转换为新入口；服务端不保留旧业务 Webhook。正文批量写入最多 500 条，同步标识必须使用现有包含账号及会话的稳定消息键。
 
-业务生命周期、Webhook 和提醒任务仍在 CRM 内运行。新增公共限流、超时和输出限制在本次迁移关闭，以保留原调用行为和成功返回结构。
+## 回退
 
-## 接入与冒烟检查
+恢复原服务镜像和采集代码，保留当前新表、旧表、附件及 OAuth。部署记录保存切换时的旧 checkpoint 副本；只在确认需要重新交付切换期间消息给旧系统时使用，不把回退误当成清空归档。新系统的手工写入仍在新表中，不能靠恢复旧库覆盖它们。
 
-```bash
-curl -fsS https://crm-home.172906573.xyz/healthz
-/home/yuwk/mcp-platform/.venv/bin/mcpctl package personal-crm --target nas
-```
+旧提醒、Fact、指标、仓储及相关测试已从当前源码移除，可从 Git 历史查阅。旧表模型仅用于历史迁移和数据库备份，不参与业务写入。
 
-未登录 MCP 请求应返回 401 和资源发现地址。授权用户可读取；只读用户不能写入。业务读写只在隔离数据库验证，生产只读。新连接首次登录需同意授权；已有 GPT/dots 连接继续使用原 App 和插件身份。插件包生成不代表客户端已发布，用户界面验收需分别确认。
+## 只更新已安装 Mac 的微信采集组件
 
-## 备份与代码回滚
-
-每次更新在 `/vol2/1000/Docker/stacks/mcp-platform/runtime/personal-crm/releases/` 保存私有变更记录、SQLite 在线备份和 OAuth 状态备份。备份文件权限为 600，发布目录为 700。
-
-手工备份使用当前镜像的管理命令：
+不重建界面或替换已获准的凭据助手。以下命令使用本机既有签名身份，将采集代码放入已安装应用，验证原后台读取入口，再切换微信任务；原 checkpoint、媒体队列和设备身份保持不变。
 
 ```bash
-sudo -n docker exec personal-crm-crm-1 personal-crm backup /data/backups/crm.db
-sudo -n docker exec personal-crm-crm-1 personal-crm integrity
+python3 apps/mac-client/update-wechat.py --prepare /tmp/crm-collector-candidate.app
+python3 apps/mac-client/update-wechat.py --check /tmp/crm-collector-candidate.app
+python3 apps/mac-client/update-wechat.py --install /tmp/crm-collector-candidate.app
 ```
 
-代码与本次入口配置回滚：
-
-```bash
-sudo -n /home/yuwk/mcp-platform/.venv/bin/mcpctl rollback personal-crm --target nas
-```
-
-回滚恢复原镜像、共享配置和 DNS，不恢复旧数据库或 OAuth 快照。共享配置或 DNS 出现外部修改时停止覆盖并记录 `needs_attention`。首次迁移回退会恢复 NPM 对应 DNS 和原 DDNS 列表；后续回退恢复上一个基座版本。
-
-数据恢复需单独安排停止写入并保留当前库副本，再恢复备份和检查完整性。数据库、OAuth 状态及备份含私人资料，应按原备份策略保护。单实例更新允许短暂重启和流连接重建。
-
-## Mac launchd
-
-先按 `docs/usage.md` 创建独立 `connector.env`，并将固定校验的导出器、白名单映射和可选 checkpoint 放入 `~/Library/Application Support/personal-crm`。推荐使用安装脚本，它会按当前用户生成绝对路径，并覆盖从另一台 Mac 迁移来的旧路径：
-
-```bash
-./deploy/launchd/install-macos.sh
-```
-
-安装脚本优先使用显式 `CRM_CLIENT_ID`，否则在
-`~/Library/Application Support/personal-crm/client-id` 生成并持久化设备 UUID。
-可用 `CHATLOG_EXECUTABLE=/absolute/path/to/audited-binary ./deploy/launchd/install-macos.sh`
-选择已有固定校验的导出器；二进制不随配置迁移替换。
-
-服务端首次升级多客户端版本前先备份数据库，再执行 `alembic upgrade head`。
-迁移 `002_sync_clients` 为互动增加可空稳定消息键及唯一索引，并创建技术状态表；
-等价 SQL 保存在 `database/002_sync_clients.sql`。客户端去重查询在 SQLite
-`BEGIN IMMEDIATE` 写事务中执行，多个设备并发提交时不会竞争创建人物或事实。
-
-也可手动复制并修改 plist：
-
-```bash
-cp deploy/launchd/com.personal-crm.wechat.plist.example \
-  ~/Library/LaunchAgents/com.personal-crm.wechat.plist
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.personal-crm.wechat.plist
-launchctl kickstart -k "gui/$(id -u)/com.personal-crm.wechat"
-```
-
-卸载只移除服务注册，不删除 checkpoint：
-
-```bash
-launchctl bootout "gui/$(id -u)/com.personal-crm.wechat"
-```
-
-## Skylight 与 Memos 日报数据源及定时事件
-
-`mcp.app.yaml` 增加两个只读绑定挂载，分别指向 NAS 上已有的
-`/vol2/1000/Docker/personal-review/data/derived/skysight/source-summaries` 和
-`/vol2/1000/Docker/memos/data`。Memos 使用 0.30 的 SQLite 表结构，整个目录只读挂载，
-使活动 WAL/SHM 一并可见；不得只复制主数据库，也不得用 `immutable=1` 忽略 WAL。
-容器用户必须能读取源文件。查询使用 SQLite `mode=ro` 和 `query_only=ON`，不创建源库。
-
-配置为 `CODEX_SKYLIGHT_PATH=/sources/codex-skylight`、
-`MEMOS_DATABASE_PATH=/sources/memos/memos_prod.db`、`MEMOS_CREATOR_ID=1`。
-本地冒烟可指定独立测试目录和测试 SQLite，不必挂载生产资料。
-
-清单启用 `DAILY_REVIEW_EVENTS_ENABLED=true`，所有者为已有授权用户名 `yuwk`；
-修改所有者需同步检查 `OIDC_AUTHORIZED_USERNAMES`。设置
-`DAILY_REVIEW_EVENT_TIMEZONE=Asia/Shanghai`、`DAILY_REVIEW_EVENT_TIME=23:00`。
-程序默认关闭事件，需要显式配置所有者和两个源路径；匿名开发模式不能启用事件。
-
-新快照及生产水位保存在 `/data/events/daily-reviews`，与原聊天报告分开，复用 `/data`
-持久卷和同一个 MCP EventService 投递队列。每天两个源独立运行；一个源读取失败不影响
-另一个源。首次启动从当前业务日开始，随后停机遗漏的日期逐日补发；已发布日期不重新推送。
-修改所有者或时区时需要显式迁移对应水位，避免无意复用其他身份的报告。
-
-部署仍使用上文的公共基座流程。更新后需客户端支持 `events/subscribe` 并完成订阅，
-才会收到每日签名 Webhook；生成代码或插件包不会替客户端创建订阅。
+默认应用在 `~/Applications/Personal Data Hub.app`。若安装在 `/Applications`，三次命令都加 `--app "/Applications/Personal Data Hub.app"`。安装会保存旧应用和任务配置，失败恢复原入口，不重启其他采集任务。

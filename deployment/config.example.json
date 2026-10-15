@@ -6,13 +6,6 @@
   "health_webhook_token_file": "/run/hub/health-token",
   "autoaccounting_webhook_token_file": "/run/hub/accounting-token",
   "sources": {
-    "crm": {
-      "adapter": "crm_pg",
-      "account": "owner",
-      "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
-      "interval_seconds": 900,
-      "deletion_support": "authoritative_inventory"
-    },
     "health": {
       "adapter": "health",
       "account": "owner",

@@ -8,9 +8,8 @@ from fastapi.testclient import TestClient
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
-from personal_crm.core import CrmService
+from personal_crm.archive import Archive
 from personal_crm.events import ChatEventProducer
-from personal_crm.storage import CrmRepository
 from personal_data_hub.contracts import Batch, Record, instant
 from personal_data_hub.daily_push import DailyPushData, daily_push_page
 from personal_data_hub.mcp import register_tools
@@ -39,9 +38,8 @@ async def check():
                   "sources": {}}
         app = create_app(config, webhook_only=True)
         store = app.state.hub_store
-        repo = CrmRepository(config["database_url"])
-        service = CrmService(repo)
-        a, b = service.create_person("同名联系人"), service.create_person("同名联系人")
+        repo = Archive(engine=store.engine, asset_root=store.root)
+        a, b = repo.create_person({"name":"同名联系人"}), repo.create_person({"name":"同名联系人"})
         long_text = "完整正文🙂\n" * 2200 + "尾字符"
         for person, stamp, text, direction in [
             (a, "2026-10-09T08:00:00+08:00", "消息一", "inbound"),
@@ -50,8 +48,8 @@ async def check():
             (b, "2026-10-08T09:00:00+08:00", "昨天聊天", "inbound"),
             (b, "2026-10-10T00:00:00+08:00", "明天聊天", "inbound"),
         ]:
-            service.record_interaction(person_id=person.id, occurred_at=instant(stamp),
-                direction=direction, channel="wechat", summary="消息内容：" + text)
+            repo.create_interaction({"person_ids":[person["id"]],"date":stamp[:10],"started_at":instant(stamp),"ended_at":instant(stamp),
+                "type":"chat","channel":"wechat","content":text,"source":"wechat"})
         def put(eid, kind, raw, normal=None, stamp="2026-10-09T12:00:00+08:00"):
             store.ingest("daily-test", Batch(records=[Record(eid, kind, raw, normal or {}, instant(stamp))]))
         payload = {"steps": [{"count": 900, "start_time": "2026-10-09T00:00:00+08:00", "end_time": "2026-10-09T12:00:00+08:00"}],
