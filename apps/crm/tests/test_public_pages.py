@@ -20,5 +20,5 @@ def test_personal_review_public_pages(tmp_path) -> None:
     assert homepage.status_code == 200
     assert "/personal-review/privacy" in homepage.text
     assert privacy.status_code == 200
-    assert "Google Calendar" in privacy.text
+    assert "Google API Services User Data Policy" in privacy.text
     assert terms.status_code == 200
