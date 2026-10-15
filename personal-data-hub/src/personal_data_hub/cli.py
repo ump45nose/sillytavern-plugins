@@ -13,6 +13,7 @@ from .runner import configuration, run, store_from
 def main():
     parser = argparse.ArgumentParser(description="个人信息采集与归档")
     parser.add_argument("--config")
+    parser.add_argument('--skip-schema-init', action='store_true', help='调度父进程已初始化数据库，子任务直接使用现有表')
     sub = parser.add_subparsers(dest="action", required=True)
     for action in ("collect", "backfill", "reconcile", "import-legacy"):
         p = sub.add_parser(action); p.add_argument("source", nargs="?", default="all"); p.add_argument("--since")
@@ -43,7 +44,7 @@ def main():
             print(canonical({"collection_error": error_detail(exc)}), file=sys.stderr)
             raise SystemExit(1) from None
         return
-    store = store_from(config)
+    store = store_from(config, initialize=not args.skip_schema_init)
     if args.action == "process-pending":
         from .processing.worker import drain
         result = drain(store, args.limit, lane=args.lane, config=config)

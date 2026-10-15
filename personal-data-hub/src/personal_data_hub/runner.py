@@ -19,11 +19,11 @@ def configuration(path=None):
     return json.loads(p.read_text())
 
 
-def store_from(config):
+def store_from(config, *, initialize=True):
     import os
     url = config.get("database_url") or os.environ.get("HUB_DATABASE_URL")
     if not url: raise ValueError("database_url_missing")
-    return Store(url, config["asset_root"])
+    return Store(url, config["asset_root"], initialize=initialize)
 
 
 def adapter(settings):
@@ -71,11 +71,11 @@ def run(store, source, settings, since=None):
                 if len(pending.records) >= 250 or batch.authoritative:
                     pending.authoritative = batch.authoritative
                     pending.seen_ids = batch.seen_ids
-                    result = store.ingest(source, pending)
+                    result = store.ingest(source, pending, refresh_unchanged=False)
                     for key in totals: totals[key] += result[key]
                     pending = Batch()
             pending.next_cursor = cursor
-            result = store.ingest(source, pending)
+            result = store.ingest(source, pending, refresh_unchanged=False)
             for key in totals: totals[key] += result[key]
         except Exception as exc:
             with store.engine.begin() as c:

@@ -29,13 +29,14 @@ tombstones = Table("hub_tombstones", metadata, Column("record_id", String(64), p
 
 
 class Store:
-    def __init__(self, database_url: str, asset_root: str | Path):
+    def __init__(self, database_url: str, asset_root: str | Path, *, initialize=True):
         self.engine = create_engine(database_url, pool_pre_ping=True)
         self.root = Path(asset_root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        metadata.create_all(self.engine)
-        from .processing.schema import migrate
-        migrate(self)
+        if initialize:
+            metadata.create_all(self.engine)
+            from .processing.schema import migrate
+            migrate(self)
 
     @contextlib.contextmanager
     def lock(self, key: str):
@@ -170,7 +171,7 @@ class Store:
         keys = [self.identity("crm", alias) for alias in self.crm_event_aliases(source, event_key, message_key)]
         return bool(keys and connection.scalar(select(tombstones.c.record_id).where(tombstones.c.record_id.in_(keys)).limit(1)))
 
-    def ingest(self, source: str, batch: Batch, connection=None) -> dict:
+    def ingest(self, source: str, batch: Batch, connection=None, *, refresh_unchanged=True) -> dict:
         changed = duplicate = ignored = removed = 0
         with self.writer_lock(connection):
             with (self.engine.begin() if connection is None else contextlib.nullcontext(connection)) as c:
@@ -218,9 +219,9 @@ class Store:
                             c.execute(insert(asset_refs).values(record_id=rid, asset_id=a["id"]))
                     changed += 1
                     existing[rid] = values
-                if duplicates:
-                    # Unchanged content has unchanged previews. Touch freshness in
-                    # one statement per batch, without rereading large raw bodies.
+                if duplicates and refresh_unchanged:
+                    # Explicit observations/pushes can refresh per-record freshness.
+                    # Periodic collectors record checks in hub_runs instead.
                     now = utcnow()
                     c.execute(update(records).where(records.c.id.in_(duplicates)).values(observed_at=now))
                     c.execute(update(display_index).where(display_index.c.record_id.in_(duplicates)).values(observed_at=now))

@@ -8,7 +8,9 @@ def drain(store, limit=50, lane='reading', config=None):
     repository = ProcessingRepository(store)
     result = {'claimed': 0, 'published': 0, 'superseded': 0, 'failed': 0}
     for _ in range(limit):
-        job = repository.claim(lease_seconds=900 if lane == 'model' else 120, lane=lane)
+        # The scheduled reading worker ends at 120s; its lease must outlive that
+        # deadline so it cannot discard an otherwise valid publication at 120s.
+        job = repository.claim(lease_seconds=900 if lane == 'model' else 180, lane=lane)
         if job is None:
             break
         result['claimed'] += 1

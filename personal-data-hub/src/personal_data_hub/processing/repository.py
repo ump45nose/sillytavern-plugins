@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, insert, or_, select, union_all, update
+from sqlalchemy import delete, func, insert, or_, select, text, union_all, update
 
 from ..contracts import instant, utcnow
 from .contracts import SCHEMA_VERSION, object_id
@@ -125,8 +125,18 @@ class ProcessingRepository:
 
     def publish(self, job, rows, content):
         from ..storage import records, sources
-        # Same lock order as ingest/purge: source writer first, then job row.
-        with self.store.writer_lock(), self.store.engine.begin() as c:
+        # Preserve the ingest/purge lock order. Background publication yields to
+        # an active writer and uses one connection for the lock and transaction.
+        guard = self.store.writer_lock() if self.store.engine.dialect.name == 'sqlite' else nullcontext()
+        with guard, self.store.engine.begin() as c:
+            if c.dialect.name == 'postgresql':
+                c.execute(text("SET LOCAL transaction_timeout = '10s'"))
+                acquired = c.scalar(text('SELECT pg_try_advisory_xact_lock(:key)'),
+                                    {'key': self.store.lock_id('hub-asset-and-record-writer')})
+                if not acquired:
+                    c.execute(update(jobs).where(jobs.c.id == job['id'], jobs.c.lease_token == job['lease_token']).values(
+                        state='pending', lease_token=None, lease_until=None))
+                    return False
             current = c.execute(select(jobs).where(jobs.c.id == job['id']).with_for_update()).mappings().one()
             if current['lease_token'] != job['lease_token']:
                 return False
@@ -201,10 +211,14 @@ class ProcessingRepository:
         selected = {processor} if processor else set(COLLECTION_PROFILES)
         kinds = {kind for name, profile in PROFILES.items() if name in selected for kind in profile.KINDS}
         with self.store.writer_lock(), self.store.engine.begin() as c:
+            scan_all = True
             if background_page:
                 profile_versions = {name: profile.PROFILE_VERSION for name, profile in COLLECTION_PROFILES.items()}
                 progress = c.scalar(select(checkpoints.c.value).where(checkpoints.c.source == 'processing:reading-backfill')) or {}
-                if progress.get('profiles') != profile_versions: progress = {}
+                scan_all = progress.get('scan_all', progress.get('profiles') != profile_versions)
+                if progress.get('profiles') != profile_versions:
+                    progress = {}
+                    scan_all = True
                 if progress.get('complete'):
                     return {'enqueued': 0, 'scanned': 0, 'next_after': None, 'complete': True}
                 after = progress.get('after')
@@ -217,7 +231,23 @@ class ProcessingRepository:
                 branches.append(select(branch.c.id))
             identifiers = union_all(*branches).subquery()
             keys = list(c.scalars(select(identifiers.c.id).order_by(identifiers.c.id).limit(limit + 1)))
-            rows = list(c.execute(select(records).where(records.c.id.in_(keys[:limit])).order_by(records.c.id)).mappings()) if keys else []
+            body_keys = keys[:limit]
+            if background_page and not scan_all and not force and body_keys:
+                # Ingest saves routing links transactionally. With the same rule
+                # versions, existing links do not need the original JSON again.
+                metadata_rows = list(c.execute(select(records.c.id, records.c.kind).where(records.c.id.in_(body_keys))))
+                kinds_by_id = {row.id: row.kind for row in metadata_rows}
+                linked = list(c.execute(select(members.c.record_id, jobs.c.processor, jobs.c.profile_version)
+                    .join(jobs, jobs.c.id == members.c.job_id).where(members.c.record_id.in_(body_keys), jobs.c.processor.in_(selected))))
+                covered, outdated = set(), set()
+                for link in linked:
+                    profile = PROFILES[link.processor]
+                    if link.profile_version != profile.PROFILE_VERSION:
+                        outdated.add(link.record_id)
+                    elif kinds_by_id[link.record_id] in profile.KINDS:
+                        covered.add(link.record_id)
+                body_keys = [key for key in body_keys if key not in covered or key in outdated]
+            rows = list(c.execute(select(records).where(records.c.id.in_(body_keys)).order_by(records.c.id)).mappings()) if body_keys else []
             batch = rows[:limit]
             wanted, record_routes = {}, {}
             for row in batch:
@@ -251,11 +281,11 @@ class ProcessingRepository:
                         timezone=row['timezone'], title=row['kind'], preview='', state='pending', details={}, warnings=[], coverage={}))
                 new_links = [dict(job_id=key, record_id=rid) for rid in repair for key in record_routes[rid]]
                 if new_links: c.execute(insert(members), new_links)
-            result = {'enqueued': len(affected), 'scanned': min(len(rows), limit),
+            result = {'enqueued': len(affected), 'scanned': min(len(keys), limit),
                       'next_after': keys[limit-1] if len(keys) > limit else None}
             if background_page:
                 result['complete'] = result['next_after'] is None
-                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete']}
+                value = {'profiles': profile_versions, 'after': result['next_after'], 'complete': result['complete'], 'scan_all': scan_all}
                 values = dict(source='processing:reading-backfill', value=value, updated_at=utcnow())
                 updated = c.execute(update(checkpoints).where(checkpoints.c.source == values['source']).values(**values))
                 if not updated.rowcount: c.execute(insert(checkpoints).values(**values))

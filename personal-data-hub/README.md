@@ -25,7 +25,7 @@ flowchart LR
 
 | 来源 | 接入方式 | 当前范围 / 节奏 | 删除信号 |
 | --- | --- | --- | --- |
-| CRM / 微信 | 保留现有 webhook，归档和 CRM 表同事务提交 | 全部本机可读单聊/群聊及源消息；保留身份和水位，推送即入库，15 分钟对账 | 显式删除及完整来源清单 |
+| CRM / 微信 | 保留现有 webhook，归档和 CRM 表同事务提交 | 全部本机可读单聊/群聊及源消息；推送即入库，性能止血期间暂停全量核对 | 显式删除及完整来源清单 |
 | Computer History / Skysight | 现有授权 Node 读取应用组，SSH/rsync 交付并取得数据库提交回执 | 已闭合原始片段、官方 10min / 6h 摘要；15 分钟 | 显式删除；缓存过期不删除 |
 | Plaud | 官方 MCP 下载、独立转录与日报处理 | 每小时同步最近 30 天；原任务处理前一天录音；归档原音频、分源转录、融合日报与摘要 | 源接口未提供可靠删除信号 |
 | AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
@@ -70,6 +70,8 @@ uv sync --python 3.12 --no-dev
 ```
 
 默认私有配置：`/home/yuwk/.config/personal-data-hub/config.json`；使用 `HUB_CONFIG` 或 `hub --config PATH` 指定其他配置。参考 `deployment/config.example.json`，其中没有生产凭据。`hub` 是维护 CLI；`personal-data-hub` 是 HTTP 服务入口。
+
+2026-10-13 性能止血：停止并禁用宿主轮询调度器，`processing_enabled=false` 暂停后台阅读加工，`sources.crm.enabled=false` 暂停 CRM 全量核对；微信、健康和账单等推送继续归档，现有阅读内容与积压保留。依赖后台轮询的来源暂不更新。以后重新启用加工时，每轮只处理一个任务，成功、失败及超时均等待配置的加工间隔，不持续追赶积压；已有手工 `process-pending` 不代表重新开启自动队列。当前影响与恢复边界见 [性能止血记录](docs/performance-relief-20261013.md)。
 
 生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。统一只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_recording_content`、`get_data_asset_info`、`read_data_asset`。录音详情提供文字稿、分源草稿、每日摘要、处理状态和关联日报；HTTP 对应 `/api/v1/recordings/{record_id}/content`，详见 [Plaud 处理说明](processors/plaud/README.md)。联系人及日报查询继续可用，MCP 不开放数据写入。
 
