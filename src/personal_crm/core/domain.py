@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import enum
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -34,68 +33,3 @@ def uuid7() -> str:
         | secrets.randbits(62)
     )
     return str(uuid.UUID(int=value))
-
-
-class PersonStatus(enum.StrEnum):
-    """人物是否参与当前社交建议。"""
-
-    ACTIVE = "active"
-    PAUSED = "paused"
-    ARCHIVED = "archived"
-
-
-class InteractionType(enum.StrEnum):
-    """互动的业务形式。"""
-
-    MESSAGE = "message"
-    CALL = "call"
-    MEETING = "meeting"
-    MANUAL_NOTE = "manual_note"
-    OTHER = "other"
-
-
-class InteractionChannel(enum.StrEnum):
-    """互动发生的渠道。"""
-
-    WECHAT = "wechat"
-    PHONE = "phone"
-    IN_PERSON = "in_person"
-    EMAIL = "email"
-    MANUAL = "manual"
-    OTHER = "other"
-
-
-class InteractionDirection(enum.StrEnum):
-    """互动方向，用于判断是否完成主动联系提醒。"""
-
-    INBOUND = "inbound"
-    OUTBOUND = "outbound"
-    MUTUAL = "mutual"
-
-
-class FactStatus(enum.StrEnum):
-    """事实生命周期；首版事实默认自动生效。"""
-
-    ACTIVE = "active"
-    SUPERSEDED = "superseded"
-    RETRACTED = "retracted"
-
-
-class ReminderType(enum.StrEnum):
-    """提醒类别。"""
-
-    FOLLOW_UP = "follow_up"
-    BIRTHDAY = "birthday"
-    ANNIVERSARY = "anniversary"
-    CUSTOM = "custom"
-
-
-class ReminderStatus(enum.StrEnum):
-    """提醒生命周期。"""
-
-    PENDING = "pending"
-    COMPLETED = "completed"
-    SNOOZED = "snoozed"
-    SKIPPED = "skipped"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"

@@ -1,68 +1,40 @@
-# 部署说明
+# 独立部署
 
-## NAS Docker
+运行一个 `personal-crm-server` 进程，使用 PostgreSQL 或 SQLite 和一个附件目录。没有 Hub、消息队列、定时报告或额外业务数据库依赖。
 
-从 `.env.example` 创建仅管理员可读的 `.env`。在 Authelia 中为 CRM 创建独立 OIDC client，callback URL 配为：
+## 服务配置
 
-```text
-https://crm.example.com/auth/callback
-```
+从 `.env.example` 开始。生产使用 PostgreSQL 时，将 `DATABASE_URL` 指向既有数据库，并设置持久的 `CRM_ASSET_ROOT`。先备份，再执行 `personal-crm migrate`，最后启动服务。启动过程不自动迁移数据库。
 
-`PUBLIC_BASE_URL` 必须与公网源完全一致。OIDC client 使用授权码、刷新令牌、PKCE S256 和 `client_secret_basic`；scope 为 `openid profile offline_access`，claims policy 必须签发 `preferred_username`。为 `WECHAT_WEBHOOK_SECRET`、`OAUTH_JWT_SIGNING_KEY` 和 `OAUTH_STORAGE_ENCRYPTION_KEY` 分别生成随机长密钥，且不要复用 OIDC client secret。
+- HTTP 读写：`CRM_API_TOKEN`；只读：`CRM_VIEWER_TOKEN`。读写令牌不会自动赋给只读调用方。
+- 微信写入：`WECHAT_WEBHOOK_SECRET`，只用于私聊批量写入和媒体上传。
+- 分段间隔：`WECHAT_INTERACTION_GAP_MINUTES=30`。修改只影响后续追加，不重组已有正文。
+- 公网 MCP：`MCP_DEVELOPMENT_NO_AUTH=false`，设置公开 URL、OIDC discovery/client、授权用户名及 OAuth 签名和存储密钥。
+- `OIDC_READ_ONLY_USERNAMES` 中的用户只读；`OIDC_AUTHORIZED_USERNAMES` 明确授权读写。沿用 `mcp-platform` 的 OAuth，未新建用户/角色系统。
+- `OAUTH_STORAGE_PATH` 持久化，迁移部署时保留原目录、密钥和 `personal-crm-oauth-v1` 盐对应的状态格式。
 
-`CRM_BIND_ADDRESS` 和 `CRM_HOST_PORT` 只控制宿主机端口映射；应用容器内仍监听 `PORT=8080`。仅供同机 Hermes 使用时保持绑定 `127.0.0.1`，需要接入容器化反向代理时再绑定 NAS 内网地址并配置防火墙。
+反向代理转发整个服务，包含 `/mcp`、`/.well-known/*` 和 OAuth 路由。开发无认证模式只允许回环监听，不能用于公网。
 
-首次启动与升级：
+独立服务的 HTTP 环境变量使用 `CRM_API_TOKEN` / `CRM_VIEWER_TOKEN`，不读取 Hub 配置文件；若从宿主切换，将原令牌值放入对应配置，原只读令牌仍只读。
 
-```bash
-docker compose build
-docker compose run --rm crm uv run --no-dev alembic upgrade head
-docker compose up -d
-docker compose ps
-curl -fsS http://127.0.0.1:8080/healthz
-```
+## 数据库升级与备份
 
-HTTPS 反代参考 `deploy/nginx/personal-crm.conf.example`。MCP 流式端点必须关闭代理缓冲并保留较长读取超时；OAuth 还需要转发 `/.well-known/`、`/auth/`、`/authorize`、`/token`、`/register` 和 `/consent`。
+`personal-crm migrate` 创建当前 `crm_*` 结构。旧 001–003 revision 仅保留升级标记，新安装不创建旧人物、Fact 或 Reminder 表。已经升级至 `004_person_archive` 的数据库可直接使用。
 
-部署后的独立验收顺序：
+已有旧 CRM 表需要转换时：备份数据库与附件，暂停原写入，执行 migrate，再执行一次 migrate-legacy。转换读取既有表；旧 Hub 附件引用存在时可以复用其文件，运行不需要 Hub Python 包。目标归档非空时拒绝重复转换。没有旧表时转换结果为零。旧数据不删除。
 
-1. 未登录请求 `/mcp` 返回 401，资源发现文档可访问。
-2. 白名单用户完成 Authelia 登录，非白名单用户无法调用工具。
-3. 只读用户能查询，但修改工具被拒绝。
-4. Hermes、Codex、Claude 分别完成 `initialize → tools/list → tools/call`。
+SQLite 备份：`uv run personal-crm backup /safe/path/crm.db`；PostgreSQL 使用已有 `pg_dump`。附件与 OAuth 目录单独备份。回退软件不覆盖切换后产生的新数据。
 
-任一客户端未通过时，不声明公网通用 MCP 已完成。
+## 微信读取器与附件
 
-## 备份与恢复
+微信读取器是 Mac 上已有的 `chatlog-keeper`，需提供 `directory --source wechat` 和 `message-stream-v1 --selection-stdin` 协议。先完成本机数据授权；本项目不安装读取器、不提取密钥或修改系统授权。
 
-备份使用应用提供的 SQLite 一致性备份入口，避免直接复制仍在 WAL 写入中的数据库：
+`connector.env.example` 是采集配置样例。`CRM_CLIENT_ID`、`CRM_ACCOUNT_NAMESPACE`、`CRM_CHECKPOINT` 和可选的 `CHATLOG_SCOPES` 沿用原值；来源身份不靠备注名匹配。只需要 `CRM_ENV_FILE` 指向实际文件即可运行采集 CLI，不依赖 Hub 客户端安装器。
+
+只有需要保留能读取的媒体时才启用 `WECHAT_MEDIA_ENABLED=true`，并安装原媒体读取依赖：
 
 ```bash
-docker compose exec crm uv run --no-dev personal-crm backup /data/backups/crm.db
-docker compose exec crm uv run --no-dev personal-crm integrity
+uv pip install -r requirements-wechat-media.txt
 ```
 
-恢复前停止写入，保留当前库副本，再替换数据库文件。恢复后执行完整性检查，并回放人物、互动、Fact、Reminder 核心查询和一个重复 Webhook 批次。数据库和备份都含敏感资料，应加密保存。
-
-## Mac launchd
-
-先按 `docs/usage.md` 创建独立 `connector.env`，并将固定校验的导出器、白名单映射和可选 checkpoint 放入 `~/Library/Application Support/personal-crm`。推荐使用安装脚本，它会按当前用户生成绝对路径，并覆盖从另一台 Mac 迁移来的旧路径：
-
-```bash
-./deploy/launchd/install-macos.sh
-```
-
-也可手动复制并修改 plist：
-
-```bash
-cp deploy/launchd/com.personal-crm.wechat.plist.example \
-  ~/Library/LaunchAgents/com.personal-crm.wechat.plist
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.personal-crm.wechat.plist
-launchctl kickstart -k "gui/$(id -u)/com.personal-crm.wechat"
-```
-
-卸载只移除服务注册，不删除 checkpoint：
-
-```bash
-launchctl bootout "gui/$(id -u)/com.personal-crm.wechat"
-```
+媒体读取只复用已有数据库密钥缓存；保留可取得的原文件，不增加 OCR、转写或解密能力。文件暂时缺失时元数据和 attachment:// 引用仍保留，后续补文件不重写正文。

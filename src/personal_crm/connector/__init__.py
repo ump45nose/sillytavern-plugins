@@ -1,4 +1,4 @@
-"""Mac WeChat/WeLink 只读连接器。"""
+"""Mac 微信私聊增量采集器。"""
 
 from .config import ConnectorConfig
 from .sync import SyncResult, WeChatConnector

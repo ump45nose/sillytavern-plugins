@@ -6,12 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """从环境变量读取 NAS 服务配置，不在代码内保存秘密。"""
+    """从环境变量读取独立服务配置，不在代码内保存秘密。"""
 
-    database_url: str = "sqlite:///crm.db"
+    database_url: str = "sqlite:///data/crm.db"
     wechat_webhook_secret: str = ""
     host: str = "127.0.0.1"
     port: int = 8080
+    mcp_development_no_auth: bool = False
+    mcp_proxy_sni_compatibility: bool = False
     public_base_url: str = ""
     oidc_discovery_url: str = ""
     oidc_client_id: str = ""
@@ -20,7 +22,7 @@ class Settings(BaseSettings):
     oidc_read_only_usernames: str = ""
     oauth_jwt_signing_key: str = ""
     oauth_storage_encryption_key: str = ""
-    oauth_storage_path: str = "/data/oauth"
+    oauth_storage_path: str = "data/oauth"
     # 兼容本机 Agent，以及 GPT、Claude、Grok 官方主域名和所有子域名回调。
     allowed_client_redirect_uris: str = (
         "http://localhost:*,http://127.0.0.1:*,"
@@ -32,9 +34,10 @@ class Settings(BaseSettings):
         "https://x.ai/*,https://*.x.ai/*,"
         "https://x.com/*,https://*.x.com/*"
     )
-    reminder_scheduler_enabled: bool = True
-    reminder_poll_seconds: int = 3600
-
+    crm_asset_root: str = "data/attachments"
+    wechat_interaction_gap_minutes: int = 30
+    crm_api_token: str = ""
+    crm_viewer_token: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     @property

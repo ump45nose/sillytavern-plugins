@@ -16,3 +16,7 @@ connector.env
 connector.env.*
 data/
 connector-state/
+
+!connector.env.example
+.worktree/
+.DS_Store

@@ -1,234 +1,133 @@
-"""从本机微信数据源读取裁剪事件并可靠推送到 NAS。"""
+"""私聊消息增量同步；服务端负责人物和交互聚合。"""
 
 from __future__ import annotations
 
 import hashlib
-import json
-import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 import httpx
 
-from .chatlog import ChatlogMessageSource, ChatlogSourceError, SourceBatch
+from .chatlog import ChatlogMessageSource
 from .checkpoint import load, save
-from .config import ConnectorConfig, as_datetime
 
 
 @dataclass
 class SyncResult:
-    """一次同步的可观察结果。"""
-
-    batch_id: str
-    interactions: list[dict[str, Any]]
-    facts: list[dict[str, Any]]
+    messages: list[dict]
     sent: bool
     errors: list[str]
+    accepted: int = 0
+    duplicates: int = 0
 
 
 class WeChatConnector:
-    """只出站运行的 Mac 微信连接器。"""
-
-    def __init__(
-        self,
-        config: ConnectorConfig,
-        client: Any | None = None,
-        source: Any | None = None,
-    ) -> None:
-        """装配 Webhook 客户端及可替换的本地消息源。"""
-
+    def __init__(self, config, client=None, source=None):
         self.config = config
         self.client = client or httpx.Client(timeout=config.timeout)
-        self.source = source or (
-            ChatlogMessageSource(config) if config.source_type == "chatlog" else None
-        )
+        self.source = source or ChatlogMessageSource(config)
 
-    def _get(self, state: dict[str, Any]) -> SourceBatch:
-        """读取配置的数据源；保留 WeLink 作为显式兼容模式。"""
-
-        if self.source is not None:
-            return self.source.read(state)
-
-        response = self.client.get(
-            self.config.adapter_base_url.rstrip("/") + "/" + self.config.adapter_path.lstrip("/")
-        )
-        response.raise_for_status()
-        body = response.json()
-        if isinstance(body, list):
-            return SourceBatch(events=body, until=datetime.now(UTC))
-        for key in ("data", "items", "messages", "interactions"):
-            if isinstance(body, dict) and isinstance(body.get(key), list):
-                return SourceBatch(events=body[key], until=datetime.now(UTC))
-        return SourceBatch(events=[], until=datetime.now(UTC))
-
-    @staticmethod
-    def _key(event: dict[str, Any]) -> str:
-        """优先使用上游消息 ID；缺失时用不出站的本地内容组合生成键。"""
-
-        raw = event.get("id") or event.get("message_id")
-        if not raw:
-            raw = "|".join(
-                str(event.get(key, ""))
-                for key in ("contact", "sender", "timestamp", "text", "content")
-            )
-        return hashlib.sha256(str(raw).encode("utf-8")).hexdigest()
-
-    def _filter(self, event: dict[str, Any]) -> bool:
-        """在生成任何出站数据前应用白名单与时间窗口。"""
-
-        contact = str(event.get("contact") or event.get("peer") or event.get("sender") or "")
-        occurred_at = as_datetime(
-            event.get("timestamp") or event.get("created_at") or event.get("time")
-        )
-        if (
-            self.config.chatlog_scope_mode != "all_direct"
-            and self.config.allowed_contacts
-            and contact not in self.config.allowed_contacts
-        ):
-            return False
-        if self.config.since and (not occurred_at or occurred_at < self.config.since):
-            return False
-        return not (self.config.until and occurred_at and occurred_at > self.config.until)
-
-    def _safe_summary(self, event: dict[str, Any], person_name: str) -> str:
-        """原样传递正文，明确标记为内容而非生成的摘要。"""
-
-        source_text = str(event.get("text") or event.get("content") or "").strip()
-        if source_text and self.config.source_type == "chatlog":
-            return f"消息内容：{source_text}"
-        candidate = str(event.get("summary") or "").strip()
-        if candidate and candidate != source_text and len(candidate) <= 1000:
-            return candidate
-        message_type = str(event.get("message_type") or event.get("type") or "消息")
-        return f"与 {person_name} 发生一次微信{message_type}互动"
-
-    @staticmethod
-    def _facts(
-        event: dict[str, Any], person_name: str, wxid: str | None, event_key: str
-    ) -> list[dict[str, Any]]:
-        """只接受上游明确给出的结构化 facts，不从一条消息臆造人物事实。"""
-
-        occurred_at = as_datetime(
-            event.get("timestamp") or event.get("created_at") or event.get("time")
-        )
-        result: list[dict[str, Any]] = []
-        for item in event.get("facts") or []:
-            if not isinstance(item, dict) or not str(item.get("content") or "").strip():
-                continue
-            result.append(
-                {
-                    "person_name": person_name,
-                    "wxid": wxid,
-                    "fact_type": item.get("fact_type", "other"),
-                    "content": str(item["content"]).strip()[:2000],
-                    "observed_at": occurred_at.isoformat() if occurred_at else None,
-                    "confidence": item.get("confidence"),
-                    "source_event_key": event_key,
-                }
-            )
-        return result
-
-    def sync_once(self, dry_run: bool = False) -> SyncResult:
-        """同步一次；读取或写入失败时均不推进本地 checkpoint。"""
-
+    def sync_once(self, dry_run=False):
         state = load(self.config.checkpoint_path)
+        # Establish the activation boundary once; first failure must not move it forward.
+        if not state.get("last_synced_at"):
+            state["last_synced_at"] = (self.config.since or datetime.now(UTC)).isoformat()
+            state["enabled_since"] = state["last_synced_at"]
+            if not dry_run:
+                save(self.config.checkpoint_path, state)
+        media_queue = None
+        if self.config.media_enabled and not dry_run:
+            from .media import MediaQueue
+
+            media_queue = MediaQueue(self.config)
+            try:
+                media_queue.initialize()
+            except (OSError, ValueError):
+                return SyncResult([], False, ["media_queue_unavailable"])
         try:
-            source_batch = self._get(state)
-            events = source_batch.events
-        except ChatlogSourceError as error:
-            return SyncResult("", [], [], False, [f"chatlog: {error}"])
-        except Exception as error:
-            return SyncResult("", [], [], False, [f"welink: {type(error).__name__}"])
-
-        interactions: list[dict[str, Any]] = []
-        facts: list[dict[str, Any]] = []
-        known_keys = set(state.get("keys", []))
-        for event in events:
-            event_key = self._key(event)
-            if event_key in known_keys or not self._filter(event):
+            batch = self.source.read(state)
+        except Exception as exc:
+            return SyncResult([], False, [f"chatlog: {type(exc).__name__}"])
+        outgoing, local_media = [], []
+        for event in batch.events:
+            message = event["message"]
+            if message["conversation_type"] != "direct":
                 continue
-            person_name = str(
-                event.get("contact") or event.get("peer") or event.get("sender") or ""
-            ).strip()
-            occurred_at = as_datetime(
-                event.get("timestamp") or event.get("created_at") or event.get("time")
+            record = message["record"]
+            event_key = hashlib.sha256(event["id"].encode()).hexdigest()
+            key = event.get("source_message_key") or event_key
+            typ = int(record.get("msg_type") or 0)
+            media = None
+            if typ in {3, 34, 43, 49}:
+                labels = {3: "图片", 34: "语音", 43: "视频", 49: "文件"}
+                meta = record.get("attachment_meta") or {}
+                # Type 49 includes link cards; only file subtypes are attachments.
+                if (
+                    typ != 49
+                    or meta.get("file_name")
+                    or record.get("sub_type") == 6
+                    or "<type>6</type>" in record["content"]
+                ):
+                    media = {
+                        "name": meta.get("file_name") or labels[typ],
+                        "media_type": "application/octet-stream",
+                    }
+            outgoing.append(
+                dict(
+                    key=key,
+                    account=message["account_namespace"],
+                    peer=message["conversation_id"],
+                    name=event["contact"],
+                    sent_at=event["timestamp"],
+                    sender=event["contact"],
+                    is_self=record.get("is_self") is True,
+                    content=record["content"],
+                    attachment=media,
+                )
             )
-            if not person_name or occurred_at is None:
-                continue
-            wxid = str(event.get("wxid") or "").strip() or None
-            direction = str(event.get("direction") or "inbound")
-            if direction not in {"inbound", "outbound", "mutual"}:
-                direction = "inbound"
-            interactions.append(
-                {
-                    "person_name": person_name,
-                    "wxid": wxid,
-                    "occurred_at": occurred_at.isoformat(),
-                    "interaction_type": "message",
-                    "channel": "wechat",
-                    "direction": direction,
-                    "summary": self._safe_summary(event, person_name),
-                    "source_reference": f"{self.config.source_type}:wechat:{event_key}",
-                    "source_event_key": event_key,
-                }
-            )
-            facts.extend(self._facts(event, person_name, wxid, event_key))
-
-        batch_seed = [item["source_event_key"] for item in interactions]
-        # 相同事件集合得到相同 UUID，NAS 重试和进程重启后仍可关联同一批次。
-        batch_id = str(
-            uuid.uuid5(
-                uuid.NAMESPACE_URL,
-                f"personal-crm:{self.config.source_type}:"
-                + json.dumps(
-                    {
-                        "event_keys": batch_seed,
-                        "empty_window_until": (
-                            source_batch.until.isoformat() if not batch_seed else None
-                        ),
-                    },
-                    sort_keys=True,
-                ),
-            )
-        )
-        payload = {
-            "batch_id": batch_id,
-            "source": self.config.source_type,
-            "interactions": interactions,
-            "facts": facts,
-        }
+            if media_queue and media:
+                local_media.append(
+                    dict(
+                        source_event_key=event_key,
+                        source_message_key=event.get("source_message_key"),
+                        occurred_at=event["timestamp"],
+                        message=dict(message, _media_account_id=event.get("_media_account_id")),
+                    )
+                )
         if dry_run:
-            return SyncResult(batch_id, interactions, facts, False, [])
-        # chatlog 的空窗口也发送给 NAS 确认可用性，成功后才能推进回填水位。
-        if not interactions and not facts and self.config.source_type != "chatlog":
-            return SyncResult(batch_id, interactions, facts, False, [])
+            return SyncResult(outgoing, False, [])
         if not self.config.webhook_url:
-            return SyncResult(batch_id, interactions, facts, False, ["未配置 CRM_WEBHOOK_URL"])
-
+            return SyncResult(outgoing, False, ["CRM_WEBHOOK_URL is not configured"])
+        accepted = duplicates = 0
         try:
-            response = self.client.post(
-                self.config.webhook_url,
-                json=payload,
-                headers={"X-Webhook-Token": self.config.webhook_token},
-            )
-            response.raise_for_status()
-            body = response.json()
-            errors = body.get("errors", []) if isinstance(body, dict) else ["invalid response"]
-            if errors:
-                return SyncResult(batch_id, interactions, facts, False, list(errors))
-        except Exception as error:
-            return SyncResult(
-                batch_id, interactions, facts, False, [f"webhook: {type(error).__name__}"]
-            )
-
-        # 只有整个批次被 NAS 接受后才提交所有事件键。
+            if media_queue:
+                media_queue.enqueue(local_media)
+            parts = max(1, (len(outgoing) + 499) // 500)
+            for part in range(parts):
+                response = self.client.post(
+                    self.config.webhook_url,
+                    json={
+                        "messages": outgoing[part * 500 : (part + 1) * 500],
+                        "client_id": self.config.client_id,
+                        "synced_through": batch.until.isoformat() if part == parts - 1 else None,
+                    },
+                    headers={"X-Webhook-Token": self.config.webhook_token},
+                )
+                response.raise_for_status()
+                result = response.json()
+                if result.get("errors"):
+                    return SyncResult(outgoing, False, ["ingest_rejected"])
+                accepted += result["accepted"]
+                duplicates += result["duplicates"]
+        except httpx.HTTPStatusError as exc:
+            return SyncResult(outgoing, False, [f"ingest: HTTP {exc.response.status_code}"])
+        except Exception as exc:
+            return SyncResult(outgoing, False, [f"ingest: {type(exc).__name__}"])
         save(
             self.config.checkpoint_path,
             {
-                "keys": list(known_keys | set(batch_seed)),
-                "last_batch_id": batch_id,
-                "last_synced_at": source_batch.until.isoformat(),
+                **({"enabled_since": state["enabled_since"]} if state.get("enabled_since") else {}),
+                "last_synced_at": batch.until.isoformat(),
             },
         )
-        return SyncResult(batch_id, interactions, facts, True, [])
+        return SyncResult(outgoing, True, [], accepted, duplicates)

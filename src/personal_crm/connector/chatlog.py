@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConnectorConfig, as_datetime
-from .fact_extractor import FactExtractor, NullFactExtractor, RuleBasedFactExtractor
 
 
 class ChatlogSourceError(RuntimeError):
@@ -29,15 +28,8 @@ class SourceBatch:
 class ChatlogMessageSource:
     """通过 stdin/stdout 调用本机 message-stream-v1，不开放入站端口。"""
 
-    def __init__(
-        self, config: ConnectorConfig, fact_extractor: FactExtractor | None = None
-    ) -> None:
-        """装配消息源和只在本机运行的可替换 Fact 抽取器。"""
-
+    def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
-        self.fact_extractor = fact_extractor or (
-            RuleBasedFactExtractor() if config.fact_extraction_enabled else NullFactExtractor()
-        )
 
     def _verified_executable(self) -> Path:
         """验证可执行文件路径及可选 SHA-256，避免静默运行被替换的二进制。"""
@@ -52,142 +44,81 @@ class ChatlogMessageSource:
         return executable
 
     def _scopes(self) -> list[dict[str, str]]:
-        """读取显式映射或从本机目录枚举全部单聊。"""
-
-        if self.config.chatlog_scope_mode == "all_direct":
-            try:
-                completed = subprocess.run(
-                    [str(self._verified_executable()), "directory", "--source", "wechat"],
-                    capture_output=True,
-                    text=True,
-                    timeout=self.config.timeout,
-                    check=False,
-                )
-            except (OSError, subprocess.TimeoutExpired) as error:
-                raise ChatlogSourceError("directory_unavailable") from error
-            try:
-                directory = json.loads(completed.stdout)
-            except ValueError as error:
-                raise ChatlogSourceError("directory_invalid") from error
-            if (
-                completed.returncode
-                or not isinstance(directory, dict)
-                or not directory.get("available")
-            ):
-                raise ChatlogSourceError("directory_unavailable")
-            # 已建立的五位联系人沿用原 CRM 身份，避免目录昵称变化产生重复人物。
-            try:
-                pinned = json.loads(
-                    Path(self.config.chatlog_scopes_path).expanduser().read_text(encoding="utf-8")
-                )
-            except (OSError, ValueError):
-                pinned = []
-            pinned_by_scope = {
-                (
-                    item.get("account_id"),
-                    item.get("conversation_id"),
-                    item.get("conversation_type"),
-                ): item
-                for item in pinned
-                if isinstance(item, dict)
-            }
-            scopes = []
-            for item in directory.get("conversations", []):
-                if not isinstance(item, dict) or item.get("conversation_type") != "direct":
-                    continue
-                account_id = str(item.get("account_id") or "").strip()
-                conversation_id = str(item.get("conversation_id") or "").strip()
-                if not account_id or not conversation_id:
-                    raise ChatlogSourceError("directory_invalid")
-                known = pinned_by_scope.get((account_id, conversation_id, "direct"), {})
-                scopes.append(
-                    {
-                        "requested_id": str(known.get("requested_id") or conversation_id),
-                        "person_name": str(
-                            known.get("person_name") or item.get("label") or conversation_id
-                        ).strip(),
-                        "account_id": account_id,
-                        "conversation_id": conversation_id,
-                        "conversation_type": "direct",
-                    }
-                )
-            if not scopes:
-                raise ChatlogSourceError("directory_empty")
-            return sorted(scopes, key=lambda item: (item["account_id"], item["conversation_id"]))
-        if self.config.chatlog_scope_mode != "configured":
-            raise ChatlogSourceError("scope_mode_invalid")
-
+        """目录仅用于定位私聊；不将目录对象导入人物表。"""
         try:
-            raw = json.loads(
-                Path(self.config.chatlog_scopes_path).expanduser().read_text(encoding="utf-8")
-            )
-        except (OSError, ValueError) as error:
-            raise ChatlogSourceError("scopes_unavailable") from error
-        if not isinstance(raw, list):
+            pinned = json.loads(Path(self.config.chatlog_scopes_path).expanduser().read_text())
+        except FileNotFoundError:
+            pinned = []
+        if not isinstance(pinned, list):
             raise ChatlogSourceError("scopes_invalid")
-
-        scopes: list[dict[str, str]] = []
-        allowed = self.config.allowed_contacts
-        for item in raw:
-            if not isinstance(item, dict):
-                raise ChatlogSourceError("scopes_invalid")
-            requested_id = str(item.get("requested_id") or "").strip()
-            account_id = str(item.get("account_id") or "").strip()
-            conversation_id = str(item.get("conversation_id") or "").strip()
-            conversation_type = str(item.get("conversation_type") or "").strip()
-            if (
-                not requested_id
-                or not account_id
-                or not conversation_id
-                or conversation_type not in {"direct", "group"}
-            ):
-                raise ChatlogSourceError("scopes_invalid")
-            # 双重执行白名单：环境配置和映射文件必须同时允许该联系人。
-            if allowed and requested_id not in allowed:
-                continue
-            scopes.append(
-                {
-                    "requested_id": requested_id,
-                    "person_name": str(item.get("person_name") or requested_id).strip(),
-                    "account_id": account_id,
-                    "conversation_id": conversation_id,
-                    "conversation_type": conversation_type,
-                }
+        known = {
+            (x.get("account_id"), x.get("conversation_id")): x
+            for x in pinned
+            if isinstance(x, dict)
+        }
+        try:
+            result = subprocess.run(
+                [str(self._verified_executable()), "directory", "--source", "wechat"],
+                capture_output=True,
+                text=True,
+                timeout=self.config.timeout,
+                check=False,
             )
-        if allowed and {item["requested_id"] for item in scopes} != allowed:
-            raise ChatlogSourceError("scopes_allowlist_mismatch")
-        return sorted(
-            scopes,
-            key=lambda item: (
-                item["account_id"],
-                item["conversation_id"],
-                item["conversation_type"],
-            ),
-        )
+            directory = json.loads(result.stdout)
+        except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+            raise ChatlogSourceError("directory_unavailable") from error
+        if result.returncode or not isinstance(directory, dict) or not directory.get("available"):
+            raise ChatlogSourceError("directory_unavailable")
+        scopes = []
+        for item in directory.get("conversations", []):
+            account, peer = item.get("account_id"), item.get("conversation_id")
+            if not account or not peer:
+                raise ChatlogSourceError("directory_invalid")
+            if str(peer).endswith("@chatroom") or item.get("message_count") == 0:
+                continue
+            override = known.get((account, peer), {})
+            scopes.append(
+                dict(
+                    requested_id=peer,
+                    person_name=override.get("person_name")
+                    or item.get("remark")
+                    or item.get("label")
+                    or item.get("nickname")
+                    or peer,
+                    account_id=account,
+                    account_namespace=override.get("account_namespace")
+                    or self.config.account_namespace
+                    or account,
+                    conversation_id=peer,
+                    conversation_type="direct",
+                )
+            )
+        return sorted(scopes, key=lambda x: (x["account_id"], x["conversation_id"]))
 
     def _window(self, state: dict[str, Any]) -> tuple[datetime, datetime]:
         """生成可重试的一天窗口；成功后再由 Connector 提交水位。"""
 
         now = datetime.now(UTC)
-        configured_since = self.config.since or (now - timedelta(days=1))
         previous = as_datetime(state.get("last_synced_at"))
-        start = configured_since
-        if previous:
-            start = max(
-                configured_since,
-                previous - timedelta(seconds=self.config.chatlog_overlap_seconds),
-            )
+        floor = self.config.since or as_datetime(state.get("enabled_since"))
+        start = (
+            previous - timedelta(seconds=self.config.chatlog_overlap_seconds)
+            if previous
+            else (floor or now)
+        )
+        if floor:
+            start = max(floor, start)
         end = min(start + timedelta(seconds=self.config.chatlog_window_seconds), now)
         if self.config.until:
             end = min(end, self.config.until)
         return start, max(start, end)
 
     def _event(self, record: dict[str, Any], scope: dict[str, str]) -> dict[str, Any] | None:
-        """映射消息并保留完整正文；事实抽取仍在本机执行。"""
+        """保留源消息，不裁剪、改写或生成正文。"""
 
         occurred_at = as_datetime(record.get("ts"))
-        if occurred_at is None:
-            return None
+        if occurred_at is None or not isinstance(record.get("content"), str):
+            raise ChatlogSourceError("invalid_record")
         identity = {
             "account_id": scope["account_id"],
             "conversation_id": scope["conversation_id"],
@@ -198,50 +129,56 @@ class ChatlogMessageSource:
         event_id = hashlib.sha256(
             json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
+        message_key = None
+        server_id = str(record.get("server_id") or "").strip()
+        if server_id and server_id != "0":
+            # 同账号两台 Mac 的 rowid/shard 偏移不同；服务器消息 ID 才是跨设备身份。
+            stable_identity = {
+                "account": scope.get("account_namespace") or scope["account_id"],
+                "conversation": scope["conversation_id"],
+                "server_id": server_id,
+            }
+            message_key = hashlib.sha256(
+                json.dumps(stable_identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
         direction = "outbound" if record.get("is_self") is True else "inbound"
-        try:
-            # 抽取器只接触当前栈中的正文，输出只能是受限结构化 Fact。
-            facts = self.fact_extractor.extract(str(record.get("content") or ""), direction)
-        except Exception:
-            # Fact 是增强信息；抽取失败不能阻断互动同步或推进重试风暴。
-            facts = []
         return {
             "id": event_id,
+            "_media_account_id": scope["account_id"],
+            "source_message_key": message_key,
             "contact": scope["person_name"],
             "wxid": scope["requested_id"],
             "timestamp": occurred_at.isoformat(),
             "direction": direction,
             "message_type": str(record.get("msg_type") or "消息"),
-            "content": str(record.get("content") or ""),
-            "facts": facts,
+            "content": record["content"],
+            "message": {
+                "account_namespace": scope.get("account_namespace") or scope["account_id"],
+                "conversation_id": scope["conversation_id"],
+                "conversation_type": scope["conversation_type"],
+                **(
+                    {"directory_conversation_type": scope["directory_conversation_type"]}
+                    if "directory_conversation_type" in scope
+                    else {}
+                ),
+                "record": record,
+            },
         }
 
     def read(self, state: dict[str, Any]) -> SourceBatch:
-        """按协议上限分批读取所有会话，全部成功才返回水位。"""
+        """按源协议的 128 会话上限读取；全部完成才允许提交水位。"""
 
         executable = self._verified_executable()
         scopes = self._scopes()
         start, end = self._window(state)
         events: list[dict[str, Any]] = []
-        identity_fact_scopes: set[int] = set()
         for offset in range(0, len(scopes), 128):
-            chunk = scopes[offset : offset + 128]
-            events.extend(
-                self._read_chunk(executable, chunk, start, end, identity_fact_scopes, offset)
-            )
+            events.extend(self._read_chunk(executable, scopes[offset : offset + 128], start, end))
         return SourceBatch(events=events, until=end)
 
     def _read_chunk(
-        self,
-        executable: Path,
-        scopes: list[dict[str, str]],
-        start: datetime,
-        end: datetime,
-        identity_fact_scopes: set[int],
-        offset: int,
+        self, executable: Path, scopes: list[dict[str, str]], start: datetime, end: datetime
     ) -> list[dict[str, Any]]:
-        """读取至多 128 个会话；不完整响应令整轮同步失败。"""
-
         request = {
             "protocol": "message-stream-v1",
             "version": 1,
@@ -284,19 +221,6 @@ class ChatlogMessageSource:
                         raise ChatlogSourceError("scope_mismatch")
                     event = self._event(frame.get("record") or {}, scopes[scope_index])
                     if event:
-                        if (
-                            self.config.fact_extraction_enabled
-                            and offset + scope_index not in identity_fact_scopes
-                        ):
-                            # 每个读取批次只附带一次来源身份 Fact，供无语义命中时验证链路。
-                            event["facts"].append(
-                                {
-                                    "fact_type": "contact",
-                                    "content": f"微信联系人：{scopes[scope_index]['requested_id']}",
-                                    "confidence": 1.0,
-                                }
-                            )
-                            identity_fact_scopes.add(offset + scope_index)
                         events.append(event)
                 elif frame_type == "complete":
                     complete = True

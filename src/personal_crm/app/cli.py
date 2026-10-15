@@ -1,45 +1,64 @@
-"""数据库初始化、完整性检查和备份命令。"""
+"""CRM 迁移、健康与备份维护入口。"""
 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, time, timedelta
 import json
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-from personal_crm.storage import CrmRepository
+from pathlib import Path
 
 from .settings import Settings
 
 
-def main(argv: list[str] | None = None) -> int:
-    """执行个人 CRM 运维命令。"""
-
+def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["init-db", "integrity", "backup", "daily-summary"])
+    parser.add_argument("command", choices=["migrate", "migrate-legacy", "integrity", "backup"])
     parser.add_argument("path", nargs="?")
-    parser.add_argument("--date", help="daily-summary 的业务日期，格式 YYYY-MM-DD")
-    parser.add_argument("--timezone", default="Asia/Shanghai", help="daily-summary 的业务时区")
     args = parser.parse_args(argv)
-    repository = CrmRepository(Settings().database_url)
-    if args.command == "integrity":
-        print(repository.integrity_check())
-    elif args.command == "backup":
-        if not args.path:
-            parser.error("backup requires path")
-        print(repository.backup(args.path))
-    elif args.command == "daily-summary":
-        if not args.date:
-            parser.error("daily-summary requires --date")
-        try:
-            business_day = datetime.strptime(args.date, "%Y-%m-%d").date()
-            zone = ZoneInfo(args.timezone)
-        except (ValueError, ZoneInfoNotFoundError) as error:
-            parser.error(f"invalid date or timezone: {error}")
-        # CLI 与 MCP 使用相同半开业务日窗口，输出也只包含无正文聚合。
-        start = datetime.combine(business_day, time.min, zone)
-        summary = repository.daily_summary(start, start + timedelta(days=1))
-        print(json.dumps({"date": args.date, "timezone": args.timezone, **summary}, ensure_ascii=False))
+    settings = Settings()
+    if args.command == "migrate":
+        from sqlalchemy.engine import make_url
+
+        url = make_url(settings.database_url)
+        if url.get_backend_name() == "sqlite" and url.database not in (None, "", ":memory:"):
+            Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
+        from alembic import command
+        from alembic.config import Config
+
+        config = Config()
+        location = Path(__file__).resolve().parents[1] / "migrations"
+        if not location.exists():
+            location = Path(__file__).resolve().parents[3] / "migrations"
+        config.set_main_option("script_location", str(location))
+        config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+        config.attributes["configured_database_url"] = settings.database_url
+        command.upgrade(config, "head")
+        print("migrated")
+        return 0
+    from personal_crm.archive import Archive
+
+    archive = Archive(
+        settings.database_url,
+        settings.crm_asset_root,
+        gap_minutes=settings.wechat_interaction_gap_minutes,
+        create_schema=False,
+    )
+    if args.command == "migrate-legacy":
+        from personal_crm.archive.migration import migrate_legacy
+
+        print(json.dumps(migrate_legacy(archive)))
+    elif args.command == "integrity":
+        print(archive.integrity_check())
     else:
-        print("initialized")
+        if not args.path:
+            parser.error("backup requires a destination path")
+        if archive.engine.dialect.name != "sqlite":
+            parser.error("PostgreSQL: use pg_dump before migration")
+        import sqlite3
+
+        target = Path(args.path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with archive.engine.connect() as c, sqlite3.connect(target) as destination:
+            c.connection.driver_connection.backup(destination)
+        target.chmod(0o600)
+        print(target)
     return 0

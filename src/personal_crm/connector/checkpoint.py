@@ -22,6 +22,8 @@ def save(path: str, value: dict) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temp, target)
     finally:
         if os.path.exists(temp):

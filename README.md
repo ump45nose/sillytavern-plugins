@@ -1,57 +1,65 @@
-# personal-crm
+# Personal CRM
 
-面向个人 Agent 的模块化个人 CRM。NAS 保存唯一 SQLite 数据源并提供 Webhook 与 MCP；Mac Connector 通过本机 `chatlog-keeper message-stream-v1` 只读微信数据库，可将单聊原文写入 NAS，供 MCP 按日期分页读取。系统不自动发微信，也不包含 RPA、自动回复或代发能力。
+保存人物基本资料，以及你与他们发生的交互。用户与 AI 通过 HTTP / MCP 查询和直接编辑同一份内容；微信采集器只追加新增私聊。
 
-## 架构
+```text
+微信采集器 → 人物与交互归档 ← HTTP / MCP ← 用户与 AI
+```
 
-代码采用模块化单体，部署为两个进程：
+- **Person**：名称、别名、关系、联系方式、标签和可读备注。
+- **Interaction**：关联一个或多个人、日期/起止时间、类型、渠道、一份 Markdown 正文及附件。
+- 连续私聊默认按 30 分钟间隔聚合，跨日、跨同步批次不断开；重复消息跳过，新消息追加，不覆盖已编辑正文。
+- API 与 MCP 共用归档服务。无需 Personal Data Hub，没有日报、提醒、Fact、画像、评分或表现界面。
 
-- NAS：`core`、`storage`、`reminders`、`metrics`、`webhook`、`mcp`、`app`。
-- Mac：`connector`，以子进程 stdin/stdout 调用本地只读导出器，并通过 HTTPS 主动出站。
+## 本机启动
 
-核心数据严格为四张表：`people`、`interactions`、`facts`、`reminders`。所有实体 ID 使用 UUIDv7，时间统一为 UTC，SQLite JSON 字段带 `json_valid()` 约束。
-
-## 快速开始
-
-需要 Python 3.12 与 [uv](https://docs.astral.sh/uv/)：
+需要 Python 3.12+ 和 uv。认证/MCP 复用固定版本的 `mcp-platform` 库；它是同账号下的私有 Git 依赖，需要现有 GitHub Git 访问权限。
 
 ```bash
-uv sync --extra dev
+git clone https://github.com/ump45nose/personal-crm.git
+cd personal-crm
+uv sync --locked
 cp .env.example .env
-uv run alembic upgrade head
+```
+
+在 `.env` 设置 `CRM_API_TOKEN`。示例默认只监听 `127.0.0.1`，本机 MCP 使用显式开发模式；公网部署按 [部署说明](docs/deployment.md) 配置 OAuth。
+
+```bash
+uv run personal-crm migrate
 uv run personal-crm-server
 ```
 
-本地未配置 OAuth 时，可直接用 MCP 客户端连接 `http://127.0.0.1:8080/mcp` 验证十四个工具。管理 CLI：
+健康检查：`http://127.0.0.1:8080/healthz`；HTTP 前缀：`/api/v1/crm`；MCP：`/mcp`。默认数据库为 `data/crm.db`，附件在 `data/attachments`。PostgreSQL 使用 `DATABASE_URL=postgresql+psycopg://...`，不增加其他服务。
+
+创建人物：
 
 ```bash
-uv run personal-crm integrity
-uv run personal-crm backup /safe/path/personal-crm.db
+curl http://127.0.0.1:8080/api/v1/crm/people \
+  -H "Authorization: Bearer $CRM_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"张三","relationship":"朋友"}'
 ```
 
-## 对外端点
+这里的 `CRM_API_TOKEN` 是调用终端中的环境变量，值与服务配置一致。完整人物、多人交互、搜索分页、附件及 MCP 示例见 [使用说明](docs/usage.md)。
 
-- `POST /mcp`：Streamable HTTP MCP。
-- `GET /.well-known/oauth-protected-resource`：兼容发现入口，跳转到权威的 `/mcp` 后缀元数据（启用 OAuth 后）。
-- `GET /healthz`：进程与 SQLite 完整性检查。
-- `POST /api/v1/webhooks/wechat`：Mac Connector 批量导入。
+## 微信增量采集
 
-## 当前交付状态
+在已获本机数据读取授权的 Mac 上，配置 `connector.env.example` 中的读取器路径、服务地址、采集令牌和稳定设备身份，然后运行：
 
-- P0：四表、迁移、Repository、事务、备份恢复和领域测试已实现。
-- P1：十四个 MCP 工具、本地 `initialize` 与工具调用已实现。
-- P2：每周三条上限、重要日期优先、cadence、自动完成和周绩效已实现。
-- P3：Authelia OIDCProxy 与用户名白名单代码、反代样例已实现；各客户端实机鉴权需分别验收。
-- P4：Webhook 共享密钥、严格输入、幂等事务及合成数据测试已实现。
-- P5：五人白名单映射、真实微信 4.1.11 消息流、隐私裁剪、稳定批次和失败重试已实机验证；launchd 常驻与完整 90 天回填仍需持续验收。
-- P6：两周样品期尚未开始，必须在真实使用后再决定扩展数据模型。
+```bash
+CRM_ENV_FILE=/absolute/path/to/connector.env uv run personal-crm-wechat --watch
+```
 
-代码测试、Docker 部署、健康检查、MCP 鉴权调用、微信真实导入、Reminder 实际触发和用户使用验收是独立状态，不能互相替代。
+服务器的 `WECHAT_WEBHOOK_SECRET` 与采集器的 `CRM_WEBHOOK_TOKEN` 使用同一随机值。没有 checkpoint 的设备从启用时间开始；已有设备继续使用原 checkpoint、账号命名空间和媒体队列。采集器读取目录只为定位私聊，不导入通讯录人物。媒体采集及读取器要求见 [部署说明](docs/deployment.md#微信读取器与附件)。
 
-## 安全与权限
+## 开发
 
-公网模式使用与 SmartSearch 相同的 FastMCP `OIDCProxy` 对接 Authelia。上游申请 `openid profile offline_access`，并从 `preferred_username` 映射 CRM 权限：`OIDC_AUTHORIZED_USERNAMES` 可读写，列入 `OIDC_READ_ONLY_USERNAMES` 的账号只读。动态 MCP 客户端仍由 OIDCProxy 管理，Authelia 只需登记固定的 `personal-crm` 客户端。
+```bash
+uv sync --locked --extra dev
+uv run pytest
+uv build
+```
 
-只向反代暴露 `/mcp`、OAuth 路由、`/healthz` 和精确的微信 Webhook 路径。所有秘密仅从环境变量或密钥管理注入；数据库和日志不得出现完整微信正文。
+设置 `CRM_TEST_DATABASE_URL` 可将归档测试运行在 PostgreSQL 临时 schema 中。新库只创建 `crm_*` 表；已有旧 CRM 数据可在备份后运行一次 `personal-crm migrate-legacy`，不重抓微信历史。
 
-使用和部署细节见 [`docs/usage.md`](docs/usage.md) 与 [`docs/deployment.md`](docs/deployment.md)。
+[发布说明](CHANGELOG.md) · [独立发布记录](docs/plans/2026-10-15-standalone-release.md)

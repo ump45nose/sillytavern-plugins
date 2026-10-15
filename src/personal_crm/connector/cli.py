@@ -3,8 +3,13 @@
 import argparse
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 
-from .config import ConnectorConfig
+import httpx
+
+from .checkpoint import load
+from .config import ConnectorConfig, as_datetime
 from .sync import WeChatConnector
 
 
@@ -12,13 +17,12 @@ def _output(result, compact: bool) -> dict:
     """常驻日志只保留数量和状态，避免重复落人物级互动摘要。"""
 
     if not compact:
-        # 单次运行和 dry-run 也不能把聊天正文打印进终端日志。
-        return _output(result, compact=True)
+        return result.__dict__
     return {
-        "batch_id": result.batch_id,
-        "interaction_count": len(result.interactions),
-        "fact_count": len(result.facts),
+        "message_count": len(result.messages),
         "sent": result.sent,
+        "accepted": result.accepted,
+        "duplicates": result.duplicates,
         "errors": result.errors,
     }
 
@@ -31,15 +35,42 @@ def main(argv=None):
     args = parser.parse_args(argv)
     config = ConnectorConfig.from_env()
     connector = WeChatConnector(config)
-    while True:
-        result = connector.sync_once(args.dry_run)
-        # watch 日志仅保留批次统计；交互级摘要只在人工单次或 dry-run 时展示。
-        print(json.dumps(_output(result, args.watch), ensure_ascii=False, indent=2), flush=True)
-        if not args.watch or args.dry_run:
-            return 0 if not result.errors else 1
-        # 成功窗口（包括已确认的空窗口）快速追赶历史；失败时恢复常规轮询。
-        # 全部单聊需要多次读取；常驻模式保持完整轮询间隔，避免持续扫描微信库。
-        if config.chatlog_scope_mode == "all_direct":
-            time.sleep(config.poll_seconds)
-        else:
-            time.sleep(min(config.poll_seconds, 1.0) if result.sent else config.poll_seconds)
+
+    def media_run():
+        from .media import MediaQueue
+
+        with httpx.Client(timeout=max(config.timeout, 300)) as client:
+            return MediaQueue(config).run_once(client)
+
+    # 原文件读取/上传可能慢于文字轮询；仅允许一个媒体 worker。
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = None
+        while True:
+            result = connector.sync_once(args.dry_run)
+            print(json.dumps(_output(result, True), ensure_ascii=False, indent=2), flush=True)
+            if config.media_enabled and not args.dry_run:
+                if future is not None and future.done():
+                    try:
+                        media_status = future.result()
+                    except Exception:
+                        media_status = {"error": "media_worker_failed"}
+                    print(json.dumps({"media": media_status}), flush=True)
+                    future = None
+                if future is None:
+                    future = executor.submit(media_run)
+            if not args.watch or args.dry_run:
+                if future is not None:
+                    try:
+                        print(json.dumps({"media": future.result()}), flush=True)
+                    except Exception:
+                        print('{"media":{"error":"media_worker_failed"}}', flush=True)
+                return 0 if not result.errors else 1
+            watermark = as_datetime(load(config.checkpoint_path).get("last_synced_at"))
+            behind = (
+                watermark is not None
+                and (datetime.now(UTC) - watermark).total_seconds()
+                > config.chatlog_overlap_seconds + 60
+            )
+            time.sleep(
+                min(config.poll_seconds, 1.0) if result.sent and behind else config.poll_seconds
+            )

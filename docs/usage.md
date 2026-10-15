@@ -1,71 +1,59 @@
-# 使用说明
+# 记录人物和交互
 
-## NAS 服务
+先创建人物，再将一次交互关联到一个或多个人。正文支持 Markdown，更新时只传需要改动的字段。
 
-`personal-crm-server` 同时提供健康检查、Webhook 和 Streamable HTTP MCP。数据库迁移必须在启动前显式执行：
+## HTTP
 
-```bash
-uv run alembic upgrade head
-uv run personal-crm-server
+使用 CRM_API_TOKEN 作为 Bearer 令牌。CRM_VIEWER_TOKEN 只读，不能新增、编辑或删除。
+
+```http
+POST /api/v1/crm/people
+{"name":"张三","relationship":"朋友","tags":["同学"],"notes":"一起参加过读书会"}
 ```
 
-管理 CLI 仅用于恢复和诊断：
-
-```bash
-uv run personal-crm integrity
-uv run personal-crm backup /safe/path/personal-crm-backup.db
+```http
+POST /api/v1/crm/interactions
+{"person_ids":["张三ID","李四ID"],"date":"2026-10-15","type":"meeting","channel":"in_person","content":"我、张三、李四一起吃饭。","source":"manual"}
 ```
 
-本地开发省略 OAuth 配置时，`/mcp` 无鉴权，方便用五个真实联系人验证字段。公网部署必须完整配置 Authelia OIDC 和用户名白名单。
-
-MCP 提供人物、互动、Fact、Reminder 与周绩效共十四个工具。所有修改工具返回实体 ID 和修改前后摘要；不提供 SQL 工具，也不会自动发送建议话术。
-
-## Mac Connector
-
-为 Connector 单独创建不提交到 Git 的 `connector.env`：
-
-```dotenv
-WECHAT_SOURCE=chatlog
-CHATLOG_EXECUTABLE=/Users/your-name/Library/Application Support/personal-crm/bin/chatlog-keeper
-CHATLOG_EXPECTED_SHA256=replace-with-release-sha256
-CHATLOG_SCOPES=/Users/your-name/Library/Application Support/personal-crm/wechat/whitelist-scopes.json
-CHATLOG_SCOPE_MODE=all_direct
-CHATLOG_PAGE_SIZE=200
-CHATLOG_WINDOW_SECONDS=86400
-CHATLOG_OVERLAP_SECONDS=300
-WECHAT_FACT_EXTRACTION=true
-CHATLOG_POLL_SECONDS=60
-CHATLOG_TIMEOUT=120
-CRM_WEBHOOK_URL=https://crm.example.com/api/v1/webhooks/wechat
-CRM_WEBHOOK_TOKEN=replace-with-webhook-secret
-CRM_CHECKPOINT=/Users/your-name/Library/Application Support/personal-crm/checkpoint.json
-WECHAT_CONTACTS=visible_wechat_id_alice,visible_wechat_id_bob
-WECHAT_SINCE=2026-06-06T00:00:00Z
+```http
+PATCH /api/v1/crm/interactions/交互ID
+{"content":"补充：约定下个月再聚。"}
 ```
 
-`CHATLOG_SCOPES` 是权限 `0600` 的本地 JSON 数组，每项包含
-`requested_id/person_name/account_id/conversation_id/conversation_type`。其中
-`requested_id` 必须与 `WECHAT_CONTACTS` 完全一致；账号和内部会话 ID 只留在 Mac，
-不会写入 Webhook。`CHATLOG_SCOPE_MODE=all_direct` 会从本机目录枚举所有单聊，并沿用
-`CHATLOG_SCOPES` 中已有会话的人物映射；此模式忽略 `WECHAT_CONTACTS`。群聊不纳入。
-二进制应从已审计 Release 固定到私有目录，并配置 SHA-256。
+省略字段保持原值。可选文本传 null 清空；aliases、contacts、tags、attachment_ids 传 null 清空列表。name、person_ids、date、type、source、content 不能为 null。
 
-先做不推进 checkpoint 的 dry run：
+精确时间必须带时区；不确定时间就只传 date，不填零点。started_at / ended_at 入库转 UTC，date 使用北京时间。
 
-```bash
-CRM_ENV_FILE=/absolute/path/connector.env uv run personal-crm-wechat --dry-run
+## 查询
+
+- `GET /api/v1/crm/people?query=张&tag=同学`：查名称、别名、联系方式、备注和精确标签。
+- `GET /api/v1/crm/people/{id}`：人物详情、来源身份与最近交互。
+- `GET /api/v1/crm/interactions?person_id=...&start=2026-10-01&end=2026-10-15`：人物历史，日期范围两端包含，跨日交互按覆盖范围匹配。
+- 交互还可按 type / channel / source / query 筛选；列表只给 500 字预览，完整正文从 `GET /interactions/{id}` 读取。
+- 列表均返回 items / next_cursor。limit 默认 50、最大 100；续页保留原筛选条件。
+- 同一多人交互只有一条数据，出现在每个相关人物的历史中。
+
+创建/修改/删除人物与交互分别使用 POST / PATCH / DELETE。`POST /people/{目标ID}/merge` 提交 `{"source_person_id":"来源ID"}`；目标资料优先、空字段补齐，交互和来源身份转入目标。
+
+`PUT /people/{id}/identities` 提交 `{"source":"wechat","account":"我的账号命名空间","external_id":"对方会话ID"}`，用于绑定或纠正来源关联。不会按同名猜测合并。
+
+## 附件
+
+HTTP 使用 multipart 上传至 `POST /api/v1/crm/attachments`（字段名 file），返回附件 ID。交互通过 attachment_ids 关联，正文可写 `[方案.pdf](attachment://ID)`。
+
+`GET /attachments/{id}` 读取元数据，available=false 表示文件尚未归档；`GET /attachments/{id}/content` 下载文件。返回数据不包含服务器本地路径。
+
+## MCP
+
+工具与 HTTP 共用相同业务：list_people / get_person / create_person / update_person / delete_person / merge_people / bind_person_identity，以及对应的交互工具和 upload_attachment / read_attachment。
+
+```json
+{"data":{"name":"张三","tags":["朋友"]}}
 ```
 
-确认输出只有数量和状态后，再去掉 `--dry-run`。常驻模式使用
-`personal-crm-wechat --watch`。Connector 按一天窗口回填并保留五分钟重叠；只有 NAS
-对整个批次（包括空窗口）返回成功且无错误项时，才会原子推进 checkpoint。
-chatlog 读取失败、NAS 5xx 或进程重启均不会丢失水位。
+上例用于 create_person。update_person 和 update_interaction 使用 `changes` 参数；create_interaction 使用 `data` 参数。
 
-Connector 将原始 `content` 以“消息内容：”前缀写入 NAS 的互动记录；不会在日志和
-checkpoint 中保存正文。MCP `get_daily_chat_records` 可按业务日分页取回全部聊天原文，
-Connector 不负责生成语义摘要。`WECHAT_FACT_EXTRACTION=true` 会启用
-高置信规则抽取器：仅处理对方明确自述的偏好、边界、人生事件、组织和联系方式，
-并只外发受限结构化 Fact；出站消息、卡片、链接和超长内容不抽取。抽取器通过独立
-Protocol 隔离，后续可替换成本地模型或 Agent。
-启用时还会为每个实际出现消息的白名单会话生成一个可幂等去重的 `contact` Fact，
-用于记录微信来源身份并验证 Fact 链路；它不包含内部账号或会话 ID。
+get_interaction 默认每页 16000 字符，next_offset_chars 非空时续读；HTTP 详情返回完整正文。
+
+upload_attachment 使用 Base64，每块不超过 256 KiB；第一块 final=false 返回附件 ID 和 next_offset。后续传 attachment_id / offset_bytes；最后一块 final=true。小文件可一次 final=true 完成。read_attachment 使用 offset_bytes / limit_bytes 续读。

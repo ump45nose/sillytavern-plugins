@@ -1,7 +1,7 @@
 """连接器配置。"""
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,24 +12,22 @@ from dotenv import load_dotenv
 class ConnectorConfig:
     """集中保存适配器、过滤、checkpoint 与 Webhook 参数。"""
 
-    source_type: str = "chatlog"
-    adapter_base_url: str = "http://127.0.0.1:18790"
-    adapter_path: str = "/api/messages"
     chatlog_executable: str = "chatlog-keeper"
     chatlog_expected_sha256: str = ""
     chatlog_scopes_path: str = (
         "~/Library/Application Support/personal-crm/wechat/whitelist-scopes.json"
     )
-    chatlog_scope_mode: str = "configured"
     chatlog_page_size: int = 200
     chatlog_window_seconds: int = 86400
     chatlog_overlap_seconds: int = 300
-    fact_extraction_enabled: bool = False
+    media_enabled: bool = False
+    media_queue_path: str = ""
     poll_seconds: float = 60.0
     webhook_url: str = ""
     webhook_token: str = ""
+    client_id: str = "legacy"
+    account_namespace: str = ""
     checkpoint_path: str = ".personal-crm-wechat-checkpoint.json"
-    allowed_contacts: set[str] = field(default_factory=set)
     since: datetime | None = None
     until: datetime | None = None
     timeout: float = 15.0
@@ -57,27 +55,26 @@ class ConnectorConfig:
                 return default
             return value.strip().lower() in {"1", "true", "yes", "on"}
 
-        contacts = {x.strip() for x in os.getenv("WECHAT_CONTACTS", "").split(",") if x.strip()}
         return cls(
-            source_type=os.getenv("WECHAT_SOURCE", "chatlog"),
-            adapter_base_url=os.getenv("WELINK_BASE_URL", cls.adapter_base_url),
-            adapter_path=os.getenv("WELINK_PATH", cls.adapter_path),
             chatlog_executable=os.getenv("CHATLOG_EXECUTABLE", cls.chatlog_executable),
             chatlog_expected_sha256=os.getenv("CHATLOG_EXPECTED_SHA256", ""),
             chatlog_scopes_path=os.getenv("CHATLOG_SCOPES", cls.chatlog_scopes_path),
-            chatlog_scope_mode=os.getenv("CHATLOG_SCOPE_MODE", "configured"),
             chatlog_page_size=int(os.getenv("CHATLOG_PAGE_SIZE", "200")),
             chatlog_window_seconds=int(os.getenv("CHATLOG_WINDOW_SECONDS", "86400")),
             chatlog_overlap_seconds=int(os.getenv("CHATLOG_OVERLAP_SECONDS", "300")),
-            fact_extraction_enabled=enabled("WECHAT_FACT_EXTRACTION"),
+            media_enabled=enabled("WECHAT_MEDIA_ENABLED"),
+            media_queue_path=os.getenv("WECHAT_MEDIA_QUEUE", ""),
             poll_seconds=float(os.getenv("CHATLOG_POLL_SECONDS", "60")),
-            webhook_url=os.getenv("CRM_WEBHOOK_URL", ""),
+            webhook_url=os.getenv("CRM_WEBHOOK_URL", "").replace(
+                "/api/v1/webhooks/wechat", "/api/v1/crm/ingest/wechat"
+            ),
             webhook_token=os.getenv("CRM_WEBHOOK_TOKEN", ""),
+            client_id=os.getenv("CRM_CLIENT_ID", "legacy"),
+            account_namespace=os.getenv("CRM_ACCOUNT_NAMESPACE", ""),
             checkpoint_path=os.getenv("CRM_CHECKPOINT", cls.checkpoint_path),
-            allowed_contacts=contacts,
             since=dt("WECHAT_SINCE"),
             until=dt("WECHAT_UNTIL"),
-            timeout=float(os.getenv("CHATLOG_TIMEOUT", os.getenv("WELINK_TIMEOUT", "120"))),
+            timeout=float(os.getenv("CHATLOG_TIMEOUT", "120")),
         )
 
 
