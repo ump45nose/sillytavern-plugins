@@ -14,8 +14,7 @@ from personal_crm.connector.config import ConnectorConfig
 from personal_crm.connector.media import MediaQueue
 from personal_crm.connector.media_reader import LocalMediaResolver, MediaUnavailable
 from personal_crm.connector.sync import WeChatConnector
-from tests.test_connector import FakeClient, FakeResponse
-from tests.test_faithful_wechat import source_event
+from tests.archive.test_connector import FakeClient, FakeResponse, source_event
 
 
 def test_voice_requires_server_conversation_and_time():
@@ -78,9 +77,9 @@ def _queued(tmp_path, event=None):
     queue.initialize()
     with queue.state() as state:
         state["enabled_since"] = "2026-09-03T00:00:00+00:00"
-    event = event or source_event()
+    event = event or source_event(typ=34)
     source = SimpleNamespace(read=lambda state: SourceBatch([event], datetime(2026, 9, 5, tzinfo=UTC)))
-    connector = WeChatConnector(cfg, FakeClient([FakeResponse(body={"accepted": 1})]), source)
+    connector = WeChatConnector(cfg, FakeClient([FakeResponse(body={"accepted": 1, "duplicates": 0})]), source)
     return cfg, queue, connector
 
 
@@ -101,7 +100,7 @@ def test_media_retry_spool_survives_source_loss_and_text_watermark(tmp_path):
     original_cp = load(cfg.checkpoint_path)
     job = next(iter(json.loads(queue.path.read_text())["jobs"].values()))
     assert job["message"]["_media_account_id"] == "local-account"
-    assert "_media_account_id" not in connector.client.posted[0][1]["interactions"][0]["message"]
+    assert "_media_account_id" not in connector.client.posted[0][1]["messages"][0]
     data = b"\x02#!SILK_original"
     identity = hashlib.sha256(data).hexdigest()
     def resolve(message):

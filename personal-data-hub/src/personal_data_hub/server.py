@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Query
 from fastapi.responses import FileResponse
@@ -61,21 +59,21 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
     else:
         from personal_crm.app.server import create_app as crm_app
         from personal_crm.app.settings import Settings
-        from personal_crm.storage import CrmRepository
+        from personal_crm.archive import Archive
         settings = crm_settings or Settings()
         settings.database_url = str(store.engine.url)
         # URL 对象的 str 默认隐藏密码，原始连接值必须来自配置。
         settings.database_url = config.get("database_url") or os.environ["HUB_DATABASE_URL"]
-        settings.reminder_scheduler_enabled = False
         # 既有聊天订阅继续由显式部署配置控制，迁移不能关闭事件发现和续订。
         settings.daily_review_events_enabled = False
-        repository = CrmRepository(settings.database_url, hub_store=store)
-        app = crm_app(settings, repository, hub_store=store)
+        repository = Archive(engine=store.engine, asset_root=store.root,
+            gap_minutes=settings.wechat_interaction_gap_minutes, create_schema=False,
+            asset_lock=store.writer_lock)
+        app = crm_app(settings, repository, hub_store=store, http_auth=lambda authorization, readonly=False: authenticate(authorization, readonly=readonly))
     app.state.hub_store = store
     api = APIRouter()
     from .display import Display
     from zoneinfo import ZoneInfoNotFoundError
-    from datetime import date
     display = Display(store)
     from .processing.query import ReadingQuery, ContentChanged, ContentRemoved
     from .processing.repository import ProcessingRepository

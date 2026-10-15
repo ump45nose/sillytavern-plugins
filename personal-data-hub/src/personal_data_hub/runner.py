@@ -30,14 +30,16 @@ def store_from(config, *, initialize=True):
 
 
 def adapter(settings):
-    from .collectors import BillsCollector, FilesCollector, PlaudCollector, SQLiteCollector, PostgreSQLCrmCollector
-    classes = {'crm_pg': PostgreSQLCrmCollector, 'crm': SQLiteCollector, 'health': SQLiteCollector,
+    from .collectors import BillsCollector, FilesCollector, PlaudCollector, SQLiteCollector
+    classes = {'health': SQLiteCollector,
                'shellcrash': SQLiteCollector, 'bills': BillsCollector, 'skysight': FilesCollector,
                'plaud': PlaudCollector}
     return classes[settings['adapter']](settings)
 
 
 def run(store, source, settings, since=None):
+    if settings['adapter'] in {'crm', 'crm_pg'}:
+        raise ValueError('CRM mirror retired; remove from sources')
     store.register(source, settings.get("account", "owner"), settings["adapter"], settings.get("deletion_support", "explicit_only"))
     rid = str(uuid4())
     totals = dict(changed=0, duplicates=0, tombstoned=0, deleted=0)
@@ -50,28 +52,23 @@ def run(store, source, settings, since=None):
                 ended_at=utcnow(), status="failed", error=canonical({"type": "InterruptedError", "reason": "上次采集进程中断，已自动重新采集"})))
             c.execute(insert(runs).values(id=rid, source=source, started_at=utcnow(), status="running", records=0))
         try:
-            if settings['adapter'] == 'crm_pg':
-                from .crm_archive import reconcile
-                totals = reconcile(store)
-                store.ingest(source, Batch(next_cursor={'collected_at': utcnow().isoformat()}), refresh_unchanged=False)
-            else:
-                pending = Batch()
-                cursor = None
-                batches = adapter(settings).collect({} if settings.get('force_full') else store.cursor(source), since)
-                for batch in batches:
-                    invalid += sum(r.kind == "computer_segment_invalid" for r in batch.records)
-                    pending.records.extend(batch.records)
-                    pending.deletions.extend(batch.deletions)
-                    if batch.next_cursor is not None: cursor = batch.next_cursor
-                    if len(pending.records) >= 250 or batch.authoritative:
-                        pending.authoritative = batch.authoritative
-                        pending.seen_ids = batch.seen_ids
-                        result = store.ingest(source, pending, refresh_unchanged=False)
-                        for key in totals: totals[key] += result[key]
-                        pending = Batch()
-                pending.next_cursor = cursor
-                result = store.ingest(source, pending, refresh_unchanged=False)
-                for key in totals: totals[key] += result[key]
+            pending = Batch()
+            cursor = None
+            batches = adapter(settings).collect({} if settings.get('force_full') else store.cursor(source), since)
+            for batch in batches:
+                invalid += sum(r.kind == "computer_segment_invalid" for r in batch.records)
+                pending.records.extend(batch.records)
+                pending.deletions.extend(batch.deletions)
+                if batch.next_cursor is not None: cursor = batch.next_cursor
+                if len(pending.records) >= 250 or batch.authoritative:
+                    pending.authoritative = batch.authoritative
+                    pending.seen_ids = batch.seen_ids
+                    result = store.ingest(source, pending, refresh_unchanged=False)
+                    for key in totals: totals[key] += result[key]
+                    pending = Batch()
+            pending.next_cursor = cursor
+            result = store.ingest(source, pending, refresh_unchanged=False)
+            for key in totals: totals[key] += result[key]
         except Exception as exc:
             with store.engine.begin() as c:
                 c.execute(update(runs).where(runs.c.id == rid).values(ended_at=utcnow(), status="failed", records=totals["changed"], error=canonical(error_detail(exc))))

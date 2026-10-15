@@ -1,4 +1,4 @@
-"""个人 CRM 的四张 SQLAlchemy 核心表。"""
+"""旧 CRM 冻结表定义；只供历史迁移、备份和旧数据清理使用。"""
 
 from __future__ import annotations
 

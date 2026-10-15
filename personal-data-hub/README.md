@@ -1,12 +1,12 @@
 # Personal Data Hub
 
-保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、健康、账单、网络流量。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询。
+保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、健康、账单、网络流量。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询，以及人物和交互的 CRM 读写。
 
 ## 当前范围
 
 | 来源 | Hub 的职责 | 当前实现 |
 | --- | --- | --- |
-| CRM / 微信 | 将 Mac 对话按联系人或群聊可靠归档 | 保留 webhook、跨设备消息去重、附件及同事务归档；业务表精简另行设计 |
+| CRM / 微信 | 按人物保存私聊交互 | 增量采集、连续对话聚合、可编辑正文及附件；直接写 crm_*，API / MCP 读写，不做 Hub 镜像 |
 | Skysight | 同步仅在 Mac 保存的活动片段和已有摘要 | 文件校验、提交回执、原始片段与摘要归档 |
 | Plaud | 下载音频并取得自有转录文本 | 保留既有独立转录任务、原音频、转录 Markdown 和处理状态 |
 | Health | 为手机上传的健康数据提供长期存储 | `/health/import`、幂等上传及历史读取 |
@@ -19,7 +19,7 @@ Mem0、Hermes 报告不再采集。Memos、GitHub、Emby、Navidrome、Google Ca
 
 ## 数据与运行
 
-当前原件仍存在 `hub_records`，包含稳定来源身份、原始载荷、适配字段、时间和附件引用；版本在 `hub_revisions`，阅读内容在 `hub_content_*`。结构重设计另行推进。集成的 P1 修复保留已发布旧版阅读，发布不占用归档全局写锁，附件在锁外准备，CRM 变更同事务归档并用短事务补漏核对。
+当前原件仍存在 `hub_records`，包含稳定来源身份、原始载荷、适配字段、时间和附件引用；版本在 `hub_revisions`，阅读内容在 `hub_content_*`。结构重设计另行推进。集成的 P1 修复保留已发布旧版阅读，发布不占用归档全局写锁，附件在锁外准备，CRM 已改为独立人物与交互归档，不再镜像到 Hub。
 
 结构化数据使用独立数据库 `personal_data_hub`；文件按 SHA-256 存在 `/vol1/1000/personal-data-hub/assets`。设备身份、凭据、配置、数据库和附件均在 Git 外。显式删除保留墓碑，阻止旧备份重新导入已删除数据。
 
@@ -49,10 +49,12 @@ uv sync --python 3.12 --no-dev
 ## 源码边界
 
 - `src/personal_data_hub`：保留来源的适配、归档、加工和查询。
-- `apps/crm`：微信接收、既有 CRM 业务、OAuth/MCP 和聊天事件。
+- `apps/crm`：人物与交互归档、微信增量接收、API / MCP、既有 OAuth 和聊天事件。
 - `agents/mac`、`agents/nas`：设备同步与流量采集。
 - `collectors/plaud`、`processors/plaud`：音频同步和独立转录处理。
 - `apps/mac-client`：由用户在 Mac 修改，本轮只交付 [客户端接口调整清单](docs/client-requirements/source-cleanup.md)。
 - `legacy`：历史源码，不注册采集任务。
 
 正式 NAS Compose 仍为 `/vol2/1000/Docker/stacks/mcp/compose.yaml` 的 `crm` 服务。构建用 [deployment/build-image.sh](deployment/build-image.sh)，只打包 Hub 和 CRM。保留原 OAuth 状态、1000:1001 身份、持久卷、域名与网络。具体操作见 [部署说明](docs/deployment.md)。
+
+CRM 的读写与使用见 [归档说明](apps/crm/docs/usage.md)，本次迁移与实际部署见 [验收记录](docs/crm-archive-validation.md)。

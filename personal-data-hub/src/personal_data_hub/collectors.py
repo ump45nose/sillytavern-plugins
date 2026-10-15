@@ -200,24 +200,3 @@ class PlaudCollector:
             if (root / directory).is_dir():
                 yield from FilesCollector({"adapter": "files", "path": str(root), "kind": "recording_artifact", "patterns": [directory + "/**/*.json", directory + "/**/*.jsonl", directory + "/**/*.md", directory + "/**/*.wav"]}).collect({})
         yield Batch(next_cursor={"collected_at": utcnow().isoformat()})
-
-
-class PostgreSQLCrmCollector:
-    def __init__(self, settings): self.settings = settings
-
-    def collect(self, cursor, since=None):
-        from sqlalchemy import create_engine, select
-        from personal_crm.storage.models import Base
-        from .contracts import canonical
-        seen = []
-        engine = create_engine(self.settings["database_url"])
-        try:
-            with engine.connect().execution_options(isolation_level="REPEATABLE READ") as c, c.begin():
-                for name in ("people", "interactions", "facts", "reminders", "sync_clients"):
-                    for row in c.execute(select(Base.metadata.tables[name])).mappings():
-                        raw = json.loads(canonical(dict(row)))
-                        eid = "client:" + digest([raw["source"], raw["client_id"]]) if name == "sync_clients" else name + ":" + raw["id"]
-                        seen.append(eid)
-                        yield Batch(records=[Record(eid, name, raw, {"table": name}, instant(raw.get("occurred_at", raw.get("observed_at", raw.get("created_at")))), instant(raw.get("updated_at")))])
-            yield Batch(next_cursor={"collected_at": utcnow().isoformat()}, authoritative=True, seen_ids=seen)
-        finally: engine.dispose()

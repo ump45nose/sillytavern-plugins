@@ -46,8 +46,8 @@ for name in ["com.yuwk.personal-review-skysight", "com.personal-crm.wechat"]:
         data["ProgramArguments"] = [str(python), "-c", "from personal_crm.connector.cli import main; main()", "--watch"]
         data["WorkingDirectory"] = str(repo / "apps/crm")
         data.setdefault("EnvironmentVariables", {})["PYTHONPATH"] = str(repo / "apps/crm/src")
-        data["EnvironmentVariables"]["WECHAT_FACT_EXTRACTION"] = "false"
-        data["EnvironmentVariables"].setdefault("CHATLOG_SCOPE_MODE", "all")
+        data["EnvironmentVariables"].pop("WECHAT_FACT_EXTRACTION", None)
+        data["EnvironmentVariables"].pop("CHATLOG_SCOPE_MODE", None)
         data["EnvironmentVariables"]["WECHAT_MEDIA_ENABLED"] = "true"
         data["EnvironmentVariables"].setdefault("WECHAT_MEDIA_QUEUE", str(home / "Library/Application Support/personal-crm/wechat/media-queue.json"))
         # 旧凭据迁出旧仓库；checkpoint/client-id/白名单继续用原路径。

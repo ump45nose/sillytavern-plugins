@@ -4,29 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from personal_crm.core import CrmService
+from personal_crm.archive import Archive
 from personal_crm.daily_review import DailyReviewService
 from personal_crm.mcp import _runtime, http_app
-from personal_crm.reminders import ReminderService
-from personal_crm.storage import CrmRepository
-from personal_crm.webhook import create_router
+from personal_crm.archive.http import create_router, register_errors
 
 from .settings import Settings
 
 
-def create_app(settings: Settings | None = None, repository=None, hub_store=None) -> FastAPI:
+def create_app(settings: Settings | None = None, repository=None, hub_store=None, http_auth=None) -> FastAPI:
     """装配健康检查、Webhook 和 MCP；具体模块只依赖公开服务。"""
 
     runtime = settings or Settings()
-    repo = repository or CrmRepository(runtime.database_url)
-    service = CrmService(repo)
-    reminder_service = ReminderService(repo)
+    repo = repository or Archive(runtime.database_url, runtime.crm_asset_root,
+        gap_minutes=runtime.wechat_interaction_gap_minutes, create_schema=False)
+    service = repo
     events, chat_reports = None, None
     daily_review_reports = {}
     daily_reviews = DailyReviewService(
@@ -82,17 +79,6 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
         daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store,
     )
 
-    async def run_reminder_scheduler() -> None:
-        """定期补齐本周提醒；持久化周预算保证重复执行不会超额。"""
-
-        while True:
-            try:
-                reminder_service.generate_weekly()
-            except Exception:
-                # 后台生成失败不能拖垮查询服务，日志只记录异常而不包含人物内容。
-                logging.getLogger(__name__).exception("每周提醒生成失败")
-            await asyncio.sleep(max(runtime.reminder_poll_seconds, 60))
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """把 FastMCP 的生命周期纳入主 ASGI 应用。"""
@@ -100,8 +86,6 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
         del app
         tasks = []
         async with mcp_application.lifespan(mcp_application):
-            if runtime.reminder_scheduler_enabled:
-                tasks.append(asyncio.create_task(run_reminder_scheduler()))
             if chat_reports is not None:
                 tasks.append(asyncio.create_task(chat_reports.serve()))
             for producer in daily_review_reports.values():
@@ -120,7 +104,19 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
     app = FastAPI(title="Personal CRM", lifespan=lifespan)
     app.state.repository = repo
     app.state.crm_service = service
-    app.include_router(create_router(repo, runtime.wechat_webhook_secret))
+    if http_auth is None:
+        def http_auth(authorization, *, readonly=False):
+            import hmac
+            allowed = [runtime.hub_api_token]
+            if readonly:
+                allowed.append(runtime.hub_viewer_token)
+            allowed = [token for token in allowed if token]
+            if not allowed:
+                raise HTTPException(503, 'authentication_not_configured')
+            if not any(hmac.compare_digest(authorization or '', 'Bearer ' + token) for token in allowed):
+                raise HTTPException(401, 'unauthorized')
+    register_errors(app)
+    app.include_router(create_router(repo, http_auth, runtime.wechat_webhook_secret))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

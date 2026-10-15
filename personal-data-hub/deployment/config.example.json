@@ -9,14 +9,6 @@
   "processing_interval_seconds": 21600,
   "processing_backfill_on_start": false,
   "sources": {
-    "crm": {
-      "adapter": "crm_pg",
-      "enabled": false,
-      "account": "owner",
-      "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
-      "interval_seconds": 21600,
-      "deletion_support": "authoritative_inventory"
-    },
     "health": {
       "adapter": "health",
       "account": "owner",
