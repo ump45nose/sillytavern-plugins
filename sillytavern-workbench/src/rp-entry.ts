@@ -1,3 +1,4 @@
+import { RpCallOutbox, observeRpCalls } from "./host/resource-center-calls";
 import {
   ResourceCenterLink,
   centerDefaults,
@@ -41,7 +42,7 @@ const panel = document.createElement("div");
 panel.className = "inline-drawer";
 panel.id = "ai-resource-center-rp";
 panel.innerHTML =
-  '<div class="inline-drawer-toggle inline-drawer-header"><b>AI 资源中心 · RP</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><label>中心地址<input data-field="url" class="text_pole" placeholder="http://192.168.31.201:18321"></label><label>限定 RP 连接的凭据<input data-field="token" type="password" class="text_pole" autocomplete="off"></label><button data-action="configure" class="menu_button">保存并读取</button><button data-action="read" class="menu_button">读取中心</button><div data-state style="white-space:pre-wrap;overflow-wrap:anywhere"></div><label>绑定当前酒馆连接<select data-channels class="text_pole"></select></label><button data-action="bind" class="menu_button">关联当前连接</button><button data-action="apply" class="menu_button">应用中心配置到原生连接</button><button data-action="send" class="menu_button">上报酒馆已保存配置</button><button data-action="retry" class="menu_button">重交保存结果</button><div data-error style="color:#f58a86;white-space:pre-wrap"></div><small>禁测活。保存、排序和同步只访问中心与酒馆原生设置。暂停从下一次生成生效。冲突在中心选择两侧配置。</small></div>';
+  '<div class="inline-drawer-toggle inline-drawer-header"><b>AI 资源中心 · RP</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><label>中心地址<input data-field="url" class="text_pole" placeholder="http://192.168.31.201:18321"></label><label>限定 RP 连接的凭据<input data-field="token" type="password" class="text_pole" autocomplete="off"></label><button data-action="configure" class="menu_button">保存并读取</button><button data-action="read" class="menu_button">读取中心</button><div data-state style="white-space:pre-wrap;overflow-wrap:anywhere"></div><label>绑定当前酒馆连接<select data-channels class="text_pole"></select></label><button data-action="bind" class="menu_button">关联当前连接</button><button data-action="apply" class="menu_button">应用中心配置到原生连接</button><button data-action="send" class="menu_button">上报酒馆已保存配置</button><button data-action="retry" class="menu_button">重交保存结果</button><div data-calls style="white-space:pre-wrap;overflow-wrap:anywhere"></div><button data-action="calls" class="menu_button">重交调用记录</button><div data-error style="color:#f58a86;white-space:pre-wrap"></div><small>真实调用自动上报；保存和同步不测活。暂停从下一次生成生效。</small></div>';
 const container =
   document.querySelector("#extensions_settings2") ||
   document.querySelector("#extensions_settings");
@@ -61,6 +62,9 @@ const refresh = () => {
   panel.querySelector("[data-state]")!.textContent =
     `当前：${profile?.name || "未选择原生连接"}\n${binding ? `酒馆 v${binding.version} · ${binding.enabled ? "启用" : "暂停"} · 禁测活` : "尚未绑定"}${remote ? `\n中心 v${remote.version}：${remote.baseUrl} · ${remote.models.join(", ")}` : ""}\n待交保存 ${s.outbox.length} 条 · 最近确认 ${s.lastAck || "无"}`;
   panel.querySelector("[data-error]")!.textContent = s.error || "";
+  const rows = calls.entries();
+  panel.querySelector("[data-calls]")!.textContent =
+    `调用：待交 ${rows.filter((r) => !r.acknowledged).length} 条 · 待终态 ${rows.filter((r) => r.event.result === "pending").length} 条\n最近调用确认 ${calls.lastAck || "无"}${calls.error ? "\n" + calls.error : ""}`;
   const value = connectionSelect.value;
   connectionSelect.replaceChildren(
     new Option("请选择", ""),
@@ -78,6 +82,53 @@ const link = new ResourceCenterLink(
   refresh,
   selected,
 );
+const calls = new RpCallOutbox(
+  settings,
+  (path, body) => link.request(path, body),
+  localStorage,
+  refresh,
+);
+observeRpCalls(
+  window,
+  (body) => {
+    const s = settings();
+    if (!s.url || !s.token) return null;
+    const profileId = selected(),
+      source = body.chat_completion_source;
+    const protocol =
+      source === "claude"
+        ? "Anthropic"
+        : ["makersuite", "vertexai"].includes(source)
+          ? "Gemini"
+          : source
+            ? "OpenAI"
+            : undefined;
+    const address =
+      (source === "custom" ? body.custom_url : body.reverse_proxy) ||
+      body.api_server;
+    let baseUrl;
+    if (address) {
+      const u = new URL(address);
+      u.username = "";
+      u.password = "";
+      u.search = "";
+      u.hash = "";
+      baseUrl = u.href;
+    }
+    return {
+      profileId: profileId || undefined,
+      channelId: s.bindings[profileId]?.channelId,
+      baseUrl,
+      protocol,
+    };
+  },
+  (event) => calls.put(event),
+  (error) => {
+    calls.error = `调用采集：${String(error)}`;
+    refresh();
+  },
+);
+setInterval(() => void calls.deliver(), 30000);
 const apply = async () => {
   if (generating || ctx().streamingProcessor)
     throw new Error("请在当前生成结束后应用");
@@ -144,6 +195,7 @@ panel.addEventListener("click", async (event) => {
       await link.queueSavedProfiles();
     }
     if (button.dataset.action === "retry") await link.deliver();
+    if (button.dataset.action === "calls") await calls.deliver();
   } catch (e) {
     settings().error = e instanceof Error ? e.message : String(e);
   } finally {
@@ -175,7 +227,10 @@ for (const name of ["GENERATION_ENDED", "GENERATION_STOPPED"])
 c.eventSource.on(c.eventTypes.CONNECTION_PROFILE_LOADED, () => {
   refresh();
 });
-window.addEventListener("online", () => void link.deliver());
+window.addEventListener("online", () => {
+  void link.deliver();
+  void calls.deliver();
+});
 (globalThis as any).aiResourceCenterRpGuard = (
   _chat: any,
   _size: any,
@@ -189,4 +244,7 @@ window.addEventListener("online", () => void link.deliver());
   }
 };
 refresh();
-if (settings().url) void link.deliver();
+if (settings().url) {
+  void link.deliver();
+  void calls.deliver();
+}
