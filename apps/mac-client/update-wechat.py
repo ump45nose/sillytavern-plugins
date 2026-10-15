@@ -1,6 +1,6 @@
 """Update only the packaged WeChat collector, preserving the installed UI and launch identity.
 
-python update-wechat.py --prepare /absolute/candidate.app
+python update-wechat.py --prepare /absolute/candidate.app --connector-source /absolute/personal-crm/src/personal_crm/connector
 python update-wechat.py --install /absolute/candidate.app
 """
 import argparse
@@ -22,13 +22,15 @@ SUPPORT = Path.home() / 'Library/Application Support/PersonalDataHub'
 LABEL = 'com.personal-crm.wechat'
 
 
-def prepare(candidate):
+def prepare(candidate, source=None):
     if candidate.exists():
         raise FileExistsError(candidate)
+    source = source or ROOT.parent / 'crm/src/personal_crm/connector'
+    if not (source / 'sync.py').is_file() or not (source / 'media.py').is_file():
+        raise RuntimeError('connector_source_required')
     subprocess.run(['codesign', '--verify', '--strict', str(APP)], check=True)
     shutil.copytree(APP, candidate, symlinks=True)
     resources = candidate / 'Contents/Resources'
-    source = ROOT.parent / 'crm/src/personal_crm/connector'
     replacements = {'packages/personal_crm/connector/' + p.name: p.read_bytes() for p in source.glob('*.py')}
     replacements['run-wechat.py'] = (ROOT / 'collection/run-wechat.py').read_bytes()
     output = resources / 'collection.new.tar.gz'
@@ -160,9 +162,10 @@ if __name__ == '__main__':
     group.add_argument('--install', type=Path)
     group.add_argument('--check', type=Path)
     parser.add_argument('--app', type=Path, default=APP)
+    parser.add_argument('--connector-source', type=Path)
     args = parser.parse_args()
     APP = args.app.resolve()
     if args.prepare:
-        prepare(args.prepare.resolve())
+        prepare(args.prepare.resolve(), args.connector_source.resolve() if args.connector_source else None)
     else:
         install((args.install or args.check).resolve(), check_only=args.check is not None)

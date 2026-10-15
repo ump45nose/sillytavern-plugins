@@ -9,7 +9,7 @@
 - API Bearer 可写；原 viewer 凭据只读。没有升级只读权限。
 - 读写与附件续传示例：[使用说明](../apps/crm/docs/usage.md)。
 
-## 迁移对账
+## 2026-10-15 迁移对账
 
 | 项目 | 结果 |
 | --- | ---: |
@@ -39,7 +39,11 @@
 
 ## 部署与恢复位置
 
-NAS 当前镜像：`local/personal-data-hub:crm-person-20261015`，CRM 包版本 `0.2.0`。服务仍为 `personal-crm-crm-1`，复用原 PostgreSQL、OAuth 状态、附件卷及共享 Compose。
+NAS 当前镜像：`local/personal-data-hub:crm-readable-20261016-r2`，CRM 包版本 `0.2.1`。服务仍为 `personal-crm-crm-1`，复用原 PostgreSQL、OAuth 状态、附件卷及共享 Compose。
+
+2026-10-16 的姓名/发言人/附件修复来自独立仓库 `ump45nose/personal-crm`。本仓库只增加打包器的 `--connector-source` 入参，用独立来源更新签名包，不再要求复制 CRM 源码回来。MacAir / MacPro 已安装并继续成功增量轮询。归档更新 76 个人物、1,091 条聊天，重跑零变更；附件补齐 1,319 条，当前 1,450 条元数据中 1,362 个文件实际存在，88 条缺少本地原文件、消息或定位。真实 HTTP 附件下载及 MCP/HTTP 正文比对通过。
+
+本轮发布目录 `/home/yuwk/.config/personal-data-hub/releases/crm-readable-20261016` 保留宿主兼容构建及变更前 Compose；受影响文本字段备份位于 `/vol1/1000/personal-data-hub/backups/crm-readable-20261016`。原始迁移与备份如下：
 
 - 发布目录：`/home/yuwk/.config/personal-data-hub/releases/crm-person-20261015`。包含候选 wheel、Dockerfile、原镜像记录、迁移报告及 `rollback.py`。
 - 备份：`/vol1/1000/personal-data-hub/backups/crm-person-20261015/database.dump`，1,127,255,946 字节；`pg_restore` 可列出 245 个目录项。原 Compose 与私有配置同目录备份。
