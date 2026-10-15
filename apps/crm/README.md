@@ -1,5 +1,7 @@
 # Personal CRM
 
+独立源码与发行版：[personal-crm](https://github.com/ump45nose/personal-crm) · [v0.2.0](https://github.com/ump45nose/personal-crm/releases/tag/v0.2.0)。独立使用和 CRM 主体维护以该仓库为准；本目录保留已部署的 Hub 宿主集成版本。
+
 以人物为入口，保存你与他们发生的交互。用户与 AI 通过同一套 API / MCP 读写；微信采集器只同步新增私聊。
 
 ## 结构
