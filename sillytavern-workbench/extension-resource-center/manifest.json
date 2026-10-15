@@ -1,0 +1,12 @@
+{
+  "display_name": "AI 资源中心 · RP",
+  "loading_order": 1100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "author": "Local",
+  "version": "1.0.0",
+  "minimum_client_version": "1.19.0",
+  "auto_update": false,
+  "generate_interceptor": "aiResourceCenterRpGuard"
+}
