@@ -41,3 +41,10 @@
 - 旧业务代码和测试删除，历史表与备份保留，未执行历史物理清理。没有开发界面。
 
 部署、备份、实测证据和工作树差异见 [验收记录](../crm-archive-validation.md)。
+
+
+## 独立仓库发布
+
+已发布私有仓库 [personal-crm](https://github.com/ump45nose/personal-crm)，main 与 v0.2.0 指向 2cc7b1f。独立版本只包含人物、交互、附件、微信私聊采集和 HTTP / MCP，不导入 Hub，也不注册日报或其他宿主工具。CRM 主体后续维护以独立仓库为准。
+
+发行物 wheel 和 sdist 已发布并下载回读；下载的 wheel 安装后独立网络 smoke 通过。Mac 完整测试 27 passed，Linux wheel 的 PostgreSQL/接口测试 19 passed。发布没有改变现有线上服务或采集任务；本目录仍是此前已部署的宿主集成版本。
