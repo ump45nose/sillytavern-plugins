@@ -322,22 +322,12 @@ class DailyReviewService:
                 currency = str(value.get("currency") or "CNY").strip()
                 if amount:
                     rows.append(f"- **{label}**：{DailyReviewService._money(amount, currency)}")
-        totals = payload.get("totals", {})
-        if isinstance(totals, dict):
-            for currency, values in sorted(totals.items()):
-                if not isinstance(values, dict):
-                    continue
-                expense = str(values.get("expense") or "0")
-                income = str(values.get("income") or "0")
-                refund = str(values.get("refund") or "0")
-                if DailyReviewService._nonzero(expense):
-                    rows.append(f"- **合计支出**：{DailyReviewService._money(expense, currency)}")
-                elif not DailyReviewService._nonzero(income) and not DailyReviewService._nonzero(refund):
-                    rows.append("- **今天没有支出**")
-                if DailyReviewService._nonzero(income):
-                    rows.append(f"- **收入**：{DailyReviewService._money(income, currency)}")
-                if DailyReviewService._nonzero(refund):
-                    rows.append(f"- **退款**：{DailyReviewService._money(refund, currency)}")
+        labels = {"expense": "合计支出", "expense_reimbursement": "垫付支出", "expense_lending": "借出", "expense_repayment": "还款支出",
+            "income": "收入", "income_lending": "借入", "income_repayment": "收到还款", "income_reimbursement": "报销收入", "income_refund": "退款", "transfer": "转账"}
+        for value in payload.get("totals", []):
+            rows.append(f"- **{labels[value['type']]}**：{DailyReviewService._money(value['amount'], value['currency'])}")
+        if payload.get("pending_count"):
+            rows.append(f"- **待确认**：{payload['pending_count']} 笔")
         return ("\n".join(rows),) if rows else ()
 
     @staticmethod

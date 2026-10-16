@@ -43,7 +43,7 @@ def _auth_check(settings: Any, *, write: bool):
 
 
 def create_mcp(service: Any, settings: Any, *, chat_reports=None,
-               daily_reviews=None, daily_review_reports=None, hub_store=None) -> FastMCP:
+               daily_reviews=None, daily_review_reports=None, hub_store=None, records_client=None) -> FastMCP:
     """创建完整 MCP 服务；本地无 OAuth 配置时便于离线测试。"""
 
     runtime = _runtime(settings)
@@ -72,16 +72,16 @@ def create_mcp(service: Any, settings: Any, *, chat_reports=None,
         register_daily_review_event_tools(server, daily_review_reports, auth=read_auth)
     if hub_store is not None:
         from personal_data_hub.mcp import register_tools
-        register_tools(server, hub_store, read_auth, chat_reports=chat_reports)
+        register_tools(server, hub_store, read_auth, chat_reports=chat_reports, records_client=records_client)
     return server
 
 
 def http_app(service: Any, settings: Any, *, events=None, chat_reports=None,
-             daily_reviews=None, daily_review_reports=None, hub_store=None):
+             daily_reviews=None, daily_review_reports=None, hub_store=None, records_client=None):
     """公共基座提供 HTTP、发现路由及经过同一认证的事件协议。"""
 
     server = create_mcp(service, settings, chat_reports=chat_reports,
-                        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store)
+                        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store, records_client=records_client)
     config = _runtime(settings)
     if events is not None:
         return create_http_app(server, config, events=events)

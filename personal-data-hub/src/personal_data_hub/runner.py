@@ -30,9 +30,8 @@ def store_from(config, *, initialize=True):
 
 
 def adapter(settings):
-    from .collectors import BillsCollector, FilesCollector, PlaudCollector, SQLiteCollector
-    classes = {'health': SQLiteCollector,
-               'shellcrash': SQLiteCollector, 'bills': BillsCollector, 'skysight': FilesCollector,
+    from .collectors import FilesCollector, PlaudCollector, SQLiteCollector
+    classes = {'shellcrash': SQLiteCollector, 'skysight': FilesCollector,
                'plaud': PlaudCollector}
     return classes[settings['adapter']](settings)
 

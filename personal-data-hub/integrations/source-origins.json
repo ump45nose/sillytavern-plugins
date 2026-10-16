@@ -27,12 +27,6 @@
     "included_worktree_changes": false,
     "managed_at": "legacy/hermes-reports"
   },
-  "AutoAccounting": {
-    "source": "/home/yuwk/code/AutoAccounting",
-    "commit": "ea2d99f4f0f33fcf219606baf1fbac5af305b200",
-    "included_worktree_changes": false,
-    "managed_at": "integrations/autoaccounting"
-  },
   "skysight": {
     "source": "/Users/yuwk/Library/Application Support/PersonalReview",
     "runtime": "ChatGPT bundled Node via existing Python wrapper",
@@ -53,14 +47,6 @@
   "personal-review": {
     "source": "/vol2/1000/Docker/personal-review",
     "managed_at": "legacy/personal-review",
-    "runtime_data_outside_repository": true
-  },
-  "health-webhook": {
-    "source": "/home/hermes/.local/share/health-webhook",
-    "managed_at": [
-      "src/personal_data_hub/server.py",
-      "legacy/health-webhook"
-    ],
     "runtime_data_outside_repository": true
   }
 }

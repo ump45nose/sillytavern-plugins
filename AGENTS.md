@@ -6,6 +6,7 @@
 
 | 目录 | 作用 |
 | --- | --- |
+| `personal-records/` | 独立健康与账单 Webhook、SQLite 业务数据、HTTP / MCP。 |
 | `personal-data-hub/` | 个人数据采集、归档、处理和只读 MCP；含 CRM、用量监控、Mac 客户端及 Plaud。 |
 | `nas-cron-jobs/` | NAS 定时任务、Hermes 调度包装、日报通知、巡检和容器启动；业务逻辑归业务项目。 |
 | `mcp-platform/` | MCP 公共运行时、认证、应用登记和构建部署协调；业务工具归各自项目。 |

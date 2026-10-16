@@ -49,8 +49,6 @@ class SQLiteCollector:
         with snapshot(self.settings["path"]) as c:
             if kind == "crm":
                 tables = ["people", "interactions", "facts", "reminders", "sync_clients"]
-            elif kind == "health":
-                tables = ["health_payloads"]
             else:
                 tables = ["traffic_hourly", "collector_gaps", "collector_meta"]
             for table in tables:
@@ -63,7 +61,7 @@ class SQLiteCollector:
                     statement += " WHERE bucket >= ?"; params = (since_bucket,)
                 for row in c.execute(statement, params):
                     raw = dict(row)
-                    for name in ("aliases", "organizations", "contact_methods", "tags", "payload_json"):
+                    for name in ("aliases", "organizations", "contact_methods", "tags"):
                         if isinstance(raw.get(name), str): raw[name] = json.loads(raw[name])
                     if table == "traffic_hourly":
                         eid = "hour:" + digest({k: v for k, v in raw.items() if k not in ("upload_bytes", "download_bytes")})
@@ -76,12 +74,11 @@ class SQLiteCollector:
                         if parsed.tzinfo is None: event = parsed.replace(tzinfo=__import__("zoneinfo").ZoneInfo(self.settings.get("timezone", "Asia/Shanghai")))
                     normal = {"table": table}
                     if table == "traffic_hourly": normal.update(upload_bytes=raw["upload_bytes"], download_bytes=raw["download_bytes"], grain="hour+destination+process+route", cumulative=True)
-                    if table == "health_payloads": normal.update(payload=raw["payload_json"], missing_is_zero=False)
                     items.append(Record(eid, table, raw, normal, instant(event), instant(raw.get("updated_at"))))
                     if len(items) == 250:
                         yield Batch(records=items); items = []
                 if items: yield Batch(records=items)
-        # Health 的历史 webhook 快照和流量保留窗口缺失不代表设备删除。
+        # 流量保留窗口缺失不代表设备删除。
         yield Batch(next_cursor={"collected_at": utcnow().isoformat()}, authoritative=kind == "crm", seen_ids=seen if kind == "crm" else None)
 
 
@@ -156,22 +153,6 @@ class FilesCollector:
             yield Batch(records=[Record(eid, record_kind, raw, normal, occurred, instant(stat.st_mtime), assets=attachments)])
         # NAS/Mac 的缓存轮转不意味着源删除，只有显式删除事件才清理。
         yield Batch(next_cursor={"collected_at": utcnow().isoformat(), "files": fingerprints, "invalid_ids": sorted(invalid_ids), "segment_validator_version": 3})
-
-
-class BillsCollector:
-    def __init__(self, settings): self.settings = settings
-
-    def collect(self, cursor, since=None):
-        root = Path(self.settings["path"])
-        if not root.is_dir(): raise FileNotFoundError("bills_directory_missing")
-        for p in sorted((root / "bills").glob("*.jsonl")):
-            rows = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
-            for row in rows:
-                payload = row.get("bill", row.get("payload", row))
-                bid = payload.get("id", row.get("bill_id"))
-                if bid is None: raise ValueError("bill_id_missing")
-                yield Batch(records=[Record(str(bid), "bill", row, {"currency": payload.get("currency"), "amount": str(payload.get("money", payload.get("amount", ""))), "source_ref": str(bid)}, instant(payload.get("time", 0) / 1000) if isinstance(payload.get("time"), (int, float)) else None)])
-        yield Batch(next_cursor={"collected_at": utcnow().isoformat()})
 
 
 class PlaudCollector:

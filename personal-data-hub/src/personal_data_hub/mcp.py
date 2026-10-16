@@ -6,9 +6,9 @@ from zoneinfo import ZoneInfo
 from .contracts import canonical, instant
 
 
-def register_tools(server, store, auth, *, chat_reports=None):
+def register_tools(server, store, auth, *, chat_reports=None, records_client=None):
     from .daily_push import DailyPushData, daily_push_page
-    daily_data = DailyPushData(store)
+    daily_data = DailyPushData(store, records_client=records_client)
 
     @server.tool(auth=auth, annotations={"readOnlyHint": True})
     def get_daily_push_data(day: str | None = None, timezone: str = "Asia/Taipei",

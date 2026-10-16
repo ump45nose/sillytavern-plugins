@@ -38,18 +38,9 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
     config = config or configuration()
     from .source_policy import validate_sources
     validate_sources(config)
+    from personal_records.client import RecordsClient
+    records_client = RecordsClient.from_config(config) if config.get("records_api_url") else None
     store = store_from(config)
-    from sqlalchemy import Sequence, select
-    from .storage import records as archive_records
-    health_ids = Sequence("hub_health_ids")
-    if store.engine.dialect.name == "postgresql":
-        with store.engine.begin() as c:
-            c.execute(__import__("sqlalchemy").text("SELECT pg_advisory_xact_lock(:key)"), {"key": store.lock_id("health-id-sequence")})
-            existing = c.scalar(__import__("sqlalchemy").text("SELECT to_regclass('hub_health_ids')"))
-            if existing is None:
-                legacy = list(c.scalars(select(archive_records.c.raw).where(archive_records.c.source == "health")))
-                maximum = max([int(r.get("id", 0)) for r in legacy] + [0])
-                Sequence("hub_health_ids", start=maximum + 1).create(c)
     for source, settings in config["sources"].items():
         store.register(source, settings.get("account", "owner"), settings["adapter"], settings.get("deletion_support", "explicit_only"))
     if webhook_only:
@@ -69,7 +60,7 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         repository = Archive(engine=store.engine, asset_root=store.root,
             gap_minutes=settings.wechat_interaction_gap_minutes, create_schema=False,
             asset_lock=store.writer_lock)
-        app = crm_app(settings, repository, hub_store=store, http_auth=lambda authorization, readonly=False: authenticate(authorization, readonly=readonly))
+        app = crm_app(settings, repository, hub_store=store, records_client=records_client, http_auth=lambda authorization, readonly=False: authenticate(authorization, readonly=readonly))
     app.state.hub_store = store
     api = APIRouter()
     from .display import Display
@@ -130,7 +121,7 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         authenticate(authorization, readonly=True)
         return ProcessingRepository(store).status()
     from .daily_push import DailyPushData, daily_push_page
-    daily_data = DailyPushData(store)
+    daily_data = DailyPushData(store, records_client=records_client)
 
     def secret(name):
         if config.get(name + "_file"):
@@ -155,13 +146,13 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
             raise HTTPException(422, "invalid_daily_parameters") from None
 
     @api.get("/api/v1/dashboard")
-    def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social", authorization: str | None = Header(default=None)):
+    def dashboard(date: str, tz: str = "Asia/Shanghai", modules: str = "social", authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         try: return display.overview(date, tz, modules)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
 
     @api.get("/api/v1/trends")
-    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social,network", days: int = 7, authorization: str | None = Header(default=None)):
+    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "social,network", days: int = 7, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         try: return display.trends(date, tz, modules, days)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
@@ -264,57 +255,6 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
                 raise HTTPException(422, str(exc)) from None
         return {"batch_id": payload.batch_id, "accepted": len(items), "committed": True, **result}
 
-    @api.get("/health")
-    def health(): return {"ok": True, "service": "personal-data-hub", "ts": utcnow().isoformat()}
-
-    @api.post("/health/import")
-    async def health_import(request: Request, authorization: str | None = Header(default=None)):
-        authenticate(authorization, "health_webhook_token")
-        payload = await request.json(); received = utcnow()
-        eid = request.headers.get("Idempotency-Key") or "payload:" + digest(payload)
-        with store.lock("source:health"):
-            previous = store.get_record(store.identity("health", eid))
-            if previous:
-                identifier = previous["raw"].get("id")
-                received = instant(previous["raw"]["received_at"])
-            elif store.engine.dialect.name == "postgresql":
-                with store.engine.begin() as c: identifier = c.scalar(health_ids.next_value())
-            else:
-                identifier = len(store.list_records("health", limit=1000)) + 1
-            store.ingest("health", Batch(records=[Record(eid, "health_payloads", {"id": identifier, "payload_json": payload, "received_at": received.isoformat()}, {"payload": payload, "missing_is_zero": False}, received)]))
-        return {"ok": True, "id": identifier, "received_at": received.isoformat(), "bytes": len(canonical(payload).encode())}
-
-    @api.get("/health/recent")
-    def health_recent(limit: int = 10, authorization: str | None = Header(default=None)):
-        authenticate(authorization, "health_webhook_token")
-        return [{"id": r["raw"].get("id"), "received_at": r["raw"].get("received_at"), "payload": r["raw"].get("payload_json")} for r in store.list_records("health", "health_payloads", limit=limit)]
-
-    @api.post("/autoaccounting/v1/bills")
-    async def bill_import(request: Request, authorization: str | None = Header(default=None)):
-        authenticate(authorization, "autoaccounting_webhook_token")
-        from .bill_contract import validate_bill
-        payload = await request.json()
-        try: bill = validate_bill(payload)
-        except ValueError: raise HTTPException(422, "invalid_bill") from None
-        result = store.ingest("finance", Batch(records=[Record(str(bill["id"]), "bill", {"bill": bill}, {"currency": bill.get("currency"), "amount": str(bill["money"]), "type": bill["type"]}, instant(bill["time"] / 1000))]))
-        return {"ok": True, "bill_id": bill["id"], "changed": bool(result["changed"]), "date": instant(bill["time"] / 1000).astimezone(__import__("zoneinfo").ZoneInfo("Asia/Shanghai")).date().isoformat()}
-
-    @api.post("/autoaccounting/v1/deletions")
-    async def bill_delete(request: Request, authorization: str | None = Header(default=None)):
-        authenticate(authorization, "autoaccounting_webhook_token")
-        payload = await request.json()
-        ids = payload.get("bill_ids", [])
-        if not isinstance(ids, list) or not ids or len(ids) > 1000 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in ids): raise HTTPException(422, "invalid_bill_ids")
-        return {"ok": True, **store.ingest("finance", Batch(deletions=[str(x) for x in ids]))}
-
-    @api.get("/autoaccounting/v1/bills/ids")
-    def bill_ids(offset: int = 0, limit: int = 1000, authorization: str | None = Header(default=None)):
-        authenticate(authorization, "autoaccounting_webhook_token")
-        if offset < 0 or not 1 <= limit <= 1000: raise HTTPException(422, "invalid_pagination")
-        with store.engine.connect() as c:
-            ids = list(c.scalars(select(archive_records.c.external_id).where(archive_records.c.source == "finance", archive_records.c.kind == "bill").order_by(archive_records.c.external_id).offset(offset).limit(limit)))
-        return {"ok": True, "bill_ids": [int(x) for x in ids], "next_offset": offset + len(ids) if len(ids) == limit else None}
-
     # 既有 CRM 根挂载必须排在新增 API 后面。
     mount = app.router.routes.pop() if not webhook_only else None
     app.include_router(api)
@@ -324,4 +264,4 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
 
 def main():
     import uvicorn
-    uvicorn.run(create_app(webhook_only=os.environ.get("HUB_WEBHOOK_ONLY") == "1"), host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8080")))
+    uvicorn.run(create_app(), host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8080")))

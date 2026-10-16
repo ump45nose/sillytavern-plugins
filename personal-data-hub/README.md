@@ -1,6 +1,6 @@
 # Personal Data Hub
 
-保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、健康、账单、网络流量。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询，以及人物和交互的 CRM 读写。
+保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、网络流量。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询，以及人物和交互的 CRM 读写。
 
 ## 当前范围
 
@@ -9,9 +9,9 @@
 | CRM / 微信 | 按人物保存私聊交互 | 增量采集、连续对话聚合、可编辑正文及附件；直接写 crm_*，API / MCP 读写，不做 Hub 镜像 |
 | Skysight | 同步仅在 Mac 保存的活动片段和已有摘要 | 文件校验、提交回执、原始片段与摘要归档 |
 | Plaud | 下载音频并取得自有转录文本 | 保留既有独立转录任务、原音频、转录 Markdown 和处理状态 |
-| Health | 为手机上传的健康数据提供长期存储 | `/health/import`、幂等上传及历史读取 |
-| AutoAccounting | 为手机账单提供长期存储 | 官方账单 webhook、按源 ID 更新及显式删除 |
 | 网络流量 | 采集并持久化 NAS / Mac 代理统计 | 小时累计事实、设备边界、缺口和提交回执 |
+
+Health 与 AutoAccounting 已迁至独立 `personal-records`；日报直接调用其 API，Hub 不采集、镜像或加工这些数据。
 
 Mem0、Hermes 报告不再采集。Memos、GitHub、Emby、Navidrome、Google Calendar/Tasks、Token Monitor 和邮件退出 Hub 的采集、镜像、加工和展示链路；这些原系统继续维护自己的存储、接口与独立任务。Hub 不再依赖 `usage-monitor-mcp`。独立用量服务源码仍在 `apps/usage-monitor`。
 
@@ -23,7 +23,7 @@ Mem0、Hermes 报告不再采集。Memos、GitHub、Emby、Navidrome、Google Ca
 
 结构化数据使用独立数据库 `personal_data_hub`；文件按 SHA-256 存在 `/vol1/1000/personal-data-hub/assets`。设备身份、凭据、配置、数据库和附件均在 Git 外。显式删除保留墓碑，阻止旧备份重新导入已删除数据。
 
-2026-10-13 止血措施继续保留：`personal-data-hub-collectors.service` 停止并禁用，后台轮询和阅读加工暂停；微信、健康、账单、设备推送与显式文件确认入口保留。来源清理不会自动恢复后台。来源清理与 P1 性能修复已合入 main；生产最近核对为 0.4.9，本次代码合并不执行部署。见 [止血记录](docs/performance-relief-20261013.md) 和 [清理计划](docs/plans/2026-10-15-source-cleanup.md)。
+2026-10-13 止血措施继续保留：`personal-data-hub-collectors.service` 停止并禁用，后台轮询和阅读加工暂停；微信、设备推送与显式文件确认入口保留。来源清理不会自动恢复后台。来源清理与 P1 性能修复已合入 main；生产最近核对为 0.4.9，本次代码合并不执行部署。见 [止血记录](docs/performance-relief-20261013.md) 和 [清理计划](docs/plans/2026-10-15-source-cleanup.md)。
 
 ## 维护
 
@@ -55,6 +55,6 @@ uv sync --python 3.12 --no-dev
 - `apps/mac-client`：由用户在 Mac 修改，本轮只交付 [客户端接口调整清单](docs/client-requirements/source-cleanup.md)。
 - `legacy`：历史源码，不注册采集任务。
 
-正式 NAS Compose 仍为 `/vol2/1000/Docker/stacks/mcp/compose.yaml` 的 `crm` 服务。构建用 [deployment/build-image.sh](deployment/build-image.sh)，只打包 Hub 和 CRM。保留原 OAuth 状态、1000:1001 身份、持久卷、域名与网络。具体操作见 [部署说明](docs/deployment.md)。
+正式 NAS Compose 仍为 `/vol2/1000/Docker/stacks/mcp/compose.yaml` 的 `crm` 服务。构建用 [deployment/build-image.sh](deployment/build-image.sh)，打包 Hub、CRM 与 Personal Records 只读客户端。保留原 OAuth 状态、1000:1001 身份、持久卷、域名与网络。具体操作见 [部署说明](docs/deployment.md)。
 
 CRM 的读写与使用见 [归档说明](apps/crm/docs/usage.md)，本次迁移与实际部署见 [验收记录](docs/crm-archive-validation.md)。

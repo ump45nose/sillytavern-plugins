@@ -27,11 +27,9 @@ class SourceCleanupTests(unittest.TestCase):
             'asset_root': str(root / 'assets'),
             'hub_api_token_file': str(root / 'write'),
             'hub_viewer_token_file': str(root / 'read'),
-            'health_webhook_token_file': str(root / 'write'),
-            'autoaccounting_webhook_token_file': str(root / 'write'),
             'sources': {name: {'adapter': adapter} for name, adapter in (
-                ('crm', 'crm_pg'), ('sky', 'skysight'), ('plaud', 'plaud'),
-                ('health', 'health'), ('finance', 'bills'), ('network', 'shellcrash'))},
+                ('sky', 'skysight'), ('plaud', 'plaud'),
+                ('network', 'shellcrash'))},
         }
         self.app = create_app(self.config, webhook_only=True)
         self.client = TestClient(self.app)
@@ -46,7 +44,7 @@ class SourceCleanupTests(unittest.TestCase):
 
     def test_removed_config_and_api_cannot_resume_sources(self):
         path = Path(self.temporary.name) / 'config.json'
-        for adapter in ('memos', 'mem0', 'files', 'git', 'emby', 'navidrome', 'google', 'token', 'email'):
+        for adapter in ('memos', 'mem0', 'files', 'git', 'emby', 'navidrome', 'google', 'token', 'email', 'crm_pg', 'health', 'bills'):
             path.write_text(json.dumps(self.config | {'sources': {'removed': {'adapter': adapter}}}))
             with self.subTest(adapter=adapter), self.assertRaisesRegex(ValueError, 'unsupported_source_adapter'):
                 configuration(path)
@@ -91,7 +89,6 @@ class SourceCleanupTests(unittest.TestCase):
 
     def test_retained_pushes_and_display_boundaries(self):
         for source, kind, raw, normal in (
-            ('crm', 'interactions', {'channel': 'wechat', 'direction': 'outbound', 'summary': '原话'}, {}),
             ('sky', 'computer_summary', {}, {'content': '已有摘要', 'interval': '10min'}),
             ('plaud', 'recording', {'recording_id': 'audio'}, {'date': '2026-10-15', 'duration_ms': 1000}),
             ('network', 'traffic_hourly', {'bucket': '2026-10-15T12:00'}, {'upload_bytes': 10, 'download_bytes': 20}),
@@ -103,15 +100,15 @@ class SourceCleanupTests(unittest.TestCase):
             self.assertTrue(response.json()['committed'])
         payload = {'timestamp': '2026-10-15T04:00:00Z', 'steps': [{'count': 10,
             'start_time': '2026-10-15T00:00:00+08:00', 'end_time': '2026-10-15T12:00:00+08:00'}]}
-        self.assertEqual(self.client.post('/health/import', headers=self.write, json=payload).status_code, 200)
+        self.assertEqual(self.client.post('/health/import', headers=self.write, json=payload).status_code, 404)
         bill = {'id': 1, 'state': 'Synced', 'type': 'Expend', 'time': 1792036800000,
                 'money': 1, 'fee': 0, 'flag': 0, 'remark': 'synthetic'}
-        self.assertEqual(self.client.post('/autoaccounting/v1/bills', headers=self.write, json=bill).status_code, 200)
-        self.assertEqual(self.store.record_page()['total'], 6)
+        self.assertEqual(self.client.post('/autoaccounting/v1/bills', headers=self.write, json=bill).status_code, 404)
+        self.assertEqual(self.store.record_page()['total'], 3)
         self.assertEqual(self.client.get('/api/v1/records').status_code, 401)
         self.assertEqual(self.client.post('/api/v1/ingest', headers=self.read,
             json={'batch_id': 'readonly', 'source': 'sky'}).status_code, 401)
-        for module in ('agenda', 'usage', 'mail', 'git', 'notes'):
+        for module in ('agenda', 'usage', 'mail', 'git', 'notes', 'health', 'finance'):
             response = self.client.get('/api/v1/dashboard', headers=self.read,
                 params={'date': '2026-10-15', 'modules': module})
             self.assertEqual(response.status_code, 422)

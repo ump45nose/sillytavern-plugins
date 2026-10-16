@@ -3,7 +3,7 @@ name = "personal-data-hub"
 version = "0.1.0"
 description = "个人信息采集、归档与统一只读查询"
 requires-python = ">=3.12"
-dependencies = ["sqlalchemy>=2.0,<3", "psycopg[binary]>=3.2,<4", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "httpx>=0.27,<1", "pydantic-settings>=2.6,<3", "PyYAML>=6,<7", "personal-crm"]
+dependencies = ["sqlalchemy>=2.0,<3", "psycopg[binary]>=3.2,<4", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "httpx>=0.27,<1", "pydantic-settings>=2.6,<3", "PyYAML>=6,<7", "personal-crm", "personal-records>=0.1,<1"]
 
 [project.scripts]
 hub = "personal_data_hub.cli:main"
@@ -20,6 +20,7 @@ packages = ["src/personal_data_hub"]
 members = ["apps/crm", "apps/usage-monitor"]
 
 [tool.uv.sources]
+personal-records = { path = "../personal-records" }
 personal-crm = { workspace = true }
 usage-monitor-mcp = { workspace = true }
 mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }

@@ -1013,6 +1013,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "personal-crm" },
+    { name = "personal-records" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -1025,12 +1026,33 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "personal-crm", editable = "apps/crm" },
+    { name = "personal-records", directory = "../personal-records" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
+
+[[package]]
+name = "personal-records"
+version = "0.1.0"
+source = { directory = "../personal-records" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115,<1" },
+    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27,<1" },
+    { name = "mcp-platform", marker = "extra == 'server'", git = "https://github.com/ump45nose/mcp-platform.git?rev=dea309a5d83b6365a57937bc6e11affe692bfcaf" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'migrate'", specifier = ">=3.2,<4" },
+    { name = "pydantic", specifier = ">=2.11,<3" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<10" },
+    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.30,<1" },
+]
+provides-extras = ["server", "migrate", "test"]
 
 [[package]]
 name = "platformdirs"

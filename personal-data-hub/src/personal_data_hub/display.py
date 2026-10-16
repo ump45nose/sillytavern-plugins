@@ -12,16 +12,16 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, or_, select
 from .storage import active_sources, display_index as idx
 
-DOMAINS = {'health_payloads': 'health', 'people': 'social', 'interactions': 'social', 'facts': 'social',
-           'computer_summary': 'activity', 'recording': 'recordings', 'bill': 'finance', 'traffic_hourly': 'network',
+DOMAINS = {'people': 'social', 'interactions': 'social', 'facts': 'social',
+           'computer_summary': 'activity', 'recording': 'recordings', 'traffic_hourly': 'network',
            'recording_transcript': 'recordings', 'recording_daily_report': 'reports',
            'recording_summary': 'reports', 'recording_processing_status': 'recordings'}
-MODULES = {'health', 'social', 'activity', 'recordings', 'reports', 'finance', 'network'}
+MODULES = {'social', 'activity', 'recordings', 'reports', 'network'}
 
 def clean(v, size=160):
     return str(v or "").replace("\x00", "")[:size]
 
-from .metric_rules import when, number, health_samples, health_value, finance_totals, sum_field
+from .metric_rules import when, number, sum_field
 
 def index_value(kind, external_id, raw, n):
     from .storage import Store
@@ -38,16 +38,6 @@ def index_value(kind, external_id, raw, n):
     elif kind in ("people", "interactions", "facts"):
         d = {k: clean(raw.get(k), 300) for k in ("id", "person_id", "display_name", "relationship_to_me", "channel", "direction", "status", "last_interaction_at")}
         if kind == "interactions": p["title"] = "交流记录"
-    elif kind == "health_payloads":
-        payload = n.get("payload", raw.get("payload_json", {}))
-        d = {key: [sample for _, sample in values] for key, values in
-             health_samples(payload, ('steps','sleep','resting_heart_rate','heart_rate','active_calories')).items()}
-        p = {"title": "健康同步", "preview": "步数、睡眠与心率记录"}
-    elif kind == "bill":
-        bill = raw.get("bill", raw.get("payload", raw))
-        d = {k: clean(bill.get(k), 200) for k in ("type", "state", "currency", "cateName", "shopName")}
-        d["amount"] = clean(bill.get("money", n.get("amount")))
-        p = {"title": clean(bill.get("shopName") or bill.get("cateName") or "账单"), "preview": clean(bill.get("remark"), 500)}
     elif kind == "traffic_hourly":
         d = {k: number(n.get(k)) or 0 for k in ("upload_bytes", "download_bytes")}
         d.update({k: clean(n.get(k, raw.get(k))) for k in ("device_id", "collector_id", "measurement_scope", "measurement_point", "host", "process", "category", "exit_node", "rule")})
@@ -77,7 +67,7 @@ class Display:
         with self.store.engine.connect() as c:
             return [dict(r) for r in c.execute(select(idx).where(idx.c.domain.in_(domains), idx.c.source.in_(active_sources()))).mappings()]
 
-    def overview(self, day, tz="Asia/Shanghai", modules="health,social", _rows=None):
+    def overview(self, day, tz="Asia/Shanghai", modules="social", _rows=None):
         start, end, zone = self.window(day, tz)
         selected = modules.split(",")
         if not set(selected) <= MODULES: raise ValueError("invalid_modules")
@@ -93,23 +83,7 @@ class Display:
                 updated = max((r["observed_at"] for r in group if r["record_id"] in references), key=when, default=None)
                 metrics.append({"id": key, "label": label, "value": value, "unit": unit, "date": data_date, "updated_at": updated, "record_ids": list(dict.fromkeys(refs or []))[:10]})
             items = []
-            if module == "health":
-                for key, label, unit, factor in [("steps", "步数", "步", 1), ("sleep", "睡眠", "小时", 1/3600), ("resting_heart_rate", "静息心率", "次/分", 1), ("active_calories", "活动热量", "千卡", 1)]:
-                    samples = {}
-                    for r in sorted(group, key=lambda r: when(r["observed_at"])):
-                        for s in r["data"].get(key, []):
-                            t = when(s["time"])
-                            if t and (t < end or (key in ("steps", "active_calories") and t == end)): samples[(s["time"], s["origin"], s["device"])] = (s, r["record_id"])
-                    def sample_date(s): return (when(s.get("day_time")) or when(s["time"])).astimezone(zone).date().isoformat()
-                    chosen = [(s, rid) for s, rid in samples.values() if sample_date(s) == day]
-                    sample_day = day
-                    if not chosen and samples:
-                        sample_day = max(sample_date(s) for s, _ in samples.values() if sample_date(s) <= day)
-                        chosen = [(s, rid) for s, rid in samples.values() if sample_date(s) == sample_day]
-                    # Daily cumulative snapshots use their valid maximum. Sleep is a set of sessions.
-                    value = health_value(key, [sample for sample, _ in chosen])
-                    metric(key, label, value, unit, sample_day, [rid for _, rid in chosen])
-            elif module == "social":
+            if module == "social":
                 interactions = sorted([r for r in group if r["kind"] == "interactions" and (not r["occurred_at"] or when(r["occurred_at"]) < end)], key=lambda r: when(r["occurred_at"]) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
                 contacts_today = [r for r in current if r["kind"] == "interactions"]
                 metric("interactions", "今日交流", len(contacts_today), "条", refs=[r["record_id"] for r in contacts_today])
@@ -122,14 +96,6 @@ class Display:
                     value["metadata"]["person_record_id"] = people[pid]["record_id"] if pid in people else ""
                     items.append(value)
                     if len(items) == 5: break
-            elif module == "finance":
-                for currency in sorted({r["data"].get("currency") or "未知币种" for r in current}):
-                    totals = finance_totals([r['data'] for r in current if (r['data'].get('currency') or '未知币种') == currency])[0]
-                    pending = totals['pending_count']
-                    refs = [r["record_id"] for r in current if (r["data"].get("currency") or "未知币种") == currency]
-                    for k, label in [("expense", "支出"), ("income", "收入"), ("transfer", "转账")]: metric(k+":"+currency, label, str(totals[k]), currency, refs=refs)
-                    metric("pending:"+currency, "待确认", pending, "笔", refs=refs)
-                items = [card(r) for r in sorted(current, key=lambda r: when(r["occurred_at"]), reverse=True)[:8]]
             elif module == 'network':
                 selected_rows = current
                 default_source = 'shellcrash' if any(r['source'] == 'shellcrash' for r in selected_rows) else next((r['source'] for r in selected_rows), None)

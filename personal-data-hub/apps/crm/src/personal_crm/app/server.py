@@ -17,7 +17,7 @@ from personal_crm.archive.http import create_router, register_errors
 from .settings import Settings
 
 
-def create_app(settings: Settings | None = None, repository=None, hub_store=None, http_auth=None) -> FastAPI:
+def create_app(settings: Settings | None = None, repository=None, hub_store=None, http_auth=None, records_client=None) -> FastAPI:
     """装配健康检查、Webhook 和 MCP；具体模块只依赖公开服务。"""
 
     runtime = settings or Settings()
@@ -52,7 +52,7 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
         daily_data = None
         if hub_store is not None:
             from personal_data_hub.daily_push import DailyPushData
-            daily_data = DailyPushData(hub_store, repo)
+            daily_data = DailyPushData(hub_store, repo, records_client=records_client)
 
         chat_reports = ChatEventProducer(
             repo, events, owner=runtime.chat_event_owner,
@@ -76,7 +76,7 @@ def create_app(settings: Settings | None = None, repository=None, hub_store=None
             )
     mcp_application = http_app(
         service, runtime, events=events, chat_reports=chat_reports,
-        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store,
+        daily_reviews=daily_reviews, daily_review_reports=daily_review_reports, hub_store=hub_store, records_client=records_client,
     )
 
     @asynccontextmanager

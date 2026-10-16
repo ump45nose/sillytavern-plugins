@@ -3,7 +3,6 @@
 set -euo pipefail
 APP_ROOT=/vol2/1000/Docker/personal-review
 SOURCE_ROOT=/vol1/1000/Code/personal-data-hub/legacy/personal-review
-JOBS_ROOT=/vol1/1000/Code/personal-data-hub/legacy/personal-jobs
 TRIMACL=/usr/trim/bin/trimacl
 [ "$(id -u)" -eq 0 ] || { echo "必须以 root 执行" >&2; exit 2; }
 [ -x "$TRIMACL" ] && [ -f "$APP_ROOT/.env" ] || exit 2
@@ -23,9 +22,6 @@ for name in bin review schemas scripts; do
     while IFS= read -r -d '' file; do
         setfattr -x system.trim_acl "$file" 2>/dev/null || true
     done < <(find "$target" -mindepth 1 -xdev ! -type l -print0)
-done
-for name in personal-review-health-source.py health_data.py; do
-    "$TRIMACL" -m a:u:988:rxaec:s "$JOBS_ROOT/$name"
 done
 # 生产 .env、数据库、配置和运行数据的现有所有权保持独立。
 runuser -u hermes -- "$APP_ROOT/bin/reviewctl" config validate >/dev/null

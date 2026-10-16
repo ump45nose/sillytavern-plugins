@@ -1,8 +1,6 @@
 """Hub 当前承担同步或持久化的来源范围。"""
 
 SOURCE_KINDS = {
-    'health': frozenset(('health_payloads',)),
-    'bills': frozenset(('bill',)),
     'skysight': frozenset(('computer_segment', 'computer_segment_invalid', 'computer_summary')),
     'plaud': frozenset(('recording', 'recording_transcript', 'recording_daily_report',
                         'recording_summary', 'recording_processing_status', 'recording_artifact')),
