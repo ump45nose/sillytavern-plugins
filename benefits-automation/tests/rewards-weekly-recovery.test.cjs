@@ -48,6 +48,10 @@ test("a missing or different weekly identity cannot confirm the failed submissio
   assert.equal(rotated.execution, "failed");
   assert.equal(rotated.reason, "full_task_cycle_changed");
   assert.equal(rotated.business.desktop_app_weekly, "unknown");
+  const completedBeforeRotation = await run(snapshot(40, true, parent.replace("Octw2", "Octw3")),
+    snapshot(40, true));
+  assert.equal(completedBeforeRotation.execution, "failed");
+  assert.equal(completedBeforeRotation.business.desktop_app_weekly, "unknown");
   const staleStage = snapshot(30, false, parent.replace("Octw2", "Octw1"));
   staleStage.execution = "failed";
   assert.equal((await run(snapshot(40, true), staleStage)).execution, "failed");

@@ -129,7 +129,7 @@ class ClaimWorkflow:
             if not isinstance(state, Obstacle):
                 raise Paused("invalid_observation")
             if state.kind in TERMINAL:
-                raise Paused(state.kind)
+                raise Paused(phase + "_state_unconfirmed" if state.kind == "unknown" else state.kind)
             if state.kind in RECOVERABLE:
                 if self.remaining_recoveries <= 0:
                     raise Paused("recovery_budget_exhausted")
@@ -309,6 +309,14 @@ class ClaimWorkflow:
             out.reason = error.reason
             if error.checkpoint:
                 out.pending.append(error.checkpoint)
-        except Exception:
+        except Exception as error:
+            # SDK/browser messages may contain session tokens. Keep locations
+            # and exception type so an operational failure remains diagnosable.
+            import json
+            import traceback
+            from pathlib import Path
+            print(json.dumps({"event": "epic_driver_error", "type": type(error).__name__,
+                "frames": [f"{Path(row.filename).name}:{row.lineno}:{row.name}"
+                           for row in traceback.extract_tb(error.__traceback__)[-6:]]}), flush=True)
             out.reason = "driver_error"
         return out

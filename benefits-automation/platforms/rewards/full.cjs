@@ -247,6 +247,7 @@ async function execute(
   const weeklyChanged = enabled.includes("desktop_app_weekly") &&
     weeklyBefore && weeklyAfter && weeklyBefore !== weeklyAfter;
   if (!stopped && enabled.includes("desktop_app_weekly") &&
+      (stages.desktop_app_weekly.execution !== "ok" || business.desktop_app_weekly !== "complete") &&
       snapshots.after.execution === "ok" && weeklyBefore && weeklyBefore === weeklyAfter &&
       (!weeklyQuest(stages.desktop_app_weekly) || weeklyQuest(stages.desktop_app_weekly) === weeklyAfter) &&
       snapshots.after.business.desktop_app_weekly === "complete") {
