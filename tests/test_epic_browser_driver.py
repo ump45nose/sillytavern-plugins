@@ -55,6 +55,23 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_forbidden_product_assets_stop_before_a_static_button_can_be_used(self):
+        driver = BrowserDriver(None, None, None)
+        driver.observe_asset_response(SimpleNamespace(
+            url="https://store.epicgames.com/egs-v2/assets/fixture.js", status=403))
+        driver._observe_once = AsyncMock(return_value=None)
+        with self.assertRaises(Paused) as raised:
+            await driver.observe("product", timeout=1)
+        self.assertEqual(raised.exception.reason, "store_assets_access_denied")
+        driver._observe_once.assert_not_awaited()
+
+    async def test_unrelated_tracking_failure_does_not_block_the_product(self):
+        driver = BrowserDriver(None, None, None)
+        for url, status in [("https://tracking.epicgames.com/track.png", 403),
+                            ("https://store.epicgames.com/egs-v2/assets/fixture.js", 200)]:
+            driver.observe_asset_response(SimpleNamespace(url=url, status=status))
+        self.assertFalse(driver.assets_denied)
+
     async def test_current_device_warning_continues_once_to_the_price_gate(self):
         button = SimpleNamespace(count=AsyncMock(return_value=1), is_visible=AsyncMock(return_value=True),
             is_enabled=AsyncMock(return_value=True), click=AsyncMock())

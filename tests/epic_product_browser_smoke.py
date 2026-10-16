@@ -17,8 +17,11 @@ async def main(cache):
     async with AsyncCamoufox(headless=True) as browser:
         context = await browser.new_context()
         markup = {"body": '<main><button type="button" class="_sidebarBuyButton_fixture" '
-                  'onclick="window.clicks=(window.clicks||0)+1">Get</button></main>'}
+                  'onclick="window.clicks=(window.clicks||0)+1">Get</button>'
+                  '<button aria-label="Add to Cart"></button></main>'}
+        navigations = []
         async def route(request):
+            navigations.append(request.request.url)
             await request.fulfill(status=200, content_type="text/html", body=markup["body"])
         await context.route("https://store.epicgames.com/**", route)
         page = await context.new_page()
@@ -30,6 +33,7 @@ async def main(cache):
         assert await driver.verify(offer, timeout=10) == "not_owned"
         assert await driver.checkout_uses_cart(offer, timeout=10) is False
         await driver.prepare_checkout(offer, timeout=10)
+        assert len(navigations) == 1
         assert await page.evaluate("window.clicks") == 1
         markup["body"] = '<main><button disabled>In Library</button></main>'
         assert await driver.verify_readonly(offer, timeout=10) == "owned"
@@ -44,6 +48,10 @@ async def main(cache):
         assert await driver._purchase_button(page) is None
         await page.set_content('<main><button hidden>Get</button><button>Get</button></main>')
         assert await driver._purchase_button(page) is not None
+        markup["body"] = '<main><button aria-label="Add to Cart"></button></main>'
+        await page.set_content(markup["body"])
+        assert await driver.verify(offer, timeout=10) == "not_owned"
+        assert await driver.checkout_uses_cart(offer, timeout=10) is True
         print("PASS: product readiness, ownership, checkout route, one click, separate readback, ambiguity and exact names")
 
 

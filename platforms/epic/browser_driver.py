@@ -27,6 +27,9 @@ PURCHASE_NAMES = re.compile(
     r"^(Get|Free|Add to cart|Buy now|In library|In your library|获取|免费|加入购物车)$",
     re.I,
 )
+DIRECT_PURCHASE_NAMES = re.compile(
+    r"^(Get|Free|Buy now|In library|In your library|获取|免费)$", re.I)
+CART_PURCHASE_NAMES = re.compile(r"^(Add to cart|加入购物车)$", re.I)
 
 
 def clean_target(url, *, checkout=False):
@@ -80,6 +83,13 @@ class BrowserDriver:
         self.current_offer_ids = set()
         self.observation_session = uuid.uuid4().hex
         self.device_acknowledged = set()
+        self.assets_denied = False
+
+    def observe_asset_response(self, response):
+        target = urlsplit(response.url)
+        if (target.hostname == "store.epicgames.com" and target.path.startswith("/egs-v2/assets/")
+                and response.status == 403):
+            self.assets_denied = True
 
     def _purchase_controls(self, page):
         # Both storefront versions expose named buttons. Test IDs are absent
@@ -87,18 +97,27 @@ class BrowserDriver:
         return page.get_by_role("button", name=PURCHASE_NAMES)
 
     async def _purchase_button(self, page):
-        controls = self._purchase_controls(page)
-        count = await controls.count()
-        if count > 32:
-            raise Paused("purchase_controls_ambiguous")
-        visible = []
-        for index in range(count):
-            button = controls.nth(index)
-            if await button.is_visible():
-                visible.append(button)
-        if len(visible) > 1:
-            raise Paused("purchase_controls_ambiguous")
-        return visible[0] if visible else None
+        # The current sidebar offers Get alongside an optional cart icon.
+        # Prefer the direct route; use the cart route only when it is primary.
+        for names in (DIRECT_PURCHASE_NAMES, CART_PURCHASE_NAMES):
+            controls = page.get_by_role("button", name=names)
+            count = await controls.count()
+            if count > 32:
+                raise Paused("purchase_controls_ambiguous")
+            visible = []
+            for index in range(count):
+                button = controls.nth(index)
+                if await button.is_visible():
+                    visible.append(button)
+            if len(visible) > 1:
+                raise Paused("purchase_controls_ambiguous")
+            if visible:
+                return visible[0]
+        return None
+
+    async def _purchase_text(self, button, timeout):
+        text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip()
+        return text or (await button.get_attribute("aria-label") or "").strip()
 
     async def _visible(self, locator):
         try:
@@ -231,6 +250,8 @@ class BrowserDriver:
         # Re-probe without navigation or interaction before declaring a layout gap.
         attempts = 20 if phase in {"checkout", "post_submit"} else 8
         for attempt in range(attempts):
+            if self.assets_denied:
+                raise Paused("store_assets_access_denied")
             state = await self._observe_once(phase, timeout=timeout)
             if state is None or state.kind != "unknown":
                 return state
@@ -430,8 +451,13 @@ class BrowserDriver:
         self.offer = offer
         await self._goto(offer.url, timeout)
 
+    def _at_offer(self, page, offer):
+        actual, expected = clean_target(page.url), clean_target(offer.url)
+        return re.sub(r"/en-US/", "/", actual) == re.sub(r"/en-US/", "/", expected)
+
     async def verify(self, offer, *, timeout):
-        await self._goto(offer.url, timeout)
+        if not self._at_offer(self.page, offer):
+            await self._goto(offer.url, timeout)
         return await self._ownership(self.page, offer, timeout=timeout)
 
     async def verify_readonly(self, offer, *, timeout):
@@ -457,9 +483,10 @@ class BrowserDriver:
 
     async def _ownership(self, page, offer, *, timeout):
         # The current store can canonicalize /en-US/p/x to /p/x.
-        actual, expected = clean_target(page.url), clean_target(offer.url)
-        if re.sub(r"/en-US/", "/", actual) != re.sub(r"/en-US/", "/", expected):
+        if not self._at_offer(page, offer):
             return "unknown"
+        if self.assets_denied:
+            raise Paused("store_assets_access_denied")
         try:
             await self._purchase_controls(page).first.wait_for(
                 state="visible", timeout=min(15000, int(timeout * 1000)))
@@ -470,7 +497,7 @@ class BrowserDriver:
         button = await self._purchase_button(page)
         if button is None:
             return "unknown"
-        text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip()
+        text = await self._purchase_text(button, timeout)
         if storefront_owned(text):
             return "owned"
         if text.casefold() in {
@@ -495,7 +522,7 @@ class BrowserDriver:
         button = await self._purchase_button(self.page)
         if button is None:
             raise Paused("purchase_control_unknown")
-        text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip().casefold()
+        text = (await self._purchase_text(button, timeout)).casefold()
         if text in {"add to cart", "加入购物车"}:
             return True
         if text in {"get", "free", "buy now", "获取", "免费"}:
@@ -536,13 +563,14 @@ class BrowserDriver:
     async def prepare_checkout(self, offer, *, timeout):
         if offer.id in self.prepared:
             raise Paused("checkout_already_started")
-        await self.open_offer(offer, timeout=timeout)
+        if not self._at_offer(self.page, offer):
+            await self.open_offer(offer, timeout=timeout)
         await self._purchase_controls(self.page).first.wait_for(
             state="visible", timeout=min(20000, int(timeout * 1000)))
         button = await self._purchase_button(self.page)
         if button is None:
             raise Paused("purchase_control_unknown")
-        text = (await button.inner_text(timeout=5000)).strip().casefold()
+        text = (await self._purchase_text(button, timeout)).casefold()
         if text not in {
             "get",
             "free",

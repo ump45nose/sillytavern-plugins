@@ -1,4 +1,7 @@
 import unittest
+import contextlib
+import io
+import json
 from unittest.mock import AsyncMock
 from common.interventions import fingerprint, IDENTITY
 from platforms.epic.workflow import ClaimWorkflow, Offer, Obstacle
@@ -78,6 +81,19 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.reason, "complete")
         self.assertEqual(d.submitted, ["a"])
         self.assertEqual(d.journal.states["a"], "confirmed")
+
+    async def test_driver_failure_logs_location_without_private_error_message(self):
+        d = Driver()
+        d.inventory = AsyncMock(side_effect=RuntimeError("private-fixture-token"))
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            out = await self.engine(d).run()
+        diagnostic = json.loads(stream.getvalue())
+        self.assertEqual(out.reason, "driver_error")
+        self.assertEqual(diagnostic["type"], "RuntimeError")
+        self.assertTrue(diagnostic["frames"])
+        self.assertNotIn("private-fixture-token", stream.getvalue())
+        self.assertEqual(d.submitted, [])
 
     async def test_direct_zero_checkout_preserves_unrelated_paid_cart(self):
         d = Driver()
