@@ -22,4 +22,8 @@
 - 已读取诊断证据并保存既有工作修改的文件摘要。
 - 97 项 Epic、51 项 Rewards 回归及真实 Camoufox 本地商品页检查通过；正式 Hermes 身份的只读 SDK 初始化通过。
 - 昨日 Rewards 保存证据离线重放已由失败修正为完成，30→40，且无旧未完成明细残留。
-- 正在完成正式实跑与发布。通过摘要和补丁核对把本次修复用于当前源码，不执行 Git 合并、不提交既有修改。
+- 13:32 已通过摘要和精确补丁核对更新当前源码，正式任务身份可读；既有改动保留、主工作区索引未改，没有 Git 合并。通知报告通过原 `deploy-hermes.py --only` 选择性部署；未发送额外通知。
+- 当前源码的 31 项通知测试通过（使用现有 Hermes agent 的 `PYTHONPATH`）；Epic 商品页浏览器检查及只读 SDK 初始化均通过。
+- Epic 正式链路实跑 `e7017102-738a-49aa-952f-c3702cf3632c` 用时 19.9 秒，明确返回 `store_assets_access_denied`；Bad Cheese 与 Agent A 仍未确认领取，订单 journal 与修复前一致。仅把此真实新运行保存到当日 delivery，历史结果未改。
+- 当前异常报告仅显示「Epic 免费游戏：商店资源被拒绝访问（403），领取已停止」；Rewards 当日仍为正常，周积分 50/70。SDK 实际模型挑战和新游戏下单仍未完成业务验收，不能声称 Epic 领取成功；剩余阻塞是 Epic/WAF 的资源访问限制。
+- 全机启动登记检查有与本次脚本变更无关的差异：`missing=['tailscale']`、`active_unplanned=['ai-resource-center']`、`stopped_planned=[]`；没有因此操作其他容器。
