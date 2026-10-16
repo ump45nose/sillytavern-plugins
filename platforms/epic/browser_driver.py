@@ -23,6 +23,10 @@ from .workflow import Paused
 STORE = "https://store.epicgames.com/en-US"
 PROMOTIONS = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
 ALLOWED = {"store.epicgames.com", "www.epicgames.com", "accounts.epicgames.com"}
+PURCHASE_NAMES = re.compile(
+    r"^(Get|Free|Add to cart|Buy now|In library|In your library|获取|免费|加入购物车)$",
+    re.I,
+)
 
 
 def clean_target(url, *, checkout=False):
@@ -77,6 +81,25 @@ class BrowserDriver:
         self.observation_session = uuid.uuid4().hex
         self.device_acknowledged = set()
 
+    def _purchase_controls(self, page):
+        # Both storefront versions expose named buttons. Test IDs are absent
+        # from the current product page; generated CSS classes are not an API.
+        return page.get_by_role("button", name=PURCHASE_NAMES)
+
+    async def _purchase_button(self, page):
+        controls = self._purchase_controls(page)
+        count = await controls.count()
+        if count > 32:
+            raise Paused("purchase_controls_ambiguous")
+        visible = []
+        for index in range(count):
+            button = controls.nth(index)
+            if await button.is_visible():
+                visible.append(button)
+        if len(visible) > 1:
+            raise Paused("purchase_controls_ambiguous")
+        return visible[0] if visible else None
+
     async def _visible(self, locator):
         try:
             count = await locator.count()
@@ -119,9 +142,8 @@ class BrowserDriver:
             # the same expected path and a visible business marker to continue.
             if clean_target(self.page.url) != clean_target(
                 url
-            ) or not await self._visible(
-                self.page.locator('[data-testid="purchase-cta-button"],egs-navigation')
-            ):
+            ) or not (await self._visible(self.page.locator("egs-navigation"))
+                      or await self._purchase_button(self.page) is not None):
                 raise
         clean_target(self.page.url)
 
@@ -192,9 +214,7 @@ class BrowserDriver:
             # storefront; its own bounding box is empty even while logged in.
             return await container.locator('egs-navigation[isloggedin="true"]').count() == 1
         if phase in {"product", "verification"}:
-            return await self._visible(
-                container.locator('[data-testid="purchase-cta-button"]')
-            )
+            return await self._purchase_button(container) is not None
         if phase == "cart":
             return any(
                 x in text for x in ("your cart is empty", "购物车为空")
@@ -216,7 +236,7 @@ class BrowserDriver:
                 return state
             if attempt == 0 and phase in {"product", "verification"}:
                 try:
-                    await self.page.locator('[data-testid="purchase-cta-button"]').first.wait_for(
+                    await self._purchase_controls(self.page).first.wait_for(
                         state="visible", timeout=min(20000, int(timeout * 1000)))
                 except Exception as error:
                     if not _is_playwright_timeout(error):
@@ -440,14 +460,15 @@ class BrowserDriver:
         actual, expected = clean_target(page.url), clean_target(offer.url)
         if re.sub(r"/en-US/", "/", actual) != re.sub(r"/en-US/", "/", expected):
             return "unknown"
-        button = page.locator('[data-testid="purchase-cta-button"]').first
         try:
-            await button.wait_for(state="visible", timeout=min(15000, int(timeout * 1000)))
+            await self._purchase_controls(page).first.wait_for(
+                state="visible", timeout=min(15000, int(timeout * 1000)))
         except Exception as error:
             if not _is_playwright_timeout(error):
                 raise
             return "unknown"
-        if not await self._visible(button):
+        button = await self._purchase_button(page)
+        if button is None:
             return "unknown"
         text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip()
         if storefront_owned(text):
@@ -471,7 +492,9 @@ class BrowserDriver:
         """Observe the current product route before touching an existing cart."""
         if self.offer is None or self.offer.id != offer.id:
             raise Paused("purchase_control_unknown")
-        button = self.page.locator('[data-testid="purchase-cta-button"]').first
+        button = await self._purchase_button(self.page)
+        if button is None:
+            raise Paused("purchase_control_unknown")
         text = (await button.inner_text(timeout=min(5000, int(timeout * 1000)))).strip().casefold()
         if text in {"add to cart", "加入购物车"}:
             return True
@@ -514,7 +537,11 @@ class BrowserDriver:
         if offer.id in self.prepared:
             raise Paused("checkout_already_started")
         await self.open_offer(offer, timeout=timeout)
-        button = self.page.locator('[data-testid="purchase-cta-button"]').first
+        await self._purchase_controls(self.page).first.wait_for(
+            state="visible", timeout=min(20000, int(timeout * 1000)))
+        button = await self._purchase_button(self.page)
+        if button is None:
+            raise Paused("purchase_control_unknown")
         text = (await button.inner_text(timeout=5000)).strip().casefold()
         if text not in {
             "get",

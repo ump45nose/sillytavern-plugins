@@ -242,6 +242,32 @@ async function execute(
       reason: "not_run_after_stop",
       business: { snapshot: "unknown" },
     };
+  const weeklyQuest = out => out?.details?.items?.find(row => row.id === "desktop_app_weekly_quest")?.url;
+  const weeklyBefore = weeklyQuest(snapshots.before), weeklyAfter = weeklyQuest(snapshots.after);
+  const weeklyChanged = enabled.includes("desktop_app_weekly") &&
+    weeklyBefore && weeklyAfter && weeklyBefore !== weeklyAfter;
+  if (!stopped && enabled.includes("desktop_app_weekly") &&
+      snapshots.after.execution === "ok" && weeklyBefore && weeklyBefore === weeklyAfter &&
+      (!weeklyQuest(stages.desktop_app_weekly) || weeklyQuest(stages.desktop_app_weekly) === weeklyAfter) &&
+      snapshots.after.business.desktop_app_weekly === "complete") {
+    // The final weekly read verifies every opened child and its credited points.
+    // Replace stale stage rows as well as the aggregate; never replay the POST.
+    business.desktop_app_weekly = "complete";
+    const week = weeklyAfter.split("/quest/")[1].replace("WW_pcparent_", "");
+    stages.desktop_app_weekly = {execution: "ok", reason: "desktop_app_confirmed_by_fresh_snapshot",
+      business: {desktop_app_weekly: "complete"}, details: {
+        metrics: Object.fromEntries(Object.entries(snapshots.after.details.metrics)
+          .filter(([key]) => key.startsWith("desktop_app_"))),
+        items: snapshots.after.details.items.filter(row => row.id === "desktop_app_weekly_quest" ||
+          /^WW_pcchild[2-8]_urlreward_/.test(row.id) && row.id.endsWith("_" + week)),
+      }};
+    failed = Object.values(stages).some(out => out.execution !== "ok");
+  }
+  if (weeklyChanged) {
+    failed = true;
+    stopped = "full_task_cycle_changed";
+    business.desktop_app_weekly = "unknown";
+  }
   // Only a fresh, attributable page counter confirms APP check-in. A POST ACK
   // or a balance increase cannot establish which task credited those points.
   if (!stopped && enabled.includes("app_daily") &&

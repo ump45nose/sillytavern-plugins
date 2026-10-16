@@ -296,12 +296,14 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         from platforms.epic.workflow import Offer
 
         offer = Offer("a", "https://store.epicgames.com/en-US/p/fixture", True)
-        button = SimpleNamespace(inner_text=AsyncMock(return_value="In Library"), wait_for=AsyncMock())
+        button = SimpleNamespace(inner_text=AsyncMock(return_value="In Library"), wait_for=AsyncMock(),
+            is_visible=AsyncMock(return_value=True))
+        controls = SimpleNamespace(first=button, count=AsyncMock(return_value=1), nth=lambda i: button)
         verification = SimpleNamespace(
             url=offer.url,
             goto=AsyncMock(),
             close=AsyncMock(),
-            locator=lambda s: SimpleNamespace(first=button),
+            get_by_role=lambda *a, **k: controls,
         )
         checkout = SimpleNamespace(goto=AsyncMock())
         context = SimpleNamespace(new_page=AsyncMock(return_value=verification))
