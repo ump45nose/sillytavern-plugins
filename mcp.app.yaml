@@ -1,0 +1,41 @@
+schema_version: 1
+id: personal-records
+name: Personal Records
+deployment_mode: existing
+command: [personal-records, serve]
+public_url: https://records-home.172906573.xyz
+host_port: 18087
+port: 8080
+bind_address: 192.168.31.201
+compose_project: mcp
+compose_service: personal-records
+container_name: personal-records
+user: 1000:1001
+cap_drop: [ALL]
+security_opt: [no-new-privileges:true]
+external_networks: [data_net]
+volumes:
+- name: personal-records-data
+  mount: /data
+  external: true
+bind_mounts:
+- source: /home/yuwk/.config/personal-records/secrets
+  mount: /run/records
+  read_only: true
+environment:
+  HOST: 0.0.0.0
+  PORT: '8080'
+  RECORDS_DATABASE: /data/records.sqlite
+  OAUTH_STORAGE_PATH: /data/oauth
+  MCP_DEVELOPMENT_NO_AUTH: 'false'
+  RECORDS_API_READ_TOKEN_FILE: /run/records/read.token
+  RECORDS_API_WRITE_TOKEN_FILE: /run/records/write.token
+  RECORDS_HEALTH_TOKEN_FILE: /run/records/health.token
+  RECORDS_ACCOUNTING_TOKEN_FILE: /run/records/autoaccounting.token
+required_env: [OIDC_CLIENT_SECRET, OAUTH_JWT_SIGNING_KEY, OAUTH_STORAGE_ENCRYPTION_KEY, OIDC_AUTHORIZED_USERNAMES]
+auth:
+  client_id: personal-records
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+backup_command: [personal-records, backup, --database, /data/records.sqlite, --destination, '{backup_path}']
+integrity_command: [personal-records, status, --database, /data/records.sqlite]
+expected_tools: [list_health_days, get_health_day, create_health_day, update_health_day, delete_health_day, summarize_health, list_bills, get_bill, create_bill, update_bill, delete_bill, summarize_bills, get_collection_status]
