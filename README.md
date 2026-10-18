@@ -4,7 +4,7 @@
 
 ## 运行
 
-Python 3.12+。独立环境安装服务器、测试和一次迁移依赖：
+服务端 Python 3.12+，基础客户端兼容 Hermes 的 Python 3.11。独立环境安装服务器、测试和一次迁移依赖：
 
 ```sh
 uv sync --extra server --extra test --extra migrate
@@ -45,3 +45,15 @@ personal-records backup --database /data/records.sqlite --destination /private/b
 迁移只读 PostgreSQL 一致快照，目的地必须不存在；只取当前 Health/finance 记录，不混合旧 SQLite/JSONL。独立磁盘审计索引逐个比较规范化业务字段和唯一样本，校验失败删除本次候选库。两个早期华为日汇总仅迁日期与步数，其余未迁字段在报告中计数，完整原件保留在历史备份。
 
 备份使用 SQLite backup API，包括 WAL 中已提交数据，禁止直接只复制运行中的主文件。OAuth 状态按 MCP 平台方式配套备份。正式部署入口为 NAS mcp 组 Compose；私有数据、配置与源码分离。实施和验证见 [计划](docs/plans/2026-10-16-health-accounting.md)。
+
+## 本机入口
+
+正式公网入口为 `https://records-home.172906573.xyz:28443`：
+
+- Health：`https://records-home.172906573.xyz:28443/webhooks/health`
+- AutoAccounting：`https://records-home.172906573.xyz:28443/webhooks/autoaccounting`
+- MCP：`https://records-home.172906573.xyz:28443/mcp`
+
+沿用现有 Nginx Proxy Manager，域名转发到 `192.168.31.201:18087`，复用已有泛域名证书。公网 443 受限，URL 必须带 `:28443`。DNS 使用现有 DDNS 泛域名 A/AAAA，不新增此域名的 CF Tunnel/CNAME。
+
+`mcp.app.yaml` 保存服务和 OAuth 元数据；此服务的域名由本机 NPM 管理，不执行会登记 Tunnel 的 `mcpctl deploy`。修改公共地址时同步服务环境和该独立 OIDC 客户端回调，保留密钥与 OAuth 状态。
