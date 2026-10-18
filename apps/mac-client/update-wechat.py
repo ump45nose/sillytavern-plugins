@@ -22,7 +22,7 @@ SUPPORT = Path.home() / 'Library/Application Support/PersonalDataHub'
 LABEL = 'com.personal-crm.wechat'
 
 
-def prepare(candidate, source=None):
+def prepare(candidate, source=None, media_deps=None):
     if candidate.exists():
         raise FileExistsError(candidate)
     source = source or ROOT.parent / 'crm/src/personal_crm/connector'
@@ -32,22 +32,35 @@ def prepare(candidate, source=None):
     shutil.copytree(APP, candidate, symlinks=True)
     resources = candidate / 'Contents/Resources'
     replacements = {'packages/personal_crm/connector/' + p.name: p.read_bytes() for p in source.glob('*.py')}
+    core = source.parent / 'core'
+    for name in ('__init__.py', 'presentation.py'):
+        replacements['packages/personal_crm/core/' + name] = (core / name).read_bytes()
+    if media_deps:
+        for folder in ('PIL', 'pilk'):
+            for path in (media_deps / folder).rglob('*'):
+                if path.is_file() and '__pycache__' not in path.parts:
+                    replacements['packages/' + str(path.relative_to(media_deps))] = path.read_bytes()
+        binaries = list((media_deps / 'imageio_ffmpeg/binaries').glob('ffmpeg-macos-*'))
+        if len(binaries) != 1:
+            raise RuntimeError('media_ffmpeg_binary_required')
+        replacements['bin/ffmpeg'] = binaries[0].read_bytes()
     replacements['run-wechat.py'] = (ROOT / 'collection/run-wechat.py').read_bytes()
     output = resources / 'collection.new.tar.gz'
     with tarfile.open(resources / 'collection.tar.gz', 'r:gz') as old, tarfile.open(output, 'w:gz') as new:
         written = set()
         for item in old:
-            if item.name == 'packages/personal_crm/connector/fact_extractor.py':
+            if item.name in {'packages/personal_crm/connector/fact_extractor.py', 'packages/personal_crm/connector/presentation.py'}:
                 continue
             data = replacements.get(item.name)
             if data is not None:
                 item.size = len(data)
+                if item.name == 'bin/ffmpeg': item.mode = 0o700
                 new.addfile(item, io.BytesIO(data)); written.add(item.name)
             else:
                 new.addfile(item, old.extractfile(item) if item.isfile() else None)
         for name, data in replacements.items():
             if name not in written:
-                item = tarfile.TarInfo(name); item.size = len(data); item.mode = 0o600
+                item = tarfile.TarInfo(name); item.size = len(data); item.mode = 0o700 if name == 'bin/ffmpeg' else 0o600
                 new.addfile(item, io.BytesIO(data))
     output.replace(resources / 'collection.tar.gz')
     manifest_path = resources / 'collection.json'
@@ -163,9 +176,10 @@ if __name__ == '__main__':
     group.add_argument('--check', type=Path)
     parser.add_argument('--app', type=Path, default=APP)
     parser.add_argument('--connector-source', type=Path)
+    parser.add_argument('--media-deps', type=Path)
     args = parser.parse_args()
     APP = args.app.resolve()
     if args.prepare:
-        prepare(args.prepare.resolve(), args.connector_source.resolve() if args.connector_source else None)
+        prepare(args.prepare.resolve(), args.connector_source.resolve() if args.connector_source else None, args.media_deps.resolve() if args.media_deps else None)
     else:
         install((args.install or args.check).resolve(), check_only=args.check is not None)
