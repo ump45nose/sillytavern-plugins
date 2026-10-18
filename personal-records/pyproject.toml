@@ -2,7 +2,7 @@
 name = "personal-records"
 version = "0.1.0"
 description = "健康与账单的 Webhook、SQLite 业务存储和 HTTP/MCP"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = ["pydantic>=2.11,<3"]
 
 [project.optional-dependencies]
@@ -25,3 +25,7 @@ mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "d
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv]
+# Servers use the platform Python 3.12+ runtime; the base client supports Hermes 3.11.
+environments = ["python_version >= '3.12'"]
