@@ -263,3 +263,19 @@ def test_legacy_huawei_steps_only_are_audited(tmp_path):
     assert 'sleep' not in store.get_health('2026-07-17')
     assert audit.verify(store)['verified']
     audit.close()
+
+
+def test_sleeping_envelope_excludes_overlapping_awake_intervals(service):
+    service.create_health_day({"date": "2026-10-18", "sleep": [
+        {"start": "2026-10-17T22:00:00Z", "end": "2026-10-18T06:00:00Z", "stage": "sleeping"},
+        {"start": "2026-10-17T22:30:00Z", "end": "2026-10-18T00:00:00Z", "stage": "light"},
+        {"start": "2026-10-17T23:00:00Z", "end": "2026-10-17T23:30:00Z", "stage": "awake"},
+        {"start": "2026-10-18T01:00:00Z", "end": "2026-10-18T01:15:00Z", "stage": "awake_in_bed"},
+        {"start": "2026-10-18T05:50:00Z", "end": "2026-10-18T06:10:00Z", "stage": "out_of_bed"},
+        {"start": "2026-10-17T21:00:00Z", "end": "2026-10-17T22:00:00Z", "stage": "unknown"},
+    ]})
+    sleep = service.health_summary("2026-10-18", "2026-10-18")["metrics"]["sleep"]
+    assert sleep["duration_seconds"] == 8 * 3600 - 55 * 60
+    assert sleep["session_seconds"] == 9 * 3600 + 10 * 60
+    assert sleep["sample_count"] == 6
+    assert sleep["stages_seconds"]["awake"] == 30 * 60
