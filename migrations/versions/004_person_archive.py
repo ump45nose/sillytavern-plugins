@@ -5,7 +5,7 @@ from alembic import op
 from personal_crm.archive.models import metadata
 
 revision = "004_person_archive"
-down_revision = "003_wechat_messages"
+down_revision = None
 branch_labels = None
 depends_on = None
 

@@ -93,6 +93,7 @@ class MessageInput(Input):
 
 class WechatBatch(Input):
     messages: list[MessageInput] = Field(default_factory=list, max_length=500)
+    pending_media_keys: list[str] = Field(default_factory=list, max_length=500)
     client_id: Nonempty = "legacy"
     synced_through: datetime | None = None
 

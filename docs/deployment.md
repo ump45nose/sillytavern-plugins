@@ -1,52 +1,57 @@
 # 独立部署
 
-运行一个 `personal-crm-server` 进程，使用 PostgreSQL 或 SQLite 和一个附件目录。没有 Hub、消息队列、定时报告或额外业务数据库依赖。
+一个 `personal-crm-server` 进程连接既有 PostgreSQL，使用自己的附件和 OAuth 目录。容器不安装 Hub，也不挂载 Hub 配置或资产目录。
 
-## 服务配置
+## 配置和启动
 
-从 `.env.example` 开始。生产使用 PostgreSQL 时，将 `DATABASE_URL` 指向既有数据库，并设置持久的 `CRM_ASSET_ROOT`。先备份，再执行 `personal-crm migrate`，最后启动服务。启动过程不自动迁移数据库。
+复制 `.env.example`，设置 `DATABASE_URL=postgresql+psycopg://...`、`CRM_API_TOKEN`、可选只读 `CRM_VIEWER_TOKEN`、`WECHAT_WEBHOOK_SECRET`。配置文件仅供运行账号读取。启动不自动迁移：
 
-- HTTP 读写：`CRM_API_TOKEN`；只读：`CRM_VIEWER_TOKEN`。读写令牌不会自动赋给只读调用方。
-- 微信写入：`WECHAT_WEBHOOK_SECRET`，只用于私聊批量写入和媒体上传。
-- 分段间隔：`WECHAT_INTERACTION_GAP_MINUTES=30`。修改只影响后续追加，不重组已有正文。
-- 公网 MCP：`MCP_DEVELOPMENT_NO_AUTH=false`，设置公开 URL、OIDC discovery/client、授权用户名及 OAuth 签名和存储密钥。
-- `OIDC_READ_ONLY_USERNAMES` 中的用户只读；`OIDC_AUTHORIZED_USERNAMES` 明确授权读写。沿用 `mcp-platform` 的 OAuth，未新建用户/角色系统。
-- `OAUTH_STORAGE_PATH` 持久化，迁移部署时保留原目录、密钥和 `personal-crm-oauth-v1` 盐对应的状态格式。
+```bash
+uv sync --locked
+uv run personal-crm migrate
+uv run personal-crm integrity
+uv run personal-crm-server
+```
 
-反向代理转发整个服务，包含 `/mcp`、`/.well-known/*` 和 OAuth 路由。开发无认证模式只允许回环监听，不能用于公网。
+- 分段间隔 `WECHAT_INTERACTION_GAP_MINUTES=30`，修改只影响后续采集。
+- 公网 MCP 关闭开发模式，配置公开 URL、OIDC 和现有 OAuth 凭据。
+- `OIDC_READ_ONLY_USERNAMES` 不会升级为写权限；复制部署时保留原 OAuth 状态目录、签名/存储配置及 `personal-crm-oauth-v1` 格式。
+- 反向代理转发整个服务，包括 `/mcp`、`/.well-known/*` 和 OAuth 路由。
+- 业务内容和附件按普通文件保存；OAuth 凭据存储沿用既有认证库。
 
-独立服务的 HTTP 环境变量使用 `CRM_API_TOKEN` / `CRM_VIEWER_TOKEN`，不读取 Hub 配置文件；若从宿主切换，将原令牌值放入对应配置，原只读令牌仍只读。
+数据库基线为 `004_person_archive`。新库只创建当前 `crm_*` 表；已在该 revision 的库无需再导入。001–003 的旧模型导入已完成，不再保留长期转换入口。备份使用 PostgreSQL `pg_dump`，附件和 OAuth 目录分别备份；回退软件不能覆盖切换后新增的数据。
 
-## 数据库升级与备份
+## 容器构建
 
-`personal-crm migrate` 创建当前 `crm_*` 结构。旧 001–003 revision 仅保留升级标记，新安装不创建旧人物、Fact 或 Reminder 表。已经升级至 `004_person_archive` 的数据库可直接使用。
+需要 uv，以及对固定版本 mcp-platform 源码的访问权限。它是通用认证/协议库，不是运行服务。
 
-已有旧 CRM 表需要转换时：备份数据库与附件，暂停原写入，执行 migrate，再执行一次 migrate-legacy。转换读取既有表；旧 Hub 附件引用存在时可以复用其文件，运行不需要 Hub Python 包。目标归档非空时拒绝重复转换。没有旧表时转换结果为零。旧数据不删除。
+```bash
+uv build --wheel --out-dir dist/wheels
+uv export --frozen --no-dev --no-emit-project --no-emit-package mcp-platform \
+  --no-hashes --format requirements-txt > dist/requirements.txt
+# 在固定 revision dea309a5d83b6365a57937bc6e11affe692bfcaf 的 mcp-platform checkout：
+uv build --wheel --out-dir /absolute/personal-crm/dist/wheels /absolute/mcp-platform
+# 回到 personal-crm：
+docker build -t local/personal-crm:0.3.0 .
+```
 
-SQLite 备份：`uv run personal-crm backup /safe/path/crm.db`；PostgreSQL 使用已有 `pg_dump`。附件与 OAuth 目录单独备份。回退软件不覆盖切换后产生的新数据。
+使用 `compose.yaml`，将 `server.env` 配好并接入能访问现有 PostgreSQL 的网络。先在独立端口检查健康、认证、读取与附件，再切换反向代理。原宿主的其他数据来源保持原入口。
 
-## 微信读取器与附件
+## 微信读取器和附件
 
-微信读取器是 Mac 上已有的 `chatlog-keeper`，需提供 `directory --source wechat` 和 `message-stream-v1 --selection-stdin` 协议。先完成本机数据授权；本项目不安装读取器、不提取密钥或修改系统授权。
-
-`connector.env.example` 是采集配置样例。`CRM_CLIENT_ID`、`CRM_ACCOUNT_NAMESPACE`、`CRM_CHECKPOINT` 和可选的 `CHATLOG_SCOPES` 沿用原值；来源身份不靠备注名匹配。只需要 `CRM_ENV_FILE` 指向实际文件即可运行采集 CLI，不依赖 Hub 客户端安装器。
-
-媒体采集默认开启（`WECHAT_MEDIA_ENABLED=true`），部署采集器时安装原媒体读取依赖：
+采集器在获授权的 Mac 上使用已有 `chatlog-keeper`。它提供 `directory --source wechat` 和 `message-stream-v1 --selection-stdin`。保留 `CRM_CLIENT_ID`、`CRM_ACCOUNT_NAMESPACE`、`CRM_CHECKPOINT`、现有数据库读取授权和账号身份；不靠备注名识别人物。
 
 ```bash
 uv pip install -r requirements-wechat-media.txt
+CRM_ENV_FILE=/absolute/connector.env uv run personal-crm-wechat --watch
 ```
 
-媒体读取只复用已有数据库密钥缓存；保留可取得的原文件，不增加 OCR、转写或解密能力。文件暂时缺失时元数据和 attachment:// 引用仍保留，后续补文件不重写正文。
+将 ffmpeg 放在 PATH（原生打包版本置于读取器旁的 bin 目录）。采集器只读已有数据库 key 缓存；微信图片缓存就地转换为 JPEG/PNG，SILK 语音转 WAV，普通文件原样归档。不做 OCR、转写或进程密钥扫描。账号统计文件不可用时可配置本账号 `WECHAT_IMAGE_UIN`，不保存图片密钥。
 
-## 修整既有微信展示数据
+文件暂时未下载时保留元数据和稳定引用，读取明确返回 `available=false`。成功提交批次后才推进消息水位；媒体工作独立重试，不阻塞文字，不保留第二份正文。损坏 checkpoint 报错，不当成首次启用重置。
 
-从已有读取器导出 `directory --source wechat` 的 JSON 到私有文件后运行：
+## 一次性历史修整
 
-```bash
-personal-crm repair-wechat /private/wechat-directory.json --accounts wechat-main,legacy
-personal-crm repair-wechat /private/wechat-directory.json --accounts wechat-main,legacy \
-  --apply --backup /private/backups/wechat-text-before.json
-```
+`checks/repair_archive.py` 清理机器生成的姓名/发言人和重复占位；`inspect-wechat-files.py` 从已保存消息定位文件元数据；`repair-wechat-media.py` 沿原上传入口补文件；`repair-media-files.py` 将旧附件缓存转为可打开文件并保留附件 ID。这些只在维护环境运行，输入、受影响行备份、报告保存在私有目录，不进入运行包。
 
-默认仅报告变更数量。执行时先保存受影响行，再在一个事务中修改机器生成的复合姓名、技术身份姓名、发言人和重复媒体占位；手工姓名及正文其余部分保留，不改变来源身份、水位、分段或附件 ID。`--accounts` 应明确列出本目录对应的来源账号，不能混用不同账号的目录。备份文件不能已存在。
+修整不重抓全部聊天、不重新生成正文、不推进文字水位；已有人工编辑保留。旧历史物理清理独立处理。

@@ -8,7 +8,7 @@ import json
 import os
 import tempfile
 import threading
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -19,7 +19,6 @@ from sqlalchemy import (
     cast,
     create_engine,
     delete,
-    event,
     func,
     insert,
     or_,
@@ -27,10 +26,9 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.pool import StaticPool
 
-from personal_crm.connector.presentation import attachment_content, short_name
 from personal_crm.core.domain import ensure_utc, utcnow, uuid7
+from personal_crm.core.presentation import attachment_content, short_name
 
 from .models import (
     attachment_links,
@@ -53,10 +51,7 @@ from .schemas import (
 )
 
 ZONE = ZoneInfo("Asia/Shanghai")
-
-
-def sqlite_foreign_keys(connection, _):
-    connection.execute("PRAGMA foreign_keys=ON")
+UNREADABLE_MEDIA = {"application/vnd.wechat.encrypted-image", "audio/silk"}
 
 
 class NotFound(ValueError):
@@ -88,37 +83,26 @@ def unique(values):
 class Archive:
     def __init__(
         self,
-        url="sqlite:///:memory:",
+        url=None,
         asset_root="data/crm-assets",
         *,
         engine=None,
         gap_minutes=30,
         create_schema=True,
-        asset_lock=nullcontext,
     ):
         if gap_minutes <= 0:
             raise ValueError("WECHAT_INTERACTION_GAP_MINUTES must be positive")
         if engine is None:
-            options = (
-                {"connect_args": {"check_same_thread": False, "timeout": 30}}
-                if url.startswith("sqlite:")
-                else {}
-            )
-            if url in ("sqlite://", "sqlite:///:memory:"):
-                options["poolclass"] = StaticPool
-            engine = create_engine(url, **options)
-
+            if not url:
+                raise ValueError("database_url_required")
+            engine = create_engine(url)
+        if engine.dialect.name != "postgresql":
+            raise ValueError("PostgreSQL is required")
         self.engine = engine
-        if engine.dialect.name == "sqlite":
-            if not event.contains(engine, "connect", sqlite_foreign_keys):
-                event.listen(engine, "connect", sqlite_foreign_keys)
-            with engine.connect() as c:
-                c.exec_driver_sql("PRAGMA foreign_keys=ON")
         self.root = Path(asset_root).expanduser()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.gap = timedelta(minutes=gap_minutes)
         self._mutex = threading.RLock()
-        self._asset_lock = asset_lock
         if create_schema:
             metadata.create_all(engine)
 
@@ -127,10 +111,7 @@ class Archive:
         # One transaction covers both text edits and append; never read-edit-write outside it.
         with self._mutex, self.engine.connect() as c:
             with c.begin():
-                if c.dialect.name == "sqlite":
-                    c.exec_driver_sql("BEGIN IMMEDIATE")
-                else:
-                    c.execute(text("SELECT pg_advisory_xact_lock(214173813)"))
+                c.execute(text("SELECT pg_advisory_xact_lock(214173813)"))
                 yield c
 
     @staticmethod
@@ -157,11 +138,7 @@ class Archive:
         return values
 
     def _local_day(self, column):
-        return (
-            func.date(column, "+8 hours")
-            if self.engine.dialect.name == "sqlite"
-            else cast(func.timezone("Asia/Shanghai", column), Date)
-        )
+        return cast(func.timezone("Asia/Shanghai", column), Date)
 
     def _recent_columns(self):
         at = func.coalesce(interactions.c.ended_at, interactions.c.started_at)
@@ -333,6 +310,8 @@ class Archive:
             and data["ended_at"] < data["started_at"]
         ):
             raise ValueError("ended_at precedes started_at")
+        if data.get("started_at"):
+            data["date"] = data["started_at"].astimezone(ZONE).date()
         return data
 
     def _set_links(self, c, iid, table, column, keys, target):
@@ -387,7 +366,9 @@ class Archive:
         patch = InteractionPatch.model_validate(data).model_dump(exclude_unset=True)
         with self.write() as c:
             old = self._require(c, interactions, interaction_id)
-            self._interaction_values({**old, **patch})
+            checked = self._interaction_values({**old, **patch})
+            if checked.get("started_at"):
+                patch["date"] = checked["date"]
             if "person_ids" in patch:
                 self._set_links(
                     c, interaction_id, participants, "person_id", patch.pop("person_ids"), people
@@ -401,7 +382,6 @@ class Archive:
                     patch.pop("attachment_ids"),
                     attachments,
                 )
-            self._interaction_values({**old, **patch})
             c.execute(
                 update(interactions)
                 .where(interactions.c.id == interaction_id)
@@ -451,15 +431,7 @@ class Archive:
         if start:
             conditions.append(
                 or_(
-                    (
-                        func.date(interactions.c.ended_at, "+8 hours")
-                        if self.engine.dialect.name == "sqlite"
-                        else cast(
-                            func.timezone("Asia/Shanghai", interactions.c.ended_at),
-                            __import__("sqlalchemy").Date,
-                        )
-                    )
-                    >= date.fromisoformat(str(start)),
+                    self._local_day(interactions.c.ended_at) >= date.fromisoformat(str(start)),
                     and_(
                         interactions.c.ended_at.is_(None),
                         interactions.c.date >= date.fromisoformat(str(start)),
@@ -550,12 +522,8 @@ class Archive:
             pattern = (
                 "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
             )
-            if self.engine.dialect.name == "sqlite":
-                alias_search = "EXISTS (SELECT 1 FROM json_each(crm_people.aliases) a WHERE a.value LIKE :pattern ESCAPE '\\')"
-                contact_search = "EXISTS (SELECT 1 FROM json_each(crm_people.contacts) a WHERE json_extract(a.value, '$.value') LIKE :pattern ESCAPE '\\')"
-            else:
-                alias_search = "EXISTS (SELECT 1 FROM jsonb_array_elements_text(crm_people.aliases::jsonb) a(value) WHERE a.value ILIKE :pattern ESCAPE '\\')"
-                contact_search = "EXISTS (SELECT 1 FROM jsonb_array_elements(crm_people.contacts::jsonb) a(value) WHERE a.value->>'value' ILIKE :pattern ESCAPE '\\')"
+            alias_search = "EXISTS (SELECT 1 FROM jsonb_array_elements_text(crm_people.aliases::jsonb) a(value) WHERE a.value ILIKE :pattern ESCAPE '\\')"
+            contact_search = "EXISTS (SELECT 1 FROM jsonb_array_elements(crm_people.contacts::jsonb) a(value) WHERE a.value->>'value' ILIKE :pattern ESCAPE '\\')"
             conditions.append(
                 or_(
                     people.c.name.icontains(query, autoescape=True),
@@ -565,11 +533,7 @@ class Archive:
                 )
             )
         if tag:
-            expression = (
-                "EXISTS (SELECT 1 FROM json_each(crm_people.tags) j WHERE j.value = :tag)"
-                if self.engine.dialect.name == "sqlite"
-                else "EXISTS (SELECT 1 FROM jsonb_array_elements_text(crm_people.tags::jsonb) j(value) WHERE j.value = :tag)"
-            )
+            expression = "EXISTS (SELECT 1 FROM jsonb_array_elements_text(crm_people.tags::jsonb) j(value) WHERE j.value = :tag)"
             conditions.append(text(expression).bindparams(tag=tag))
         if cursor:
             d, t, key = decode_cursor(cursor, 3)
@@ -634,7 +598,13 @@ class Archive:
     def _asset(self, c, aid):
         row = self._require(c, attachments, aid)
         key = row.pop("file_key")
-        row["available"] = key is not None and (self.root / key).is_file()
+        row["available"] = (
+            key is not None
+            and row["media_type"] not in UNREADABLE_MEDIA
+            and (self.root / key).is_file()
+        )
+        if row["media_type"] in UNREADABLE_MEDIA:
+            row["unavailable_reason"] = "wechat_media_not_decoded"
         partial = self.root / (".chunk-" + row["id"])
         if key is None and partial.exists():
             row["size"] = partial.stat().st_size
@@ -686,21 +656,20 @@ class Archive:
             Path(filename).unlink(missing_ok=True)
 
     def upload_attachment(self, name, media_type, chunks):
-        with self._asset_lock():
-            key, size = self._save_file(chunks)
-            aid = uuid7()
-            with self.write() as c:
-                c.execute(
-                    insert(attachments).values(
-                        id=aid,
-                        name=Path(name.replace("\\", "/")).name or "attachment",
-                        media_type=media_type,
-                        size=size,
-                        file_key=key,
-                        created_at=utcnow(),
-                    )
+        key, size = self._save_file(chunks)
+        aid = uuid7()
+        with self.write() as c:
+            c.execute(
+                insert(attachments).values(
+                    id=aid,
+                    name=Path(name.replace("\\", "/")).name or "attachment",
+                    media_type=media_type,
+                    size=size,
+                    file_key=key,
+                    created_at=utcnow(),
                 )
-                return self._asset(c, aid)
+            )
+            return self._asset(c, aid)
 
     def _ingest(self, c, batch):
         accepted = duplicates = 0
@@ -766,9 +735,7 @@ class Archive:
                         messages.c.interaction_id.is_not(None),
                     )
                     .order_by(
-                        func.abs(func.extract("epoch", messages.c.sent_at) - sent.timestamp())
-                        if c.dialect.name == "postgresql"
-                        else func.abs(func.julianday(messages.c.sent_at) - func.julianday(sent)),
+                        func.abs(func.extract("epoch", messages.c.sent_at) - sent.timestamp()),
                         messages.c.key,
                     )
                     .limit(1)
@@ -876,26 +843,54 @@ class Archive:
                 c.execute(update(clients).where(clients.c.id == batch.client_id).values(**values))
             else:
                 c.execute(insert(clients).values(id=batch.client_id, **values))
-            return {"accepted": accepted, "duplicates": duplicates, "errors": []}
+            keys = list(dict.fromkeys([m.key for m in batch.messages] + batch.pending_media_keys))
+            missing = (
+                list(
+                    c.scalars(
+                        select(messages.c.key)
+                        .join(attachments, attachments.c.id == messages.c.attachment_id)
+                        .where(
+                            messages.c.key.in_(keys),
+                            messages.c.interaction_id.is_not(None),
+                            or_(
+                                attachments.c.file_key.is_(None),
+                                attachments.c.media_type.in_(UNREADABLE_MEDIA),
+                            ),
+                        )
+                        .order_by(messages.c.sent_at, messages.c.key)
+                    )
+                )
+                if keys
+                else []
+            )
+            return {
+                "accepted": accepted,
+                "duplicates": duplicates,
+                "missing_media_keys": missing,
+                "errors": [],
+            }
 
     def attach_wechat_media(self, key, chunks, name, media_type, expected_hash):
-        with self._asset_lock():
-            file_key, size = self._save_file(chunks, expected_hash)
-            with self.write() as c:
-                row = c.execute(select(messages).where(messages.c.key == key)).mappings().first()
-                if row is None:
-                    return {"status": "pending"}
-                if row["interaction_id"] is None:
-                    return {"status": "deleted"}
-                aid = row["attachment_id"]
-                if aid is None:
-                    raise ValueError("message_has_no_attachment")
-                c.execute(
-                    update(attachments)
-                    .where(attachments.c.id == aid)
-                    .values(file_key=file_key, size=size, name=name, media_type=media_type)
-                )
+        if media_type in UNREADABLE_MEDIA:
+            raise ValueError("wechat_media_must_be_decoded")
+        with self.write() as c:
+            row = c.execute(select(messages).where(messages.c.key == key)).mappings().first()
+            if row is None:
+                return {"status": "pending"}
+            if row["interaction_id"] is None:
+                return {"status": "deleted"}
+            aid = row["attachment_id"]
+            if aid is None:
+                raise ValueError("message_has_no_attachment")
+            if self._asset(c, aid)["available"]:
                 return {"status": "attached", "attachment_id": aid}
+            file_key, size = self._save_file(chunks, expected_hash)
+            c.execute(
+                update(attachments)
+                .where(attachments.c.id == aid)
+                .values(file_key=file_key, size=size, name=name, media_type=media_type)
+            )
+            return {"status": "attached", "attachment_id": aid}
 
     def list_sync_clients(self):
         with self.engine.connect() as c:
@@ -915,7 +910,7 @@ class Archive:
             raise ValueError("invalid_base64") from exc
         if len(block) > 262144 or offset_bytes < 0:
             raise ValueError("invalid_upload_chunk")
-        with self._asset_lock(), self.write() as c:
+        with self.write() as c:
             if attachment_id is None:
                 if offset_bytes != 0:
                     raise ValueError("new_upload_requires_zero_offset")

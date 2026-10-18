@@ -6,11 +6,9 @@ import fcntl
 import time
 from collections import Counter
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 
 from .checkpoint import save
-from .config import as_datetime
 
 
 class MediaQueue:
@@ -32,12 +30,18 @@ class MediaQueue:
             fcntl.flock(lock, fcntl.LOCK_EX)
             if self.path.exists():
                 state = json.loads(self.path.read_text())
-                if not isinstance(state.get("jobs"), dict) or not as_datetime(
-                    state.get("enabled_since")
-                ):
+                if not isinstance(state.get("jobs"), dict):
                     raise ValueError("media_queue_invalid")
             else:
-                state = {"enabled_since": datetime.now(UTC).isoformat(), "jobs": {}}
+                state = {"jobs": {}}
+            state.pop("enabled_since", None)
+            for job in state["jobs"].values():
+                message = job["message"]
+                job["message"] = dict(
+                    conversation_id=message["conversation_id"],
+                    _media_account_id=message.get("_media_account_id"),
+                    record={k: message["record"][k] for k in ("ts", "server_id", "msg_type")},
+                )
             yield state
             save(str(self.path), state)
 
@@ -45,27 +49,24 @@ class MediaQueue:
         with self.state():
             pass
 
-    def enqueue(self, interactions):
+    def pending_keys(self):
         with self.state() as state:
-            since = as_datetime(state["enabled_since"])
-            for item in interactions:
-                message = item.get("message")
-                if not message or int(message["record"].get("msg_type") or 0) not in {
-                    3,
-                    34,
-                    43,
-                    49,
-                }:
-                    continue
-                if as_datetime(item["occurred_at"]) < since:
-                    continue
+            return list(state["jobs"])
+
+    def reconcile(self, checked, missing, media):
+        with self.state() as state:
+            for key in set(checked) - set(missing):
+                state["jobs"].pop(key, None)
+            for item in media:
                 key = item.get("source_message_key") or item["source_event_key"]
+                if key not in missing:
+                    continue
                 state["jobs"].setdefault(
                     key,
                     {
                         "event_key": item["source_event_key"],
                         "message_key": item.get("source_message_key"),
-                        "message": message,
+                        "message": item["message"],
                         "state": "pending",
                         "attempts": 0,
                         "next_retry": 0,

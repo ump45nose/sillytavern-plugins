@@ -20,13 +20,17 @@ class MediaUnavailable(RuntimeError):
 
 
 class LocalMediaResolver:
-    def __init__(self, config, spool):
+    def __init__(self, config, spool=None):
         self.config = config
-        self.spool = Path(spool)
-        self.spool.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.spool.chmod(0o700)
+        self.spool = Path(spool) if spool is not None else None
+        if self.spool is not None:
+            self.spool.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self.spool.chmod(0o700)
         self.readers = {}
         self.db = None
+
+    def metadata(self, message):
+        return self._metadata(self._reader(message.get("_media_account_id")), message)
 
     def _reader(self, account):
         if not account:
@@ -181,12 +185,9 @@ class LocalMediaResolver:
         reader = self._reader(message.get("_media_account_id"))
         if int(record["msg_type"]) == 34:
             data = self._voice_data(reader, message)
-            silk = data.lstrip(b"\x02").startswith(b"#!SILK")
-            return self._stage(
-                [data],
-                "voice.silk" if silk else "voice.bin",
-                "audio/silk" if silk else "application/octet-stream",
-            )
+            from .formats import voice_wav
+
+            return self._stage([voice_wav(data)], "voice.wav", "audio/wav")
         meta = self._metadata(reader, message)
         if not meta:
             if int(record["msg_type"]) == 49:
@@ -203,11 +204,15 @@ class LocalMediaResolver:
                 if kind == "image"
                 else list((root / "video").glob(f"**/{md5}.mp4"))
             )
-            name = md5 + (".dat" if kind == "image" else ".mp4")
-            mime = "application/vnd.wechat.encrypted-image" if kind == "image" else "video/mp4"
             if len(candidates) != 1:
                 raise MediaUnavailable("media_file_unavailable")
-            return self._stage_file(candidates[0], root, name, mime)
+            path = self._safe_path(candidates[0], root)
+            if kind == "image":
+                from .formats import image_bytes
+
+                data, extension, mime = image_bytes(path, reader.wxid_dir, self.config.image_uin)
+                return self._stage([data], md5 + "." + extension, mime)
+            return self._stage_file(path, root, md5 + ".mp4", "video/mp4")
         if kind == "file":
             name = str(meta.get("filename") or "")
             if not name or Path(name).name != name or "\\" in name:

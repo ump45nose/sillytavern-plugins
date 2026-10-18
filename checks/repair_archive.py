@@ -7,10 +7,9 @@ from pathlib import Path
 
 from sqlalchemy import select, update
 
-from personal_crm.connector.presentation import clean_chat, directory_name, short_name
+from personal_crm.archive.models import identities, interactions, people
 from personal_crm.core.domain import utcnow
-
-from .models import identities, interactions, people
+from personal_crm.core.presentation import clean_chat, directory_name, short_name
 
 
 def repair_wechat(archive, directory, *, accounts, backup=None, apply=False):
@@ -111,3 +110,70 @@ def repair_wechat(archive, directory, *, accounts, backup=None, apply=False):
                 .values(content=row["new"], updated_at=now)
             )
         return result
+
+
+def repair_file_attachments(archive, rows, backup):
+    """一次补齐已保存消息漏建的文件附件；不重投消息、不覆盖人工正文。"""
+    from sqlalchemy import insert
+
+    from personal_crm.archive.models import attachment_links, attachments, messages
+    from personal_crm.core.domain import uuid7
+    from personal_crm.core.presentation import attachment_content
+
+    changed = []
+    with archive.write() as c:
+        for item in rows:
+            receipt = (
+                c.execute(select(messages).where(messages.c.key == item["key"])).mappings().first()
+            )
+            if not receipt or receipt["attachment_id"] or not receipt["interaction_id"]:
+                continue
+            row = (
+                c.execute(
+                    select(interactions).where(interactions.c.id == receipt["interaction_id"])
+                )
+                .mappings()
+                .one()
+            )
+            aid, now = uuid7(), utcnow()
+            link = attachment_content("", item["name"], aid)
+            content = row["content"]
+            placeholder = item.get("placeholder") or ""
+            if placeholder and placeholder in content:
+                content = content.replace(placeholder, link, 1)
+            else:
+                content += "\n" + link
+            changed.append(
+                dict(
+                    key=item["key"],
+                    interaction_id=row["id"],
+                    content=row["content"],
+                    updated_at=row["updated_at"],
+                    attachment_id=aid,
+                )
+            )
+            c.execute(
+                insert(attachments).values(
+                    id=aid,
+                    name=item["name"],
+                    media_type=item.get("media_type", "application/octet-stream"),
+                    created_at=now,
+                )
+            )
+            c.execute(insert(attachment_links).values(interaction_id=row["id"], attachment_id=aid))
+            c.execute(
+                update(messages).where(messages.c.key == item["key"]).values(attachment_id=aid)
+            )
+            c.execute(
+                update(interactions)
+                .where(interactions.c.id == row["id"])
+                .values(content=content, updated_at=now)
+            )
+        if changed:
+            path = Path(backup)
+            path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
+                json.dump(changed, f, ensure_ascii=False, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+    return {"attached_metadata": len(changed)}

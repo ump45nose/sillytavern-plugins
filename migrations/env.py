@@ -15,8 +15,10 @@ if config.config_file_name:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 config.set_main_option(
     "sqlalchemy.url",
-    config.attributes.get("configured_database_url")
-    or os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url")),
+    (
+        config.attributes.get("configured_database_url")
+        or os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    ).replace("%", "%%"),
 )
 
 target_metadata = archive_metadata
@@ -30,7 +32,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -45,14 +46,9 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        if connection.dialect.name == "sqlite":
-            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-        # SQLAlchemy 2 会让 PRAGMA 触发隐式事务；先提交，避免 Alembic 版本号随连接回滚。
-        connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,
             include_name=lambda name, type_, parent: (
                 type_ != "table" or name in archive_metadata.tables
             ),

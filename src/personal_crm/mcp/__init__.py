@@ -66,4 +66,8 @@ def create_mcp(archive, settings) -> FastMCP:
 
 
 def http_app(archive, settings):
-    return create_http_app(create_mcp(archive, settings), _runtime(settings))
+    from .protocol import attach
+
+    config = _runtime(settings)
+    server = create_mcp(archive, settings)
+    return attach(create_http_app(server, config), server, config)

@@ -28,7 +28,16 @@ class WeChatConnector:
         self.source = source or ChatlogMessageSource(config)
 
     def sync_once(self, dry_run=False):
-        state = load(self.config.checkpoint_path)
+        try:
+            state = load(self.config.checkpoint_path)
+            if state.get("last_synced_at"):
+                from .config import as_datetime
+
+                at = as_datetime(state["last_synced_at"])
+                if at is None or at.tzinfo is None:
+                    raise ValueError("checkpoint_invalid")
+        except (OSError, ValueError):
+            return SyncResult([], False, ["checkpoint_unreadable"])
         # Establish the activation boundary once; first failure must not move it forward.
         if not state.get("last_synced_at"):
             state["last_synced_at"] = (self.config.since or datetime.now(UTC)).isoformat()
@@ -61,15 +70,9 @@ class WeChatConnector:
             if typ in {3, 34, 43, 49}:
                 labels = {3: "图片", 34: "语音", 43: "视频", 49: "文件"}
                 meta = record.get("attachment_meta") or {}
-                # Type 49 includes link cards; only file subtypes are attachments.
-                if (
-                    typ != 49
-                    or meta.get("file_name")
-                    or record.get("sub_type") == 6
-                    or "<type>6</type>" in record["content"]
-                ):
+                if typ != 49 or meta.get("kind") == "file":
                     media = {
-                        "name": meta.get("file_name") or labels[typ],
+                        "name": meta.get("filename") or labels[typ],
                         "media_type": "application/octet-stream",
                     }
             outgoing.append(
@@ -91,7 +94,11 @@ class WeChatConnector:
                         source_event_key=event_key,
                         source_message_key=event.get("source_message_key"),
                         occurred_at=event["timestamp"],
-                        message=dict(message, _media_account_id=event.get("_media_account_id")),
+                        message=dict(
+                            conversation_id=message["conversation_id"],
+                            _media_account_id=event.get("_media_account_id"),
+                            record={k: record[k] for k in ("ts", "server_id", "msg_type")},
+                        ),
                     )
                 )
         if dry_run:
@@ -100,8 +107,8 @@ class WeChatConnector:
             return SyncResult(outgoing, False, ["CRM_WEBHOOK_URL is not configured"])
         accepted = duplicates = 0
         try:
-            if media_queue:
-                media_queue.enqueue(local_media)
+            pending = media_queue.pending_keys()[:500] if media_queue else []
+            missing = set()
             parts = max(1, (len(outgoing) + 499) // 500)
             for part in range(parts):
                 response = self.client.post(
@@ -109,6 +116,7 @@ class WeChatConnector:
                     json={
                         "messages": outgoing[part * 500 : (part + 1) * 500],
                         "client_id": self.config.client_id,
+                        "pending_media_keys": pending if part == parts - 1 else [],
                         "synced_through": batch.until.isoformat() if part == parts - 1 else None,
                     },
                     headers={"X-Webhook-Token": self.config.webhook_token},
@@ -119,6 +127,10 @@ class WeChatConnector:
                     return SyncResult(outgoing, False, ["ingest_rejected"])
                 accepted += result["accepted"]
                 duplicates += result["duplicates"]
+                missing.update(result["missing_media_keys"])
+            if media_queue:
+                checked = pending + [m["key"] for m in outgoing]
+                media_queue.reconcile(checked, missing, local_media)
         except httpx.HTTPStatusError as exc:
             return SyncResult(outgoing, False, [f"ingest: HTTP {exc.response.status_code}"])
         except Exception as exc:

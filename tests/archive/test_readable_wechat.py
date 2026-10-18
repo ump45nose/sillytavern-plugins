@@ -1,10 +1,10 @@
 import json
 from types import SimpleNamespace
 
-from personal_crm.archive.repair import repair_wechat
+from checks.repair_archive import repair_wechat
 from personal_crm.connector.chatlog import ChatlogMessageSource
 from personal_crm.connector.config import ConnectorConfig
-from personal_crm.connector.presentation import clean_chat, directory_name
+from personal_crm.core.presentation import clean_chat, directory_name
 from tests.archive.test_archive import msg as base_msg
 
 
@@ -126,3 +126,23 @@ def test_media_enabled_by_default(monkeypatch):
     assert ConnectorConfig.from_env().media_enabled is True
     monkeypatch.setenv("WECHAT_MEDIA_ENABLED", "false")
     assert ConnectorConfig.from_env().media_enabled is False
+
+
+def test_repair_missing_file_metadata_preserves_content_and_idempotent(archive, tmp_path):
+    from checks.repair_archive import repair_file_attachments
+
+    archive.ingest_wechat(dict(messages=[msg(content="[文件：方案.pdf]")]))
+    row = archive.list_interactions()["items"][0]
+    before = archive.get_interaction(row["id"])["content"]
+    archive.update_interaction(row["id"], dict(content="人工备注\n" + before))
+    rows = [dict(key="1", name="方案.pdf", placeholder="[文件：方案.pdf]")]
+    result = repair_file_attachments(archive, rows, tmp_path / "before.json")
+    assert result == dict(attached_metadata=1)
+    result = archive.get_interaction(row["id"])
+    assert result["content"].startswith("人工备注\n10:00 ")
+    assert "[文件：方案.pdf]" not in result["content"]
+    assert "[方案.pdf](attachment://" in result["content"]
+    assert len(result["attachment_ids"]) == 1
+    assert repair_file_attachments(archive, rows, tmp_path / "unused.json") == dict(
+        attached_metadata=0
+    )

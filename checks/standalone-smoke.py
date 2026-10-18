@@ -9,21 +9,47 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import httpx
 from fastmcp import Client
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 from personal_crm.connector.chatlog import ChatlogMessageSource, SourceBatch
 from personal_crm.connector.config import ConnectorConfig
 from personal_crm.connector.sync import WeChatConnector
 
 
+@contextmanager
+def smoke_database():
+    url = os.environ["CRM_TEST_DATABASE_URL"]
+    engine = create_engine(url)
+    schema = "test_crm_smoke_" + uuid4().hex
+    with engine.begin() as c:
+        c.execute(text("CREATE SCHEMA " + schema))
+    try:
+        yield (
+            make_url(url)
+            .update_query_dict({"options": "-csearch_path=" + schema})
+            .render_as_string(hide_password=False)
+        )
+    finally:
+        with engine.begin() as c:
+            c.execute(text("DROP SCHEMA " + schema + " CASCADE"))
+        engine.dispose()
+
+
 def check():
     assert importlib.util.find_spec("personal_data_hub") is None, "run without Hub installed"
-    with tempfile.TemporaryDirectory(prefix="crm-standalone-") as tmp:
+    with (
+        smoke_database() as database_url,
+        tempfile.TemporaryDirectory(prefix="crm-standalone-") as tmp,
+    ):
         root = Path(tmp)
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
@@ -32,7 +58,7 @@ def check():
             **os.environ,
             "HOST": "127.0.0.1",
             "PORT": str(port),
-            "DATABASE_URL": "sqlite:///" + str(root / "db/crm.db"),
+            "DATABASE_URL": database_url,
             "CRM_ASSET_ROOT": str(root / "assets"),
             "MCP_DEVELOPMENT_NO_AUTH": "true",
             "CRM_API_TOKEN": "smoke-write",

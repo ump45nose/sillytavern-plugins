@@ -223,3 +223,85 @@ def test_people_recency_uses_end_of_cross_day_interaction(archive):
     assert page["items"][0]["last_interaction_date"] == date(2026, 10, 15)
     assert archive.get_person(first["id"])["last_interaction_date"] == date(2026, 10, 15)
     assert archive.list_people(limit=1, cursor=page["next_cursor"])["items"][0]["id"] == other["id"]
+
+
+def test_exact_time_controls_business_date_and_patch(archive):
+    person = archive.create_person({"name": "小王"})
+    row = archive.create_interaction(
+        dict(person_ids=[person["id"]], date="2026-10-01", started_at="2026-10-16T00:05:00+08:00")
+    )
+    assert str(row["date"]) == "2026-10-16"
+    assert archive.list_interactions(start="2026-10-16", end="2026-10-16")["items"]
+    archive.update_interaction(row["id"], {"started_at": "2026-10-17T01:00:00+08:00"})
+    assert str(archive.get_interaction(row["id"])["date"]) == "2026-10-17"
+
+
+def test_media_receipt_and_reject_encrypted_cache(archive):
+    row = dict(msg(), attachment={"name": "图片"})
+    result = archive.ingest_wechat({"messages": [row]})
+    assert result["missing_media_keys"] == [row["key"]]
+    with pytest.raises(ValueError, match="must_be_decoded"):
+        archive.attach_wechat_media(
+            row["key"], [b"encrypted"], "image.dat", "application/vnd.wechat.encrypted-image", None
+        )
+    archive.attach_wechat_media(row["key"], [b"file"], "image.png", "image/png", None)
+    assert archive.ingest_wechat({"messages": [row]})["missing_media_keys"] == []
+    iid = archive.list_interactions()["items"][0]["id"]
+    archive.delete_interaction(iid)
+    assert (
+        archive.ingest_wechat({"messages": [row], "pending_media_keys": [row["key"]]})[
+            "missing_media_keys"
+        ]
+        == []
+    )
+
+
+@pytest.mark.asyncio
+async def test_modern_mcp_tools_without_events(archive):
+    import httpx
+
+    from personal_crm.app.server import create_app
+    from personal_crm.app.settings import Settings
+
+    archive.create_person(dict(name="协议测试"))
+    app = create_app(Settings(mcp_development_no_auth=True), archive)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://localhost"
+        ) as client:
+            version = "2026-07-28"
+            meta = {
+                "io.modelcontextprotocol/protocolVersion": version,
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+
+            async def call(method, params):
+                return await client.post(
+                    "/mcp",
+                    headers={
+                        "mcp-protocol-version": version,
+                        "mcp-method": method,
+                        "mcp-name": params.get("name", ""),
+                        "Accept": "application/json, text/event-stream",
+                    },
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": method,
+                        "params": dict(params, _meta=meta),
+                    },
+                )
+
+            discover = await call("server/discover", {})
+            assert discover.json()["result"]["capabilities"] == {"tools": {}}
+            tools = await call("tools/list", {})
+            assert tools.status_code == 200
+            import json
+
+            result = json.loads(
+                next(s[6:] for s in tools.text.splitlines() if s.startswith("data: "))
+            )["result"]
+            assert len(result["tools"]) == 14
+            result = await call("tools/call", {"name": "list_people", "arguments": {}})
+            assert "协议测试" in result.text
+            assert '"resultType":"complete"' in result.text

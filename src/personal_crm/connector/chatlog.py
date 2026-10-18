@@ -10,8 +10,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from personal_crm.core.presentation import directory_name
+
 from .config import ConnectorConfig, as_datetime
-from .presentation import directory_name
 
 
 class ChatlogSourceError(RuntimeError):
@@ -31,6 +32,7 @@ class ChatlogMessageSource:
 
     def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
+        self._metadata_reader = None
 
     def _verified_executable(self) -> Path:
         """验证可执行文件路径及可选 SHA-256，避免静默运行被替换的二进制。"""
@@ -171,6 +173,18 @@ class ChatlogMessageSource:
         events: list[dict[str, Any]] = []
         for offset in range(0, len(scopes), 128):
             events.extend(self._read_chunk(executable, scopes[offset : offset + 128], start, end))
+        # Native message-stream omits the 49 subtype; use the existing local reader's
+        # structured metadata instead of guessing from its already formatted text.
+        for event in events:
+            message = event["message"]
+            if int(message["record"].get("msg_type") or 0) == 49:
+                if self._metadata_reader is None:
+                    from .media_reader import LocalMediaResolver
+
+                    self._metadata_reader = LocalMediaResolver(self.config)
+                message["record"]["attachment_meta"] = self._metadata_reader.metadata(
+                    dict(message, _media_account_id=event["_media_account_id"])
+                )
         return SourceBatch(events=events, until=end)
 
     def _read_chunk(

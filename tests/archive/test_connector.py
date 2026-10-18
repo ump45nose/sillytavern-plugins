@@ -36,7 +36,7 @@ class FakeResponse:
     def __init__(self, status=200, body=None):
         self.response = httpx.Response(
             status,
-            json=body or {"accepted": 1, "duplicates": 0},
+            json=body or {"accepted": 1, "duplicates": 0, "missing_media_keys": []},
             request=httpx.Request("POST", "http://nas"),
         )
 
@@ -44,7 +44,7 @@ class FakeResponse:
         self.response.raise_for_status()
 
     def json(self):
-        return self.response.json()
+        return {"missing_media_keys": [], **self.response.json()}
 
 
 class FakeClient:

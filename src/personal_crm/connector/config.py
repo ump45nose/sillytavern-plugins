@@ -22,6 +22,7 @@ class ConnectorConfig:
     chatlog_overlap_seconds: int = 300
     media_enabled: bool = True
     media_queue_path: str = ""
+    image_uin: int | None = None
     poll_seconds: float = 60.0
     webhook_url: str = ""
     webhook_token: str = ""
@@ -64,6 +65,9 @@ class ConnectorConfig:
             chatlog_overlap_seconds=int(os.getenv("CHATLOG_OVERLAP_SECONDS", "300")),
             media_enabled=enabled("WECHAT_MEDIA_ENABLED", True),
             media_queue_path=os.getenv("WECHAT_MEDIA_QUEUE", ""),
+            image_uin=int(os.environ["WECHAT_IMAGE_UIN"])
+            if os.getenv("WECHAT_IMAGE_UIN")
+            else None,
             poll_seconds=float(os.getenv("CHATLOG_POLL_SECONDS", "60")),
             webhook_url=os.getenv("CRM_WEBHOOK_URL", "").replace(
                 "/api/v1/webhooks/wechat", "/api/v1/crm/ingest/wechat"

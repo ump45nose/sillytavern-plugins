@@ -34,7 +34,14 @@ def directory_name(item):
 
 def attachment_content(content, name, attachment_id):
     # 仅替换整段通用占位；实际说明、时长和文件名不丢弃。
-    if content.strip() in {"[图片]", "[语音]", "[视频]", "[文件]", "[附件]", f"[{name}]"}:
+    if re.fullmatch(r"\[文件[:：].*\]", content.strip()) or content.strip() in {
+        "[图片]",
+        "[语音]",
+        "[视频]",
+        "[文件]",
+        "[附件]",
+        f"[{name}]",
+    }:
         content = ""
     link = f"[{name}](attachment://{attachment_id})"
     return f"{content} {link}" if content else link

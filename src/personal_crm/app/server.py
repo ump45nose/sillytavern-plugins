@@ -28,7 +28,7 @@ def create_app(settings: Settings | None = None, repository=None) -> FastAPI:
         async with mcp_application.lifespan(mcp_application):
             yield
 
-    app = FastAPI(title="Personal CRM", version="0.2.1", lifespan=lifespan)
+    app = FastAPI(title="Personal CRM", version="0.3.0", lifespan=lifespan)
     app.state.repository = archive
 
     def authenticate(authorization, *, readonly=False):

@@ -1,13 +1,13 @@
 [project]
 name = "personal-crm"
-version = "0.2.1"
+version = "0.3.0"
 description = "人物、可编辑交互与微信私聊归档，提供 HTTP / MCP 读写"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.13,<2",
   # 认证、MCP 协议栈和兼容修正由版本化公共基座锁定。
-  "mcp-platform @ git+https://github.com/ump45nose/mcp-platform.git@dea309a5d83b6365a57937bc6e11affe692bfcaf",
+  "mcp-platform==0.1.6",
   "psycopg[binary]>=3.2,<4",
   "fastapi>=0.115,<1",
   "httpx>=0.27,<1",
@@ -53,3 +53,6 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv.sources]
+mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }

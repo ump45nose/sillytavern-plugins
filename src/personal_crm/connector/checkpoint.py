@@ -7,10 +7,13 @@ from pathlib import Path
 
 
 def load(path: str) -> dict:
-    """读取 checkpoint；损坏或不存在时从空状态开始。"""
+    """读取 checkpoint；仅不存在时从空状态开始，其他读取错误直接暴露。"""
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("checkpoint_invalid")
+        return value
+    except FileNotFoundError:
         return {}
 
 

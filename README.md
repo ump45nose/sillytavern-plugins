@@ -22,14 +22,14 @@ uv sync --locked
 cp .env.example .env
 ```
 
-在 `.env` 设置 `CRM_API_TOKEN`。示例默认只监听 `127.0.0.1`，本机 MCP 使用显式开发模式；公网部署按 [部署说明](docs/deployment.md) 配置 OAuth。
+在 `.env` 设置既有 PostgreSQL 的 `DATABASE_URL` 和 `CRM_API_TOKEN`。示例默认只监听 `127.0.0.1`，本机 MCP 使用显式开发模式；公网部署按 [部署说明](docs/deployment.md) 配置 OAuth。
 
 ```bash
 uv run personal-crm migrate
 uv run personal-crm-server
 ```
 
-健康检查：`http://127.0.0.1:8080/healthz`；HTTP 前缀：`/api/v1/crm`；MCP：`/mcp`。默认数据库为 `data/crm.db`，附件在 `data/attachments`。PostgreSQL 使用 `DATABASE_URL=postgresql+psycopg://...`，不增加其他服务。
+健康检查：`http://127.0.0.1:8080/healthz`；HTTP 前缀：`/api/v1/crm`；MCP：`/mcp`。数据库固定使用 PostgreSQL；附件在独立的 `data/attachments` 目录。
 
 创建人物：
 
@@ -56,10 +56,10 @@ CRM_ENV_FILE=/absolute/path/to/connector.env uv run personal-crm-wechat --watch
 
 ```bash
 uv sync --locked --extra dev
-uv run pytest
+CRM_TEST_DATABASE_URL=postgresql+psycopg://... uv run pytest
 uv build
 ```
 
-设置 `CRM_TEST_DATABASE_URL` 可将归档测试运行在 PostgreSQL 临时 schema 中。新库只创建 `crm_*` 表；已有旧 CRM 数据可在备份后运行一次 `personal-crm migrate-legacy`，不重抓微信历史。
+测试使用 PostgreSQL 临时 schema，结束后删除测试 schema；不要将生产表作为测试夹具。运行包只包含当前归档模型，已完成的旧表导入器已移除。历史修整脚本位于 `checks/`，不进入服务进程。
 
 [发布说明](CHANGELOG.md) · [独立发布记录](docs/plans/2026-10-15-standalone-release.md)

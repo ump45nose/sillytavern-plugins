@@ -20,7 +20,7 @@ from personal_crm.core.domain import ensure_utc
 
 
 class UTCDateTime(TypeDecorator):
-    """SQLite 按 UTC 存储，读回时恢复明确时区。"""
+    """PostgreSQL timestamptz，统一返回 UTC。"""
 
     impl = DateTime(timezone=True)
     cache_ok = True
@@ -29,7 +29,7 @@ class UTCDateTime(TypeDecorator):
         if value is None:
             return None
         value = ensure_utc(value)
-        return value.replace(tzinfo=None) if dialect.name == "sqlite" else value
+        return value
 
     def process_result_value(self, value, dialect):
         return ensure_utc(value) if value is not None else None

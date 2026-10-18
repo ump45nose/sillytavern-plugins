@@ -23,7 +23,7 @@ PATCH /api/v1/crm/interactions/交互ID
 
 省略字段保持原值。可选文本传 null 清空；aliases、contacts、tags、attachment_ids 传 null 清空列表。name、person_ids、date、type、source、content 不能为 null。
 
-精确时间必须带时区；不确定时间就只传 date，不填零点。started_at / ended_at 入库转 UTC，date 使用北京时间。
+精确时间必须带时区；不确定时间就只传 date，不填零点。started_at / ended_at 入库转 UTC，date 使用 Asia/Shanghai。有 started_at 时按它计算 date；只有日期的交互不伪造零点。
 
 ## 查询
 
@@ -57,3 +57,28 @@ HTTP 使用 multipart 上传至 `POST /api/v1/crm/attachments`（字段名 file�
 get_interaction 默认每页 16000 字符，next_offset_chars 非空时续读；HTTP 详情返回完整正文。
 
 upload_attachment 使用 Base64，每块不超过 256 KiB；第一块 final=false 返回附件 ID 和 next_offset。后续传 attachment_id / offset_bytes；最后一块 final=true。小文件可一次 final=true 完成。read_attachment 使用 offset_bytes / limit_bytes 续读。
+
+## HTTP / MCP 对应接口
+
+HTTP 前缀 `/api/v1/crm`，MCP 入口 `/mcp`。
+
+| HTTP | MCP | 用处 |
+|---|---|---|
+| GET /people | list_people | 搜索人物 |
+| GET /people/{id} | get_person | 人物详情 |
+| POST /people | create_person | 创建人物 |
+| PATCH /people/{id} | update_person | 修改资料 |
+| DELETE /people/{id} | delete_person | 删除人物 |
+| POST /people/{id}/merge | merge_people | 合并人物 |
+| PUT /people/{id}/identities | bind_person_identity | 绑定来源身份 |
+| GET /interactions | list_interactions | 查询交互历史 |
+| GET /interactions/{id} | get_interaction | 完整交互正文 |
+| POST /interactions | create_interaction | 记录交互 |
+| PATCH /interactions/{id} | update_interaction | 编辑交互 |
+| DELETE /interactions/{id} | delete_interaction | 删除交互 |
+| POST /attachments | upload_attachment | 上传附件 |
+| GET /attachments/{id}、/content | read_attachment | 元数据与文件 |
+
+人物和交互的业务字段一致；MCP 另有协议封装。MCP 交互详情带字符分页字段，附件内容使用 Base64 分块；HTTP 正文完整返回，附件用二进制下载。
+
+采集器独立使用 POST /ingest/wechat、PUT /ingest/wechat/media/{key} 和 GET /ingest/wechat/clients，不逐条调用 CRUD。批量回执返回缺失附件的消息标识，已归档文件不会重复上传。

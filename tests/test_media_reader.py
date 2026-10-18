@@ -3,7 +3,7 @@
 import hashlib
 import json
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -39,7 +39,7 @@ def test_voice_requires_server_conversation_and_time():
     connection.close()
 
 
-def test_image_keeps_encrypted_bytes_and_does_not_guess_xml_md5(tmp_path, monkeypatch):
+def test_image_decodes_and_does_not_guess_xml_md5(tmp_path, monkeypatch):
     resolver = LocalMediaResolver(ConnectorConfig(), tmp_path / "spool")
     root = tmp_path / "account"
     image = root / "msg/attach/chat/month/Img" / ("a" * 32 + ".dat")
@@ -50,9 +50,14 @@ def test_image_keeps_encrypted_bytes_and_does_not_guess_xml_md5(tmp_path, monkey
     meta = {"kind": "image", "file_md5": "a" * 32, "md5": "b" * 32}
     monkeypatch.setattr(resolver, "_metadata", lambda *args: meta)
     message = {"record": {"msg_type": 3, "server_id": "1"}}
+    decoded = b"readable-image"
+    monkeypatch.setattr(
+        "personal_crm.connector.formats.image_bytes", lambda *a: (decoded, "png", "image/png")
+    )
     result = resolver.resolve(message)
-    assert result["media_type"] == "application/vnd.wechat.encrypted-image"
-    assert (resolver.spool / result["id"]).read_bytes() == data
+    assert result["media_type"] == "image/png"
+    assert result["name"].endswith(".png")
+    assert (resolver.spool / result["id"]).read_bytes() == decoded
     meta.pop("file_md5")
     with pytest.raises(MediaUnavailable, match="locator"):
         resolver.resolve(message)
@@ -86,27 +91,58 @@ def _queued(tmp_path, event=None):
     )
     queue = MediaQueue(cfg)
     queue.initialize()
-    with queue.state() as state:
-        state["enabled_since"] = "2026-09-03T00:00:00+00:00"
     event = event or source_event(typ=34)
     source = SimpleNamespace(
         read=lambda state: SourceBatch([event], datetime(2026, 9, 5, tzinfo=UTC))
     )
     connector = WeChatConnector(
-        cfg, FakeClient([FakeResponse(body={"accepted": 1, "duplicates": 0})]), source
+        cfg,
+        FakeClient(
+            [
+                FakeResponse(
+                    body={
+                        "accepted": 1,
+                        "duplicates": 0,
+                        "missing_media_keys": [event["source_message_key"]],
+                    }
+                )
+            ]
+        ),
+        source,
     )
     return cfg, queue, connector
 
 
-def test_only_future_media_enqueued_and_dry_run_does_not_create_queue(tmp_path):
+def test_first_incremental_media_enqueued_and_dry_run_does_not_create_queue(tmp_path):
     cfg, queue, connector = _queued(tmp_path)
-    with queue.state() as state:
-        state["enabled_since"] = (datetime.now(UTC) + timedelta(seconds=1)).isoformat()
     assert connector.sync_once().sent
-    assert json.loads(queue.path.read_text())["jobs"] == {}
+    jobs = json.loads(queue.path.read_text())["jobs"]
+    assert len(jobs) == 1
+    record = next(iter(jobs.values()))["message"]["record"]
+    assert set(record) == {"ts", "server_id", "msg_type"}
     queue.path.unlink()
     connector.sync_once(dry_run=True)
     assert not queue.path.exists()
+
+
+def test_completed_media_is_not_requeued_on_duplicate(tmp_path):
+    cfg, queue, connector = _queued(tmp_path)
+    connector.sync_once()
+    key = source_event(typ=34)["source_message_key"]
+    queue.update(key, complete=True)
+    connector.client = FakeClient(
+        [FakeResponse(body={"accepted": 0, "duplicates": 1, "missing_media_keys": []})]
+    )
+    assert connector.sync_once().duplicates == 1
+    assert json.loads(queue.path.read_text())["jobs"] == {}
+
+
+def test_corrupt_checkpoint_is_not_replaced(tmp_path):
+    cfg, queue, connector = _queued(tmp_path)
+    Path = __import__("pathlib").Path
+    Path(cfg.checkpoint_path).write_text("{broken")
+    assert connector.sync_once().errors == ["checkpoint_unreadable"]
+    assert Path(cfg.checkpoint_path).read_text() == "{broken"
 
 
 def test_media_retry_spool_survives_source_loss_and_text_watermark(tmp_path):

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
     """从环境变量读取独立服务配置，不在代码内保存秘密。"""
 
-    database_url: str = "sqlite:///data/crm.db"
+    database_url: str
     wechat_webhook_secret: str = ""
     host: str = "127.0.0.1"
     port: int = 8080
@@ -39,6 +41,13 @@ class Settings(BaseSettings):
     crm_api_token: str = ""
     crm_viewer_token: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+
+    @field_validator("database_url")
+    @classmethod
+    def postgres_only(cls, value):
+        if make_url(value).get_backend_name() != "postgresql":
+            raise ValueError("PostgreSQL is required")
+        return value
 
     @property
     def oauth_enabled(self) -> bool:

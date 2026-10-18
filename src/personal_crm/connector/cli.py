@@ -2,9 +2,11 @@
 
 import argparse
 import json
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 
@@ -34,6 +36,9 @@ def main(argv=None):
     parser.add_argument("--watch", action="store_true")
     args = parser.parse_args(argv)
     config = ConnectorConfig.from_env()
+    os.environ["PATH"] = (
+        str(Path(config.chatlog_executable).parent) + os.pathsep + os.environ.get("PATH", "")
+    )
     connector = WeChatConnector(config)
 
     def media_run():
@@ -65,7 +70,11 @@ def main(argv=None):
                     except Exception:
                         print('{"media":{"error":"media_worker_failed"}}', flush=True)
                 return 0 if not result.errors else 1
-            watermark = as_datetime(load(config.checkpoint_path).get("last_synced_at"))
+            watermark = (
+                as_datetime(load(config.checkpoint_path).get("last_synced_at"))
+                if result.sent
+                else None
+            )
             behind = (
                 watermark is not None
                 and (datetime.now(UTC) - watermark).total_seconds()
