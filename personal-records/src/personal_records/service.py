@@ -101,8 +101,15 @@ class Service:
             item = {"sample_count": len(samples), "duration_seconds": union_seconds((s["start"], s["end"]) for s in samples) if samples else None}
             if key == "sleep":
                 asleep = [s for s in samples if s["stage"] in ASLEEP]
+                awake = [s for s in samples if s["stage"] in ("awake", "awake_in_bed", "out_of_bed")]
                 item["session_seconds"] = item["duration_seconds"]
-                item["duration_seconds"] = union_seconds((s["start"], s["end"]) for s in asleep) if asleep else (0 if samples and all(s["stage"] != "unknown" for s in samples) else None)
+                # Sources can send a broad sleeping interval alongside detailed stages.
+                # |asleep union awake| - |awake| removes every overlapping awake period.
+                item["duration_seconds"] = (
+                    union_seconds((s["start"], s["end"]) for s in asleep + awake)
+                    - union_seconds((s["start"], s["end"]) for s in awake)
+                    if asleep else (0 if samples and all(s["stage"] != "unknown" for s in samples) else None)
+                )
                 item["stages_seconds"] = {stage: union_seconds((s["start"], s["end"]) for s in samples if s["stage"] == stage) for stage in sorted({s["stage"] for s in samples})}
             result[key] = item
         return {"start_date": start_date, "end_date": end_date, "timezone": "Asia/Shanghai",
