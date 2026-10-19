@@ -1,0 +1,3 @@
+# NAS build data stays on the SSD, isolated by workspace identity.
+[build]
+build-dir = "/vol2/1000/BuildCache/rust/workspaces/{workspace-path-hash}"

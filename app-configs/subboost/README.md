@@ -36,6 +36,11 @@
 
 固定上游 SubBoost **2.8.1** / commit `4a69b494b46d095c965be58cf425fe35a2c1e524`，基于现有官方镜像 digest `sha256:01f7d8e02486bf536e4da0fee2ce1dd1003294460cfeeb2c64d4295c7d0f4def` 构建。没有数据库 schema 变更。
 
+NAS 的规则索引使用上游原生 `GITHUB_TOKEN` 设置，在正式服务私有
+`infra/env/app.env` 中配置并仅重建 `app` 生效。2026-10-13 已复用 NAS
+现有 GitHub 登录凭据，解决匿名请求被共享出口 IP 限流的问题。
+令牌只留在私有环境文件，不复制到本仓库，不改变镜像或订阅身份。
+
 ```bash
 bash subboost/build.sh
 ```

@@ -2,6 +2,8 @@
 
 保存 `/home/yuwk/code` 聚合开发仓库在 2026-10-13 的配置。各项目源码通过 Git subtree 管理，统一 diff 和 worktree，项目提交仍拆分回各自原仓库。
 
+NAS 的 Rust 构建缓存与产物放在 SSD，安装配置及现有 Codex 工程的迁移记录见 [Rust 构建存储](RUST-BUILD.md)。
+
 ## 配置内容
 
 | 文件 | 用途 |
