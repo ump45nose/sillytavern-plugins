@@ -7,5 +7,5 @@
   "reviewed_on": "2026-10-19",
   "usage": "Public protocol reference only. No upstream source file or Env framework is redistributed; the one-shot adapter and recovery state are independently implemented.",
   "license": "No upstream license is asserted for the referenced source. No upstream source is vendored.",
-  "verification": "Pinned source bytes and offline behavior reviewed; authenticated merchant login, store lookup, sign and renewal require account acceptance."
+  "verification": "Pinned source and offline behavior reviewed. On 2026-10-19, authenticated YYB code login, empty enter_shop_code check-in, independent sign_of_day N-to-Y readback and repeat execution passed; points stayed 0. Natural session-expiry renewal remains unverified."
 }
