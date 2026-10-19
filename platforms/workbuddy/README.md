@@ -15,6 +15,16 @@ python3 platforms/workbuddy/login.py --edition intl \
 
 打开终端显示的官方授权链接完成登录，程序在有界时间内查询授权结果，保存 0600 凭据。`--timeout` 默认 300 秒，范围 30–600 秒。登录命令会显示一次性授权地址，日常任务和日报均不输出令牌、原始响应或模型回答。
 
+已有 CookieCloud 网页登录态时，可以直接创建独立 NAS 会话：
+
+```sh
+python3 platforms/workbuddy/login.py --edition cn \
+  --session-file /absolute/private/workbuddy-cn.json \
+  --cookiecloud-config /absolute/private/cookiecloud.json
+```
+
+国际版改用 `--edition intl` 和独立凭据路径。此方式复用 `common.cookiecloud`，首次登录需要其可选 `cryptography` 依赖；日常运行不依赖 CookieCloud。只提取该版本的 `www.workbuddy.cn` 或 `www.workbuddy.ai` Cookie，按官方网页流程建立同域 SSO、申请新的 access/refresh token，再清空 Cookie，通过官方账号接口核对新 bearer 身份后保存。当前只支持唯一、启用客户端的个人账号；多账号或企业账号直接报告需要人工选择，Cookie 失效时重新登录官网并同步后再执行。不会修改浏览器中的原会话文件。
+
 已有**明文**官方客户端会话可一次性导入：
 
 ```sh
@@ -39,6 +49,8 @@ python3 platforms/workbuddy/login.py --edition cn \
 ```
 
 国际版 `edition` 为 `intl`，官方授权会保存其真实 domain。文件不存入源码或 Git，不通过命令行传递令牌。读取请求被明确拒绝认证时，仅续期一次；旋转的令牌原子保存成功后才继续。登录工具和日常运行共用凭据文件旁的锁，避免并发刷新覆盖新令牌。
+
+凭据文件要求 0600。如果宿主主动给运行目录修复共享 ACL，应把实际凭据放在 ACL 管理范围之外的 0700 私有目录，在约定的运行路径放链接。登录和运行会先解析实际路径，续期和锁都使用该路径，不会用新文件覆盖链接。不要反复 chmod 或停止宿主的权限服务。
 
 ## 运行
 
@@ -74,6 +86,6 @@ python3 platforms/workbuddy/run.py --runtime-root /absolute/private/benefits-run
 python3 -m unittest discover -s tests -p 'test_workbuddy.py' -v
 ```
 
-真实账号验收尚待完成：分别官方授权、只读余额/国内活动状态、受控签到或国际一次请求、再次运行不重复提交、令牌自然失效后的续期。当前没有使用真实账号，模拟响应测试不代表实际取得积分。
+2026-10-19 真实账号验收：两版通过 CookieCloud 的官方网页登录流程建立独立会话，清空 Cookie 后核对身份，并完成 refresh token 旋转、保存和重新读取。国内签到成功，确认奖励 100、余额 1000→1100；国际版 `hy3` 请求成功，余额当时仍为 350，活跃奖励维持 unknown。当天再次调用两版均保留原 intent，国内余额未再次变化；重复运行路径的写请求计数由离线测试核验。尚未等待令牌自然过期，也未核实国际活跃奖励的发放。
 
 来源与许可见 `provider-source.json` 和 `LICENSE.provider`。协议窄范围移植自 MIT 的 workbuddy-helper；国内状态字段另对照 ZaiZaiCat 公开源码，不引入完整上游程序。

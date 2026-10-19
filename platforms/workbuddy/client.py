@@ -9,7 +9,7 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, HTTPCookieProcessor, build_opener
 
 from .state import WorkBuddyError, validate_session
@@ -60,11 +60,16 @@ class HTTP:
             p = urlsplit(proxy)
             if p.scheme not in {"http", "https"} or not p.hostname or p.fragment:
                 raise WorkBuddyError("invalid_proxy")
+        self.cookies = http.cookiejar.CookieJar()
         self.opener = build_opener(NoRedirect(),
             ProxyHandler({"http": proxy, "https": proxy} if proxy else {}),
-            HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            HTTPCookieProcessor(self.cookies))
 
     def request(self, method, url, headers, payload=None):
+        status, raw, _ = self._response(method, url, headers, payload)
+        return status, raw
+
+    def _response(self, method, url, headers, payload=None):
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode() if payload is not None else None
         request = Request(url, data=data, headers=headers, method=method)
         try:
@@ -76,11 +81,26 @@ class HTTP:
                 raw = response.read(MAX_BODY + 1)
                 if len(raw) > MAX_BODY:
                     raise WorkBuddyError("response_too_large")
-                return response.status, raw
+                return response.status, raw, response.headers
         except WorkBuddyError:
             raise
         except (OSError, URLError, ValueError, http.client.HTTPException):
             raise WorkBuddyError("transport_error") from None
+
+    def navigate(self, url, headers, origin):
+        """Follow only this official web origin for the cookie-based OIDC handshake."""
+        for _ in range(8):
+            parsed = urlsplit(url)
+            if (parsed.scheme != "https" or parsed.netloc != urlsplit(origin).netloc
+                    or parsed.username or parsed.password):
+                raise WorkBuddyError("unexpected_authorization_redirect")
+            status, raw, response_headers = self._response("GET", url, headers)
+            location = response_headers.get("Location")
+            if status in {301, 302, 303, 307, 308} and location:
+                url = urljoin(url, location)
+                continue
+            return status, raw
+        raise WorkBuddyError("authorization_redirect_limit")
 
 
 def json_body(raw):
