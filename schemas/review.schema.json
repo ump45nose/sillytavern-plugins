@@ -122,8 +122,8 @@
     },
     "retention": {
       "type": "object", "additionalProperties": false,
-      "required": ["skysight_raw_days", "attachment_pending_days", "quarantine_days", "derived_until_annual"],
-      "properties": {"skysight_raw_days": {"type": "integer", "minimum": 1}, "attachment_pending_days": {"type": "integer", "minimum": 1}, "quarantine_days": {"type": "integer", "minimum": 1}, "derived_until_annual": {"type": "boolean"}}
+      "required": ["attachment_pending_days"],
+      "properties": {"attachment_pending_days": {"type": "integer", "minimum": 1}}
     },
     "projections": {
       "type": "object", "additionalProperties": false,

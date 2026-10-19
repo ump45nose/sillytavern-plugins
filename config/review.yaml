@@ -84,10 +84,7 @@ stages:
   allowed_terminal_states: [成功, 失败, 停止]
 
 retention:
-  skysight_raw_days: 90
   attachment_pending_days: 30
-  quarantine_days: 7
-  derived_until_annual: true
 
 projections:
   retry_max: 5

@@ -19,7 +19,6 @@ from review.jobs import CronPlanner
 from review.ledger import MemosClient, MemosError
 from review.observability import StructuredLogger
 from review.projections import CurrentStateProjection, ProjectionOutbox, StageWritebackProjection, UserMdProjection
-from review.retention import RetentionService
 from review.sources.email import EmailBriefSource
 from review.sources.google import GoogleCalendarBriefSource, GoogleTasksBriefSource
 from review.sources.health import HealthSource
@@ -30,7 +29,7 @@ from review.sources.git_activity import (
     store_git_mcp_summary,
     verify_git_summary,
 )
-from review.sources.crm_activity import CrmActivitySource, store_crm_mcp_summary
+from review.sources.crm_activity import CrmActivitySource
 from review.sources.memos import MemosSource
 from review.sources.skysight import SkysightSummarySource
 from review.stages import StageService
@@ -59,10 +58,7 @@ def _parser() -> argparse.ArgumentParser:
     git_input.add_argument("--date", required=True, help="GitHub MCP 查询对应的业务日期")
     git_input.add_argument("--content-file", help="MCP 聚合后的最小 JSON")
 
-    crm_input = commands.add_parser("crm")
-    crm_input.add_argument("action", choices=["import"])
-    crm_input.add_argument("--date", required=True, help="Personal CRM MCP 查询对应的业务日期")
-    crm_input.add_argument("--content-file", required=True, help="CRM MCP 返回的无正文每日汇总 JSON")
+
 
     daily = commands.add_parser("daily")
     daily.add_argument("action", choices=["prepare", "refresh", "acknowledge", "finalize"])
@@ -124,12 +120,7 @@ def _parser() -> argparse.ArgumentParser:
     attachment.add_argument("--source")
     attachment.add_argument("--memo-name")
     attachment.add_argument("--status")
-
-    retention = commands.add_parser("retention")
-    retention.add_argument("action", choices=["plan", "apply"])
-    retention.add_argument("--dry-run", action="store_true")
     return parser
-
 
 def _runtime(config: AppConfig) -> tuple[StateRepository, MemosClient | None]:
     """初始化状态库；Memos 未配置好时允许只读 dry-run 路径继续。"""
@@ -193,7 +184,7 @@ def _collect(
             hour, minute = map(int, config.policy["daily"]["skysight_cutoff"].split(":"))
             cutoff = datetime.combine(window.start.date(), time(hour, minute), window.start.tzinfo)
             source_window = TimeWindow(window.start, min(window.end, cutoff))
-        adapters.append(("skysight", SkysightSummarySource(config.path("REVIEW_NAS_SKYSIGHT_ROOT")), source_window))
+        adapters.append(("skysight", SkysightSummarySource(config.path("REVIEW_SKYSIGHT_ARCHIVE_ROOT"), config.values.get("REVIEW_SKYSIGHT_READER")), source_window))
     if source_flags["email"]:
         adapters.append(("email", EmailBriefSource(config.path("REVIEW_EMAIL_BRIEF_DIR"), config.policy), window))
     if source_flags["health"]:
@@ -203,7 +194,7 @@ def _collect(
     if source_flags["git"] and not weekly:
         adapters.append(("git", GitActivitySource(config.path("REVIEW_GIT_SUMMARY_DIR")), window))
     if source_flags["crm"] and not weekly:
-        adapters.append(("crm", CrmActivitySource(config.path("REVIEW_CRM_SUMMARY_DIR")), window))
+        adapters.append(("crm", CrmActivitySource(config.values["REVIEW_CRM_API_URL"], config.path("REVIEW_CRM_TOKEN_FILE")), window))
     if source_flags["google_tasks"]:
         adapters.append(
             (
@@ -291,18 +282,6 @@ def run(argv: Iterable[str] | None = None) -> int:
                 _json_print(verify_git_summary(config.path("REVIEW_GIT_SUMMARY_DIR"), day))
             else:
                 _json_print(store_git_failure(config.path("REVIEW_GIT_SUMMARY_DIR"), day, datetime.now(config.timezone)))
-            return 0
-        if args.command == "crm":
-            # CRM MCP 已在服务端剥离正文；这里只保存按业务日汇总的关系变化。
-            day = datetime.strptime(args.date, "%Y-%m-%d").date().isoformat()
-            payload = json.loads(_read_required(args.content_file, "CRM MCP 汇总"))
-            result = store_crm_mcp_summary(
-                config.path("REVIEW_CRM_SUMMARY_DIR"),
-                day,
-                payload,
-                datetime.now(config.timezone),
-            )
-            _json_print({"status": "imported", **result})
             return 0
         if args.command == "daily":
             service = DailyReviewService(
@@ -546,13 +525,7 @@ def run(argv: Iterable[str] | None = None) -> int:
             else:
                 _json_print({"moved_to_manual": queue.expire(datetime.now(config.timezone))})
             return 0
-        if args.command == "retention":
-            service = RetentionService(state, config.path("REVIEW_NAS_SKYSIGHT_ROOT"), config.policy)
-            if args.action == "plan":
-                _json_print(service.plan(datetime.now(config.timezone)))
-            else:
-                _json_print(service.apply(datetime.now(config.timezone), args.dry_run))
-            return 0
+
     except (ConfigError, ValueError, RuntimeError, OSError, json.JSONDecodeError) as exc:
         if logger is not None:
             logger.emit("reviewctl.command", "error", command=args.command, error_type=type(exc).__name__)
@@ -567,7 +540,7 @@ def _doctor(config: AppConfig, state: StateRepository, memos: MemosClient | None
     paths = {
         "state_parent": config.path("REVIEW_STATE_DB").parent,
         "jobs_file": config.path("REVIEW_JOBS_FILE"),
-        "skysight_root": config.path("REVIEW_NAS_SKYSIGHT_ROOT"),
+        "skysight_input": Path(config.values.get("REVIEW_SKYSIGHT_READER") or config.values["REVIEW_SKYSIGHT_ARCHIVE_ROOT"]),
         "attachment_spool": config.path("REVIEW_ATTACHMENT_SPOOL"),
         "log_dir": config.path("REVIEW_LOG_DIR"),
         "user_md_parent": config.path("REVIEW_USER_MD").parent,
@@ -593,7 +566,7 @@ def _doctor(config: AppConfig, state: StateRepository, memos: MemosClient | None
         "frozen_cycles": int(frozen_cycles["count"]),
     }
     checks["sqlite_integrity"] = {"ok": bool(integrity and integrity[0] == "ok")}
-    required = ("state_db", "state_parent", "jobs_file", "skysight_root", "log_dir")
+    required = ("state_db", "state_parent", "jobs_file", "skysight_input", "log_dir")
     healthy = checks["sqlite_integrity"]["ok"] and all(checks[name]["exists"] for name in required)
     return {
         "status": "ok" if healthy else "error",

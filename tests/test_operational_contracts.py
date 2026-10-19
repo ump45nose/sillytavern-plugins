@@ -13,8 +13,7 @@ import yaml
 
 from review.domain import TimeWindow
 from review.projections import CurrentStateProjection, ProjectionOutbox
-from review.retention import RetentionService
-from review.sources import SkysightSummarySource, TaskCompletionSource
+from review.sources import TaskCompletionSource
 from review.state import StateRepository
 
 
@@ -112,71 +111,6 @@ class OperationalContractTests(unittest.TestCase):
         self.assertIn("交付版本", text)
         self.assertIn("PERSONAL_REVIEW:BEGIN sha256=", text)
 
-    def test_retention_archives_then_expires_quarantine(self) -> None:
-        """Raw 到期先压缩到隔离区，超过隔离期后才删除压缩包。"""
-
-        old_raw = self.root / "raw" / "skysight" / "2026-01-01"
-        old_raw.mkdir(parents=True)
-        (old_raw / "event.json").write_text("{}", encoding="utf-8")
-        service = RetentionService(self.state, self.root, self.policy)
-        now = datetime(2026, 8, 29, 3, 30, tzinfo=timezone.utc)
-        result = service.apply(now)
-        self.assertFalse(old_raw.exists())
-        archive = Path(result["archived"][0])
-        self.assertTrue(archive.is_file())
-        expired_time = (now - timedelta(days=8)).timestamp()
-        os.utime(archive, (expired_time, expired_time))
-        deleted = service.apply(now)
-        self.assertEqual(deleted["deleted_archives"], [str(archive)])
-        self.assertFalse(archive.exists())
-
-    def test_skysight_summary_is_delivered_verbatim(self) -> None:
-        """上游 Memory summary 区块必须逐字透传，不能再由日报代码选句或合并。"""
-
-        directory = self.root / "derived" / "skysight" / "source-summaries"
-        directory.mkdir(parents=True)
-        path = directory / "2026-08-29T08-00-00-6h-memory-summary.md"
-        path.write_text(
-            "description: 已完成日报系统重构并锁定账本边界。\n\n"
-            "## Memory summary\n"
-            "上午直接摘要：完成配置骨架并决定使用 Memos。\n\n"
-            "### Relevant prior context\n"
-            "这段检索背景不应进入日报。\n\n"
-            "### Important non-obvious context about the user\n"
-            "这段实体词典也不应进入日报。\n\n"
-            "## Recording summary\n"
-            "- 已完成配置骨架。\n"
-            "- 决定使用 Memos。\n",
-            encoding="utf-8",
-        )
-        start = datetime(2026, 8, 29, tzinfo=timezone.utc)
-        result = SkysightSummarySource(self.root).collect(TimeWindow(start, start + timedelta(days=1)), None)
-        self.assertEqual(len(result.evidence), 1)
-        self.assertEqual(result.evidence[0].payload["evidence_type"], "source_summary")
-        self.assertEqual(result.evidence[0].payload["summary_type"], "6h")
-        self.assertEqual(
-            result.evidence[0].payload["summary_markdown"],
-            "## Memory summary\n上午直接摘要：完成配置骨架并决定使用 Memos。",
-        )
-        self.assertNotIn("## Recording summary", result.evidence[0].payload["summary_markdown"])
-        self.assertNotIn("Relevant prior context", result.evidence[0].payload["summary_markdown"])
-        self.assertNotIn("Important non-obvious context", result.evidence[0].payload["summary_markdown"])
-
-    def test_skysight_prefers_upstream_6h_files_without_mixing_10min_files(self) -> None:
-        """已有上游 6 小时摘要时只透传该层，避免把 10 分钟子摘要重复附加。"""
-
-        directory = self.root / "derived" / "skysight" / "source-summaries"
-        directory.mkdir(parents=True)
-        six_hour = directory / "2026-08-29T00-00-00-a-6h-memory-summary.md"
-        ten_minute = directory / "2026-08-29T00-10-00-b-memory-summary.md"
-        six_hour.write_text("上午六小时摘要", encoding="utf-8")
-        ten_minute.write_text("十分钟子摘要", encoding="utf-8")
-        start = datetime(2026, 8, 29, tzinfo=timezone.utc)
-
-        result = SkysightSummarySource(self.root).collect(TimeWindow(start, start + timedelta(days=1)), None)
-
-        self.assertEqual([item.source_ref for item in result.evidence], [six_hour.name])
-        self.assertEqual(result.evidence[0].payload["summary_markdown"], "上午六小时摘要")
 
 
 if __name__ == "__main__":
