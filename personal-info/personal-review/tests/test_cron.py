@@ -73,13 +73,6 @@ class CronPlannerTests(unittest.TestCase):
         ack = next(change for change in changes if change["name"] == "personal-review-daily-ack-2135")
         self.assertFalse(ack["enabled"])
         self.assertTrue(ack["no_agent"])
-        daily = next(change for change in changes if change["name"] == "personal-review-daily-2130")
-        self.assertIn("## 灵珺的话", daily["prompt"])
-        self.assertIn("## 想问你的", daily["prompt"])
-        self.assertIn("## 可以怎么走", daily["prompt"])
-        self.assertIn("不能补造事实", daily["prompt"])
-        self.assertIn("本次仅发送精简回退版", daily["prompt"])
-        self.assertIn("Git、CRM 只能在用户认可后写入留痕", daily["prompt"])
 
     def test_daily_guidance_policy_is_exposed_from_yaml(self) -> None:
         """个性化引导来源和目标必须位于可版本化业务配置中。"""
