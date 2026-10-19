@@ -11,6 +11,12 @@ from common.interventions import fingerprint
 from dataclasses import replace
 
 
+class FixtureAgent:
+    def __init__(self, **kwargs):
+        self.robotic_arm = SimpleNamespace(captcha_payload=None, _challenge_prompt=None,
+            _match_user_prompt=lambda _: "JobType: fixture")
+
+
 class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
     def fixture(self):
         page = SimpleNamespace(url="https://store.epicgames.com/login?redirectTo=%2Fpurchase%3Foffers%3Dfixture",
@@ -68,7 +74,7 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):
     async def test_payment_rejection_retains_its_code_without_account_or_token_fields(self):
-        response = SimpleNamespace(url="https://payment-website-pci.ol.epicgames.com/purchase/fixture",
+        response = SimpleNamespace(url="https://payment-website-pci.ol.epicgames.com/v2/purchase/confirm-order?token=private-account-and-token",
             status=400, request=SimpleNamespace(resource_type="xhr"),
             body=AsyncMock(return_value=json.dumps({"errorCode": "errors.com.epicgames.fixture",
                 "numericErrorCode": 1001, "errorMessage": "private-account-and-token",
@@ -77,7 +83,8 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
         with contextlib.redirect_stdout(stream):
             await report_purchase_error(response)
         self.assertEqual(json.loads(stream.getvalue()), {"event": "epic_purchase_error",
-            "status": 400, "error_code": "errors.com.epicgames.fixture", "numeric_code": 1001})
+            "status": 400, "operation": "confirm-order",
+            "error_code": "errors.com.epicgames.fixture", "numeric_code": 1001})
         self.assertNotIn("private-account", stream.getvalue())
 
     async def test_late_handler_receives_the_original_puzzle_once_and_ignores_preflights(self):
@@ -89,8 +96,10 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
         script = response("/asset/hsw.js", "GET", host="newassets.hcaptcha.com")
         payload = response("/getcaptcha/fixture", "POST")
         preflight = response("/getcaptcha/fixture", "OPTIONS")
-        class Agent:
-            def __init__(self, page, **kwargs): page.on("response", self._task_handler)
+        class Agent(FixtureAgent):
+            def __init__(self, page, **kwargs):
+                super().__init__(**kwargs)
+                page.on("response", self._task_handler)
             async def _task_handler(self, response): received.append(response)
             async def wait_for_challenge(self):
                 self.assert_puzzle()
@@ -110,6 +119,23 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
         await handler.handle(obstacle, timeout=1)
         self.assertEqual(received, [script, payload, failed])
         self.assertEqual(handler.initial_responses, ())
+
+    async def test_each_new_puzzle_keeps_its_question_alongside_the_sdk_skill(self):
+        prompts = []
+        class Agent(FixtureAgent):
+            async def wait_for_challenge(self):
+                prompts.append(self.robotic_arm._match_user_prompt("point"))
+                return SimpleNamespace(value="success")
+        handler = HCaptchaHandler(None, None, loader=lambda _: SimpleNamespace(AgentV=Agent))
+        obstacle = Obstacle("captcha", "fixture", fingerprint("x"), "checkout")
+        await handler.handle(obstacle, timeout=1)
+        for question in ("Click the animal the ball misses", "Select the matching shape"):
+            handler.agent.robotic_arm.captcha_payload = SimpleNamespace(
+                get_requester_question=lambda: question)
+            await handler.handle(obstacle, timeout=1)
+        self.assertEqual(prompts, ["JobType: fixture",
+            "Click the animal the ball misses\nJobType: fixture",
+            "Select the matching shape\nJobType: fixture"])
 
     async def test_managed_cloudflare_without_widget_waits_without_loading_hcaptcha(self):
         page=SimpleNamespace(frames=[],wait_for_timeout=AsyncMock())
@@ -156,9 +182,9 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
             from loguru import logger
         except ImportError:
             self.skipTest("optional challenge SDK logging unavailable")
-        class Agent:
+        class Agent(FixtureAgent):
             def __init__(self, **kwargs):
-                pass
+                super().__init__(**kwargs)
             async def wait_for_challenge(self):
                 logger.error("private-token-and-model-response")
                 raise ValueError("private-token-and-model-response")
@@ -173,8 +199,9 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
     async def test_solver_response_needs_fresh_readback(self):
         calls = []
 
-        class Agent:
+        class Agent(FixtureAgent):
             def __init__(self, **kw):
+                super().__init__(**kw)
                 calls.append("construct")
 
             async def wait_for_challenge(self):

@@ -35,9 +35,11 @@ python3 -m venv .venv-epic
 
 model 是可选挑战路径使用的 OpenAI compatible 视觉模型。当前 NAS 延用已有 CPA 的 `gemini-3.8-flash-high` 配置。图片只在挑战期间临时使用，不保留截图/录屏；调用不自动重试。不要将邮箱、密码或 key 放命令行或 Git。
 
+验证码模型同时接收当前原题和 SDK 技能提示。单次模型请求最多 120 秒，整轮挑战最多 300 秒，并受本次任务剩余时间约束；验证码通过后继续独立确认游戏所有权。
+
 挑战 SDK 返回的执行超时和响应超时统一报告 `challenge_timeout`，与实际未通过区分。浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口、工作流和 SDK 内部捕获的错误保留异常类型及源码位置，不记录原始错误消息、会话 token、图片或模型响应。商店部分脚本的 403 不覆盖实际可用的业务控件或当前登录、验证码状态；有界观察后仍无法确认页面状态时，才报告资源拒绝。进入结算后仍须通过商品身份、零价和独立所有权回查，不能据此确认领取。
 
-主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型；初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
+主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。浏览器使用 Camoufox 的 [`disable_coop=True`](https://camoufox.com/python/usage/)，使 Turnstile 跨域 iframe 可读取和正常点击；自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型。初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
 
 hCaptcha 组件可能在显示前已取得题目。浏览器仅在内存保留当前页面最新的脚本与题目响应，处理器按需创建后读取一次，避免错过响应而空等 30 秒或丢失题型、题数。CORS OPTIONS 不交给题目/答案解析器；HTTP 400 的真实 POST 答案响应仍保留失败语义。没有重发验证码 API 请求，也不落盘响应或 token。
 
@@ -47,7 +49,7 @@ EPIC_CONFIG=/absolute/private/epic.json \
   --runtime-root /absolute/private/runtime --execute
 ```
 
-每次一个账号，profile 位于 `state/epic/<account>/browser/`。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。登录成功或验证码通过不代表游戏领取成功。
+每次一个账号，profile 位于 `state/epic/<account>/browser/`。同级 `browser-identity.json` 保存该账号的 Camoufox 身份，跨次启动复用，并与 profile 一起备份、恢复，保持指纹与 Cookie 对应；已有身份损坏时直接报错。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。登录成功或验证码通过不代表游戏领取成功。
 
 `proxy` 可省略以使用直连。目录读取复用已完成会话检查的商店页，避免重复加载首页；线路和验证码处理均须通过当前浏览器与所有权回查验证。
 
@@ -66,5 +68,7 @@ EPIC_CONFIG=/absolute/private/epic.json \
 NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当前商品、官方商店的结算阶段，且弹窗完整文字和按钮精确匹配时点击一次 Continue，随后仍重新核对商品身份和零价。新增协议、年龄、账号设置或其他 Continue 提示不复用此处理。
 
 2026-10-09 原 Hermes 入口实跑成功，run ID 为 `78d5a00f-76ab-4b77-a834-67b095fc846d`。当期 Out of Sight 和 TerraScape 两款均确认在库；正式任务记录一款已在库、一款新领、零项未确认。已有付费购物车未被修改。
+
+2026-10-19 现场尚未通过领取验收：用户授权的受控重试在 hCaptcha 返回 `pass=true` 后，支付 `confirm-order` 仍以 `epic.error.captcha.challenge.failed` 拒绝；首个支付拒绝后停止，只读回查两款仍未在库。固定身份和完整 DMIT 出口已多次正常加载商品及结算，但期间仍出现过资源 403。详细证据与未完成项见 [持续排查计划](../../docs/plans/2026-10-19-benefits-followup.md)。
 
 业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。

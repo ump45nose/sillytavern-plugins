@@ -75,7 +75,8 @@ function exploreFixture(topic, { credited = true, navigationRace = false, target
   return { id, submitted, marks, run: () => extra.run(null, {}, parser, options, deps) };
 }
 
-for (const topic of ["flowerdelivery", "jobs", "restaurant", "petsupplies", "weather", "mattress"]) {
+for (const topic of ["flowerdelivery", "jobs", "restaurant", "petsupplies", "weather", "mattress",
+    "creditcards", "flight", "insurance", "shopping"]) {
   test(`${topic} exploration searches and confirms its own task`, async () => {
     const f = exploreFixture(topic);
     const out = await f.run();

@@ -17,6 +17,7 @@ from .browser_driver import BrowserDriver, STORE, clean_target
 from .workflow import ClaimWorkflow, Paused
 
 LOGIN = "https://store.epicgames.com/login"
+CHALLENGE_TIMEOUT = 300
 
 
 async def report_purchase_error(response):
@@ -26,6 +27,8 @@ async def report_purchase_error(response):
             or response.request.resource_type not in {"xhr", "fetch"}):
         return
     record = {"event": "epic_purchase_error", "status": response.status}
+    if re.fullmatch(r"/v2/purchase/[a-z][a-z-]{1,50}", target.path):
+        record["operation"] = target.path.rsplit("/", 1)[1]
     try:
         raw = await asyncio.wait_for(response.body(), timeout=3)
         if len(raw) <= 65536:
@@ -39,6 +42,29 @@ async def report_purchase_error(response):
     except Exception as error:
         record["read_error"] = type(error).__name__
     print(json.dumps(record), flush=True)
+
+
+def _browser_options(config, state_dir):
+    """Keep the browser identity with its cookies instead of rotating it on restart."""
+    from camoufox.utils import launch_options
+
+    identity_path = Path(state_dir) / "browser-identity.json"
+    stored = identity_path.exists()
+    identity = json.loads(identity_path.read_text(encoding="utf-8")) if stored else None
+    if stored and (not isinstance(identity, dict) or not identity):
+        raise ValueError("browser_identity_invalid")
+    # Firefox must expose Turnstile's cross-origin frame for the normal click.
+    options = dict(user_data_dir=str(Path(state_dir) / "browser"),
+                   headless=True, disable_coop=True, humanize=0.2, locale="en-US",
+                   firefox_user_prefs={"network.dns.disableIPv6": True, "network.trr.mode": 5})
+    if config.get("proxy"):
+        options["proxy"] = {"server": config["proxy"]}
+    options = launch_options(config=identity, **options)
+    if not stored:
+        chunks = sorted((int(key.rsplit("_", 1)[1]), value)
+                        for key, value in options["env"].items() if key.startswith("CAMOU_CONFIG_"))
+        atomic_json(identity_path, json.loads("".join(value for _, value in chunks)))
+    return options
 
 
 class Journal:
@@ -149,7 +175,7 @@ class Login:
             self.challenge = build_challenge(page, self.config, initial_responses=(
                 captured[kind] for kind in ("script", "payload") if kind in captured))
         try:
-            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, 120))
+            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, CHALLENGE_TIMEOUT))
         except TimeoutError:
             raise Paused("challenge_timeout") from None
         signal = outcome.get("solver_signal")
@@ -232,7 +258,7 @@ def build_challenge(page, config, *, initial_responses=()):
     temporary = Path(os.environ["TMPDIR"]) / "challenge"
     temporary.mkdir(mode=0o700, exist_ok=True)
     settings = AgentConfig(GEMINI_API_KEY=model["api_key"],
-        RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=120, RESPONSE_TIMEOUT=60,
+        RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=CHALLENGE_TIMEOUT, RESPONSE_TIMEOUT=60,
         cache_dir=temporary / "cache", challenge_dir=temporary / "images",
         captcha_response_dir=temporary / "responses")
     return HCaptchaHandler(page, settings, initial_responses=initial_responses)
@@ -246,12 +272,8 @@ async def execute(context, config, state_dir):
     if not cache.is_absolute() or not (cache / "camoufox-bin").is_file():
         raise Paused("browser_cache_unavailable")
     pkgman.INSTALL_DIR = cache
-    options = dict(persistent_context=True, user_data_dir=str(Path(state_dir) / "browser"),
-                   headless=True, humanize=0.2, locale="en-US",
-                   firefox_user_prefs={"network.dns.disableIPv6": True, "network.trr.mode": 5})
-    if config.get("proxy"):
-        options["proxy"] = {"server": config["proxy"]}
-    async with AsyncCamoufox(**options) as browser:
+    async with AsyncCamoufox(from_options=_browser_options(config, state_dir),
+                            persistent_context=True) as browser:
         async def identity_encoding(route):
             headers = await route.request.all_headers()
             headers["accept-encoding"] = "identity"

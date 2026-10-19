@@ -59,7 +59,7 @@ def install(settings):
                 if parts: messages.append({"role": getattr(content, "role", None) or "user", "content": parts})
             payload = {"model": settings["name"], "messages": messages}
             if schema: payload["response_format"] = {"type": "json_object"}
-            async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
                 async with client.stream("POST", settings["base_url"].rstrip("/") + "/chat/completions",
                     headers={"Authorization": "Bearer " + settings["api_key"]}, json=payload) as response:
                     if response.status_code != 200: raise ValueError("challenge_provider_error")

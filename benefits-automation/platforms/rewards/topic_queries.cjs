@@ -31,6 +31,8 @@ const aliases = {
   cars: "Hit the road", couponcodes: "Save more today", homeimprovement: "Upgrade your space",
   streamingservices: "Stream your favorites", flowerdelivery: "Send a smile", jobs: "Discover open job roles",
   restaurant: "Too tired to cook?", petsupplies: "Treat your pet", weather: "Prepare for the weather",
+  creditcards: "Swipe smart", flight: "Plan a quick getaway",
+  insurance: "Protect what matters", shopping: "Find Deals on Bing",
 };
 const QUERIES = Object.freeze(Object.fromEntries(Object.entries(aliases).map(([id, title]) => {
   const queries = catalog.get(normalize(title));
