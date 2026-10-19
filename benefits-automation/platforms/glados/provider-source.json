@@ -34,5 +34,5 @@
     "native Task runner, JSON schema v1 and optional existing CookieCloud reader",
     "no notification, pandas reporting, automatic exchange or browser dependency"
   ],
-  "business_validation": "39 offline tests, public frontend inspection and unauthenticated read-only status/points rejection probes; authenticated site acceptance pending credentials"
+  "business_validation": "43 offline tests; public frontend inspection and real CookieCloud/Hermes-identity read-only diagnosis confirmed Cloudflare 1010; accurate browser User-Agent and authenticated business acceptance remain pending"
 }

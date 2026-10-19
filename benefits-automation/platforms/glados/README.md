@@ -43,6 +43,8 @@ python3 platforms/glados/run.py --runtime-root /absolute/private/benefits-data -
 
 单次请求限时 20 秒，响应最多 1 MiB；总预算默认 180 秒。强制 TLS 验证、禁止重定向，Cookie 不跨域发送；无自动镜像切换、POST 重试或自动兑换。损坏状态会在联网前阻止执行。结果、状态和日志不保存邮箱、Cookie、User-Agent 或完整响应。
 
+HTTP 403 本身不表示 Cookie 失效。明确的 Cloudflare 1010 JSON（cloudflare_error=true、error_code=1010）报告 `cloudflare_browser_signature_banned`；带 `cf-mitigated: challenge` 的响应报告 `cloudflare_challenge`，其余 403 保留 `access_denied`。这两类站点拦截不能冒充 GLaDOS 的认证拒绝或业务成功。
+
 ## 来源、测试与真实验收
 
 本地实现参考 dff652/GLaDOS-Qinglong 的协议，并核对了 2026-10-19 官网前端的积分读取、日历和设备拒绝流程。固定提交、文件哈希与归属记录在 `provider-source.json`；没有复制或运行未确认许可的完整上游脚本，也没有引入其 pandas 或推送依赖。
@@ -51,6 +53,6 @@ python3 platforms/glados/run.py --runtime-root /absolute/private/benefits-data -
 python3 -m unittest discover -s tests -p test_glados.py -v
 ```
 
-39 项离线测试覆盖真实入口与结果落盘、HTTP 请求格式及大小上限、重定向阻断、认证/设备/自动化拒绝、当天记录去重、毫秒时间及时区、单次 intent、跨次只读恢复及 CookieCloud 绑定。另以无效占位 Cookie 对公网 status/points 两个只读端点验证认证拒绝，两者均正确报告 authentication_invalid。上述检查不等于真实账号签到成功。
+43 项离线测试覆盖真实入口与结果落盘、HTTP 请求格式及大小上限、重定向阻断、认证/设备/自动化拒绝、当天记录去重、毫秒时间及时区、单次 intent、跨次只读恢复、CookieCloud 绑定及 Cloudflare 拦截分类。初次开发曾以无效占位 Cookie 对公网 status/points 验证认证拒绝；后续真实 Cookie 的当前只读诊断返回 Cloudflare 1010，两次访问条件不同，不能以前次成功访问认证接口推断本次 Cookie 状态。上述检查不等于真实账号签到成功。
 
-当前未取得 GLaDOS 专用 Cookie/UA/origin，尚未完成认证与签到联调。真实验收顺序：配置同一浏览器的三项信息，先 `--execute --status`；确认账号和当前记录后执行一次签到，核对官网当天记录和积分；再重复执行确认没有第二次 POST。若服务端拒绝自动请求，保留拒绝原因，不以更换 UA、镜像或关闭证书校验来冒充修复。调度及异常日报由集成任务完成。
+现已从既有 CookieCloud 取得完整 Cookie 配对，私有 glados.json 已准备 origin 与 CookieCloud 引用，尚缺获取 Cookie 时的准确浏览器 UA。用户再次同步后的最新数据（2026-10-19 17:10:58 Asia/Shanghai）仍在 Hermes 身份下被 Cloudflare 1010 拒绝。远程 Mac Chrome 的实际 JavaScript 读取返回错误 12，未取得 UA，也未修改远程设置；没有提交签到。补齐 UA 后先 `--execute --status`；匹配 UA 不保证站点接受该 HTTP 客户端，须以实际响应确认。认证和当前记录可读后执行一次签到，核对官网当天记录和积分，再重复执行确认没有第二次 POST。保留真实拒绝原因，不以镜像切换、猜测设备或关闭证书校验来冒充修复。调度及异常日报由集成任务完成。
