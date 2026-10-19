@@ -34,8 +34,11 @@ application owns and rewrites them itself.
 - `apisix-auto-stop`: retired; the timer stays disabled because Hermes uses
   APISIX as its persistent model entrypoint.
 - `hermes-env-audit`: daily shared-secret placement audit for Hermes profiles.
-- `hermes-telegram-recovery`: two-minute Telegram polling recovery check.
+- `hermes-telegram-recovery`: retired, disabled; native Hermes adapter
+  reconnection replaces the old whole-gateway restart timer.
 - `nas-container-boot`: ordered NAS container startup after Docker starts.
+- `nas-resource-history`: minute host/process resource records and bounded
+  persistent journals; see `nas-resource-history/README.md` for selective installation.
 - `qbittorrent-portmap-renew`: hourly qBittorrent UPnP mapping renewal.
 - `rsyslog-logrotate`: rotate rsyslog files every 30 minutes.
 - `shellcrash-traffic`: traffic collector, reports, AI JSON and SubBoost refresh.

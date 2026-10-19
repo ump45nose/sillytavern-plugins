@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | APISIX auto-stop | retired, disabled | formerly every 10 minutes |
 | Hermes env audit | systemd timer | daily 06:17 |
-| Hermes Telegram recovery | systemd timer | every 2 minutes |
+| Hermes Telegram recovery | retired, disabled | formerly every 2 minutes |
 | qBittorrent port mapping | systemd timer | hourly |
 | ShellCrash → SubBoost refresh | systemd timer | hourly with jitter |
 | ShellCrash AI JSON | systemd timer | hourly at :17 |
@@ -16,6 +16,7 @@
 | TagLab delete worker | systemd timer | every 5 minutes |
 | rsyslog rotate | systemd timer | every 30 minutes |
 | NAS container boot | systemd service | on Docker startup |
+| NAS resource history | systemd timer | every minute |
 | ShellCrash traffic collector | systemd service | continuous |
 
 All files above are sourced from this repository and deployed under
