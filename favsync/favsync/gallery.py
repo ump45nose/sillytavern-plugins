@@ -6,7 +6,8 @@ import tempfile
 from .common import SyncError
 
 
-def read_events(config, url, timeout, *, runner, warnings_are_errors):
+def read_events(config, url, timeout, *, runner, warnings_are_errors,
+                module="gallery_dl"):
     """Read a complete DataJob without mistaking exit zero for completeness.
 
     Platform configuration and work visibility stay with the calling adapter.
@@ -14,7 +15,7 @@ def read_events(config, url, timeout, *, runner, warnings_are_errors):
     complete commit, regardless of that policy.
     """
     with tempfile.TemporaryFile() as output:
-        runner([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, "-j", url],
+        runner([sys.executable, "-m", module, "--config-ignore", "-c", config, "-j", url],
                timeout, output, warnings_are_errors=warnings_are_errors)
         output.seek(0)
         try:
