@@ -49,8 +49,12 @@ def main():
                         {"claim": "not_applicable" if value.reason == "no_current_promotions"
                          else "complete" if complete else "unknown"}, delivery_details(value))
     except Exception as error:
-        from platforms.epic.workflow import Paused
+        from platforms.epic.workflow import Paused, log_error
+        from platforms.epic.browser_driver import _is_playwright_timeout
+        if not isinstance(error, Paused):
+            log_error(error, event="epic_native_error")
         output = result(context, reason=error.reason if isinstance(error, Paused)
+                        else "browser_timeout" if _is_playwright_timeout(error)
                         else "native_configuration_or_browser_error", business={"claim": "unknown"})
     atomic_json(os.environ["BENEFITS_RESULT_PATH"], output)
     return 0 if output["execution_status"] == "ok" else 2

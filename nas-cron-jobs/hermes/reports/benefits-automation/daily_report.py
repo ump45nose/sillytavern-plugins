@@ -34,6 +34,7 @@ REASONS = {
     "configuration_or_io_error": "配置或结果保存失败",
     "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "配置或浏览器异常",
+    "browser_timeout": "浏览器操作超时",
     "store_assets_access_denied": "商店资源被拒绝访问（403），领取已停止",
     "challenge_timeout": "验证码处理超时",
     "challenge_unconfirmed": "验证码未通过",

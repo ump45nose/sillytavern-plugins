@@ -19,10 +19,17 @@ function appOptions(options = {}) {
   return {...options, contextOptions: {...options.contextOptions,
     userAgent: (options.contextOptions?.userAgent || DESKTOP_UA) + " " + APP_TOKEN}};
 }
+function progress(text, maximum) {
+  // The numeric counters stay stable when the page translates its task labels.
+  const values = new Set([...text.matchAll(/\b(\d+)\s*\/\s*(\d+)\b/g)]
+    .filter(match => Number(match[2]) === maximum).map(match => Number(match[1])));
+  if (values.size !== 1) return null;
+  const current = [...values][0];
+  return current <= maximum ? {current, max: maximum} : null;
+}
 function parse(parent, html, text, parser) {
   const week = parent.offerId.match(PARENT)[1];
-  const points = text.match(/\((\d+)\s*\/\s*(\d+)\)/);
-  const tasks = text.match(/(\d+)\s*\/\s*(\d+)\s*tasks/i);
+  const points = progress(text, 70), tasks = progress(text, 8);
   const children = parser.snapshotQuestPage(html).filter(row => {
     const match = row.offerId.match(CHILD);
     return match && match[2] === week;
@@ -30,25 +37,37 @@ function parse(parent, html, text, parser) {
   // Completed tiles omit offerId/hash entirely. Their keyed React row still
   // contains the day's title and the explicit success-circle/checkmark.
   const flight = parser.concatFlightChunks(html);
-  for (const match of flight.matchAll(/^[a-f0-9]+:(\["\$","div","[1-7]",[^\n]+)$/gm)) {
-    const node = JSON.parse(match[1]);
-    if (node[3].className !== "flex flex-row gap-2 sm:gap-4") continue;
-    const circle = node[3].children[0][3].children;
-    if (!circle[3].className.includes("bg-statusSuccessRewardsBg") || circle[3].children[1] !== "svg") continue;
-    const day = Object.keys(DAYS)[Number(node[2]) - 1];
-    const offerId = `WW_pcchild${Number(node[2]) + 1}_urlreward_${day}_RewardsApp_weekly_Exclusive_${week}_punchcard`;
-    const completed = {offerId, hash: null, points: 10, isCompleted: true,
-      isLocked: false, isDisabled: false, reportable: false, name: "桌面 App " + DAYS[day] + "活动"};
-    const existing = children.find(row => row.offerId === offerId);
-    if (existing) Object.assign(existing, completed);
-    else children.push(completed);
+  const records = new Map([...flight.matchAll(/^([a-f0-9]+):(\[[^\n]+)$/gm)]
+    .map(match => [match[1], JSON.parse(match[2])]));
+  const resolve = value => typeof value === "string" && /^\$L?[a-f0-9]+$/.test(value) ?
+    records.get(value.replace(/^\$L?/, "")) : value;
+  for (const root of records.values()) {
+    // React can inline the same keyed tile in its parent record instead of
+    // emitting a separate Flight record for it. Inspect both representations.
+    const pending = [root];
+    while (pending.length) {
+      const node = pending.pop();
+      if (!node || typeof node !== "object") continue;
+      pending.push(...Object.values(node).filter(value => value && typeof value === "object"));
+      if (!Array.isArray(node) || node[0] !== "$" || node[1] !== "div" ||
+          !/^[1-7]$/.test(node[2]) || node[3]?.className !== "flex flex-row gap-2 sm:gap-4") continue;
+      const circle = resolve(resolve(resolve(node[3].children)?.[0])?.[3]?.children);
+      if (!circle?.[3]?.className?.split(" ").includes("bg-statusSuccessRewardsBg") ||
+          resolve(circle[3].children)?.[1] !== "svg") continue;
+      const day = Object.keys(DAYS)[Number(node[2]) - 1];
+      const offerId = `WW_pcchild${Number(node[2]) + 1}_urlreward_${day}_RewardsApp_weekly_Exclusive_${week}_punchcard`;
+      const completed = {offerId, hash: null, points: 10, isCompleted: true,
+        isLocked: false, isDisabled: false, reportable: false, name: "桌面 App " + DAYS[day] + "活动"};
+      const existing = children.find(row => row.offerId === offerId);
+      if (existing) Object.assign(existing, completed);
+      else children.push(completed);
+    }
   }
   // The installation tile has zero points and is not an earning activity.
-  if (!points || Number(points[2]) !== 70 || !tasks || children.length !== 7)
+  if (!points || !tasks || children.length !== 7)
     throw Error("desktop_app_progress_unavailable");
   return {parent: parent.offerId, title: parent.title, children,
-    points: {current: Number(points[1]), max: Number(points[2])},
-    tasks: {current: Number(tasks[1]), max: Number(tasks[2])}};
+    points, tasks};
 }
 function summary(current, before = current, uncertain = new Set()) {
   if (!current) return {execution: "ok", reason: "desktop_app_weekly_not_assigned",

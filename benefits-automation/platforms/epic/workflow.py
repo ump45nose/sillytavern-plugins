@@ -69,6 +69,17 @@ class Paused(Exception):
         self.checkpoint = checkpoint
 
 
+def log_error(error, *, event):
+    # External SDK/browser messages can contain session tokens. Keep only the
+    # exception type and source locations, including failures before workflow.run.
+    import json
+    import traceback
+    from pathlib import Path
+    print(json.dumps({"event": event, "type": type(error).__name__,
+        "frames": [f"{Path(row.filename).name}:{row.lineno}:{row.name}"
+                   for row in traceback.extract_tb(error.__traceback__)[-6:]]}), flush=True)
+
+
 class ClaimWorkflow:
     """Driver operations remain explicit: observation, recovery, submit, verify.
 
@@ -310,13 +321,6 @@ class ClaimWorkflow:
             if error.checkpoint:
                 out.pending.append(error.checkpoint)
         except Exception as error:
-            # SDK/browser messages may contain session tokens. Keep locations
-            # and exception type so an operational failure remains diagnosable.
-            import json
-            import traceback
-            from pathlib import Path
-            print(json.dumps({"event": "epic_driver_error", "type": type(error).__name__,
-                "frames": [f"{Path(row.filename).name}:{row.lineno}:{row.name}"
-                           for row in traceback.extract_tb(error.__traceback__)[-6:]]}), flush=True)
+            log_error(error, event="epic_driver_error")
             out.reason = "driver_error"
         return out

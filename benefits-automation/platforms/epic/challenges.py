@@ -9,6 +9,15 @@ import importlib
 import sys
 
 
+def _sdk_error(message):
+    import json
+    record = message.record
+    exception = record["exception"]
+    print(json.dumps({"event": "epic_challenge_error", "source": record["file"].name,
+        "line": record["line"], "function": record["function"],
+        "type": exception.type.__name__ if exception else None}), flush=True)
+
+
 def load_sdk(name="hcaptcha_challenger.agent"):
     # Package initialization installs file sinks inside site-packages before
     # AgentConfig can redirect its runtime files. Dependencies are read-only for
@@ -44,9 +53,17 @@ class HCaptchaHandler:
             logging_module.logger.remove()
         if self.agent is None:
             self.agent = module.AgentV(page=self.page, agent_config=self.config)
-        signal = await asyncio.wait_for(
-            self.agent.wait_for_challenge(), timeout=timeout
-        )
+        # The SDK catches some internal errors itself. Retain their locations
+        # without forwarding its messages, challenge tokens or model responses.
+        logger = logging_module.logger if logging_module is not None else None
+        sink = logger.add(_sdk_error, level="ERROR", backtrace=False, diagnose=False) if logger else None
+        try:
+            signal = await asyncio.wait_for(
+                self.agent.wait_for_challenge(), timeout=timeout
+            )
+        finally:
+            if sink is not None:
+                logger.remove(sink)
         # The caller must observe the page again, regardless of solver response.
         return {
             "solver_signal": getattr(signal, "value", "unknown"),
