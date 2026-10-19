@@ -10,12 +10,12 @@ from .reading import content, fields_block, ref
 
 PROCESSOR = 'metric-day-v1'
 PROFILE_VERSION = 1
-KINDS = ('health_payloads', 'bill', 'traffic_hourly')
+KINDS = ('health_payloads', 'bill')
 
 
 def accepts(row): return row['kind'] in KINDS
 
-def header(row, scope=None): return 'metric_day', {'health_payloads': 'health_day', 'bill': 'finance_day', 'traffic_hourly': 'network_day'}[row['kind']]
+def header(row, scope=None): return 'metric_day', {'health_payloads': 'health_day', 'bill': 'finance_day'}[row['kind']]
 
 
 def zone(row):
@@ -28,8 +28,7 @@ def scopes(row):
         samples = health_samples(row['normalized']['payload'])
         days = sorted({(when(s.get('day_time')) or when(s['time'])).astimezone(ZoneInfo(z)).date().isoformat() for values in samples.values() for _,s in values})
     else: days = [instant(row['occurred_at']).astimezone(ZoneInfo(z)).date().isoformat()] if row['occurred_at'] else []
-    measurement = [row['normalized'].get(k) for k in ('measurement_scope', 'measurement_point', 'device_id', 'collector_id')] if kind == 'traffic_hourly' else []
-    return [canonical([kind, z, day, measurement]) for day in days] or [canonical([kind,z,None,measurement,row['id']])]
+    return [canonical([kind, z, day, []]) for day in days] or [canonical([kind,z,None,[],row['id']])]
 
 
 def process_scope(rows, scope_key):
@@ -57,21 +56,12 @@ def process_scope(rows, scope_key):
             for index,(sample,refs) in enumerate(entries.values()):
                 blocks.append(ContentBlock(f'{key}:{index}', 'measurement', f"{result['label']}：{sample['value']} · {sample['time']}", refs, dict(sample, metric=key, source_unit='秒' if key in ('sleep','exercise') else result['unit'])))
         title = '健康 · ' + str(day or '日期未取得')
-    elif kind == 'bill':
+    else:
         bills = []
         for r in rows:
             raw=r['raw']; bill=raw.get('bill',raw.get('payload',raw)); amount=str(bill.get('money',bill.get('amount',r['normalized'].get('amount',''))))
             data = {k:bill.get(k) for k in ('type','state','currency','cateName','shopName','remark')}; data['amount']=amount
             bills.append(data); blocks.append(fields_block(r,data,key='bill:'+r['id'],field='raw.bill' if 'bill' in raw else 'raw.payload' if 'payload' in raw else 'raw'))
         values=finance_totals(bills); title='账单 · ' + str(day or '日期未取得')
-    else:
-        # Source identity already fixes hour+destination+process+route; input updates replace each cumulative grain.
-        for r in rows:
-            n=r['normalized']; raw=r['raw']
-            data={k:raw.get(k) for k in ('bucket','host','process','exit_node','rule','category')}
-            data.update({k:n.get(k) for k in ('upload_bytes','download_bytes')})
-            blocks.append(fields_block(r,data,key='traffic:'+r['id'],field='raw'))
-        values=[{'metric':key,'value':sum_field([r['normalized'] for r in rows],key),'unit':'bytes'} for key in ('upload_bytes','download_bytes')]
-        details.update(aggregation='latest_cumulative_per_hour_grain',combine_sources=False); title='网络用量 · '+ str(day or '日期未取得')
     details['metrics']=values
     return content(row,typ,variant,title,blocks,details,coverage={'body':'complete','measurement':'collected_samples_only'})

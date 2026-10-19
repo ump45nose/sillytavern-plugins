@@ -59,13 +59,6 @@
       "path": "/path/to/plaud",
       "interval_seconds": 21600,
       "deletion_support": "not_supported"
-    },
-    "shellcrash": {
-      "adapter": "shellcrash",
-      "account": "owner",
-      "path": "/path/to/traffic.sqlite3",
-      "interval_seconds": 21600,
-      "deletion_support": "explicit_only"
     }
   }
 }

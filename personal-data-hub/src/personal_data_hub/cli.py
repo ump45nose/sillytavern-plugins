@@ -28,8 +28,11 @@ def main():
     p = sub.add_parser("import-crm"); p.add_argument("path")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
     p = sub.add_parser("ack-skysight"); p.add_argument("--source", choices=["skysight-raw", "skysight-summaries"], required=True); p.add_argument("--relative", required=True); p.add_argument("--expected-hash", required=True)
-    sub.add_parser("ingest-network")
+    p = sub.add_parser("traffic-remaining"); p.add_argument("--url")
     args = parser.parse_args()
+    if args.action == "traffic-remaining":
+        from .traffic_remaining import fetch_remaining_traffic
+        print(canonical(fetch_remaining_traffic(url=args.url))); return
     config = configuration(args.config)
     store = store_from(config, initialize=not args.skip_schema_init)
     if args.action == "process-pending":
@@ -50,11 +53,6 @@ def main():
             if args.one_page or args.background_page or result['next_after'] is None: break
             after = result['next_after']
         return
-    if args.action == "ingest-network":
-        from .network_ingest import ingest_network
-        body = sys.stdin.buffer.read(4 * 1024 * 1024 + 1)
-        if len(body) > 4 * 1024 * 1024: raise ValueError("network_batch_too_large")
-        print(canonical(ingest_network(store, json.loads(body)))); return
     if args.action == "backfill-display":
         print(canonical({"display_created": store.backfill_display(rebuild=args.rebuild, kind=args.kind)})); return
     if args.action == "backfill-previews":

@@ -17,10 +17,9 @@ build-backend = "hatchling.build"
 packages = ["src/personal_data_hub"]
 
 [tool.uv.workspace]
-members = ["apps/crm", "apps/usage-monitor"]
+members = ["apps/crm"]
 
 [tool.uv.sources]
 personal-crm = { workspace = true }
-usage-monitor-mcp = { workspace = true }
 mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }
 dingtalk-events = { git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git", rev = "59f91c009207528a4183e6d6db242f6ccf4117cd", subdirectory = "mmp-platform/events" }

@@ -32,7 +32,7 @@ def store_from(config, *, initialize=True):
 def adapter(settings):
     from .collectors import BillsCollector, FilesCollector, PlaudCollector, SQLiteCollector, PostgreSQLCrmCollector
     classes = {'crm_pg': PostgreSQLCrmCollector, 'crm': SQLiteCollector, 'health': SQLiteCollector,
-               'shellcrash': SQLiteCollector, 'bills': BillsCollector, 'skysight': FilesCollector,
+               'bills': BillsCollector, 'skysight': FilesCollector,
                'plaud': PlaudCollector}
     return classes[settings['adapter']](settings)
 

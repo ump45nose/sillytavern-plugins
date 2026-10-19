@@ -8,7 +8,6 @@ SOURCE_KINDS = {
     'skysight': frozenset(('computer_segment', 'computer_segment_invalid', 'computer_summary')),
     'plaud': frozenset(('recording', 'recording_transcript', 'recording_daily_report',
                         'recording_summary', 'recording_processing_status', 'recording_artifact')),
-    'shellcrash': frozenset(('traffic_hourly', 'collector_gaps', 'collector_meta')),
 }
 
 

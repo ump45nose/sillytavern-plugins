@@ -52,36 +52,25 @@ class SQLiteCollector:
             elif kind == "health":
                 tables = ["health_payloads"]
             else:
-                tables = ["traffic_hourly", "collector_gaps", "collector_meta"]
+                tables = []
             for table in tables:
                 items = []
                 statement = f'SELECT * FROM "{table}"'
                 params = ()
-                if table == "traffic_hourly" and cursor.get("collected_at"):
-                    from datetime import timedelta
-                    since_bucket = (utcnow() - timedelta(hours=3)).astimezone(__import__("zoneinfo").ZoneInfo(self.settings.get("timezone", "Asia/Shanghai"))).strftime("%Y-%m-%dT%H:00")
-                    statement += " WHERE bucket >= ?"; params = (since_bucket,)
                 for row in c.execute(statement, params):
                     raw = dict(row)
                     for name in ("aliases", "organizations", "contact_methods", "tags", "payload_json"):
                         if isinstance(raw.get(name), str): raw[name] = json.loads(raw[name])
-                    if table == "traffic_hourly":
-                        eid = "hour:" + digest({k: v for k, v in raw.items() if k not in ("upload_bytes", "download_bytes")})
-                    elif table == "sync_clients": eid = "client:" + digest([raw["source"], raw["client_id"]])
+                    if table == "sync_clients": eid = "client:" + digest([raw["source"], raw["client_id"]])
                     else: eid = table + ":" + str(raw.get("id", raw.get("key")))
                     seen.append(eid)
                     event = raw.get("occurred_at", raw.get("observed_at", raw.get("received_at", raw.get("bucket", raw.get("started_at", raw.get("created_at"))))))
-                    if table == "traffic_hourly" and event:
-                        parsed = datetime.fromisoformat(event)
-                        if parsed.tzinfo is None: event = parsed.replace(tzinfo=__import__("zoneinfo").ZoneInfo(self.settings.get("timezone", "Asia/Shanghai")))
                     normal = {"table": table}
-                    if table == "traffic_hourly": normal.update(upload_bytes=raw["upload_bytes"], download_bytes=raw["download_bytes"], grain="hour+destination+process+route", cumulative=True)
                     if table == "health_payloads": normal.update(payload=raw["payload_json"], missing_is_zero=False)
                     items.append(Record(eid, table, raw, normal, instant(event), instant(raw.get("updated_at"))))
                     if len(items) == 250:
                         yield Batch(records=items); items = []
                 if items: yield Batch(records=items)
-        # Health 的历史 webhook 快照和流量保留窗口缺失不代表设备删除。
         yield Batch(next_cursor={"collected_at": utcnow().isoformat()}, authoritative=kind == "crm", seen_ids=seen if kind == "crm" else None)
 
 

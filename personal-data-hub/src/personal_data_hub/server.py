@@ -163,16 +163,18 @@ def create_app(config=None, crm_settings=None, webhook_only=False):
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
 
     @api.get("/api/v1/trends")
-    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social,network", days: int = 7, authorization: str | None = Header(default=None)):
+    def trends(date: str, tz: str = "Asia/Shanghai", modules: str = "health,social", days: int = 7, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
         try: return display.trends(date, tz, modules, days)
         except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_display_parameters") from None
 
-    @api.get("/api/v1/network")
-    def network(date: str, tz: str = "Asia/Shanghai", source: str = "", authorization: str | None = Header(default=None)):
+    @api.get("/api/v1/traffic")
+    @api.get("/api/v1/network/traffic-remaining")
+    def traffic_remaining(url: str | None = None, authorization: str | None = Header(default=None)):
         authenticate(authorization, readonly=True)
-        try: return display.network(date, tz, source)
-        except (ValueError, ZoneInfoNotFoundError): raise HTTPException(422, "invalid_network_parameters") from None
+        from .traffic_remaining import fetch_remaining_traffic
+        try: return fetch_remaining_traffic(url=url)
+        except Exception as exc: raise HTTPException(502, f"failed_to_fetch_traffic: {exc}") from None
 
     @api.get("/api/v1/timeline")
     def timeline(domains: str = "social,activity,recordings,reports", cursor: str | None = None, limit: int = 30, query: str = "", start: datetime | None = None, end: datetime | None = None, person: str | None = None, kind: str | None = None, authorization: str | None = Header(default=None)):

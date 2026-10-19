@@ -12,7 +12,6 @@ resolution-markers = [
 members = [
     "personal-crm",
     "personal-data-hub",
-    "usage-monitor-mcp",
 ]
 
 [[package]]
@@ -340,15 +339,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/85/8c/7a7f5a3af1845cb6b9c28bf2a6db1bc510a6b9661109138c70ab6d8d650a/cyclopts-5.1.1.tar.gz", hash = "sha256:252fe37b01a80f10933f91c312db551e4e86ffd87bee401ab2ed091769135426", size = 237903, upload-time = "2026-10-01T00:00:02.762Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/37/1afff6923395f2f0ce730bae8851371b7418be17dc44d90ba80f72799240/cyclopts-5.1.1-py3-none-any.whl", hash = "sha256:ff0da67b2d2d8fe716d20ab82c698277ef30a8fb75d24e9b38a06f56c44931fd", size = 279527, upload-time = "2026-10-01T00:00:00.485Z" },
-]
-
-[[package]]
-name = "dingtalk-events"
-version = "0.1.1"
-source = { git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git?subdirectory=mmp-platform%2Fevents&rev=59f91c009207528a4183e6d6db242f6ccf4117cd#59f91c009207528a4183e6d6db242f6ccf4117cd" }
-dependencies = [
-    { name = "httpx" },
-    { name = "mcp" },
 ]
 
 [[package]]
@@ -1737,23 +1727,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6b/5a/92ce0b3ea5481915f55da994c2c2c5f7a3c09949afde196ee89f8ab961aa/uncalled_for-0.4.0.tar.gz", hash = "sha256:335b95bd2422332ec210d518f314a16e4c640921c39fc8bf2ad095bd3538f4af", size = 56979, upload-time = "2026-08-10T14:51:46.247Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/40/97cec87c077eb3291fc7905e6633e08b7ca593c57d30238444bcb6bb3d53/uncalled_for-0.4.0-py3-none-any.whl", hash = "sha256:16c4bb3337532e4bd5569adc192285976f3ad5305402256d34c67a12b5c968bd", size = 15502, upload-time = "2026-08-10T14:51:45.068Z" },
-]
-
-[[package]]
-name = "usage-monitor-mcp"
-version = "0.1.1"
-source = { editable = "apps/usage-monitor" }
-dependencies = [
-    { name = "dingtalk-events" },
-    { name = "mcp-platform" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "dingtalk-events", git = "https://github.com/ump45nose/dingtalk-workspace-plugin.git?subdirectory=mmp-platform%2Fevents&rev=59f91c009207528a4183e6d6db242f6ccf4117cd" },
-    { name = "mcp-platform", git = "https://github.com/ump45nose/mcp-platform.git?rev=dea309a5d83b6365a57937bc6e11affe692bfcaf" },
-    { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 
 [[package]]

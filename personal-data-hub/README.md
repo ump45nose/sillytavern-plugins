@@ -1,6 +1,6 @@
 # Personal Data Hub
 
-保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、健康、账单、网络流量。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询。
+保存确实需要补同步、补持久化或自行处理的数据：微信对话、Skysight 电脑历史、Plaud 音频和转录、健康、账单。服务端复用现有 PostgreSQL 和附件目录，提供原件、阅读内容与同步状态的只读查询。网络流量简化为从 Clash 订阅头直接读取剩余流量，不再保留复杂采集。
 
 ## 当前范围
 
@@ -11,9 +11,9 @@
 | Plaud | 下载音频并取得自有转录文本 | 保留既有独立转录任务、原音频、转录 Markdown 和处理状态 |
 | Health | 为手机上传的健康数据提供长期存储 | `/health/import`、幂等上传及历史读取 |
 | AutoAccounting | 为手机账单提供长期存储 | 官方账单 webhook、按源 ID 更新及显式删除 |
-| 网络流量 | 采集并持久化 NAS / Mac 代理统计 | 小时累计事实、设备边界、缺口和提交回执 |
+| 网络流量 | 读取 Clash 订阅剩余流量 | 通过 HTTP HEAD 解析 `Subscription-Userinfo` 头部，提供只读剩余额度查询 |
 
-Mem0、Hermes 报告不再采集。Memos、GitHub、Emby、Navidrome、Google Calendar/Tasks、Token Monitor 和邮件退出 Hub 的采集、镜像、加工和展示链路；这些原系统继续维护自己的存储、接口与独立任务。Hub 不再依赖 `usage-monitor-mcp`。独立用量服务源码仍在 `apps/usage-monitor`。
+Token Monitor 已是持久化闭环系统，独立运行，退出 Hub 与 Usage Monitor 的镜像聚合；`apps/usage-monitor` 停止维护。网络流量原秒级轮询 Mihomo、SQLite 存储与 Mac 记账链路已拆除。Mem0、Hermes 报告、Memos、GitHub、Emby、Navidrome、Google Calendar/Tasks 和邮件保持原系统维护。
 
 历史镜像、附件、任务和水位保留；默认来源、列表、阅读搜索和统计仅包含保留范围。历史原件及已发布内容可凭原 ID 显式读取。已退出来源无法重新注册或通用入库，旧任务不会被领取，回填不再处理其原件。物理数据清理需要独立列出对象和影响，本次不执行。
 
@@ -44,7 +44,7 @@ uv sync --python 3.12 --no-dev
 
 候选只移除退出来源的配置条目，不改变剩余来源、秘密、暂停状态或持久数据。宿主和容器配置都要处理；候选替换与目标镜像更新一起执行，不能把旧配置直接交给新版本。
 
-只读入口包括 `/api/v1/records`、`/api/v1/contents`、`/api/v1/sources`、`/api/v1/network` 和既有 `/mcp`。API Bearer、只读查看凭据与 OAuth 分开管理，沿用现有身份。列表只返回有界预览，完整正文、附件和依据按需读取。
+只读入口包括 `/api/v1/records`、`/api/v1/contents`、`/api/v1/sources`、`/api/v1/traffic` 和既有 `/mcp`。API Bearer、只读查看凭据与 OAuth 分开管理，沿用现有身份。列表只返回有界预览，完整正文、附件和依据按需读取。
 
 ## 源码边界
 
