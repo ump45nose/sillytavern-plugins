@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily ShellCrash proxy usage report
+
+[Timer]
+OnCalendar=*-*-* 08:15:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=shellcrash-traffic-report.service
+
+[Install]
+WantedBy=timers.target

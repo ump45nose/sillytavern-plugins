@@ -21,7 +21,7 @@
 30 apisix cli-proxy-api new-api
 30 cpa-manager-plus cli-proxy-api
 30 subboost-app-1 postgresql
-30 personal-crm-crm-1
+30 personal-crm
 30 personal-records
 30 vaultwarden
 30 clouddrive2
