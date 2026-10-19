@@ -20,6 +20,8 @@ def main():
                if settings['adapter'] not in SOURCE_KINDS]
     config['sources'] = {source: settings for source, settings in config['sources'].items()
                          if settings['adapter'] in SOURCE_KINDS}
+    for key in ('health_webhook_token', 'health_webhook_token_file', 'autoaccounting_webhook_token', 'autoaccounting_webhook_token_file'):
+        config.pop(key, None)
     fd, name = tempfile.mkstemp(prefix='.source-config-', dir=args.output.parent)
     try:
         with os.fdopen(fd, 'w') as stream:

@@ -8,10 +8,11 @@ from fastapi.testclient import TestClient
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
-from personal_crm.core import CrmService
+from personal_crm.archive import Archive
 from personal_crm.events import ChatEventProducer
-from personal_crm.storage import CrmRepository
-from personal_data_hub.contracts import Batch, Record, instant
+from personal_data_hub.contracts import instant
+from personal_records.store import Store as RecordsStore
+from personal_records.service import Service as RecordsService
 from personal_data_hub.daily_push import DailyPushData, daily_push_page
 from personal_data_hub.mcp import register_tools
 from personal_data_hub.server import create_app
@@ -36,12 +37,11 @@ async def check():
         (root / "viewer").write_text("daily-read")
         config = {"database_url": "sqlite:///" + str(root / "hub.db"),
                   "asset_root": str(root / "assets"), "hub_viewer_token_file": str(root / "viewer"),
-                  "sources": {"health":{"adapter":"health"},"finance":{"adapter":"bills"}}}
+                  "sources": {}}
         app = create_app(config, webhook_only=True)
         store = app.state.hub_store
-        repo = CrmRepository(config["database_url"])
-        service = CrmService(repo)
-        a, b = service.create_person("同名联系人"), service.create_person("同名联系人")
+        repo = Archive(engine=store.engine, asset_root=store.root)
+        a, b = repo.create_person({"name":"同名联系人"}), repo.create_person({"name":"同名联系人"})
         long_text = "完整正文🙂\n" * 2200 + "尾字符"
         for person, stamp, text, direction in [
             (a, "2026-10-09T08:00:00+08:00", "消息一", "inbound"),
@@ -50,12 +50,24 @@ async def check():
             (b, "2026-10-08T09:00:00+08:00", "昨天聊天", "inbound"),
             (b, "2026-10-10T00:00:00+08:00", "明天聊天", "inbound"),
         ]:
-            service.record_interaction(person_id=person.id, occurred_at=instant(stamp),
-                direction=direction, channel="wechat", summary="消息内容：" + text)
+            repo.create_interaction({"person_ids":[person["id"]],"date":stamp[:10],"started_at":instant(stamp),"ended_at":instant(stamp),
+                "type":"chat","channel":"wechat","content":text,"source":"wechat"})
+        records_store = RecordsStore(root / "records.sqlite")
+        service = RecordsService(records_store)
+        class Reader:
+            health_summary = service.health_summary
+            bill_summary = service.bill_summary
+            def iter_bills(self, start, end):
+                return iter(service.list_bills(start_date=start, end_date=end)["records"])
+        reader = Reader()
         def put(eid, kind, raw, normal=None, stamp="2026-10-09T12:00:00+08:00"):
-            store.ingest("health" if kind == "health_payloads" else "finance", Batch(records=[Record(eid, kind, raw, normal or {}, instant(stamp))]))
+            if kind == "health_payloads": records_store.ingest("health", normal["payload"])
+            else:
+                bill = raw.get("bill", raw)
+                typ = {"Expend": "expense", "Income": "income", "Transfer": "transfer"}[bill["type"]]
+                service.create_bill({"source": "fixture", "source_id": eid, "occurred_at": stamp, "type": typ, "amount": bill["money"], "currency": bill["currency"], "status": "pending" if bill.get("state") == "Wait2Edit" else "confirmed"})
         payload = {"steps": [{"count": 900, "start_time": "2026-10-09T00:00:00+08:00", "end_time": "2026-10-09T12:00:00+08:00"}],
-                   "sleep": [{"duration_seconds": 28800, "session_end_time": "2026-10-09T07:00:00+08:00"}],
+                   "sleep": [{"duration_seconds": 28800, "session_end_time": "2026-10-09T07:00:00+08:00", "stages": [{"start_time": "2026-10-08T23:00:00+08:00", "end_time": "2026-10-09T07:00:00+08:00", "stage": 2}]}],
                    "resting_heart_rate": [{"bpm": 66, "time": "2026-10-08T08:00:00+08:00"}],
                    "heart_rate": [{"bpm": 70, "time": "2026-10-09T12:00:00+08:00"}]}
         put("health-a", "health_payloads", {}, {"payload": payload})
@@ -69,22 +81,19 @@ async def check():
             ("pending", "2026-10-09T08:00:00+08:00", "Expend", "Wait2Edit", "99", "CNY"),
             ("transfer", "2026-10-09T08:00:00+08:00", "Transfer", "Synced", "30", "CNY"),
             ("usd", "2026-10-09T08:00:00+08:00", "Income", "Edited", "2.25", "USD"),
-            ("unknown", "2026-10-09T08:00:00+08:00", "Unknown", "Synced", "40", "CNY"),
         ]:
             put(eid, "bill", {"currency": currency, "money": amount, "type": typ, "state": state}, stamp=stamp)
-        daily = DailyPushData(store, repo)
+        daily = DailyPushData(store, repo, reader)
         snapshot = daily.snapshot("2026-10-09", cutoff="2026-10-09T23:00:00+08:00")
         assert snapshot["crm"]["total_contacts"] == 2 and snapshot["crm"]["total_messages"] == 3
         assert "昨天聊天" not in json.dumps(snapshot, ensure_ascii=False)
-        metrics = {m["metric"]: m for m in snapshot["health"]["metrics"]}
-        assert metrics["steps"]["value"] == 900 and metrics["sleep"]["value"] == 8
-        assert metrics["heart_rate"]["sample_count"] == 1
-        assert "resting_heart_rate" in snapshot["health"]["missing_metrics"]
-        assert "resting_heart_rate" not in metrics
-        totals = {t["currency"]: t for t in snapshot["finance"]["totals"]}
-        assert totals["CNY"]["expense"] == "1.20" and totals["CNY"]["income"] == "0"
-        assert totals["CNY"]["transfer"] == "30" and totals["CNY"]["pending_count"] == 1
-        assert totals["CNY"]["unclassified_count"] == 1 and totals["USD"]["income"] == "2.25"
+        metrics = snapshot["health"]["metrics"]
+        assert metrics["steps"]["total"] == 900 and metrics["sleep"]["duration_seconds"] == 28800
+        assert metrics["heart_rate"]["sample_count"] == 1 and metrics["resting_heart_rate"]["sample_count"] == 0
+        totals = {(t["currency"], t["type"]): t for t in snapshot["finance"]["totals"]}
+        assert totals[("CNY", "expense")]["amount"] == "1.20"
+        assert totals[("CNY", "transfer")]["amount"] == "30" and snapshot["finance"]["pending_count"] == 1
+        assert totals[("USD", "income")]["amount"] == "2.25"
         offset, messages, bills = 0, [], []
         while True:
             page = daily_push_page(snapshot, offset, 2)
@@ -95,7 +104,11 @@ async def check():
             if offset is None: break
         chunks = sorted([m for m in messages if "text_offset" in m], key=lambda m: m["text_offset"])
         assert "".join(m["text"] for m in chunks) == long_text
-        assert len(bills) == 16
+        assert len(bills) == 15
+        # Inject the same API reader into the HTTP composition boundary.
+        from unittest.mock import patch
+        with patch("personal_records.client.RecordsClient.from_config", return_value=reader):
+            app = create_app(config|{"records_api_url": "http://fixture"}, webhook_only=True)
         client = TestClient(app)
         assert client.get("/api/v1/daily-push").status_code == 401
         headers = {"Authorization": "Bearer daily-read"}
@@ -118,7 +131,7 @@ async def check():
         assert sink.sent[0]["read_tool"] == "get_daily_push_data"
         assert await producer.run_once(instant("2026-10-09T23:06:00+08:00")) is None
         server = FastMCP("daily-push-smoke")
-        register_tools(server, store, None, chat_reports=producer)
+        register_tools(server, store, None, chat_reports=producer, records_client=reader)
         async with Client(server) as mcp:
             actual = (await mcp.call_tool("get_daily_push_data", {"report_id": pending})).structured_content
             assert actual == frozen

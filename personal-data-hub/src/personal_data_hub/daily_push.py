@@ -3,24 +3,20 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 
 from .contracts import canonical, instant, utcnow
-from .display import Display, when
-from .metric_rules import bill_kind, finance_totals, health_value
-from .storage import display_index, records
 
 TEXT_CHARS = 4000
 PAGE_BYTES = 64 * 1024
 
 
 class DailyPushData:
-    def __init__(self, store, repository=None):
+    def __init__(self, store, repository=None, records_client=None):
         self.store = store
         self.repository = repository
+        self.records = records_client
 
     def snapshot(self, day=None, timezone="Asia/Taipei", *, cutoff=None, chats=None):
         zone = ZoneInfo(timezone)
@@ -46,9 +42,11 @@ class DailyPushData:
                 message["late_arrival"] = True
             if row["content"] is None:
                 message["content_status"] = "not_collected"
+            if row.get("ended_at"):
+                message["ended_at"] = row["ended_at"]
             contact["messages"].append(message)
-        health = self._health(selected.isoformat(), timezone, start, finish)
-        finance = self._finance(start, finish, zone)
+        health = self._health(selected.isoformat())
+        finance = self._finance(selected.isoformat())
         return {"date": selected.isoformat(), "timezone": timezone,
                 "cutoff": finish.astimezone(zone).isoformat(),
                 "crm": {"contacts": list(contacts.values()), "total_contacts": len(contacts),
@@ -57,88 +55,20 @@ class DailyPushData:
 
     def _chats(self, start, end, zone):
         if self.repository is None:
-            from personal_crm.storage import CrmRepository
-            self.repository = CrmRepository(self.store.engine.url.render_as_string(hide_password=False),
-                                            create_schema=False, hub_store=self.store)
-        from personal_crm.events import CONTENT_PREFIX
-        from personal_crm.storage.models import Interaction, Person
-        with self.repository.session() as session:
-            rows = session.execute(select(Interaction, Person.display_name)
-                .join(Person, Person.id == Interaction.person_id)
-                .where(Interaction.channel == "wechat", Interaction.occurred_at >= instant(start),
-                       Interaction.occurred_at < instant(end))
-                .order_by(Interaction.person_id, Interaction.occurred_at, Interaction.id)).all()
-            result = []
-            for item, name in rows:
-                original = (item.message or {}).get("record", {})
-                content = original.get("content") if item.message else (
-                    item.summary[len(CONTENT_PREFIX):] if item.summary.startswith(CONTENT_PREFIX) else None)
-                result.append({"id": item.id, "person_id": item.person_id, "person_name": name,
-                               "occurred_at": item.occurred_at.astimezone(zone).isoformat(),
-                               "direction": item.direction, "content": content,
-                               "sender": original.get("sender")})
-            return result
+            from personal_crm.archive import Archive
+            self.repository = Archive(engine=self.store.engine, asset_root=self.store.root, create_schema=False)
+        return self.repository.report_records(instant(end), instant(start))
 
-    def _health(self, day, timezone, start, finish):
-        # 按样本业务日期筛选；接收时间不代表样本属于今天，且不能回退到昨日值。
-        zone = ZoneInfo(timezone)
-        with self.store.engine.connect() as connection:
-            rows = [dict(row) for row in connection.execute(select(display_index)
-                    .where(display_index.c.kind == "health_payloads")).mappings()]
-        selected = []
-        for row in rows:
-            data = {}
-            for key, samples in row["data"].items():
-                data[key] = [s for s in samples if
-                    (when(s.get("day_time")) or when(s["time"])).astimezone(zone).date().isoformat() == day
-                    and when(s["time"]) <= finish]
-            if any(data.values()):
-                selected.append({**row, "data": data})
-        overview = Display(self.store).overview(day, timezone, "health", _rows=selected)
-        metrics = []
-        missing = []
-        for metric in overview["modules"][0]["metrics"]:
-            if metric["value"] is None:
-                missing.append(metric["id"])
-                continue
-            samples = [s for row in selected for s in row["data"].get(metric["id"], [])]
-            metrics.append({"metric": metric["id"], "label": metric["label"],
-                            "value": metric["value"], "unit": metric["unit"],
-                            "measured_at": max(when(s["time"]) for s in samples).astimezone(zone).isoformat()})
-        heart = {(s["time"], s["origin"], s["device"]): s
-                 for row in selected for s in row["data"].get("heart_rate", [])}
-        if heart:
-            values = [s["value"] for s in heart.values()]
-            metrics.append({"metric": "heart_rate", "label": "心率", "unit": "次/分",
-                            "min": min(values), "max": max(values),
-                            "average": health_value('heart_rate', list(heart.values())), "sample_count": len(values),
-                            "measured_at": max(when(s["time"]) for s in heart.values()).astimezone(zone).isoformat()})
-        else:
-            missing.append("heart_rate")
-        return {"metrics": metrics, "missing_metrics": missing, "empty_day": not metrics}
+    def _health(self, day):
+        if self.records is None:
+            raise ValueError("Personal Records API is not configured")
+        result = self.records.health_summary(day, day)
+        return {**result, "empty_day": result["days"] == 0}
 
-    def _finance(self, start, finish, zone):
-        with self.store.engine.connect() as connection:
-            rows = connection.execute(select(records.c.raw, records.c.normalized, records.c.occurred_at)
-                    .where(records.c.kind == "bill", records.c.occurred_at >= instant(start),
-                           records.c.occurred_at < instant(finish))
-                    .order_by(records.c.occurred_at, records.c.id)).mappings().all()
-        bills, amounts = [], []
-        for row in rows:
-            raw = row["raw"]
-            bill = raw.get("bill", raw.get("payload", raw))
-            normal = row["normalized"]
-            currency = bill.get("currency") or normal.get("currency") or "未知币种"
-            amount = str(bill.get("money", bill.get("amount", normal.get("amount", ""))))
-            typ, state = str(bill.get("type", "")), str(bill.get("state", ""))
-            kind = bill_kind(typ)
-            amounts.append(dict(currency=currency, amount=amount, type=typ, state=state))
-            bills.append({"time": instant(row["occurred_at"]).astimezone(zone).isoformat(),
-                          "type": kind, "amount": amount, "currency": currency,
-                          "category": bill.get("cateName", ""), "merchant": bill.get("shopName", ""),
-                          "note": bill.get("remark", ""), "state": state})
-        return {"totals": finance_totals(amounts),
-                "bills": bills, "total_bills": len(bills), "empty_day": not bills}
+    def _finance(self, day):
+        result = self.records.bill_summary(day, day)
+        bills = list(self.records.iter_bills(day, day))
+        return {**result, "bills": bills, "total_bills": len(bills), "empty_day": not bills}
 
 
 def daily_push_page(snapshot, offset=0, limit=50):
@@ -163,8 +93,7 @@ def daily_push_page(snapshot, offset=0, limit=50):
     result["finance"] = {"bills": [], "total_bills": snapshot["finance"]["total_bills"]}
     if offset == 0:
         result["health"] = deepcopy(snapshot["health"])
-        result["finance"].update(totals=deepcopy(snapshot["finance"]["totals"]),
-                                 empty_day=snapshot["finance"]["empty_day"])
+        result["finance"].update(deepcopy({k: v for k, v in snapshot["finance"].items() if k != "bills"}))
     groups, used, count = {}, len(canonical(result).encode()), 0
     for kind, contact, value in units[offset:offset + limit]:
         size = len(canonical(value).encode())

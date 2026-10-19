@@ -8,7 +8,7 @@ import tempfile
 import threading
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, inspect, select, text, update, column, table
 
 from .contracts import Asset, Batch, digest, utcnow
 from .source_policy import SOURCE_KINDS
@@ -279,7 +279,13 @@ class Store:
 
     def _gc(self):
         with self.engine.begin() as c:
-            for key in c.scalars(select(assets.c.id).where(~assets.c.id.in_(select(asset_refs.c.asset_id)))):
+            unused = select(assets.c.id).where(~assets.c.id.in_(select(asset_refs.c.asset_id)))
+            # CRM uses the same blobs, but no longer mirrors its records into Hub.
+            if inspect(c).has_table("crm_attachments"):
+                crm = table("crm_attachments", column("file_key", String))
+                file_key = func.substr(assets.c.id, 1, 2) + "/" + assets.c.id
+                unused = unused.where(~select(crm.c.file_key).where(crm.c.file_key == file_key).exists())
+            for key in c.scalars(unused):
                 (self.root / key[:2] / key).unlink(missing_ok=True)
                 c.execute(delete(assets).where(assets.c.id == key))
 
@@ -338,14 +344,11 @@ class Store:
     def preview_fields(kind, external_id, raw, normalized):
         def first(*values):
             return next((value for value in values if isinstance(value, str) and value.strip()), "")
-        bill = raw.get("bill", {}) if isinstance(raw.get("bill"), dict) else {}
-        amount = str(normalized.get("amount", ""))
         title = first(normalized.get("title"), normalized.get("subject"), raw.get("title"), raw.get("display_name"), raw.get("name"), kind)
-        preview = first(normalized.get("content"), normalized.get("message"), raw.get("summary"), raw.get("content"), normalized.get("body"), bill.get("remark"), raw.get("path"), str(external_id))
+        preview = first(normalized.get("content"), normalized.get("message"), raw.get("summary"), raw.get("content"), normalized.get("body"), raw.get("path"), str(external_id))
         if kind == "recording":
             title = "Plaud 录音 · " + str(normalized.get("date", ""))
             preview = first(normalized.get("summary"), normalized.get("transcript"), f"{int(normalized.get('duration_ms', 0) / 60000)} 分钟")
-        if kind == "bill": preview = " ".join(x for x in [str(normalized.get("type", bill.get("type", ""))), amount, str(normalized.get("currency") or ""), preview] if x)
         return {"title": title[:160].replace("\x00", ""), "preview": preview[:500].replace("\x00", "")}
 
     def _put_preview(self, connection, rid, kind, external_id, raw, normalized):

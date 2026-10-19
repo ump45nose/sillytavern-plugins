@@ -73,8 +73,5 @@
     "daily_dry_run.py": "hermes/personal-review-daily-dry-run.py",
     "weekly_dry_run.py": "hermes/personal-review-weekly-dry-run.py",
     "work_google_daily_input.py": "hermes/personal-review-google-input.py"
-  },
-  "review_sources": {
-    "health.py": "hermes/personal-review-health-source.py"
   }
 }

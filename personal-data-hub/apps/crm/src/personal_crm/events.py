@@ -16,10 +16,7 @@ from pathlib import Path
 from uuid import NAMESPACE_URL, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
-
 from personal_crm.core.domain import ensure_utc, utcnow
-from personal_crm.storage.models import Interaction, Person, SyncClient
 
 EVENT_NAME = "crm.daily_chat.ready"
 CONTENT_PREFIX = "消息内容："
@@ -154,32 +151,8 @@ class ChatEventProducer:
 
     def _all_records(self, cutoff: datetime):
         """只读取源数据；没有原文的旧记录明确标为未采集，不用摘要替代。"""
-        with self.repo.session() as session:
-            rows = session.execute(
-                select(Interaction, Person.display_name)
-                .join(Person, Person.id == Interaction.person_id)
-                .where(Interaction.channel == "wechat", Interaction.occurred_at < cutoff)
-                .order_by(Interaction.occurred_at, Interaction.id)
-            ).all()
-            clients = list(session.scalars(select(SyncClient)))
-            records = []
-            for item, name in rows:
-                available = item.summary.startswith(CONTENT_PREFIX)
-                records.append(
-                    {
-                        "id": item.id,
-                        "person_id": item.person_id,
-                        "person_name": name,
-                        "occurred_at": item.occurred_at.astimezone(self.zone).isoformat(),
-                        "direction": item.direction,
-                        "message_type": item.interaction_type,
-                        "content": item.summary[len(CONTENT_PREFIX) :] if available else None,
-                        "content_status": "complete" if available else "not_collected",
-                        "source_type": item.source_type,
-                        "sender": (item.message or {}).get("record", {}).get("sender"),
-                    }
-                )
-            watermarks = [item.synced_through for item in clients]
+        records = self.repo.report_records(cutoff)
+        watermarks = [row['synced_through'] for row in self.repo.list_sync_clients()]
         return records, watermarks
 
     @staticmethod

@@ -99,6 +99,8 @@ targets:
 
 Cloudflare env 使用 `CLOUDFLARE_API_TOKEN`；也支持现有基础设施的 `CLOUDFLARE_EMAIL` 与 `CLOUDFLARE_API_KEY`。新凭据优先使用指定 zone 的 DNS 编辑权限。Tunnel 使用宿主机已有 credentials，不创建新 Tunnel。
 
+Personal Info 两个应用登记在 `apps/personal-records.yaml`、`apps/plaud-archive.yaml`；NAS `source_roots` 指向 `/vol1/1000/Code/personal-info/<应用名>`。它们沿用现有 NPM `:28443`，源码路径迁移只更新登记和 Plaud 原生启动路径，不执行通用 Tunnel 部署。
+
 业务 `env_files` 未登记时，CLI 在目标 runtime 目录首次生成独立 OAuth 凭据，以后复用；业务凭据仍需要首次填写。已有 env 文件不会生成、替换或轮换密钥。
 
 ## 刷新令牌期限

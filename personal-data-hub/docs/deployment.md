@@ -1,3 +1,13 @@
+# 2026-10-16 Health / AutoAccounting 独立化
+
+健康和账单迁入 `personal-records`，正式服务为 mcp 组 `personal-records`，独立 SQLite 卷 `personal-records-data`，HTTP/MCP 入口 `https://records-home.172906573.xyz:28443`。旧 health-webhook 接收器停用，8765 与旧路径退出运行。手机使用 `/webhooks/health`、`/webhooks/autoaccounting`，沿用各自来源 Bearer。
+
+Hub 日报与 Hermes 复盘、新鲜度检查直接调用新 API，配置 `records_api_url` / `records_token_file`；Hub 不再采集、镜像或加工健康和账单。现有 Hub 轮询和加工继续暂停。升级只操作正式 mcp Compose 中指定的服务，不执行下面历史记录中的重启和全库回填命令。
+
+新产品的构建、迁移、在线备份见 `../../personal-records/README.md`，实施与验收见 `../../personal-records/docs/plans/2026-10-16-health-accounting.md`。以下为历次部署记录。
+
+---
+
 # 2026-10-15 来源清理集成要求
 
 来源清理与 P1 性能修复已按用户要求完成代码集成，过程和验证见 [合并记录](plans/2026-10-15-integration.md)。本轮没有部署，发布时使用已集成版本及私有配置候选，不单独覆盖 CRM、发布锁或调度文件。
@@ -37,7 +47,7 @@ uv sync --python 3.12 --no-dev
 HUB_IMAGE=local/personal-data-hub:0.1.0-stage1 ./deployment/build-image.sh
 .venv/bin/mcpctl plan personal-crm --source /home/yuwk/code/personal-data-hub --target nas
 .venv/bin/mcpctl deploy personal-crm --source /home/yuwk/code/personal-data-hub --target nas
-sudo systemctl restart personal-data-hub-collectors.service health-webhook.service
+# 历史命令已退役；后台保持暂停，health-webhook.service 停用。
 ```
 
 构建复用已锁定的公共 MCP 基础镜像，安装自有 wheel、PostgreSQL 驱动和独立用量库要求的锁定公共事件库。`uv sync` 先填充锁定 Git 缓存；也可通过 `HUB_EVENTS_SOURCE` 指定该事件库源码路径。构建必须通过 `uv pip check`。Docker 命令需当前操作账户已有的权限；若使用 sudo，需保留 `uv` 所在 PATH。既有部署模式复用当前镜像，因此首次切换镜像应先在原 Compose 项目更新 `crm` 服务，再由 `mcpctl` 记录和校验部署，保留其他服务。

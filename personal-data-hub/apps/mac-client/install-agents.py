@@ -171,8 +171,7 @@ def _install(app, status=False):
     configs = {label: plistlib.loads(value) for label, value in originals.items()}
     wechat = configs[LABELS[0]]
     env = wechat.setdefault("EnvironmentVariables", {})
-    collection_only = env.get("WECHAT_FACT_EXTRACTION") == "false"
-    env["WECHAT_FACT_EXTRACTION"] = "false"
+    env.pop("WECHAT_FACT_EXTRACTION", None)
     activity = configs[LABELS[1]]
     args = activity.get("ProgramArguments", [])
     if not env.get("CRM_CHECKPOINT"):
@@ -198,7 +197,7 @@ def _install(app, status=False):
     python = version / "python/bin/python3.12"
     wechat_arguments = [str(launcher), "--collect-wechat"]
     activity_arguments = [str(launcher), "--collect-activity", *parameters]
-    code_paths_match = (collection_only and wechat["ProgramArguments"] == wechat_arguments and args == activity_arguments
+    code_paths_match = (wechat["ProgramArguments"] == wechat_arguments and args == activity_arguments
                         and env.get("CHATLOG_EXECUTABLE") == str(version / "bin/chatlog-keeper")
                         and env.get("CHATLOG_EXPECTED_SHA256") == manifest["chatlogSHA256"])
     if (current.get("archiveSHA256") == manifest["archiveSHA256"]

@@ -13,8 +13,8 @@
   "email_transport": "oauth",
   "hub_source": "/home/yuwk/code/personal-data-hub/src",
   "email_container": "mcp-platform-email-mcp-1",
-  "health_api_url": "",
-  "health_token_file": "",
+  "records_api_url": "http://192.168.31.201:18087",
+  "records_token_file": "/path/to/records-read.token",
   "npm_health_url": "http://127.0.0.1:28081/",
   "ha_url": "http://127.0.0.1:8123/",
   "moviepilot_api_base": "http://127.0.0.1:28300/api/v1"

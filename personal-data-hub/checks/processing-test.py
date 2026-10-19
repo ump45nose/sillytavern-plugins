@@ -46,6 +46,8 @@ class ProcessingTests(unittest.TestCase):
                 self.store = IsolatedStore(self.admin.url, self.temp.name + '/assets')
         else:
             self.store = Store('sqlite:///' + self.temp.name + '/db', self.temp.name + '/assets')
+        from personal_crm.archive import Archive
+        Archive(engine=self.store.engine, asset_root=self.store.root)
         self.store.register('skysight-summaries', 'owner', 'skysight', 'explicit_only')
         self.repository = ProcessingRepository(self.store)
         self.query = ReadingQuery(self.store)
@@ -249,14 +251,14 @@ class ProcessingTests(unittest.TestCase):
         clock=[0];started=[]
         class Process:
             def __init__(self,args,**kwargs):
-                self.command=args[3];self.source=args[-1];self.pid=100+len(started);self.stopped=False
+                self.command=next(a for a in args if a in ('collect','rebuild-content','process-pending'));self.source=args[-1];self.pid=100+len(started);self.stopped=False
                 started.append((clock[0],self.command,self.source))
             def poll(self):return 1 if self.stopped else (None if self.source=='slow' else 0)
         def sleep(_):
             clock[0]+=5
             if clock[0]>25:raise KeyboardInterrupt
         with patch.object(scheduler.subprocess,'Popen',Process),patch.object(scheduler.time,'monotonic',side_effect=lambda:clock[0]),patch.object(scheduler.time,'sleep',side_effect=sleep),patch.object(scheduler,'stop_worker',side_effect=lambda p:setattr(p,'stopped',True)),patch.object(scheduler,'interrupted'),patch.object(ProcessingRepository,'has_pending',side_effect=[True,False,False,False]):
-            scheduler.serve(self.store,{'collector_workers':1,'sources':{'slow':{'interval_seconds':900}}})
+            scheduler.serve(self.store,{'collector_workers':1,'processing_backfill_on_start':True,'processing_interval_seconds':10,'sources':{'slow':{'interval_seconds':900}}})
         self.assertIn((0,'collect','slow'),started)
         self.assertEqual(sum(command=='rebuild-content' for _,command,_ in started),1)
         self.assertEqual(sum(command=='process-pending' for _,command,_ in started),1)

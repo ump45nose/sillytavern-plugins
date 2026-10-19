@@ -3,36 +3,10 @@
   "asset_root": "/hub-assets",
   "hub_api_token_file": "/run/hub/api-token",
   "hub_viewer_token_file": "/run/hub/viewer-token",
-  "health_webhook_token_file": "/run/hub/health-token",
-  "autoaccounting_webhook_token_file": "/run/hub/accounting-token",
   "processing_enabled": false,
   "processing_interval_seconds": 21600,
   "processing_backfill_on_start": false,
   "sources": {
-    "crm": {
-      "adapter": "crm_pg",
-      "enabled": false,
-      "account": "owner",
-      "database_url": "postgresql+psycopg://HUB_USER:HUB_PASSWORD@postgresql:5432/personal_data_hub",
-      "interval_seconds": 21600,
-      "deletion_support": "authoritative_inventory"
-    },
-    "health": {
-      "adapter": "health",
-      "account": "owner",
-      "path": "/path/to/legacy-health.db",
-      "enabled": false,
-      "collection_mode": "push",
-      "deletion_support": "not_supported"
-    },
-    "finance": {
-      "adapter": "bills",
-      "account": "owner",
-      "path": "/path/to/legacy-accounting",
-      "enabled": false,
-      "collection_mode": "push",
-      "deletion_support": "not_supported"
-    },
     "skysight-raw": {
       "adapter": "skysight",
       "account": "owner",
@@ -60,5 +34,7 @@
       "interval_seconds": 21600,
       "deletion_support": "not_supported"
     }
-  }
+  },
+  "records_api_url": "http://personal-records:8080",
+  "records_token_file": "/run/hub/records-read.token"
 }

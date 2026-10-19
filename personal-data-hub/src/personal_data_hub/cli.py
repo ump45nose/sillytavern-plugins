@@ -25,7 +25,6 @@ def main():
     from .processing.registry import PROFILES
     p.add_argument('--processor', choices=sorted(PROFILES))
     p = sub.add_parser("backfill-display"); p.add_argument("--rebuild", action="store_true"); p.add_argument("--kind")
-    p = sub.add_parser("import-crm"); p.add_argument("path")
     p = sub.add_parser("backup"); p.add_argument("--destination", required=True)
     p = sub.add_parser("ack-skysight"); p.add_argument("--source", choices=["skysight-raw", "skysight-summaries"], required=True); p.add_argument("--relative", required=True); p.add_argument("--expected-hash", required=True)
     p = sub.add_parser("traffic-remaining"); p.add_argument("--url")
@@ -83,9 +82,6 @@ def main():
                 store.ingest(args.source, batch)
         print(canonical({"committed": True, "sha256": args.expected_hash})); return
     if args.action == "status": print(canonical(store.status())); return
-    if args.action == "import-crm":
-        from .migration import import_crm
-        print(canonical(import_crm(store, args.path))); return
     if args.action == "serve-collectors":
         from .scheduler import serve
         serve(store, config, args.config)
@@ -97,7 +93,7 @@ def main():
         if args.action == "reconcile":
             settings = dict(settings)
             settings["force_full"] = True
-        if not settings.get("enabled", True): continue
+        if settings["adapter"] in {"crm", "crm_pg"} or not settings.get("enabled", True): continue
         since = instant(args.since) if args.since else (utcnow() - timedelta(days=30) if args.action == "backfill" else None)
         try:
             result = run(store, source, settings, since)

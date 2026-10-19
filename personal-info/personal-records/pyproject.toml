@@ -1,0 +1,31 @@
+[project]
+name = "personal-records"
+version = "0.1.0"
+description = "Unified personal information webhook collector with SQLite, HTTP and MCP"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.11,<3"]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "mcp-platform"]
+migrate = ["psycopg[binary]>=3.2,<4"]
+test = ["pytest>=8,<10", "httpx>=0.27,<1"]
+
+[project.scripts]
+personal-records = "personal_records.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/personal_records"]
+
+[tool.uv.sources]
+mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+# Servers use the platform Python 3.12+ runtime; the base client supports Hermes 3.11.
+environments = ["python_version >= '3.12'"]

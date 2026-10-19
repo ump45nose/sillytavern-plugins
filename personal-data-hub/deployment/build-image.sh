@@ -8,6 +8,7 @@ task_image=${HUB_IMAGE:-local/personal-data-hub:0.1.0}
 cd "$task_repo"
 uv build --wheel --out-dir "$task_stage/wheels"
 uv build --wheel --package personal-crm --out-dir "$task_stage/wheels"
+uv build --wheel "$task_repo/../personal-info/personal-records" --out-dir "$task_stage/wheels"
 task_runtime_source=${HUB_RUNTIME_SOURCE:-}
 if [[ -z "$task_runtime_source" ]]; then
   task_runtime_source=$("$task_repo/.venv/bin/python" - <<'PY'

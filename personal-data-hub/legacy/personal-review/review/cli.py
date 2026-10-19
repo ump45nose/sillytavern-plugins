@@ -197,9 +197,9 @@ def _collect(
     if source_flags["email"]:
         adapters.append(("email", EmailBriefSource(config.path("REVIEW_EMAIL_BRIEF_DIR"), config.policy), window))
     if source_flags["health"]:
-        adapters.append(("health", HealthSource(config.path("REVIEW_HEALTH_DB"), metrics), window))
+        adapters.append(("health", HealthSource(metrics), window))
     if source_flags["finance"] and not weekly:
-        adapters.append(("finance", FinanceSource(config.path("REVIEW_FINANCE_SUMMARY_DIR")), window))
+        adapters.append(("finance", FinanceSource(), window))
     if source_flags["git"] and not weekly:
         adapters.append(("git", GitActivitySource(config.path("REVIEW_GIT_SUMMARY_DIR")), window))
     if source_flags["crm"] and not weekly:
@@ -566,7 +566,6 @@ def _doctor(config: AppConfig, state: StateRepository, memos: MemosClient | None
 
     paths = {
         "state_parent": config.path("REVIEW_STATE_DB").parent,
-        "health_db": config.path("REVIEW_HEALTH_DB"),
         "jobs_file": config.path("REVIEW_JOBS_FILE"),
         "skysight_root": config.path("REVIEW_NAS_SKYSIGHT_ROOT"),
         "attachment_spool": config.path("REVIEW_ATTACHMENT_SPOOL"),

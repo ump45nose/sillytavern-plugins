@@ -18,6 +18,12 @@
     "branch": "main"
   },
   {
+    "name": "dingtalk-workspace-plugin",
+    "path": "mcp/dingtalk-workspace-plugin",
+    "remote_url": "https://github.com/ump45nose/dingtalk-workspace-plugin.git",
+    "branch": "main"
+  },
+  {
     "name": "face-baseline",
     "path": "face-baseline",
     "remote_url": null,
@@ -60,15 +66,21 @@
     "branch": "main"
   },
   {
+    "name": "personal-records",
+    "path": "personal-info/personal-records",
+    "remote_url": "https://github.com/ump45nose/personal-records.git",
+    "branch": "main"
+  },
+  {
     "name": "sillytavern-workbench",
     "path": "sillytavern-workbench",
     "remote_url": "https://github.com/ump45nose/sillytavern-workbench.git",
     "branch": "main"
   },
   {
-    "name": "dingtalk-workspace-plugin",
-    "path": "mcp/dingtalk-workspace-plugin",
-    "remote_url": "https://github.com/ump45nose/dingtalk-workspace-plugin.git",
+    "name": "plaud-archive",
+    "path": "personal-info/plaud-archive",
+    "remote_url": "https://github.com/ump45nose/plaud-archive.git",
     "branch": "main"
   }
 ]

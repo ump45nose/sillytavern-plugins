@@ -7,7 +7,7 @@ name = "personal-review"
 version = "0.1.0"
 description = "Hermes personal evidence, review ledger and projection pipeline"
 requires-python = ">=3.11"
-dependencies = ["PyYAML>=6.0", "jsonschema>=4.20"]
+dependencies = ["PyYAML>=6.0", "jsonschema>=4.20", "personal-records>=0.1,<1"]
 
 [project.optional-dependencies]
 # 邮件采集使用独立运行环境，避免 Hermes 升级覆盖 MCP 客户端依赖。
