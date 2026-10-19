@@ -4,6 +4,7 @@ Narrow GPL adaptations of Ronchy2000/epic-freebies-helper at upstream-contract.j
 No upstream service, scheduler, settings singleton or video recorder is imported.
 """
 import json
+import asyncio
 import os
 from pathlib import Path
 import time
@@ -16,6 +17,28 @@ from .browser_driver import BrowserDriver, STORE, clean_target
 from .workflow import ClaimWorkflow, Paused
 
 LOGIN = "https://store.epicgames.com/login"
+
+
+async def report_purchase_error(response):
+    """Keep the payment service's rejection code, never its account/token data."""
+    target = urlsplit(response.url)
+    if (response.status < 400 or target.hostname != "payment-website-pci.ol.epicgames.com"
+            or response.request.resource_type not in {"xhr", "fetch"}):
+        return
+    record = {"event": "epic_purchase_error", "status": response.status}
+    try:
+        raw = await asyncio.wait_for(response.body(), timeout=3)
+        if len(raw) <= 65536:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                code = data.get("errorCode")
+                if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,160}", code):
+                    record["error_code"] = code
+                if type(data.get("numericErrorCode")) is int:
+                    record["numeric_code"] = data["numericErrorCode"]
+    except Exception as error:
+        record["read_error"] = type(error).__name__
+    print(json.dumps(record), flush=True)
 
 
 class Journal:
@@ -122,7 +145,9 @@ class Login:
             await page.wait_for_timeout(min(5000, int(timeout * 1000)))
             return
         if self.challenge is None:
-            self.challenge = build_challenge(page, self.config)
+            captured = self.driver.challenge_responses
+            self.challenge = build_challenge(page, self.config, initial_responses=(
+                captured[kind] for kind in ("script", "payload") if kind in captured))
         try:
             outcome = await self.challenge.handle(obstacle, timeout=min(timeout, 120))
         except TimeoutError:
@@ -191,7 +216,7 @@ class Login:
         await page.wait_for_timeout(3000)
 
 
-def build_challenge(page, config):
+def build_challenge(page, config, *, initial_responses=()):
     """Only the challenge path loads the model SDK/image libraries."""
     from .challenges import HCaptchaHandler, load_sdk
     AgentConfig = load_sdk().AgentConfig
@@ -210,7 +235,7 @@ def build_challenge(page, config):
         RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=120, RESPONSE_TIMEOUT=60,
         cache_dir=temporary / "cache", challenge_dir=temporary / "images",
         captcha_response_dir=temporary / "responses")
-    return HCaptchaHandler(page, settings)
+    return HCaptchaHandler(page, settings, initial_responses=initial_responses)
 
 
 async def execute(context, config, state_dir):
@@ -235,6 +260,7 @@ async def execute(context, config, state_dir):
         page = browser.pages[0] if browser.pages else await browser.new_page()
         driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
         browser.on("response", driver.observe_response)
+        browser.on("response", report_purchase_error)
         await driver._goto(STORE + "/free-games", 45)
         await page.wait_for_timeout(5000)
         auth = Login(driver, config)
