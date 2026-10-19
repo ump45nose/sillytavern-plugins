@@ -64,4 +64,4 @@ python3 -m unittest discover -s tests -p 'test_ole_entrypoint.py' -v
 
 参考 [smallfawn Olé 脚本的固定提交](https://github.com/smallfawn/QLScriptPublic/blob/6f471a97fa0a9f418f41978c3d79638961183478/wxapp/olecs.js)，精确 SHA-256 和使用边界见 `provider-source.json`。仅依据公开协议独立实现适配器，没有导入其框架、推送、作者坐标或签到失败自动重试。
 
-2026-10-19 已完成真实扫码取码、商家会员登录及空门店签到，GET 状态 N→Y；积分 0→0，没有已到账增量。Hermes 包装重复执行确认 already_complete。自然过期后的续登仍未等待，尚未启用生产定时；详细 run_id 见平台计划与统一验收记录。
+2026-10-19 已完成真实扫码取码、商家会员登录及空门店签到，GET 状态 N→Y；积分 0→0，没有已到账增量。正式 Hermes 调度重复执行确认 already_complete，日常任务已启用，操作留本地记录、仅异常上报。自然过期后的续登仍未等待；详细 run_id 见平台计划与统一验收记录。
