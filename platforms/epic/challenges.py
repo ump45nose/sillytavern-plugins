@@ -7,6 +7,24 @@ The public task binds its authorized challenge scope and private model config.
 import asyncio
 import importlib
 import sys
+from urllib.parse import urlsplit
+
+
+def response_kind(response):
+    """Only provider requests carry challenge data; CORS preflights do not."""
+    target = urlsplit(response.url)
+    if target.scheme != "https" or not target.hostname or not (
+        target.hostname == "hcaptcha.com" or target.hostname.endswith(".hcaptcha.com")
+    ):
+        return None
+    method = response.request.method
+    if method == "GET" and target.path.endswith("/hsw.js"):
+        return "script"
+    if method == "POST" and "/getcaptcha/" in target.path:
+        return "payload"
+    if method == "POST" and "/checkcaptcha/" in target.path:
+        return "answer"
+    return None
 
 
 def _sdk_error(message):
@@ -34,11 +52,12 @@ def load_sdk(name="hcaptcha_challenger.agent"):
 
 
 class HCaptchaHandler:
-    def __init__(self, page, config, *, loader=load_sdk):
+    def __init__(self, page, config, *, loader=load_sdk, initial_responses=()):
         self.page = page
         self.config = config
         self.loader = loader
         self.agent = None
+        self.initial_responses = tuple(initial_responses)
 
     async def handle(self, obstacle, *, timeout):
         if obstacle.kind != "captcha" or timeout <= 0:
@@ -52,14 +71,26 @@ class HCaptchaHandler:
             # no optional package. SDK debug output can contain challenge tokens.
             logging_module.logger.remove()
         if self.agent is None:
-            self.agent = module.AgentV(page=self.page, agent_config=self.config)
+            class CaptchaAgent(module.AgentV):
+                async def _task_handler(self, response):
+                    if response_kind(response) is not None:
+                        await super()._task_handler(response)
+
+            self.agent = CaptchaAgent(page=self.page, agent_config=self.config)
         # The SDK catches some internal errors itself. Retain their locations
         # without forwarding its messages, challenge tokens or model responses.
         logger = logging_module.logger if logging_module is not None else None
         sink = logger.add(_sdk_error, level="ERROR", backtrace=False, diagnose=False) if logger else None
+        async def solve():
+            # The widget can finish getcaptcha before it becomes visible. Feed
+            # its observed script/payload once; never repeat a network request.
+            responses, self.initial_responses = self.initial_responses, ()
+            for response in responses:
+                await self.agent._task_handler(response)
+            return await self.agent.wait_for_challenge()
         try:
             signal = await asyncio.wait_for(
-                self.agent.wait_for_challenge(), timeout=timeout
+                solve(), timeout=timeout
             )
         finally:
             if sink is not None:

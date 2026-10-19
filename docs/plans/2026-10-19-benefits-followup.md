@@ -96,3 +96,22 @@
 - Rewards 正式完整复跑 `cd8ea9d5-1d2e-420e-93f8-d00209b68be1` 于 16:21 结束，`full_requested_capabilities_partial`。周任务再次实际读回 **20/70、已开放 2/2 完成**；每日快照超时，随后依赖该快照的能力报 `daily_cycle_unavailable`，完整任务仍未通过，不把周任务成功推广为全部成功。本轮没有继续扩大 Rewards 业务源码修改。
 - 最终实时核对：三个 Bing 特例在运行规则和持久源中一致，使用既有香港 02 TCP 节点；微软分组仍 DIRECT，廉价手动与风控敏感选择器未改。没有残留诊断 profile 副本或本轮浏览器进程。正式 delivery 均由既有启动器写入，没有手工替换。
 - 16:24 启动检查仍只有既有 `tailscale` 缺项、`ai-resource-center` / `personal-crm` 未登记，以及三个已知 SillyTavern 忽略对象；`stopped_planned=[]`，未操作这些容器。福利文件执行 `git diff --check`；仅提交本项目改动，其他项目未跟踪目录保留。
+
+## 继续处理 hCaptcha
+
+- 用户要求继续解决 Epic。先检查 `/checkcaptcha/` 的请求方法、协议错误码与 SDK 接入时序，区分答案拒绝、参数或会话失效和 SDK 兼容问题；不把 HTTP 400 单独当作模型选图错误。
+- 静态调用链发现 `AgentV` 直到页面已出现 captcha 才创建并订阅 response，而 `_review_challenge_type` 依赖更早的 `/getcaptcha/`。当前正式日志恰有 30 秒 payload 等待超时。此时序缺陷是待实测假设，先在私有诊断中从浏览器创建起记录协议形状和时序，不输出 challenge token、答案或账号页面，不修改第三方安装包。
+- 验收仍以真实领取和独立所有权确认；若只能修复一部分，明确保留未完成项。
+- 新增直连诊断 `e29c76f0-...`：Get 后被禁用，hCaptcha API 多次连接重置；额外等待 30 秒仍无法进入订单。根路径 HEAD 的 TLS 成功不代表带实际业务数据的浏览器请求成功。
+- 使用独立 loopback 临时 Core 验证，复用现有香港 02 Trojan 节点；不修改共享 Core、选择器或正式 Epic 配置。节点 IPv6 bootstrap 复用现有 Core 解析结果，仅在临时副本固定地址并保留 TLS SNI。最初因独立 Core 无法解析节点域名的 `d697fea8-...` 已安全中断，不把它计入线路对照。
+- 商店直连、hCaptcha 走 TCP 的 `40296843-57f1-42ef-b16b-3a201825261a` 首次实测两次 `/checkcaptcha/` POST 均 HTTP 200 / `pass=true`，但没有打开订单，最终 `checkout_state_unconfirmed`。因此当前模型与自动操作可以完成题目；整体领取仍未成功。精确时序确认 getcaptcha 在 34.8 秒返回，而 SDK 在 38.6 秒才创建；其 30 秒 payload 超时源于漏接先到响应。
+- 也已确认 JSONDecodeError 的空 200 为 **OPTIONS 预检**，实际 POST 另有结果；不是模型 JSON 格式错误。已在源码只向 SDK 传递 hCaptcha 的实际 GET 脚本、POST 题目和 POST 答案。保留当前页最新两条必要初始响应，SDK 首次启动时按顺序读取一次；不重发网络请求、不记录原始数据，不扩大模型依赖加载时机。真实 HTTP 400 / `pass=false` 仍失败。
+- 私有原型 `79b22bcc-63ec-44e7-b563-09f5b362bf34` 成功解码既有 payload，直接读出真实 multi-select / 2 题，不再空等或调用视觉题型路由模型；第一次校验 `pass=true`，商店随后另发第二个挑战，其校验 `pass=false`，整体仍 `challenge_unconfirmed`。新源码 117 项 Epic 回归通过，继续读取 Epic 接收验证结果的后续协议，并比较商店、验证码使用同一 TCP 出口；该出口差异是否造成商店重复挑战仍未确定。
+- 使用最终响应接入代码、商店与验证码同走香港 02 的 `5232d22a-8b93-4525-9c90-886c78d89919` 两次 hCaptcha 都返回 `pass=true`；没有 SDK 题目超时或 OPTIONS 解析报错，但最后仍没有订单页。不能再将全部剩余故障归于验证码答案或分流 IP 差异。
+- 从当前真实浏览器只读取得官方 `purchase-Ddfeyymr.js`，发现 Get 已进入 quickPurchase 流程：Talon 验证后调用 `/proxy/api/purchase/quick-purchase`，可能在没有订单页时直接领取，并在 `CAPTCHA_VERIFY_FAILED` 时自行重试一次。执行器按旧流程等待订单页，不兼容该入口；该入口还不符合本项目“核对结算零价并先记 journal 再提交”的约束。后续不再点击直接领取的 Get，不通过伪造响应、修改前端状态或重放快速领取 API 修补它。
+- 官方独立结算只读实测 `8592ad08-e2e0-4a2e-beea-42580953a77e`：`www.epicgames.com/purchase?offers=...` 规范化到 `store.epicgames.com/purchase`，完成正常 CF 等待后，当前商品身份完整匹配、可见订单控件、总额 `explicit_zero`；没有提交。直接领取路径改为打开这个已验证的官方结算入口，随后复用原有零价核对、journal、单次订单和独立所有权回查。119 项 Epic 回归通过，进入完整领取验收；购物车分支不扩大修改。
+- 完整业务验证 `49a99c9a-79cb-4780-9994-c0e1d73be8ac`：两款均打开独立零元结算、先记 journal 后各点击一次订单；下单阶段 hCaptcha 两次均 HTTP 200 / `pass=true`，随后均观察到支付服务 `payment-website-pci.ol.epicgames.com` 的 XHR 400，独立所有权回查未确认。还不能确定该 400 的具体业务拒绝码，不能将它直接称为账号封禁或已证明的地区限制。两款 journal 保留 `uncertain`，后续仅查状态，不清空、不重下。
+- 已补齐支付服务错误码的脱敏记录：只保留 HTTP 状态、标准 `errorCode` / `numericErrorCode`，不输出原始 message、账号字段或 token；120 项 Epic 回归和真实 SDK 导入冒烟通过。
+- 已将实测能正常加载商店、结算和通过验证码的香港 02 TCP 线路保留为福利浏览器路径：仅三条域名后缀（Epic、Unreal Engine、hCaptcha）与当前福利 Camoufox **完整可执行文件路径** 的 AND 规则，写入既有自定义源并通过 Core 校验。Epic 私有配置仅恢复原 HTTP 代理字段，其余字段、身份、模型和文件权限/ACL 保留；微软 DIRECT 及所有选择器未改。临时 Core 只用于对照，不作为新增常驻服务。
+- 原正式入口 `cfa6d776-61be-4978-9c7f-789789fd5ace` 使用最终代码与持久路径结束为 `partial`：当前促销 2、确认在库 0、未确认 2。它遵守已有 journal，仅执行独立回查，没有重新提交。正式 delivery 由启动器更新。
+- 订单历史旧 AJAX 地址返回 HTML，无法据此确认订单终态；账号事务页转入官方 `/id/login/switch-account`，已确认页面显示配置中的同一邮箱。正进行限定同一身份的只读历史访问，没有切换到其他账号，也没有修改安全设置。
