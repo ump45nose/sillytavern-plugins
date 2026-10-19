@@ -8,7 +8,6 @@ from platforms.epic.challenges import HCaptchaHandler, _sdk_error
 from platforms.epic.workflow import Obstacle, Paused
 from platforms.epic.native import Login
 from common.interventions import fingerprint
-from urllib.parse import parse_qs, urlsplit
 from dataclasses import replace
 
 
@@ -27,9 +26,7 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
         auth = Login(driver, {})
         await auth.sso(obstacle, timeout=10)
         target = driver._goto.await_args.args[0]
-        self.assertEqual(urlsplit(target).netloc, "www.epicgames.com")
-        self.assertEqual(urlsplit(target).path, "/id/login")
-        self.assertEqual(parse_qs(urlsplit(target).query)["redirectUrl"], [driver.page.url])
+        self.assertEqual(target, driver.page.url)
         with self.assertRaises(Paused):
             await auth.sso(obstacle, timeout=10)
         driver._goto.assert_awaited_once()
@@ -46,6 +43,27 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(change=change), self.assertRaises(Paused):
                 await Login(driver, {}).sso(obstacle, timeout=10)
             driver._goto.assert_not_awaited()
+
+    async def test_signed_out_product_authenticates_before_any_checkout_action(self):
+        driver, _ = self.fixture()
+        driver.page.url = "https://store.epicgames.com/p/fixture"
+        hidden = SimpleNamespace(is_visible=AsyncMock(return_value=False))
+        driver.page.get_by_text = lambda *a, **kw: hidden
+        driver.page.locator = lambda selector: SimpleNamespace(
+            is_visible=AsyncMock(return_value=False), count=AsyncMock(
+                return_value=1 if selector == 'egs-navigation[isloggedin="false"]' else 0))
+        link = SimpleNamespace(is_visible=AsyncMock(return_value=True),
+            get_attribute=AsyncMock(return_value="/login?redirectTo=%2Fp%2Ffixture"), click=AsyncMock())
+        driver.page.get_by_role = lambda role, **kw: SimpleNamespace(
+            count=AsyncMock(return_value=1 if role == "link" else 0), nth=lambda _: link)
+        auth = Login(driver, {"email": "fixture@example.invalid", "password": "fixture"})
+        obstacle = Obstacle("login", driver.page.url, "fixture", "product")
+        await auth.login(obstacle, timeout=10)
+        with self.assertRaises(Paused): await auth.login(obstacle, timeout=10)
+        link.click.assert_awaited_once()
+        driver._goto.assert_not_awaited()
+        driver.prepare_checkout.assert_not_awaited()
+        driver.submit_once.assert_not_awaited()
 
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):

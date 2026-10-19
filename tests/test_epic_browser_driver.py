@@ -88,6 +88,19 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         await driver.recover(obstacle, timeout=1)
         callback.assert_awaited_once_with(obstacle, timeout=1)
 
+    async def test_product_signed_out_navigation_requires_login_before_using_get(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/p/fixture",
+            locator=lambda selector: SimpleNamespace(count=AsyncMock(
+                return_value=1 if selector == 'egs-navigation[isloggedin="false"]' else 0)),
+            get_by_role=lambda *a, **kw: object())
+        driver = BrowserDriver(None, page, None)
+        driver._text = AsyncMock(return_value="Game")
+        driver._visible = AsyncMock(return_value=False)
+        driver._ready = AsyncMock(return_value=True)
+        obstacle = await driver._observe_container(page, "product", timeout=1)
+        self.assertEqual(obstacle.kind, "login")
+        driver._ready.assert_not_awaited()
+
     async def test_navigation_timeout_accepts_the_canonical_page_with_its_navigation_component(self):
         try:
             from playwright.async_api import TimeoutError as BrowserTimeout

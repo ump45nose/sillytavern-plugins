@@ -9,13 +9,13 @@ from pathlib import Path
 import time
 import shutil
 import re
-from urllib.parse import parse_qs, urlsplit, urlencode
+from urllib.parse import parse_qs, urlsplit, urljoin
 
 from common.model import atomic_json
 from .browser_driver import BrowserDriver, STORE, clean_target
 from .workflow import ClaimWorkflow, Paused
 
-LOGIN = "https://www.epicgames.com/id/login?lang=en-US&noHostRedirect=true&redirectUrl=" + STORE + "/free-games"
+LOGIN = "https://store.epicgames.com/login"
 
 
 class Journal:
@@ -93,7 +93,7 @@ class Login:
         page, offer = self.driver.page, self.driver.offer
         if (obstacle.phase != "checkout" or (obstacle.payload or {}).get("_container") is not page
                 or offer is None or offer.id not in self.driver.prepared
-                or clean_target(page.url) != "https://store.epicgames.com/login"
+                or clean_target(page.url) != LOGIN
                 or obstacle.target != clean_target(page.url)):
             raise Paused("login_not_confirmed")
         key = ("sso", offer.id)
@@ -101,11 +101,9 @@ class Login:
             raise Paused("login_not_confirmed")
         self.acted.add(key)
         # The store login transition retains the pending purchase in its URL.
-        # Return there after official authentication, without replaying Get or
-        # an order submission. Ordinary login/challenge handlers run afterward.
-        target = "https://www.epicgames.com/id/login?" + urlencode({
-            "lang": "en-US", "noHostRedirect": "true", "redirectUrl": page.url})
-        await self.driver._goto(target, timeout)
+        # Let the storefront build its OAuth request and preserve its pending
+        # purchase. Never invent authentication client/state parameters.
+        await self.driver._goto(page.url, timeout)
         await page.wait_for_timeout(3000)
 
     async def captcha(self, obstacle, *, timeout):
@@ -152,6 +150,27 @@ class Login:
             self.acted.add("email")
             await page.locator("#email").fill(email)
             await page.locator("#continue").click(timeout=10000)
+        elif (urlsplit(page.url).hostname == "store.epicgames.com"
+                and await page.locator('egs-navigation[isloggedin="false"]').count() == 1):
+            if "store_authentication" in self.acted:
+                raise Paused("login_not_confirmed")
+            names = re.compile(r"^(Sign In|Log In|Login|登录)$", re.I)
+            visible = []
+            for role in ("link", "button"):
+                controls = page.get_by_role(role, name=names)
+                if await controls.count() > 16:
+                    raise Paused("login_layout_unavailable")
+                for index in range(await controls.count()):
+                    control = controls.nth(index)
+                    if await control.is_visible():
+                        visible.append(control)
+            if len(visible) != 1:
+                raise Paused("login_layout_unavailable")
+            href = await visible[0].get_attribute("href")
+            if href:
+                clean_target(urljoin(page.url, href))
+            self.acted.add("store_authentication")
+            await visible[0].click(timeout=min(10000, int(timeout * 1000)))
         else:
             raise Paused("login_layout_unavailable")
         await page.wait_for_timeout(3000)
