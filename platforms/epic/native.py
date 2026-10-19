@@ -41,6 +41,29 @@ async def report_purchase_error(response):
     print(json.dumps(record), flush=True)
 
 
+def _browser_options(config, state_dir):
+    """Keep the browser identity with its cookies instead of rotating it on restart."""
+    from camoufox.utils import launch_options
+
+    identity_path = Path(state_dir) / "browser-identity.json"
+    stored = identity_path.exists()
+    identity = json.loads(identity_path.read_text(encoding="utf-8")) if stored else None
+    if stored and (not isinstance(identity, dict) or not identity):
+        raise ValueError("browser_identity_invalid")
+    # Firefox must expose Turnstile's cross-origin frame for the normal click.
+    options = dict(user_data_dir=str(Path(state_dir) / "browser"),
+                   headless=True, disable_coop=True, humanize=0.2, locale="en-US",
+                   firefox_user_prefs={"network.dns.disableIPv6": True, "network.trr.mode": 5})
+    if config.get("proxy"):
+        options["proxy"] = {"server": config["proxy"]}
+    options = launch_options(config=identity, **options)
+    if not stored:
+        chunks = sorted((int(key.rsplit("_", 1)[1]), value)
+                        for key, value in options["env"].items() if key.startswith("CAMOU_CONFIG_"))
+        atomic_json(identity_path, json.loads("".join(value for _, value in chunks)))
+    return options
+
+
 class Journal:
     def __init__(self, directory):
         self.path = Path(directory) / "claim-journal.json"
@@ -246,13 +269,8 @@ async def execute(context, config, state_dir):
     if not cache.is_absolute() or not (cache / "camoufox-bin").is_file():
         raise Paused("browser_cache_unavailable")
     pkgman.INSTALL_DIR = cache
-    # Firefox must expose Turnstile's cross-origin frame for the normal click.
-    options = dict(persistent_context=True, user_data_dir=str(Path(state_dir) / "browser"),
-                   headless=True, disable_coop=True, humanize=0.2, locale="en-US",
-                   firefox_user_prefs={"network.dns.disableIPv6": True, "network.trr.mode": 5})
-    if config.get("proxy"):
-        options["proxy"] = {"server": config["proxy"]}
-    async with AsyncCamoufox(**options) as browser:
+    async with AsyncCamoufox(from_options=_browser_options(config, state_dir),
+                            persistent_context=True) as browser:
         async def identity_encoding(route):
             headers = await route.request.all_headers()
             headers["accept-encoding"] = "identity"
