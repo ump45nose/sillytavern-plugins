@@ -193,12 +193,9 @@ async function execute({config, state, request, getCode, statusOnly = false}) {
       shop = identifier(data.shop_code);
       if (!shop) throw new OleError("shop_lookup_unconfirmed");
     }
-    if (!shop) return outcome("ok", "missing_shop_configuration", "blocked",
-      before === null ? "unknown" : "complete", null, before);
-
     state.record("pending");
     let submissionError = null;
-    try { dataOf(await request("POST", ENDPOINTS.sign, {enter_shop_code: shop}, session)); }
+    try { dataOf(await request("POST", ENDPOINTS.sign, {enter_shop_code: shop || ""}, session)); }
     catch (error) { submissionError = error instanceof OleError ? error.code : "merchant_network_error"; }
     // The POST reply never completes this action. One authenticated readback does.
     const final = await query();

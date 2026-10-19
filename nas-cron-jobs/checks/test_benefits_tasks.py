@@ -26,9 +26,20 @@ def module(name, filename):
 
 runner = module("benefits_job_runner", "hermes/benefits_native_runner.py")
 report = module("benefits_job_report", "hermes/reports/benefits-automation/daily_report.py")
+summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 
 class JobTests(unittest.TestCase):
+    def test_international_activity_summary_preserves_unknown_reward_and_observed_balance(self):
+        text = summary.describe("workbuddy", {"execution_status": "ok",
+            "business": {"activity": "complete", "reward": "unknown", "balance": "complete"},
+            "details": {"metrics": {"balance": {"unit": "points", "current": 350, "delta": 0}}}})
+        self.assertIn("部分完成", text)
+        self.assertIn("活跃请求已完成", text)
+        self.assertIn("奖励未确认", text)
+        self.assertIn("余额 350分", text)
+        self.assertNotIn("奖励 0", text)
+
     def test_workbuddy_editions_use_one_provider_and_distinct_delivery_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

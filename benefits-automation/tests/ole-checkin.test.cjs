@@ -133,14 +133,17 @@ test("a store returned by the authenticated status needs no location lookup", as
   assert.equal(s.calls[1].body.enter_shop_code, "member-store");
 });
 
-test("missing store is explicit and no intent or submission is made", async (t) => {
+test("missing store uses the protocol's empty value without fabricating a location", async (t) => {
   const configuration = config();
   delete configuration.shop_code;
   const f = fixture(t, {configuration});
-  const out = await run(f, requests([["GET", ENDPOINTS.sign, status(false)]]));
-  assert.equal(out.reason, "missing_shop_configuration");
-  assert.deepEqual(out.business, {checkin: "blocked", balance: "complete"});
-  assert.equal(f.state.checkin, "unknown");
+  const s = requests([["GET", ENDPOINTS.sign, status(false)],
+    ["POST", ENDPOINTS.sign, ok({})], ["GET", ENDPOINTS.sign, status(true, 110)]]);
+  const out = await run(f, s);
+  assert.equal(out.reason, "checkin_confirmed");
+  assert.deepEqual(out.business, {checkin: "complete", balance: "complete"});
+  assert.deepEqual(s.calls[1].body, {enter_shop_code: ""});
+  assert.equal(f.state.checkin, "complete");
 });
 
 test("unknown daily status does not authorize a sign request", async (t) => {
