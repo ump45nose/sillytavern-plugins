@@ -5,13 +5,14 @@ import json
 import os
 import sys
 import time
+from http.cookiejar import Cookie
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.locks import Busy, Lease
-from platforms.workbuddy.client import BASES, CN_UA, HTTP, envelope
-from platforms.workbuddy.state import WorkBuddyError, durable_json, read_private, validate_session
+from platforms.workbuddy.client import BASES, CN_UA, Client, HTTP, classify, envelope
+from platforms.workbuddy.state import WorkBuddyError, credential_path, durable_json, read_private, validate_session
 
 
 def authorization_url(value, edition):
@@ -80,11 +81,83 @@ def import_plaintext(value, edition):
         "enterprise_id": account.get("enterpriseId") or "", "domain": auth.get("domain") or ""}, edition)
 
 
+def cookiecloud_login(edition, config, transport=None, read_cookies=None):
+    """Create an independent NAS session through the current official web login flow."""
+    if read_cookies is None:
+        try:
+            from common.cookiecloud import browser_cookies
+        except ImportError:
+            raise WorkBuddyError("cookiecloud_dependency_missing") from None
+        read_cookies = browser_cookies
+    host = "www.workbuddy.cn" if edition == "cn" else "www.workbuddy.ai"
+    origin = "https://" + host
+    transport = transport or HTTP()
+    try:
+        rows = read_cookies(config, host)
+    except ImportError:
+        raise WorkBuddyError("cookiecloud_dependency_missing") from None
+    except (ValueError, OSError):
+        raise WorkBuddyError("web_session_unavailable") from None
+    for row in rows:
+        transport.cookies.set_cookie(Cookie(
+            0, row["name"], row["value"], None, False, row["domain"], True,
+            row["domain"].startswith("."), row["path"], True, row["secure"],
+            None if row["expires"] < 0 else int(row["expires"]), False, None, None, {}))
+    headers = {"Accept": "application/json,text/html", "User-Agent": "Mozilla/5.0",
+               "Referer": origin + "/login/", "X-Domain": host}
+    status, raw = transport.navigate(origin + "/console/accounts", headers, origin)
+    if status != 200:
+        if status in {301, 302, 303, 307, 308, 401, 403}:
+            raise WorkBuddyError("web_authentication_required")
+        raise classify(status, {})
+    try:
+        accounts = envelope(status, raw)["accounts"]
+    except WorkBuddyError as error:
+        if error.reason != "invalid_platform_response":
+            raise
+        raise WorkBuddyError("web_authentication_required") from None
+    except KeyError:
+        raise WorkBuddyError("web_authentication_required") from None
+    if not isinstance(accounts, list) or len(accounts) != 1:
+        raise WorkBuddyError("web_account_selection_required")
+    account = accounts[0]
+    if (not isinstance(account, dict) or not isinstance(account.get("uid"), str)
+            or not account["uid"] or account.get("pluginEnabled") is not True
+            or account.get("type") != "personal" or account.get("enterpriseId")):
+        raise WorkBuddyError("web_account_selection_required")
+    login = Login(edition, transport)
+    login.start()
+    platform = "CLI" if edition == "cn" else "workbuddy-ai"
+    headers.update({"Accept": "application/json", "X-Product-Code": platform})
+    # The official web grant mints a new refresh token; never copy a desktop session.
+    token = envelope(*transport.request("POST", origin + "/console/login/enterprise?" +
+                                       urlencode({"state": login.state}), headers))
+    switched = envelope(*transport.request("POST", origin + "/console/account/switch",
+        {**headers, "Content-Type": "application/json"}, {}))
+    if switched.get("switched") is not True:
+        raise WorkBuddyError("web_account_switch_unconfirmed")
+    session = validate_session({"edition": edition, "access_token": token.get("accessToken"),
+        "refresh_token": token.get("refreshToken") or "", "uid": account["uid"],
+        "domain": host}, edition)
+    if not session.get("refresh_token"):
+        raise WorkBuddyError("refresh_token_missing")
+    # Validate the newly issued bearer independently of browser cookies.
+    transport.cookies.clear()
+    client = Client(edition, session, lambda value: None, transport)
+    identity = envelope(*transport.request("GET", login.base + "/v2/plugin/login/account",
+                                          client.headers()))
+    if identity.get("uid") != session["uid"] or identity.get("enterpriseId"):
+        raise WorkBuddyError("web_account_identity_mismatch")
+    return session
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edition", choices=("cn", "intl"), required=True)
     parser.add_argument("--session-file", type=Path, required=True)
-    parser.add_argument("--import-client", type=Path)
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--import-client", type=Path)
+    source.add_argument("--cookiecloud-config", type=Path)
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
@@ -93,9 +166,13 @@ def main():
         parser.error("session-file must be an absolute private path outside this source tree; timeout must be 30..600")
     os.umask(0o077)
     try:
+        args.session_file = credential_path(args.session_file)
         with Lease(args.session_file.with_name(args.session_file.name + ".lock")):
             if args.import_client:
                 session = import_plaintext(read_private(args.import_client), args.edition)
+            elif args.cookiecloud_config:
+                session = cookiecloud_login(args.edition, args.cookiecloud_config,
+                                           HTTP(os.environ.get("WORKBUDDY_PROXY")))
             else:
                 login = Login(args.edition, HTTP(os.environ.get("WORKBUDDY_PROXY")))
                 print("请在浏览器完成官方授权：\n" + login.start(), file=sys.stderr, flush=True)
