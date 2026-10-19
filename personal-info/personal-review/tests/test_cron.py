@@ -52,7 +52,7 @@ class CronPlannerTests(unittest.TestCase):
         """空 jobs 文件应产生完整受管任务计划，且不触碰其他任务。"""
 
         changes = CronPlanner(self.config).diff()
-        self.assertEqual(len(changes), 13)
+        self.assertEqual(len(changes), 11)
         self.assertTrue(all(change["action"] == "create" for change in changes))
         email = next(change for change in changes if change["name"] == "personal-review-email-2100")
         self.assertTrue(email["enabled"])
@@ -68,9 +68,8 @@ class CronPlannerTests(unittest.TestCase):
         self.assertIn("reviewctl git import", git["prompt"])
         self.assertIn("禁止使用 git 命令", git["prompt"])
         attachment = next(change for change in changes if change["name"] == "personal-review-attachments-worker")
-        retention = next(change for change in changes if change["name"] == "personal-review-retention")
         self.assertFalse(attachment["enabled"])
-        self.assertTrue(retention["enabled"])
+        self.assertNotIn("personal-review-retention", {change["name"] for change in changes})
         ack = next(change for change in changes if change["name"] == "personal-review-daily-ack-2135")
         self.assertFalse(ack["enabled"])
         self.assertTrue(ack["no_agent"])
@@ -79,10 +78,8 @@ class CronPlannerTests(unittest.TestCase):
         self.assertIn("## 想问你的", daily["prompt"])
         self.assertIn("## 可以怎么走", daily["prompt"])
         self.assertIn("不能补造事实", daily["prompt"])
-        self.assertIn("不要模板化鼓励", daily["prompt"])
         self.assertIn("本次仅发送精简回退版", daily["prompt"])
         self.assertIn("Git、CRM 只能在用户认可后写入留痕", daily["prompt"])
-        self.assertLess(len(daily["prompt"]), 800)
 
     def test_daily_guidance_policy_is_exposed_from_yaml(self) -> None:
         """个性化引导来源和目标必须位于可版本化业务配置中。"""

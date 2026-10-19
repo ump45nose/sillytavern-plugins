@@ -2,7 +2,7 @@
 # 修复当前部署及其明确登记的源码链接，不跟随其他链接、不修改容器数据卷。
 set -euo pipefail
 APP_ROOT=/vol2/1000/Docker/personal-review
-SOURCE_ROOT=/vol1/1000/Code/personal-data-hub/legacy/personal-review
+SOURCE_ROOT=/vol1/1000/Code/personal-info/personal-review
 TRIMACL=/usr/trim/bin/trimacl
 [ "$(id -u)" -eq 0 ] || { echo "必须以 root 执行" >&2; exit 2; }
 [ -x "$TRIMACL" ] && [ -f "$APP_ROOT/.env" ] || exit 2

@@ -21,7 +21,8 @@ class ConfigError(ValueError):
 ENV_KEYS = {
     "REVIEW_TIMEZONE",
     "REVIEW_APP_ROOT",
-    "REVIEW_NAS_SKYSIGHT_ROOT",
+    "REVIEW_SKYSIGHT_ARCHIVE_ROOT",
+    "REVIEW_SKYSIGHT_READER",
     "REVIEW_MEMOS_BASE_URL",
     "REVIEW_MEMOS_TOKEN_FILE",
     "REVIEW_STATE_DB",
@@ -34,7 +35,8 @@ ENV_KEYS = {
     "REVIEW_USER_MD",
     "REVIEW_COMPANION_USER_MD",
     "REVIEW_GIT_SUMMARY_DIR",
-    "REVIEW_CRM_SUMMARY_DIR",
+    "REVIEW_CRM_API_URL",
+    "REVIEW_CRM_TOKEN_FILE",
     "REVIEW_EMAIL_BRIEF_DIR",
     "REVIEW_EMAIL_MCP_URL",
     "REVIEW_GOOGLE_CREDENTIAL_FILE",
@@ -48,12 +50,10 @@ ENV_KEYS = {
     "REVIEW_EMAIL_TIME",
     "REVIEW_GOOGLE_TIME",
     "REVIEW_GIT_TIME",
-    "REVIEW_CRM_TIME",
     "REVIEW_DAILY_DRY_RUN_TIME",
     "REVIEW_WEEKLY_DRY_RUN_TIME",
     "REVIEW_STAGE_TIME",
     "REVIEW_ATTACHMENT_WORKER_SCHEDULE",
-    "REVIEW_RETENTION_TIME",
     "REVIEW_ENABLE_DAILY",
     "REVIEW_ENABLE_WEEKLY",
     "REVIEW_ENABLE_STAGES",
@@ -64,6 +64,7 @@ ENV_KEYS = {
 }
 
 REQUIRED_ENV_KEYS = ENV_KEYS - {
+    "REVIEW_SKYSIGHT_READER",
     "REVIEW_ENABLE_DAILY",
     "REVIEW_ENABLE_WEEKLY",
     "REVIEW_ENABLE_STAGES",
@@ -190,7 +191,7 @@ def load_config(env_file: str | Path, policy_file: str | Path) -> AppConfig:
     missing = sorted(key for key in REQUIRED_ENV_KEYS if not values.get(key))
     if missing:
         raise ConfigError(f"缺少 ENV 配置：{', '.join(missing)}")
-    for key in ("REVIEW_DAILY_TIME", "REVIEW_DAILY_ACK_TIME", "REVIEW_MEM0_TIME", "REVIEW_EMAIL_TIME", "REVIEW_GOOGLE_TIME", "REVIEW_GIT_TIME", "REVIEW_DAILY_DRY_RUN_TIME", "REVIEW_STAGE_TIME", "REVIEW_RETENTION_TIME"):
+    for key in ("REVIEW_DAILY_TIME", "REVIEW_DAILY_ACK_TIME", "REVIEW_MEM0_TIME", "REVIEW_EMAIL_TIME", "REVIEW_GOOGLE_TIME", "REVIEW_GIT_TIME", "REVIEW_DAILY_DRY_RUN_TIME", "REVIEW_STAGE_TIME"):
         if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", values[key]):
             raise ConfigError(f"{key} 必须是 HH:MM")
     for key in ("REVIEW_WEEKLY_TIME", "REVIEW_WEEKLY_DRY_RUN_TIME"):
@@ -203,7 +204,7 @@ def load_config(env_file: str | Path, policy_file: str | Path) -> AppConfig:
         ZoneInfo(values["REVIEW_TIMEZONE"])
     except ZoneInfoNotFoundError as exc:
         raise ConfigError("REVIEW_TIMEZONE 不是有效 IANA 时区") from exc
-    for key in ("REVIEW_MEMOS_BASE_URL", "REVIEW_EMAIL_MCP_URL"):
+    for key in ("REVIEW_MEMOS_BASE_URL", "REVIEW_EMAIL_MCP_URL", "REVIEW_CRM_API_URL"):
         if not re.fullmatch(r"https?://[^\s]+", values[key]):
             raise ConfigError(f"{key} 必须是 http(s) URL")
     for key in REQUIRED_ENV_KEYS:
@@ -228,7 +229,6 @@ def load_config(env_file: str | Path, policy_file: str | Path) -> AppConfig:
         "git": values["REVIEW_GIT_TIME"],
         "daily_dry_run": values["REVIEW_DAILY_DRY_RUN_TIME"],
         "stage": values["REVIEW_STAGE_TIME"],
-        "retention": values["REVIEW_RETENTION_TIME"],
     }
     seen_daily: dict[str, str] = {}
     for name, scheduled_time in daily_slots.items():

@@ -1,17 +1,17 @@
 {
-  "snapshot_date": "2026-10-13",
+  "snapshot_date": "2026-10-19",
   "workspace_path": "/home/yuwk/code",
   "source_revision": "9a1b982ee4bc9b531f9c4c878a97f7862ed44deb",
   "files": [
     {
       "source": "AGENTS.md",
       "stored_at": "root/AGENTS.md",
-      "sha256": "339af88aaa24623e946f6c6c93d3117eb188dc784bdbb7801c8a703d408d7eb7"
+      "sha256": "5ff607abc52dbdad29197cfeb91dc56979466f00bcd3b15fa80e0624c0641851"
     },
     {
       "source": "README.md",
       "stored_at": "root/README.md",
-      "sha256": "9c5e0f4a322ac5d8408467d5224d9bf44e8504438d1f6c8511a37ae1ecba3aca"
+      "sha256": "3fba97f5e3ba9725a57aee3cc7219d8c856c116ef2e8c7d4d78a29ebb10f871b"
     },
     {
       "source": ".gitignore",
@@ -21,7 +21,7 @@
     {
       "source": "projects.json",
       "stored_at": "root/projects.json",
-      "sha256": "e7b2fcad02ca7cfd1bc3f5ac07012975caafa7703da3a3fc2b88e1ab2ffe2ef4"
+      "sha256": "79581e645e33e4080de01123c034c9316a27756783b048259a429f212327b688"
     },
     {
       "source": "scripts/project.py",
@@ -64,6 +64,7 @@
       "nas-cron-jobs/hermes/personal-review-weekly-dry-run.sh",
       "nas-cron-jobs/model/plaud-daily.sh",
       "nas-cron-jobs/shellcrash-traffic"
-    ]
+    ],
+    "historical": true
   }
 }

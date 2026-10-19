@@ -61,39 +61,6 @@ the application itself:
 
 See `INVENTORY.md` for the current scheduler map.
 
-## Hub collection exception report
-
-`hermes/hub_collection_notice_daily.py` runs daily at 09:20 (Asia/Taipei) in
-the existing Hermes profile, with `no_agent=true` and `deliver=local`. It sends
-only non-empty reports through the existing notice bot's `hub-collection`
-topic in the private `cron/notice_topics.json` routing file. Hermes records
-the run locally; the shared sender verifies the bot and returned chat/topic.
-
-`hub_collection_report.py` checks the host collector service and passes
-`hub_collection_probe.py` to the existing `personal-crm-crm-1` container. The
-probe uses the container's existing Hub configuration and a bounded PostgreSQL
-read-only transaction to read run metadata. It never initializes Hub storage,
-reads personal record contents, or exports credentials. Keep the host and
-container source schedules consistent when changing collection configuration.
-
-Alerts cover only currently unresolved failed/partial runs, missing runs,
-and stalled/long-running collection beyond `max(3 * interval_seconds, 3600)`.
-Each task appears once with a short reason. A successful completed run clears
-its failure; a retry still in progress retains the last completed failure.
-History and safe structured failure details remain in Hub's existing run
-records; counts, recovered failures and history are omitted from notifications.
-Disabled and push-only sources are excluded; zero new
-records and historical quality warnings alone are normal. This monitors Hub's
-periodic archive runs; upstream device inactivity and Plaud model processing
-have separate status mechanisms and are not inferred from record freshness.
-
-Deploy only these three files with repeatable `deploy-hermes.py --only`:
-`hermes/hub_collection_probe.py`, `hermes/hub_collection_report.py`, and
-`hermes/hub_collection_notice_daily.py`. This installs the trusted profile
-wrapper declared in `hermes/manifest.json`; scheduler registration remains a
-separate operation. Run `python3 -m unittest discover -s checks -p 'test_hub_collection.py'`
-for the report checks.
-
 ## Deploy Hermes cron code
 
 Run `python3 deploy-hermes.py` for the Hermes source migration alone. This
@@ -110,7 +77,7 @@ mandatory. Error codes, links and code spans retain their literal contents.
 
 Favsync emits only `- platform: problem` for current issues, grouped and
 deduplicated by platform. Execution history remains in its source state and is
-not repeated after recovery. Hub and benefits remain exception-only reports.
+not repeated after recovery. Benefits remain exception-only reports.
 Disabled tasks stay disabled, including Aliyun.
 
 The media report includes download events and watchlist/theme business changes
@@ -157,9 +124,9 @@ directory and read access to this file. Do not commit the local file. Provider
 keys remain in the Hermes root `.env`; OAuth tokens remain in the profile's
 `mcp-tokens/` directory. Email cron defaults to the profile's `email` MCP OAuth
 cache and never launches interactive authorization. On this host,
-`email_transport=hub-local-readonly` reuses Personal Data Hub's existing local
-read-only bridge and email container, without copying account credentials or
-OAuth caches. Both clients normalize MCP 1.x/2.x result fields.
+`email_transport=service-stdio` invokes the existing email application's native
+MCP stdio transport in its container; account credentials stay in that service.
+Both clients normalize MCP 1.x/2.x result fields.
 
 Health and financial report consumers use Personal Records directly, configured
 with `records_api_url` and `records_token_file` in the private Hermes config.
@@ -245,3 +212,17 @@ the source migration installer does not automatically patch the framework.
 Scheduled scanning was removed at the user's request. The resident service only
 scans on manual web/API requests. No face-baseline cron entry or wrapper is
 installed; its former logs are retained. See `face-baseline/README.md`.
+
+## Personal Review direct inputs
+
+Business source is `personal-info/personal-review/`. CRM statistics use its
+independent HTTP API; the daily agent reads conversations through current CRM
+MCP tools. Records supplies health and bills. Skysight reads published per-device
+manifests from its independent SFTP archive. The obsolete CRM snapshot, raw
+retention and Hub exception schedules have been removed.
+
+The NAS archive is private. `skysight-archive-read.sh` calls exactly
+`sudo -n -u yuwk /usr/bin/python3 -I /home/yuwk/cron/hermes/skysight_archive_read.py`;
+the sudoers rule permits only that command. The reader accepts a time window
+and checkpoint, reads a fixed archive, and returns evidence over stdout without
+writing a data copy. It does not accept paths or commands.
