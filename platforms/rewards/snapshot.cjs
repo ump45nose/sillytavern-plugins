@@ -107,7 +107,7 @@ async function run(chromium, state, options = {}, deps = common) {
         const business = summarize(raw, daily, options.region);
         const app = await page.evaluate(() => {
           const rows = [...document.querySelectorAll('[role="progressbar"]')]
-            .filter(x => /^(Mobile App|移动应用)$/i.test(x.getAttribute('aria-label') || ''));
+            .filter(x => /^(Mobile App|移动应用|行動裝置應用程式)$/i.test(x.getAttribute('aria-label') || ''));
           return rows.length === 1 ? {current: rows[0].getAttribute('aria-valuenow'),
             max: rows[0].getAttribute('aria-valuemax')} : null;
         });

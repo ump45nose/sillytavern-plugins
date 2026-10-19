@@ -17,6 +17,7 @@ from .browser_driver import BrowserDriver, STORE, clean_target
 from .workflow import ClaimWorkflow, Paused
 
 LOGIN = "https://store.epicgames.com/login"
+CHALLENGE_TIMEOUT = 300
 
 
 async def report_purchase_error(response):
@@ -174,7 +175,7 @@ class Login:
             self.challenge = build_challenge(page, self.config, initial_responses=(
                 captured[kind] for kind in ("script", "payload") if kind in captured))
         try:
-            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, 120))
+            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, CHALLENGE_TIMEOUT))
         except TimeoutError:
             raise Paused("challenge_timeout") from None
         signal = outcome.get("solver_signal")
@@ -257,7 +258,7 @@ def build_challenge(page, config, *, initial_responses=()):
     temporary = Path(os.environ["TMPDIR"]) / "challenge"
     temporary.mkdir(mode=0o700, exist_ok=True)
     settings = AgentConfig(GEMINI_API_KEY=model["api_key"],
-        RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=120, RESPONSE_TIMEOUT=60,
+        RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=CHALLENGE_TIMEOUT, RESPONSE_TIMEOUT=60,
         cache_dir=temporary / "cache", challenge_dir=temporary / "images",
         captcha_response_dir=temporary / "responses")
     return HCaptchaHandler(page, settings, initial_responses=initial_responses)

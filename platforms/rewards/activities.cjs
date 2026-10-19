@@ -6,12 +6,14 @@ const interaction = require("./interaction.cjs");
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
 const {metric} = require("../../common/details.cjs");
-const LABEL = /^(Daily activit(?:y|ies)|Daily Set|每日活动)$/i;
+const LABEL = /^(Daily activit(?:y|ies)|Daily Set|每日活动|每日活動|每日設定)$/i;
 const DASHBOARD = "https://rewards.bing.com/dashboard";
 const DAILY_SELECTOR = '[role="progressbar"][aria-label="Daily Set" i],'+
   '[role="progressbar"][aria-label="Daily activities" i],'+
   '[role="progressbar"][aria-label="Daily activity" i],'+
-  '[role="progressbar"][aria-label="每日活动"]';
+  '[role="progressbar"][aria-label="每日活动"],'+
+  '[role="progressbar"][aria-label="每日活動"],'+
+  '[role="progressbar"][aria-label="每日設定"]';
 const HOSTS = new Set([
   "www.bing.com",
   "cn.bing.com",
