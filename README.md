@@ -1,5 +1,7 @@
 # Personal Records
 
+本机源码入口：`/vol1/1000/Code/personal-info/personal-records`；聚合路径为 `personal-info/personal-records/`，独立仓库保持单项目根目录。
+
 个人信息统一 Webhook 收集端：接收来源原生报文，转换为业务记录并持久化，通过 HTTP / MCP 提供标准增删改查、筛选和汇总能力。当前支持 Health 与 AutoAccounting。
 
 两个来源适配器共用 Webhook 接收层、SQLite 业务存储、HTTP 和 MCP。健康一天一条记录，账单逐张保存；无原始报文镜像、版本档案或自动归档文件。

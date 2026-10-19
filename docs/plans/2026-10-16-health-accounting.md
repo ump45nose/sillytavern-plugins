@@ -88,3 +88,7 @@ SQLite WAL、短事务；接收状态和业务写入同事务成功后才 ACK。
 ## 2026-10-19 独立 GitHub 仓库
 
 用户要求新建并推送独立仓库，定位为个人信息统一 Webhook 收集端。独立仓库 https://github.com/ump45nose/personal-records，默认分支 main；沿用产品名 personal-records，当前只实现 Health / AutoAccounting 两种来源，不扩展未定义的业务适配器。默认创建私有仓库，Topic 使用 GitHub 规范名称 personal-info。仅拆分 personal-records 子目录提交，生产数据库、凭据、导出样例及聚合仓库其他项目不随推送上传。
+
+## 2026-10-19 源码归组
+
+应用已迁至聚合 `personal-info/personal-records/`，本机入口 `/vol1/1000/Code/personal-info/personal-records`。独立 GitHub 仓库继续以应用本身为根目录，完整历史保留。Hub 本地依赖、锁文件、镜像构建路径及平台源码登记同步调整；服务镜像、数据卷、OAuth 和 NPM :28443 不变。新路径锁定安装、wheel 构建及 19 项测试通过；迁移前后健康、账单、来源状态的真实接口结果一致，公网 HTTPS 读取通过。
