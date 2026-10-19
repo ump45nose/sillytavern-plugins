@@ -21,14 +21,14 @@
 
 | 任务 | 所有权 | 依赖 | 进度 |
 | --- | --- | --- | --- |
-| GLaDOS | platforms/glados、对应测试、平台说明及独立计划 | 无 | 待派发 |
-| 影视飓风 | platforms/yingshijufeng、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 待派发 |
-| Olé | platforms/ole、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 待派发 |
-| 雨云 | platforms/rainyun、独立依赖锁、对应测试与说明 | 现有浏览器租约 | 待派发 |
-| WorkBuddy 双版 | platforms/workbuddy、对应测试、登录/续期说明及独立计划 | 无 | 待派发 |
-| 网易严选 | platforms/yanxuan、对应测试、现行接口核验记录 | 当前真实接口证据 | 待派发 |
-| WeTalk | platforms/wetalk、对应测试、平台说明及独立计划 | 无 | 待派发 |
-| YYB 共用登录能力 | common/wechat_code.cjs、对应测试、YYB 接入与部署方案说明 | 用户扫码用于真实验收 | 待派发 |
+| GLaDOS | platforms/glados、对应测试、平台说明及独立计划 | 无 | 代码已集成，配置与真实验收中 |
+| 影视飓风 | platforms/yingshijufeng、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 代码已集成，配置与真实验收中 |
+| Olé | platforms/ole、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 代码已集成，配置与真实验收中 |
+| 雨云 | platforms/rainyun、独立依赖锁、对应测试与说明 | 现有浏览器租约 | 代码已集成，配置与真实验收中 |
+| WorkBuddy 双版 | platforms/workbuddy、对应测试、登录/续期说明及独立计划 | 无 | 代码已集成，配置与真实验收中 |
+| 网易严选 | platforms/yanxuan、对应测试、现行接口核验记录 | 当前真实接口证据 | 代码已集成，配置与真实验收中 |
+| WeTalk | platforms/wetalk、对应测试、平台说明及独立计划 | 无 | 代码已集成，配置与真实验收中 |
+| YYB 共用登录能力 | common/wechat_code.cjs、对应测试、YYB 接入与部署方案说明 | 用户扫码用于真实验收 | 代码已集成，配置与真实验收中 |
 | 集成（本聊天） | 中央计划、公共运行器必要改动、来源与许可汇总、根 README、nas-cron-jobs 的包装/日报/部署清单 | 各平台交付 | 已建立工作区与计划 |
 
 平台任务如需公共接口变化，在独立计划记录所需接口，不各自修改公共运行器或调度仓库。来源版本和许可在平台自己的 provider-source 或 upstream-contract 文件记录，最终由集成统一更新全局来源与许可文档。
@@ -95,3 +95,6 @@
 - 用户本轮授权配置并真实验收；YYB 按已核对固定镜像加入 automation 正式入口，只更新本服务。私有随机管理密码/协议令牌保存于 automation/env，SQLite 与微信身份持久保存在独立 data 目录；复用 favsync_default，宿主回环 33082，无新公网入口。
 - 雨云与 WorkBuddy 原 fork 继续负责自己平台的现有 CookieCloud 会话复用、配置、真实验收及必要修复。所有浏览器共享原 runtime 的公共锁；原账号、旧任务、代理和生产结果保持各自归属。
 - 本聊天负责 YYB 部署/扫码、微信两商家联调、其余凭据配置和公共集成。新增生产任务仅在真实验收通过后启用，待授权或接口缺失的任务保留明确状态。
+- 最新 Mac 同步已读取（2026-10-19T09:10:58.009Z）；WeTalk 只有两个 Cookie，没有 localStorage 或客户端参数。其原 fork 继续只读核对，GLaDOS 原 fork 从实际 Mac Chrome 核对 UA。
+- YYB 微信扫码已成功确认并持久保存；两个实际目标 AppID 都已取码、登录商家。影视飓风真实签到积分 0→10，run `4019fa56-316c-4d15-a223-2d3e0ab30610`；重复运行 `2049d203-dbb2-4a38-9e80-70c3f5c992ba` 保留完成、积分 10→10。Olé 已查询真实会员状态和积分，未签到；由于商家没有返回门店，等待本人真实门店后提交，run `6cb06dbb-a186-4652-8769-ee635a4699e4`。
+- 实测凭据错误的共同原因是既有 `hermes-yuwk-access.service` 会持续恢复 Hermes/本机管理身份的命名 ACL，0600 立即显示为 0660。保留服务与授权；三个 Node 平台复用 `common/private_file.cjs` 核对普通文件、当前 owner、当前 group 和无 other/执行权限，支持本身份管理组；不放宽到任意组。新增 ACL 场景回归，与受影响平台合计 70 项 Node 测试通过。

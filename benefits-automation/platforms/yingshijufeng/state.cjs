@@ -3,12 +3,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const {isPrivateFile} = require("../../common/private_file.cjs");
 
 function readPrivate(file, limit = 65536) {
   const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   try {
     const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || (stat.mode & 0o077) || stat.size > limit)
+    if (!isPrivateFile(stat) || stat.size > limit)
       throw Error("private_file_invalid");
     const data = Buffer.alloc(limit + 1);
     const length = fs.readSync(fd, data, 0, data.length, 0);
