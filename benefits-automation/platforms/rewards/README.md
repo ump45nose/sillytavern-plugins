@@ -26,7 +26,7 @@ npx patchright install chromium
 
 请用账号实际地区；不根据示例改变地区。凭据文件不进 Git。
 
-NAS 的微软服务分组选中 DIRECT；`www.bing.com`、`rewards.bing.com`、`edgeservices.bing.com` 的显式规则均指向该分组。规则由仓库外 ShellCrash 管理。直连积分接口当前会跳转到 `cn.bing.com`，后续任务需要核对正确地区；Cookie、token 和任务 journal 保留。
+NAS 的微软服务分组选中 DIRECT。2026-10-19 用户确认 Rewards 使用 HK 地区后，`www.bing.com`、`rewards.bing.com`、`edgeservices.bing.com` 三个显式特例使用已验证的香港 02 线路；其余微软服务继续遵循原分组。规则由仓库外 ShellCrash 管理，私有地区配置保持 HK，Cookie、token 和任务 journal 继续复用。每日活动及 APP 快照兼容当前香港页面的繁体标签。
 
 ```sh
 REWARDS_ROOT=/absolute/project/platforms/rewards \

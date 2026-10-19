@@ -72,6 +72,20 @@ class HCaptchaHandler:
             logging_module.logger.remove()
         if self.agent is None:
             class CaptchaAgent(module.AgentV):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    arm = self.robotic_arm
+                    skill_prompt = arm._match_user_prompt
+
+                    def prompt(kind):
+                        question = (arm.captcha_payload.get_requester_question()
+                                    if arm.captcha_payload else arm._challenge_prompt)
+                        return "\n".join(text for text in (question, skill_prompt(kind)) if text)
+
+                    # The SDK's unmatched skill returns only a generic JobType.
+                    # Keep the actual question for each new payload as well.
+                    arm._match_user_prompt = prompt
+
                 async def _task_handler(self, response):
                     if response_kind(response) is not None:
                         await super()._task_handler(response)
