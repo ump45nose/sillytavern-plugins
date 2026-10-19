@@ -6,8 +6,9 @@
 
 | 目录 | 作用 |
 | --- | --- |
-| `personal-records/` | 独立健康与账单 Webhook、SQLite 业务数据、HTTP / MCP。 |
+| `personal-info/personal-records/` | 独立健康与账单 Webhook、SQLite 业务数据、HTTP / MCP。 |
 | `personal-data-hub/` | 个人数据采集、归档、处理和只读 MCP；含 CRM、用量监控、Mac 客户端及 Plaud。 |
+| `personal-info/plaud-archive/` | 独立 Plaud 采集、三源转录、Markdown 与音频归档及 HTTP/MCP CRUD。 |
 | `nas-cron-jobs/` | NAS 定时任务、Hermes 调度包装、日报通知、巡检和容器启动；业务逻辑归业务项目。 |
 | `mcp-platform/` | MCP 公共运行时、认证、应用登记和构建部署协调；业务工具归各自项目。 |
 | `mcp/dingtalk-workspace-plugin/` | 钉钉插件资料、接入清单及事件代码，复用官方 MCP 和 MCPHub。 |

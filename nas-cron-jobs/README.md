@@ -18,12 +18,12 @@ Hermes deterministic task code and report modules are deployed to
 `/home/yuwk/cron/model`. `retired/` preserves historical container wrappers.
 Hermes still owns task scheduling and delivery state.
 
-PLAUD three-source v3 uses `model/plaud-daily.sh`, forwarded by the Lingjun
-profile's trusted `scripts/plaud-daily.sh`. Its no-agent schedule is
-`*/30 0-7 * * *` (Asia/Taipei): synchronize and prepare all previous-day
-recordings, then at/after 07:30 send one complete, validated daily Markdown
-to CPA Grok. App settings, credentials and isolated business state remain in
-the PLAUD app; no keys or runtime job records belong in this repository.
+Plaud Archive's wrapper is `model/plaud-daily.sh`, forwarded by Lingjun's trusted
+`scripts/plaud-daily.sh`. It reads the private `PLAUD_PYTHON` and `PLAUD_CONFIG`
+paths in `/home/yuwk/cron/env/plaud-archive.env`; business code lives in
+`personal-info/plaud-archive/`. The existing job stays paused until archive
+acceptance and an explicit scheduler cutover; deploying source does not resume it.
+See [host entry](plaud-archive/README.md) for the native service.
 
 `/etc/systemd/system` contains symlinks only. Custom host scheduling uses
 systemd timers; user crontabs are intentionally kept empty unless an

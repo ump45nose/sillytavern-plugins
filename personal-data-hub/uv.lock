@@ -1026,7 +1026,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "personal-crm", editable = "apps/crm" },
-    { name = "personal-records", directory = "../personal-records" },
+    { name = "personal-records", directory = "../personal-info/personal-records" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
     { name = "pyyaml", specifier = ">=6,<7" },
@@ -1037,7 +1037,7 @@ requires-dist = [
 [[package]]
 name = "personal-records"
 version = "0.1.0"
-source = { directory = "../personal-records" }
+source = { directory = "../personal-info/personal-records" }
 dependencies = [
     { name = "pydantic" },
 ]

@@ -19,6 +19,14 @@
 ## 进度
 
 - [x] 确认源码、仓库、运行身份和实际依赖。
-- [ ] 迁移聚合路径、同步源码引用和独立仓库。
-- [ ] 备份受影响私有配置，切换新启动路径并验证。
+- [x] 迁移聚合路径、同步源码引用；独立仓库待推送本次文档。
+- [x] 备份受影响私有配置，切换新启动路径并验证。
 - [ ] 记录最终路径、检查点与剩余集成边界。
+
+## 实测结果
+
+- 两个应用均以原锁文件重建 Python 3.12 环境，基础安装、wheel 构建通过，测试为 Records 19 + Plaud 22 项。Hub 新本地路径的 lock 检查和同步通过。
+- 已更新两个 GitHub 来源登记、MCP 应用目录及 NAS targets 的两个 source_roots。Code/personal-info/ 的两个入口指向本工作区内同名目录，Hermes 身份访问正常。
+- Plaud 只重启本进程，新 WorkingDirectory 生效；两个 /healthz 正常，6 组真实读取结果逐字节一致，两条公网 :28443 TLS 鉴权读取通过。15 份 MD 和 33 条音频未变化，凭据未变化，Records 原镜像未重启。
+- 私有备份与候选比较记录：/vol1/1000/personal-data-hub/source-backups/20261019-personal-info-layout/{before.json,journal.json,after.json}。
+- 主树原有 tracked diff 摘要及 Plaud 原工作区状态均未变化。主线合并仍以主树干净和归属检查为前提；原 Plaud 定时作业不恢复。

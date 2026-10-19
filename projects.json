@@ -67,7 +67,7 @@
   },
   {
     "name": "personal-records",
-    "path": "personal-records",
+    "path": "personal-info/personal-records",
     "remote_url": "https://github.com/ump45nose/personal-records.git",
     "branch": "main"
   },
@@ -75,6 +75,12 @@
     "name": "sillytavern-workbench",
     "path": "sillytavern-workbench",
     "remote_url": "https://github.com/ump45nose/sillytavern-workbench.git",
+    "branch": "main"
+  },
+  {
+    "name": "plaud-archive",
+    "path": "personal-info/plaud-archive",
+    "remote_url": "https://github.com/ump45nose/plaud-archive.git",
     "branch": "main"
   }
 ]

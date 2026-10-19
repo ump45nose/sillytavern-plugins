@@ -20,7 +20,7 @@ packages = ["src/personal_data_hub"]
 members = ["apps/crm", "apps/usage-monitor"]
 
 [tool.uv.sources]
-personal-records = { path = "../personal-records" }
+personal-records = { path = "../personal-info/personal-records" }
 personal-crm = { workspace = true }
 usage-monitor-mcp = { workspace = true }
 mcp-platform = { git = "https://github.com/ump45nose/mcp-platform.git", rev = "dea309a5d83b6365a57937bc6e11affe692bfcaf" }
