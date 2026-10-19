@@ -37,6 +37,8 @@ model 是可选挑战路径使用的 OpenAI compatible 视觉模型。当前 NAS
 
 挑战 SDK 返回的执行超时和响应超时统一报告 `challenge_timeout`，与实际未通过区分。浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口、工作流和 SDK 内部捕获的错误保留异常类型及源码位置，不记录原始错误消息、会话 token、图片或模型响应。商店部分脚本的 403 不覆盖实际可用的业务控件或当前登录、验证码状态；有界观察后仍无法确认页面状态时，才报告资源拒绝。点击商品按钮后仍须通过结算身份、零价和独立所有权回查，不能据此确认领取。
 
+主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型；初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
+
 ```sh
 EPIC_CONFIG=/absolute/private/epic.json \
 .venv-epic/bin/python platforms/epic/run.py \

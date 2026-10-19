@@ -3,7 +3,7 @@ import contextlib
 import io
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from platforms.epic.challenges import HCaptchaHandler, _sdk_error
 from platforms.epic.workflow import Obstacle, Paused
 from platforms.epic.native import Login
@@ -67,6 +67,16 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_managed_cloudflare_without_widget_waits_without_loading_hcaptcha(self):
+        page=SimpleNamespace(frames=[],wait_for_timeout=AsyncMock())
+        auth=Login(SimpleNamespace(page=page),{})
+        obstacle=Obstacle("captcha","https://store.epicgames.com/free-games","fixture","session",
+            {"_provider":"cloudflare","_container":page})
+        with patch("platforms.epic.native.build_challenge") as factory:
+            await auth.captcha(obstacle,timeout=2)
+        factory.assert_not_called()
+        page.wait_for_timeout.assert_awaited_once_with(2000)
+
     async def test_failed_solver_or_timeout_stops_without_repeating_the_challenge(self):
         for expected, handle in [
             ("challenge_unconfirmed", AsyncMock(return_value={"solver_signal": "failure"})),
