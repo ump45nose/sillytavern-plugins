@@ -195,6 +195,10 @@ has no error. At the user's request, X `content_unavailable` assets are excluded
 from attachment alerts; asset states and failed execution history are retained.
 Execution history stays in Favsync rather than its notifications.
 Rewards alerts name unsupported exploration topics;
+the existing Rewards job runs at 09:30 and 16:30 (Asia/Taipei) from 2026-10-13,
+retaining its job ID and delivery route. It verifies the preceding platform
+cycle in the morning and handles the reset cycle in the afternoon. Receipts
+include the platform task date and name unfinished daily streaks.
 unconfirmed login and cart checks remain visible with their actual meaning.
 Benefits exception reports show only each affected platform and its problem.
 Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on

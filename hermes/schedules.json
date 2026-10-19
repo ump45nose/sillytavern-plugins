@@ -304,8 +304,8 @@
     "name": "benefits-rewards",
     "schedule": {
       "kind": "cron",
-      "expr": "30 9 * * *",
-      "display": "30 9 * * *"
+      "expr": "30 9,16 * * *",
+      "display": "30 9,16 * * *"
     },
     "no_agent": true,
     "source": "hermes/benefits_rewards.py"

@@ -12,6 +12,7 @@ REASONS = {
     "configuration_or_io_error": "配置或结果保存失败", "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "Epic 配置或浏览器异常",
     "full_intervention_pending": "微软任务遇到验证或登录问题",
+    "full_task_cycle_changed": "平台任务已重置，需核查新一轮",
     "steam_login_required": "Steam 需要首次登录或恢复会话",
     "steam_account_mismatch": "Steam 账号身份不匹配",
     "private_file_unreadable": "Steam 私有配置未准备完成",
@@ -51,6 +52,15 @@ def describe(platform, row):
         for key, label in [("daily", "每日活动"), ("desktop_search", "电脑搜索"),
                            ("app_daily", "APP签到"), ("explore", "探索必应")]:
             progress(key, label)
+        for key, label in [("bing_streak", "必应连续打卡"), ("daily_set_streak", "每日连续打卡")]:
+            if key in metrics:
+                progress(key, label)
+        if "desktop_app_weekly" in metrics:
+            progress("desktop_app_weekly", "桌面 App 本周积分")
+            progress("desktop_app_available", "桌面 App 已开放活动")
+        cycle = next((x["name"] for x in items if x.get("reason") == "platform_task_cycle"), None)
+        if cycle:
+            parts.append(cycle)
         parts.append("本次余额变动 " + fmt(metrics.get("balance", {}).get("delta")) + " 分")
         names = [x["name"] for x in items if x.get("reason") == "offer_not_credited"]
         if names:

@@ -81,6 +81,30 @@ class BenefitsTests(unittest.TestCase):
         self.assertIn("Offer A", issue)
         self.assertIn("Topic B", issue)
 
+    def test_rewards_streak_alert_names_the_unfinished_daily_task(self):
+        row = self.row(business={"daily_streaks": "incomplete"}, details={"items": [
+            {"id": "bing_streak", "name": "必应连续打卡", "status": "incomplete", "reason": "fresh_readback"},
+            {"id": "app_streak", "name": "APP连续打卡", "status": "complete", "reason": "fresh_readback"}]})
+        issue = benefits.issue_for("rewards", row, NOW.date().isoformat())
+        self.assertIn("必应连续打卡未完成", issue)
+        self.assertNotIn("APP连续打卡", issue)
+
+    def test_rewards_reset_alert_explains_the_new_task_cycle(self):
+        row = self.row(execution_status="failed", reason="full_task_cycle_changed", business={"daily": "unknown"})
+        self.assertEqual(benefits.issue_for("rewards", row, NOW.date().isoformat()),
+                         "平台任务已重置，需核查新一轮")
+
+    def test_desktop_weekly_alerts_uncredited_tasks_but_not_future_locked_days(self):
+        row = self.row(business={"desktop_app_weekly": "unknown"}, details={"items": [
+            {"name": "桌面 App 周二活动", "status": "unknown", "reason": "offer_not_credited"}]})
+        issue = benefits.issue_for("rewards", row, NOW.date().isoformat())
+        self.assertIn("桌面APP周任务未确认", issue)
+        self.assertIn("桌面 App 周二活动", issue)
+        row = self.row(business={"desktop_app_weekly": "complete"}, details={"items": [
+            {"name": "桌面 App 周三活动", "status": "blocked", "reason": "platform_locked"},
+            {"name": "本周积分20/70", "status": "incomplete", "reason": "weekly_progress"}]})
+        self.assertIsNone(benefits.issue_for("rewards", row, NOW.date().isoformat()))
+
     def test_report_omits_timestamps_and_disabled_tasks(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "runtime/delivery"
