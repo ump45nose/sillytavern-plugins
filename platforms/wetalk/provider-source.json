@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/ZenmoFeiShi/Qx",
+  "commit": "b057f396ffb93c65342f87b98c3bad97d54b5fad",
+  "file": "WeTalk.js",
+  "sha256": "68361ab1428311f1b88ad5b37b8e0fa76dfd61a77328c837da4450b4f5042d16",
+  "reference_url": "https://github.com/ZenmoFeiShi/Qx/blob/b057f396ffb93c65342f87b98c3bad97d54b5fad/WeTalk.js",
+  "reviewed_on": "2026-10-19",
+  "license": "No license found in the referenced file or repository license endpoint; no upstream source files are redistributed",
+  "implementation": "Independent protocol implementation using Node built-in crypto and fetch; reference supplies the fixed host, endpoints, query-signing convention, public signing suffix and response field names",
+  "retained_files": [],
+  "limits": [
+    "The referenced source's hand-written MD5 is verified against native MD5 only for ASCII query parameters; non-ASCII parameter values are rejected explicitly",
+    "The source requires a captured email and retains all captured query fields and relevant authentication headers; no complete minimal authentication field list is published",
+    "No authenticated live response was available during implementation"
+  ]
+}
