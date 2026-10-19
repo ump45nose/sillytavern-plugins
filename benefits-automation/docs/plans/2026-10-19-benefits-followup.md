@@ -54,3 +54,30 @@
 - 最终规则已核对：微软分组 DIRECT、廉价手动及风控敏感选择器不变；三个 Bing 特例的持久配置与运行配置一致，指向健康美国原生 01。Epic/hCaptcha 临时规则不存在。
 - 完整 Rewards 运行 `1f9b0fec-5be2-420c-92ae-81732259161b` 仍在执行，不再为 Epic 诊断中断。开始快照确认每日 3/3、桌面周积分 20/70、已开放活动 2/2；额外活动阶段发生一次脚本 GET 超时，仍在按现有节奏搜索和读回，尚不能确认完整任务成功。正式 delivery 由现有启动器在结束时写入，不手工替换。
 - Epic 最新正式结果仍为浏览器超时；日本线路诊断中仍有必要页面状态无法加载及 CF 脚本拒绝。换节点未通过领取验收，两款游戏未确认。不得将通过回归测试或商品文档 200 当作真实领取成功。
+
+## CF 403 专项定位
+
+- 用户要求先查清原因，并授权联网检索。目标是区分 Cloudflare 挑战、传输故障、会话/客户端状态与页面业务故障，再据对照证据修复；不把换节点或返回 200 单独作为业务验收。
+- 先核对 Cloudflare/Camoufox 官方资料和已安装源码，再用相同资源、出口与浏览器会话对照顶层导航和脚本子请求；记录状态、挑战响应头、必要页面标记与错误类型，不保存 Cookie 值、账号页面或凭据。
+- 持久 profile 与每次新生成指纹是否不匹配、脚本子请求的挑战是否被误当作可见验证码，均为待验证假设。没有对照证据前不调整生产身份、Cookie 或地区。
+- Rewards 完整运行仍占用串行浏览器，先进行联网和静态分析，不中断其任务。涉及浏览器的对照仍通过公共租约与清理入口执行。
+- 完成联网与静态分析后，为执行用户当前优先要求的真实浏览器对照，已调整顺序：安全停止本聊天启动的 Rewards `1f9b0fec-5be2-420c-92ae-81732259161b`，确认浏览器租约释放；保留进度与 intent，403 对照结束后恢复正式完整运行。
+- 官方资料已通过 smart-search CLI 抓取：Cloudflare 挑战响应检测、clearance、支持浏览器及 challenge solve issues；Camoufox usage。研究接口经默认代理 TLS 失败，但直连可用；仅研究命令使用 `NO_PROXY=*`，没有修改全局代理环境。
+- 第一轮受控浏览器 `541a8fce-4b69-4e93-9f58-1ae748ac10d8`：相同出口与同一组生成的启动指纹，分别使用正式 profile 的临时副本。保留 CF Cookie 时商品文档 200、登录 true、Get 1 个、无待水合组件或脚本错误/403；仅删除 CF Cookie 后文档 403、`cf-mitigated: challenge`。因此不能把旧 Cookie 失效或指纹变化直接认定为本次根因。原 profile 未改、无订单操作，临时副本已删除。下一轮比较正式请求拦截配置与未拦截配置。
+- 15:00:43 自动 SubBoost 刷新覆盖了仅运行态的 Epic 临时规则；14:59 替代美国节点也已出现 `context deadline exceeded`。`f1530a02-...` 和 `79cf0845-...` 导航超时对照受传输故障及路由变化影响，不能据此归因于请求拦截。后续固定日本测试线路，并确认实际连接命中及测试期间配置摘要不变；不改全局选择器。
+- `09a5628d-a671-4a9d-8736-6698c3f679a3` 的 403 标记为 Service Worker 响应，而部分直接响应 200。进一步 `c339d2f2-3669-4b0e-b94a-f8f58f6cd3f2` 固定指纹/出口，启用和禁用 Worker 均收到 Managed Challenge；正式 CacheStorage 的 57 个条目均为 200，没有缓存的 403。Worker 不是已证明的根因，未修改生产 Worker 配置。其官方脚本为 NetworkOnly 导航策略并不缓存 4xx/5xx。
+- `ee5215b1-1a3f-4759-842e-12f51dce8cba` 重现英文 `One more step / Please complete a security check to continue`，无可点击 iframe；不导航、不点击、不调用模型，保持页面十几秒后自动从 403 转为 200。暴露实际调用链缺陷：原分类未识别该页面，启动阶段把缺少登录标记直接当作需要跳转登录；无 iframe 时验证码处理会落入不相干的 hCaptcha 路径。
+- 已按主文档 `cf-mitigated` 响应识别 Cloudflare，绑定当前主框架/URL，并在下一文档响应后更新；自动挑战保持页面有界等待，完成后重新观察，hCaptcha 处理不混用。初始化登录统一经过 session 观察，只有明确未登录才处理。112 项 Epic 回归通过，正在原正式入口验证；未改变指纹、Cookie、账号地区或 Worker 设置。
+- 首次正式验证 `c3d83969-4fce-402a-9a4e-704c29dd38cf` 仍导航超时；追踪 `a208402d-66b1-4475-a32d-792e0d4c914c` 确认 `/free-games` 文档 200，但 45 秒后 `ready=loading`、导航组件和表单均为 0。此故障在业务工作流之前，不能将 CF 分类修复说成整体领取修复。已保存该次失败的生成指纹，继续固定它对照启动 Worker 行为；生产不预先修改 Worker 配置。
+- `8cd4de52-c64d-4c8a-835a-448a885d0824` 固定该次失败的 Mac 指纹，对照启用/禁用 Worker 都能完成首页加载，Worker 假设未获支持。宿主按浏览器进程查全量出站错误，发现 `components.unrealengine.com` 仍走原美国圣何塞 06，15:27 后有 27 次连接超时；此前只改 Epic 主域名漏掉了该共享组件依赖。现补充仅 `camoufox-bin` 访问该精确域名时使用测试线路，验证首页及完整流程。
+- 新规则实际连接确认命中日本线路。正式 `2bf63b5d-45ca-4edd-aa7c-ebbfd2502a4c` 已越过首页超时并读到两款当前促销，但仍为 `store_assets_access_denied`、零项所有权确认。继续捕获受挑战的实际子资源与导入错误，并在同一会话里对照把该确切资源作为文档打开；不把首页恢复或主文档 403 转 200 当作完整修复。
+- 日本线路 `97709613-5beb-4db6-9c50-bed66b4a800e` 确认 69 个模块脚本均被挑战，包含 entry.client、React、purchase 等实际应用模块；请求带 clearance、相同 User-Agent，响应却为 HTML。确切同一脚本作为文档打开可得 JS 200，Cookie 未变化，重开商品页仍 69 项拒绝；“打开脚本一次”未解除子资源拦截。
+- 仅把三条 Epic 及依赖规则切到既有香港 03，保留账号副本和固定的失败 Mac 指纹：`f4aa6c42-a30d-4c01-99d7-6f526433d6a0` 记录 0 个 403、页面无 Loading、登录 true、Get 1 个，持续观察仍正常。开始再切回日本的复现对照，之后用香港线路进行正式业务验收。
+- 再切回日本 `fe9510f2-6640-4a26-81e2-79c27ac326c4` 重现 69 个挑战脚本、Loading、Get 0，形成日本失败→香港正常→日本失败的浏览器对照。可确认当前两条出口对 CF 请求判定有差异；具体是哪条站点风控规则或 IP 信誉项，需要站点后台，不能声称已读到黑名单规则。
+- 已重新采用验证正常的香港 03，将 Epic 主域名、仅 Camoufox 的 hCaptcha 后缀及 components.unrealengine.com 精确域名三条规则保存至既有自定义规则源；保留原件和摘要，原权限/所有者/ACL 复制保留，其他规则及选择器不改。运行配置通过 Core 校验，正在正式领取验证。
+
+### 官方资料与复现入口
+
+- [Cloudflare 挑战响应检测](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)、[clearance](https://developers.cloudflare.com/cloudflare-challenges/concepts/clearance/)、[支持浏览器](https://developers.cloudflare.com/cloudflare-challenges/reference/supported-browsers/)、[挑战排障](https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/)。
+- [Camoufox 使用说明](https://camoufox.com/python/usage/)、[Playwright 请求拦截](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route)。线上说明与已安装 Camoufox 0.4.11 / Playwright 1.53.0 源码分别核对，不混用新版本功能。
+- 检索原始证据在 `/tmp/epic-403-research/`；命令为 `smart-search search ... --providers xai-responses --extra-sources 0`、`NO_PROXY='*' no_proxy='*' smart-search fetch URL --format markdown --output PATH`。受控浏览器脚本、独立结果与脱敏日志保存在私有 runtime 的 `diagnostics/2026-10-19/` 和对应 runs 分区，未复制账号资料至源码。

@@ -57,8 +57,9 @@ class Controls:
 class DriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_denied_assets_report_when_bounded_business_observation_stays_unknown(self):
         driver = BrowserDriver(None, None, None)
-        driver.observe_asset_response(SimpleNamespace(
-            url="https://store.epicgames.com/egs-v2/assets/fixture.js", status=403))
+        driver.observe_response(SimpleNamespace(
+            url="https://store.epicgames.com/egs-v2/assets/fixture.js", status=403,
+            request=SimpleNamespace(resource_type="script")))
         driver._observe_once = AsyncMock(return_value=SimpleNamespace(kind="unknown"))
         driver._purchase_controls = lambda _: SimpleNamespace(first=SimpleNamespace(wait_for=AsyncMock()))
         with patch("platforms.epic.browser_driver.asyncio.sleep", new=AsyncMock()), self.assertRaises(Paused) as raised:
@@ -88,7 +89,7 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         await driver.recover(obstacle, timeout=1)
         callback.assert_awaited_once_with(obstacle, timeout=1)
 
-    async def test_product_signed_out_navigation_requires_login_before_using_get(self):
+    async def test_signed_out_navigation_requires_login_in_session_and_product(self):
         page = SimpleNamespace(url="https://store.epicgames.com/p/fixture",
             locator=lambda selector: SimpleNamespace(count=AsyncMock(
                 return_value=1 if selector == 'egs-navigation[isloggedin="false"]' else 0)),
@@ -97,8 +98,9 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         driver._text = AsyncMock(return_value="Game")
         driver._visible = AsyncMock(return_value=False)
         driver._ready = AsyncMock(return_value=True)
-        obstacle = await driver._observe_container(page, "product", timeout=1)
-        self.assertEqual(obstacle.kind, "login")
+        for phase in ["session", "product"]:
+            obstacle = await driver._observe_container(page, phase, timeout=1)
+            self.assertEqual(obstacle.kind, "login")
         driver._ready.assert_not_awaited()
 
     async def test_navigation_timeout_accepts_the_canonical_page_with_its_navigation_component(self):
@@ -141,7 +143,8 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         driver = BrowserDriver(None, None, None)
         for url, status in [("https://tracking.epicgames.com/track.png", 403),
                             ("https://store.epicgames.com/egs-v2/assets/fixture.js", 200)]:
-            driver.observe_asset_response(SimpleNamespace(url=url, status=status))
+            driver.observe_response(SimpleNamespace(url=url, status=status,
+                request=SimpleNamespace(resource_type="script")))
         self.assertFalse(driver.assets_denied)
 
     async def test_current_device_warning_continues_once_to_the_price_gate(self):
@@ -226,6 +229,42 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
         state = await d.observe("session", timeout=1)
         self.assertEqual(state.kind, "captcha")
 
+    async def test_cloudflare_document_without_widget_is_reobserved_until_normal_document(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/en-US/free-games",main_frame=object(),
+            locator=lambda _:SimpleNamespace(count=AsyncMock(return_value=0)),
+            get_by_role=lambda *a,**kw:object())
+        driver = BrowserDriver(None,page,None)
+        driver._text = AsyncMock(return_value="One more step\nPlease complete a security check to continue")
+        driver._visible = AsyncMock(return_value=False)
+        driver._ready = AsyncMock(return_value=True)
+        driver._captcha_evidence = AsyncMock(return_value=["fixture"])
+        response = SimpleNamespace(url=page.url,status=403,frame=page.main_frame,
+            request=SimpleNamespace(resource_type="document"),headers={"cf-mitigated":"challenge"})
+        driver.observe_response(response)
+        state = await driver.observe("session",timeout=1)
+        self.assertEqual(state.kind,"captcha")
+        self.assertEqual(state.payload["_provider"],"cloudflare")
+        driver._ready.assert_not_awaited()
+        # A challenged child frame cannot clear the current document's state.
+        response.frame=object();response.headers={}
+        driver.observe_response(response)
+        self.assertEqual((await driver.observe("session",timeout=1)).kind,"captcha")
+        response.frame=page.main_frame;response.status=200
+        driver.observe_response(response)
+        self.assertIsNone(await driver.observe("session",timeout=1))
+
+    async def test_child_frame_challenge_does_not_replace_ready_main_document(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/en-US/free-games",main_frame=object(),
+            locator=lambda _:SimpleNamespace(count=AsyncMock(return_value=0)),
+            get_by_role=lambda *a,**kw:object())
+        driver = BrowserDriver(None,page,None)
+        driver._text=AsyncMock(return_value="Store")
+        driver._visible=AsyncMock(return_value=False)
+        driver._ready=AsyncMock(return_value=True)
+        driver.observe_response(SimpleNamespace(url=page.url,status=403,frame=object(),
+            request=SimpleNamespace(resource_type="document"),headers={"cf-mitigated":"challenge"}))
+        self.assertIsNone(await driver.observe("session",timeout=1))
+
     async def test_main_frame_not_counted_twice(self):
         frame = SimpleNamespace(url="https://store.epicgames.com/en-US/cart")
         page = SimpleNamespace(
@@ -255,8 +294,7 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_page_is_not_phase_ready(self):
         page = SimpleNamespace(
             url="https://store.epicgames.com/en-US/free-games",
-            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=0))
-            if s == 'egs-navigation[isloggedin="true"]' else s,
+            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=0)),
             get_by_role=lambda *a, **k: "button",
         )
         d = BrowserDriver(None, page, None)
@@ -267,8 +305,8 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_positive_authenticated_navigation_is_session_ready(self):
         page = SimpleNamespace(
             url="https://store.epicgames.com/en-US/free-games",
-            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=1))
-            if s == 'egs-navigation[isloggedin="true"]' else s,
+            locator=lambda s: SimpleNamespace(count=AsyncMock(return_value=
+                1 if s == 'egs-navigation[isloggedin="true"]' else 0)),
             get_by_role=lambda *a, **k: "button",
         )
         d = BrowserDriver(None, page, None)

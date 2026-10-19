@@ -115,6 +115,12 @@ class Login:
                     await page.mouse.click(box["x"] + 28, box["y"] + box["height"] / 2)
                     await page.wait_for_timeout(5000)
                     return
+        if (obstacle.payload or {}).get("_provider") == "cloudflare":
+            # Managed Challenges can verify automatically without a visible
+            # widget. Keep this document open, then let the workflow re-observe;
+            # it must not be sent to the unrelated hCaptcha model handler.
+            await page.wait_for_timeout(min(5000, int(timeout * 1000)))
+            return
         if self.challenge is None:
             self.challenge = build_challenge(page, self.config)
         try:
@@ -228,12 +234,9 @@ async def execute(context, config, state_dir):
         await browser.route("**/hsw.js*", identity_encoding)
         page = browser.pages[0] if browser.pages else await browser.new_page()
         driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
-        browser.on("response", driver.observe_asset_response)
+        browser.on("response", driver.observe_response)
         await driver._goto(STORE + "/free-games", 45)
         await page.wait_for_timeout(5000)
-        if await page.locator('egs-navigation[isloggedin="true"]').count() == 0:
-            await driver._goto(LOGIN, 45)
-            await page.wait_for_timeout(3000)
         auth = Login(driver, config)
         driver.sso_login = auth.sso
         workflow = ClaimWorkflow(driver, context, deadline=time.monotonic() + 1100,

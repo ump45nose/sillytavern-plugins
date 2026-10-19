@@ -96,12 +96,20 @@ class BrowserDriver:
         self.observation_session = uuid.uuid4().hex
         self.device_acknowledged = set()
         self.assets_denied = False
+        self.cloudflare_document = None
 
-    def observe_asset_response(self, response):
+    def observe_response(self, response):
         target = urlsplit(response.url)
         if (target.hostname == "store.epicgames.com" and target.path.startswith("/egs-v2/assets/")
                 and response.status == 403):
             self.assets_denied = True
+        if (response.request.resource_type == "document"
+                and response.frame is self.page.main_frame):
+            self.cloudflare_document = (
+                clean_target(response.url)
+                if target.hostname in ALLOWED and response.headers.get("cf-mitigated") == "challenge"
+                else None
+            )
 
     def _purchase_controls(self, page):
         # Both storefront versions expose named buttons. Test IDs are absent
@@ -338,7 +346,8 @@ class BrowserDriver:
             container.get_by_role("button", name="Done linking", exact=True)
         )
         signals["security_setting"] = "/id/login/mfa/add" in target
-        signals["visible_captcha"] = await self._visible(
+        cloudflare = container is self.page and self.cloudflare_document == target
+        signals["visible_captcha"] = cloudflare or await self._visible(
             container.locator(
                 'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
             )
@@ -357,7 +366,7 @@ class BrowserDriver:
             container.locator("#email,#password")
         )
         signals["remembered_account"] = "welcome back" in text and "/id/" in target
-        if phase == "product" and not any(signals.values()):
+        if phase in {"session", "product"} and not any(signals.values()):
             signals["login_required"] = await container.locator(
                 'egs-navigation[isloggedin="false"]'
             ).count() == 1
@@ -402,7 +411,8 @@ class BrowserDriver:
         )
         if state is not None:
             state = replace(
-                state, payload={**(state.payload or {}), "_container": container}
+                state, payload={**(state.payload or {}), "_container": container,
+                    **({"_provider": "cloudflare"} if cloudflare and state.kind == "captcha" else {})}
             )
         return state
 
