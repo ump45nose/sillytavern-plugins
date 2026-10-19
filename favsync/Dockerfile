@@ -18,7 +18,7 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir 'setuptools>=68' wheel \
     && python -c 'import tomllib,subprocess,sys; p=tomllib.load(open("pyproject.toml","rb"))["project"]; subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir",*p["dependencies"],*p["optional-dependencies"]["all"]])'
 COPY favsync ./favsync
-RUN python -m favsync.companion_ocr
+RUN chmod -R a+rX /app/favsync && python -m favsync.companion_ocr
 RUN pip install --no-cache-dir --no-deps --no-build-isolation . \
     && tdl version && gallery-dl --version \
     && python -c 'import gallery_dl.extractor.exhentai' \
