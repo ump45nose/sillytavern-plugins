@@ -132,7 +132,7 @@ function outcome(execution, reason, checkin, balance, before = null, after = nul
   };
 }
 
-async function execute({config, state, request, getCode}) {
+async function execute({config, state, request, getCode, statusOnly = false}) {
   let session = state.session, refreshed = false, before = null;
   const knownComplete = () => state.checkin === "complete" ? "complete" : "unknown";
   async function login() {
@@ -180,6 +180,8 @@ async function execute({config, state, request, getCode}) {
     if (["pending", "complete"].includes(state.checkin))
       return outcome("ok", state.checkin === "pending" ? "write_pending_confirmation" :
         "checkin_state_conflict", "unknown", before === null ? "unknown" : "complete", null, before);
+    if (statusOnly) return outcome("ok", "status_only", "incomplete",
+      before === null ? "unknown" : "complete", null, before);
 
     let shop = config.shop_code || initial.shop_code || session.shop_code;
     if (!shop && config.location) {
@@ -229,7 +231,8 @@ async function main() {
       }
       return shared.getCode(...args);
     };
-    result = await execute({config, state, request: transport(config), getCode});
+    result = await execute({config, state, request: transport(config), getCode,
+      statusOnly: process.argv.includes("--status")});
   } catch (error) {
     result = outcome("failed", error instanceof OleError ? error.code : "configuration_or_io_error",
       "blocked", "unknown");

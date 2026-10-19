@@ -43,6 +43,7 @@
 30 media-automation-media-download-mcp-1
 30 moviepilot
 30 benefits-steam-asf
+30 benefits-yyb
 
 30 face-baseline
 40 qbit_manage qbittorrent
