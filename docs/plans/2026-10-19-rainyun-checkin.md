@@ -1,37 +1,48 @@
 # 雨云一次性签到接入
 
-## 范围与决定
+## 范围与关键决定
 
-- 仅在 `codex/benefits-rainyun-20261019` 工作区修改雨云平台、专用测试/依赖锁和本计划；公共运行器、Hermes 与生产部署由集成任务处理。
-- 独立 `run.py` 复用 `common.runner` / `Task(browser=True)`，单账号、全局浏览器互斥、总超时和既有进程回收；默认不联网。
-- 参考 LeapYa/Rainyun-Qiandao 固定提交 `fdefba4dbec2d7e99568e08e182eda9c3026c75f` 的 Selenium 登录/签到选择器与验证码流程。上游未发现 LICENSE，完整来源保持外部依赖；按 hash 校验后仅加载其 ICR 算法及 stealth 脚本，不导入调度、通知、代理池或多账号主程序。
-- 认证配置在仓库外，浏览器 profile 在本账号 runtime state 内。浏览器与 ChromeDriver 显式路径且版本固定，不在运行时安装、下载或自动找替代版本；保留 Chromium sandbox。
-- 只读到每日签到行的精确“已完成”才确认成功。上游“不是领取奖励就成功”的判断不继承；积分读取失败仍保留已确认签到，余额未知为 null。
-- 每日领奖点击前持久保存 intent；意外退出/连接中断后只读回查，不再次点击领奖。验证码最多两次，只在尚未提交或明确失败时换题，结果不明不重复提交。
+- 分支 `codex/benefits-rainyun-20261019` 仅拥有雨云平台、专用测试/依赖锁和本计划；公共运行器、Hermes 调度和生产源码集成由原任务负责。
+- 独立 `run.py` 复用 `common.runner` / `Task(browser=True)`、单账号锁、全局浏览器互斥、总超时、进程包含及回收。默认不联网；只做签到与积分查询。
+- 复用 LeapYa/Rainyun-Qiandao 固定提交 `fdefba4dbec2d7e99568e08e182eda9c3026c75f` 的 Selenium 交互和验证码流程。上游未发现 LICENSE，完整来源保持仓库外；按 hash 校验后仅加载 ICR 和 stealth 字节，不导入上游主程序。
+- 浏览器与驱动显式路径，固定 Chrome for Testing / ChromeDriver `153.0.8010.12`；不在运行时安装、下载或切版本，保留 Chromium sandbox。
+- 只认每日签到行精确“已完成”；未知文本不能当成功。领取前写入每日 pending intent，提交结果不明时只读恢复，不再次领取；验证码最多两次，仅未提交或明确失败可换题。
+- 认证复用已有 CookieCloud，每次只读取目标域。profile/journal 绑定雨云内部账号 ID 的摘要，令牌轮换不切换身份。先通过官方用户接口核对当前会话身份，再接受业务状态或提交签到；密码模式保留。
+- CookieCloud 冷 profile 由官方首页先填充完整用户缓存，再进入积分页，避免有效会话被前端异步初始化的路由守卫误判。余额读取当前官方 `/user/?no_cache=true` 的 `data.Points`，不解析失效的余额 XPath，也不保留完整用户响应。
 
 ## 验收标准
 
-- 无 `--execute` 不加载 Selenium、不访问平台；缺配置、依赖或固定浏览器/驱动明确失败并输出标准 JSON。
-- 状态解析区分未签、已完成和未知文本；签到后读回、已签到重复运行、提交抛错后的只读恢复、跨进程 pending 都不重复领取。
-- 验证码目标按序点击，坐标与图片/元素尺寸一致；未知结果不刷新重试，重试次数有界。
-- 真实浏览器启动保留 sandbox，受现有账号锁及全局浏览器锁保护。模拟测试与真实账号验收分开记录。
-- 凭据未提供时继续完成可独立开发和验证的部分，留下准确联调步骤，不宣称真实签到通过。
+- 无 `--execute` 不加载 Selenium、不访问平台；配置、来源、浏览器版本或认证失败均输出标准 JSON v1。
+- 未签/已完成/未知分开报告；已签到重复运行、提交丢响应、跨进程 pending 均不重复领取。
+- 身份未核实时不提交；同次运行身份已核实后的余额暂时故障不撤销已确认签到。
+- 真实启动保留 Namespace、PID/Network namespaces、Seccomp-BPF sandbox；所有浏览器操作遵守共享租约。
+- 真实账号验收包括只读状态、一次签到、独立读回、积分变化及重复运行；算法合成测试不等于真实验证码通过率。
 
-## 进度
+## 交付进度
 
-- 已读取中央计划、公共运行器、结果协议和既有平台恢复实现。
-- 已固定并审阅上游来源；发现原签到判断将未知按钮文本误当成功，当前实现将收紧该判断。
-- 已完成独立入口、平台适配、私有配置、按登录身份隔离的持久 profile、每日 intent journal、固定浏览器/驱动契约、外部算法 hash 校验、依赖锁及 README。
-- 运行时只声明 `RAINYUN_CONFIG`。提供 `--execute --status` 只读查询；结果使用 schema v1，`business.checkin` 与 `business.balance` 分别交付签到和余额查询状态。
-- 固定 Python 3.12.13 测试环境已按完整 hash 锁安装；Selenium 4.15.2、OpenCV 4.12.0.88、NumPy 2.2.6。复用已有 Chrome for Testing 153.0.8010.12；匹配 ChromeDriver 包已下载并核对 zip 完整性，SHA256 写入 browser-contract.json。测试安装均在仓库外 `/tmp`，不是生产部署。
-- 30 项雨云测试全部通过，包括真实固定 ICR 算法识别三个合成图案、排序/坐标桥接、错误状态不冒充完成、提交丢响应后只读恢复、跨进程 pending 防重、验证码明确失败才重试以及配置/依赖边界。
-- 现有入口测试 19 项、公共能力测试 13 项通过；进程包含/回收测试 10 项中 2 项按环境条件跳过，其余通过。标准库环境也能运行雨云离线测试，依赖真实 Selenium/ICR 的两项按条件跳过。
-- 真实浏览器启动冒烟使用已有全局 runtime/浏览器租约、独立 `rainyun-smoke` 结果分区，不访问雨云或登录账号。首次 run `9103e1f9-0287-417f-847e-126ec7588f69` 的 Chromium 日志证明 `TMPDIR` 下 SingletonSocket 路径超出 Unix 限制；已改为仅浏览器子进程使用短私有 `/tmp/rainyun-*`，profile 仍保留在账号 state。新增实际 AF_UNIX socket 回归测试通过。
-- 修复后的真实浏览器冒烟 run `ec4d9500-3c2a-4375-b6f4-5c9cd2424495` 等待共享锁 60 秒后返回 `lock_busy`，没有绕过租约或中断其他平台。故浏览器修复有代码/OS 回归证据，但修复后实际 Chromium 启动与 sandbox 页面尚未完成验收。
-- 当前未提供 `RAINYUN_CONFIG` 的真实账号；尚未验证雨云登录、真实验证码、签到读回和实际积分。这些不以模拟测试或算法合成图代替。
+- 初始提交 `0367ecb` 完成单次入口、平台适配、私有配置、profile、每日 intent、来源契约、依赖锁、README 和防重/验证码测试。
+- 追加工作按原聊天授权配置 `rainyun-main`、接入既有 CookieCloud，并完成真实账号验收；没有修改公共 runner、代理、容器或调度。
+- 冷启动实测首先发现前端初始化竞争，官方接口确认会话有效后修复首页初始化顺序；随后真实只读 run `15ad52d0-8d8c-4a7f-9a0c-429bd1cfcb96` 确认未签到。
+- 余额实测发现上游 XPath 已过时，改用当前官方用户接口，并核对返回 ID 与同步身份。当前前端 URL、hash 和字段证据见 `platforms/rainyun/provider-source.json`。
+- 真实签到 run `5d7c519c-b136-46e4-8c4c-3ed1919c9360`：`checkin_confirmed`，签到与余额均 complete；积分从 **200 → 700**，本次读回差值 **+500**。
+- 重复完整执行 run `d0097fd6-333e-4bf7-9b5a-048c42958c54`：已完成分支直接返回，积分 **700 → 700**、差值 **0**。独立官方 GET 用户/任务接口均 code 200，ID 一致，`每日签到.Status` 从 1 变为 2、奖励 Points 500。
+- 最终代码只读复核 run `0b6d70f4-4504-488a-9a00-bca5633fc351`：服务端身份核对通过，签到与余额均 complete，余额 700、差值 0。
+- 浏览器真实冒烟 run `ee6dbfc5-834d-4651-9343-632f3751f58b`：`browser_sandbox_confirmed`，Namespace、PID/Network namespaces、Seccomp-BPF 确认且无 `--no-sandbox`。曾出现的 sandbox_not_confirmed 是旧页面字段名匹配失效，已按固定 Chrome 153 实际页面修正。
+- 首次启动遇到 Chromium Unix socket 路径超长；仅浏览器子进程使用短私有 `/tmp/rainyun-*`，profile 仍在账号 state。实际 AF_UNIX 回归及真实 Chromium 启动均通过。
+- 40 项雨云测试在固定依赖及固定外部 ICR 环境全部通过，含真实算法识别合成图案、身份核对、冷启动、防重恢复和有界验证码。初始现有入口 19 项、公共能力 13 项通过，进程包含 10 项中 2 项按环境条件跳过、其余通过；未修改公共能力。
 
-## 集成交付说明
+## 运行配置
 
-- 不需要修改公共 Task/runner。Hermes 新任务调用 `platforms/rainyun/run.py`，使用独立 Python 依赖环境、同一既有 runtime-root，私有凭据字段白名单只需 `RAINYUN_CONFIG`。
-- 日报可为 `balance` 增加“积分查询”标签，并按实际需要映射 README 列出的配置、登录、验证码及未确认原因；公共文件由集成任务统一修改。
-- 集成前按 README 在共享锁可用时执行 `tests/rainyun_browser_smoke.py`，再补齐真实账号只读检查、签到、重载确认和重复运行验收。当前源码和契约已完成，实际业务/部署仍未验收，不能提前启用无人值守生产调度。
+既有共享 runtime：`/home/hermes/.hermes/profiles/lingjun/benefits-runtime`。
+
+- 私有入口配置：`credentials/rainyun.json`，只存浏览器、驱动、provider 与 `credentials/cookiecloud.json` 的路径引用，不复制 CookieCloud 密钥或会话。
+- 独立依赖：`dependencies/rainyun/venv`（Python 3.12.13）、`driver/chromedriver`、`provider/`。按现有雨云锁和 CookieCloud 解密锁联合安装，保留驱动许可证及 notices。
+- 复用已有 Chrome `/home/yuwk/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`，实际版本符合契约。
+- 新增运行对象由 Hermes `988:984` 持有；执行也使用此身份。FnOS 命名 ACL 将新配置显示为 0660：该文件只有路径引用，代码允许受控组权限且拒绝 world；含密码的配置仍要求 0600。没有声称此文件具备无法在该 ACL 下保持的 0600。
+- 公共环境变量白名单只需 `RAINYUN_CONFIG`；调用 README 的单次命令、同一 runtime-root 和账号 `rainyun-main`。调度启用由集成任务完成。
+
+## 验证边界与待集成
+
+- 真实登录会话、领取、页面读回、官方独立读回、积分查询及重复执行已验证。本轮未单独记录是否出现验证码挑战，因此不将签到成功当成真实验证码识别通过率证据；已验证固定算法及验证码交互单元行为。
+- `container-boot.py --check` 返回既有差异：missing `tailscale`，active_unplanned `ai-resource-center`、`personal-crm`，无 stopped_planned。本任务未修改这些容器，也未执行 reconcile。
+- 无需修改公共 Task/runner。Hermes 任务和日报标签由原集成任务统一修改；外部来源、私有配置与长期依赖已就位。

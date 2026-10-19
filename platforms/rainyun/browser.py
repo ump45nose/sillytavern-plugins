@@ -1,5 +1,6 @@
 """Narrow Selenium binding to the pinned Rainyun page and Tencent challenge."""
 
+import hashlib
 import json
 import math
 import os
@@ -20,7 +21,6 @@ EARN_URL = ORIGIN + "/account/reward/earn"
 CHECKIN_ROW = ('//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[2]'
                '/div/div/div/div[1]/div//div/div[1]'
                '/div[span[1][normalize-space(text())="每日签到"]]/span[2]')
-BALANCE = '//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[1]/div[1]/div/p/div/h3'
 LOGIN_BUTTON = '//*[@id="app"]/div[1]/div[1]/div/div[2]/fade/div/div/span/form/button'
 LOGIN_ERROR = '/html/body/div[4]/div[2]/div/div/div[1]/div/div/div/div/small'
 CONFIRM_CAPTCHA = '//*[@id="tcStatus"]/div[2]/div[2]/div/div'
@@ -34,13 +34,6 @@ class RainyunError(Exception):
 
 def checkin_state(text):
     return {"已完成": "complete", "领取奖励": "incomplete"}.get(text.strip(), "unknown")
-
-
-def points(text):
-    text = text.strip()
-    if not re.fullmatch(r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text):
-        return None
-    return number(text.replace(",", ""))
 
 
 def click_offsets(matches, image_size, element_size):
@@ -92,13 +85,15 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class Browser:
-    def __init__(self, config, directory, *, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, config, directory, *, cookies=None, clock=time.monotonic, sleep=time.sleep):
         self.config, self.directory = config, Path(directory)
         self.clock, self.sleep = clock, sleep
         self.driver = None
         self.temporary = None
         self.login_attempted = False
         self.captcha_attempts = 0
+        self.cookies = cookies
+        self.identity_confirmed = False
 
     def open(self):
         verify_runtime(self.config)
@@ -144,6 +139,26 @@ class Browser:
         self.driver.implicitly_wait(0)
         self.driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": "Asia/Shanghai"})
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth})
+        if self.cookies is not None:
+            self.driver.execute_cdp_cmd("Network.setCookies", {"cookies": self.cookies})
+            # Rainyun's route guard reads the full Vue user cache. A cold
+            # profile with only cookies can be redirected before its async
+            # /user/ request fills localStorage. Let the official public page
+            # initialize that cache before opening the protected reward route.
+            self.driver.get(ORIGIN + "/")
+            self._official()
+            initialized = """
+              const raw=localStorage.getItem('user-data');
+              if(!raw) return false;
+              try { const user=JSON.parse(raw);
+                return Number.isInteger(user.ID) && user.ID>0 && !!user.meta;
+              } catch (_) { return false; }
+            """
+            try:
+                self.Wait(self.driver, 20, poll_frequency=0.25).until(
+                    lambda _: self.driver.execute_script(initialized))
+            except self.Timeout:
+                raise RainyunError("cookiecloud_session_not_initialized") from None
 
     def _one(self, kind, selector, *, clickable=False):
         matches = self.driver.find_elements(kind, selector)
@@ -215,13 +230,55 @@ class Browser:
 
     def read(self):
         if self._navigate().startswith("/auth/login"):
+            if self.config.get("cookiecloud_config"):
+                raise RainyunError("authentication_invalid")
             self._login()
         if self._official() != "/account/reward/earn":
             raise RainyunError("login_not_confirmed")
         element = self._wait_one("xpath", CHECKIN_ROW)
         state = checkin_state(element.text)
-        balance = self._one("xpath", BALANCE)
-        return {"checkin": state, "balance": points(balance.text) if balance else None}
+        return {"checkin": state, "balance": self._balance()}
+
+    def _balance(self):
+        # This is the official client's user-summary endpoint. Transfer only the
+        # fields needed for account binding and points, never the full response.
+        script = """
+          const done=arguments[arguments.length-1];
+          const csrf=document.cookie.split(';').map(x=>x.trim())
+            .find(x=>x.startsWith('X-CSRF-Token='));
+          const control=new AbortController();
+          const timer=setTimeout(()=>control.abort(),10000);
+          fetch('https://api.v2.rainyun.com/user/?no_cache=true',{
+            credentials:'include',signal:control.signal,
+            headers:{'Accept':'application/json','X-CSRF-Token':csrf?decodeURIComponent(csrf.slice(13)):''}
+          }).then(r=>r.json()).then(body=>done({
+            code:body.code,points:body.data?.Points,user_id:body.data?.ID
+          })).catch(()=>done({code:null})).finally(()=>clearTimeout(timer));
+        """
+        try:
+            observed = self.driver.execute_async_script(script)
+        except (self.Timeout, self.WebDriverError):
+            observed = None
+        if not isinstance(observed, dict):
+            if self.config.get("cookiecloud_config") and not self.identity_confirmed:
+                raise RainyunError("account_identity_unconfirmed")
+            return None
+        if observed.get("code") in {30002, 30038}:
+            raise RainyunError("authentication_invalid")
+        if observed.get("code") != 200:
+            if self.config.get("cookiecloud_config") and not self.identity_confirmed:
+                raise RainyunError("account_identity_unconfirmed")
+            return None
+        if self.config.get("cookiecloud_config"):
+            identifier = observed.get("user_id")
+            if type(identifier) is not int or identifier <= 0:
+                raise RainyunError("account_identity_unconfirmed")
+            expected = hashlib.sha256(f"rainyun-user-id:{identifier}".encode()).hexdigest()[:24]
+            if expected != self.directory.name:
+                raise RainyunError("account_identity_mismatch")
+            self.identity_confirmed = True
+        balance = number(observed.get("points"))
+        return balance if balance is not None and balance >= 0 else None
 
     def _dismiss_success(self):
         # Only acknowledge a known result, not arbitrary terms/security dialogs.
