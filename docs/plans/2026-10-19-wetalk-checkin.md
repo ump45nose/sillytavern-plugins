@@ -50,3 +50,16 @@
 - `business` 包含 `checkin` 和 `balance`，metrics 为 `balance`/`reward`、单位 coins。日报为 `balance` 增加“余额查询”标签，注册平台及必要稳定错误映射即可，无需修改结果 schema。
 - 全局 source-lock/许可汇总由集成任务依据本平台 `provider-source.json` 更新；本平台没有需要重新分发的上游文件或可冒用的 MIT 许可。
 - 接入真实账号前先完成平台 README 中的只读检查，再验证签到、读回和重复运行。尚未确认的业务项不能视为本次开发已验收。
+
+## 2026-10-19 真实凭据核实
+
+- 用户重新同步 CookieCloud 后，使用指定 HTTP Python 和现有解密器，仅筛选 `api.wetalkapp.com` 可用 Cookie；确认仅 `_c_WBKFRo`、`_nb_ioWEgULi` 两项，没有输出值或读取无关站点内容。根任务已确认 local_storage_data 为空。
+- 在当前 NAS 工具访问侧，对固定只读接口 `/app/queryBalanceAndBonus` 做了不带 Cookie、仅带上述 Cookie 的对照；均为 HTTP 200、JSON `retcode=100004`、`Missing param or param error.`，result 无余额或签到资格。请求未填写或猜测邮箱/设备字段，没有触发 checkIn 或 videoBonus。
+- 当前公开移动网页入口 `https://mobile.wetalkapp.com/assets/package_timestamp/202610161240/index-B0qxN3GV.js`，SHA-256 `3f21e5055b3f32b00a1bc72fd272960a5b46043499f52efbccb2db18d19dd8a0`；其实际请求包装为 `/web/*`，使用 `x-auth-token`、userInfo.token、callPin 及客户端标识。不能直接假设网页登录态可用于旧 `/app/*` 签到。
+- 同时检查公开消息页入口 `https://messages.wetalkapp.com/assets/package_timestamp/202610162138/js/app.05172ee9.js`，SHA-256 `e329cff4e68ba1d73f3ab94fd21b5a81263ab750ce3676c10e764a14a2d6f0ca`。上述两入口未包含 queryBalanceAndBonus/checkIn/isallowcheckin，移动页登录通过独立懒加载组件；没有据此声称网页完整功能已被证明不存在。
+- 可用远程 Mac 连接及 Desktop Commander 的在线 Mac（192.168.31.103）只返回目标域名匹配结果：Chrome 运行，但没有匹配 WeTalk 标签页；进程元数据未发现已启用的浏览器远程调试端口。没有读取其他标签页内容或浏览记录。另一个 Primary 远程工作台连接提示需重新认证，不能把连接失败算作 WeTalk 登录失效。
+- 发现现有适配器会将已观察到的缺参数响应统称 checkin_rejected。已补充精确的 `100004` + 该错误文案分类为 `request_parameters_invalid`，并验证其只读请求不会触发签到、确定拒绝不会永久保留含糊 intent。未修改根任务正在接入的凭据文件权限检查。
+- 当前未生成 `wetalk.json`，未用空配置或两个 Cookie 冒充账号登录，未覆盖共享 runtime 中 `wetalk-main` 的正式结果；真实签到/余额/重复运行仍缺客户端捕获。
+- 准确待办：从已登录 WeTalk App 捕获一条成功 GET `/app/queryBalanceAndBonus` 的请求参数及必要请求头（或现有 QX 单账号 capture.params/headers），确认 retcode=0 且返回 balance/isallowcheckin，再私有配置并以 wetalk-main 进行只读、受控签到和重复运行。不要提供普通官网 Cookie、网页 /web/* token 或猜测字段替代。
+- 本阶段只修改本平台错误分类、针对性测试和凭据说明；生产调度、代理、共享权限函数与其他平台保持原状。
+- 本阶段验证：WeTalk Node 测试 **25 项通过**、真实 Python 启动器/Node 受控 transport 集成 **6 项通过**，`git diff --check` 通过。真实访问仅包含上述只读错误对照；没有账号已认证、真实签到或奖励到账的成功结论。
