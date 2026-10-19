@@ -75,9 +75,24 @@
 - 仅把三条 Epic 及依赖规则切到既有香港 03，保留账号副本和固定的失败 Mac 指纹：`f4aa6c42-a30d-4c01-99d7-6f526433d6a0` 记录 0 个 403、页面无 Loading、登录 true、Get 1 个，持续观察仍正常。开始再切回日本的复现对照，之后用香港线路进行正式业务验收。
 - 再切回日本 `fe9510f2-6640-4a26-81e2-79c27ac326c4` 重现 69 个挑战脚本、Loading、Get 0，形成日本失败→香港正常→日本失败的浏览器对照。可确认当前两条出口对 CF 请求判定有差异；具体是哪条站点风控规则或 IP 信誉项，需要站点后台，不能声称已读到黑名单规则。
 - 已重新采用验证正常的香港 03，将 Epic 主域名、仅 Camoufox 的 hCaptcha 后缀及 components.unrealengine.com 精确域名三条规则保存至既有自定义规则源；保留原件和摘要，原权限/所有者/ACL 复制保留，其他规则及选择器不改。运行配置通过 Core 校验，正在正式领取验证。
+- 香港线路正式 `f3da2012-c8f0-4211-a999-bff22309b428` 又发生传输超时；固定指纹使用正式 profile 的 `8437b1ec-9df1-4c7c-a723-e4e368905e01` 仍在商品导航前连接截止超时，不能归因于随机指纹。现场美国原生及香港 03 均为 Hysteria2，日志存在 `context deadline exceeded`；尚不能仅凭协议类型认定 UDP 是根因，不扩大修改 DNS/公共设施。
+- 新增真实浏览器直连对照 `f98d32d0-1eb7-4820-b76f-e2f59b365543`：沿用失败 Mac 指纹、账号副本及相同页面，0 个 403，等待后登录 true、Get 1、无 Loading。只读副本不涉及订单。现备份并仅移除正式 Epic 配置的可选 proxy 字段，其他身份、模型和目录字段逐项保持，开始正式直连验证；未修改浏览器指纹或 Worker。
+- 宿主 `/cdn-cgi/trace` 对照直连为 CN、HTTP 200（0.49 秒），当时香港代理同请求连接失败。正式直连 `df1a83c6-f6e0-4345-869a-19d87ce5e3ad` 读出目录后仍在后续导航超时。受控正式 profile 流程 `45204866-1a41-4569-a69a-c402ebed6d48` 跳过重复首页导航后，完成商品加载、设备提示，进入结算验证码；最终 hCaptcha SDK 在 `/checkcaptcha/` 的 `response.json()` 出现 JSONDecodeError，返回未确认。这是后续验证码响应解析问题，不能再归为 403。
+- 目录读取现复用已在当前首页的会话，仍为新页初始化官方来源；114 项 Epic 回归通过。正在核对 hCaptcha 返回类型，并只读检查解析失败后页面是否已实际完成验证，不凭 SDK 信号下单。
+- 直连、默认浏览器参数及正式 profile 的受控完整链路 `6c1ca1f7-073b-4182-a58a-ae85a4bfab72` 已完成 session、目录、商品及设备提示，结算进入 hCaptcha；`/checkcaptcha/` 一次为空的 200（造成 SDK JSONDecodeError），另一次 HTTP 400、JSON `pass=false`。独立页面读回仍为 captcha，所以并非仅解析日志误报，也没有继续下单；两款 journal 均无提交。当前剩余阻塞是实际人机校验拒绝，不能再归为静态资源 403，也未将失败改记为成功。
+- 当前保留 Epic 直连配置，已撤回运行态及持久源中全部三条 Epic 实验路由；未保留固定指纹、Worker 或 DNS 改动。正式入口正在用最终代码刷新回执。Rewards 为恢复此前暂停的完整任务，三个既有 Bing 特例改为已存在的香港 02 TCP 节点，独立只读组件验证成功、账号地区 HK、周积分 20/70；微软分组仍 DIRECT。新线路已写入既有规则源，其他规则、全局选择器不变，正式完整任务已恢复排队。
 
 ### 官方资料与复现入口
 
 - [Cloudflare 挑战响应检测](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)、[clearance](https://developers.cloudflare.com/cloudflare-challenges/concepts/clearance/)、[支持浏览器](https://developers.cloudflare.com/cloudflare-challenges/reference/supported-browsers/)、[挑战排障](https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/)。
 - [Camoufox 使用说明](https://camoufox.com/python/usage/)、[Playwright 请求拦截](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route)。线上说明与已安装 Camoufox 0.4.11 / Playwright 1.53.0 源码分别核对，不混用新版本功能。
 - 检索原始证据在 `/tmp/epic-403-research/`；命令为 `smart-search search ... --providers xai-responses --extra-sources 0`、`NO_PROXY='*' no_proxy='*' smart-search fetch URL --format markdown --output PATH`。受控浏览器脚本、独立结果与脱敏日志保存在私有 runtime 的 `diagnostics/2026-10-19/` 和对应 runs 分区，未复制账号资料至源码。
+
+## 16:25 当前验收结果（覆盖上面的阶段性交接状态）
+
+- **403 原因已定位到 Cloudflare 对模块子请求的挑战，且判定随出口变化。** 同一正式账号副本、固定失败指纹及相同请求链，日本 69 个脚本 403 → 香港 0 → 日本再次 69；直连同样为 0，商品控件恢复。被拒绝响应是带 `cf-mitigated: challenge` 的 HTML，而非 JavaScript。没有站点后台证据，具体 WAF / IP 信誉规则仍未知，不能声称某个国家或全部代理均被封禁。
+- 已保留 Epic **直连**：仅移除可选 proxy 字段，其他私有配置逐项一致；三条 Epic 实验路由已从运行态与持久源移除。指纹、Worker、DNS、账号地区均未改。代码识别并等待主文档 Managed Challenge，避免错误跳登录及混入 hCaptcha；目录读取复用已稳定的首页。114 项 Epic 回归通过。
+- **Epic 整体领取仍未通过。** 最终正式入口 `302651f4-538b-461e-9251-7a49965ecbec` 于 16:19 结束，`challenge_unconfirmed`，Bad Cheese、Agent A 仍两款未确认。已越过此前的加载阻塞进入结算验证；独立诊断 `6c1ca1f7-...` 确认 hCaptcha 返回 HTTP 400 / `pass=false` 且页面仍为 captcha。SDK 的空响应 JSONDecodeError 是并存信号，不能把它当作验证码实际通过，也不能据此下单。
+- Rewards 正式完整复跑 `cd8ea9d5-1d2e-420e-93f8-d00209b68be1` 于 16:21 结束，`full_requested_capabilities_partial`。周任务再次实际读回 **20/70、已开放 2/2 完成**；每日快照超时，随后依赖该快照的能力报 `daily_cycle_unavailable`，完整任务仍未通过，不把周任务成功推广为全部成功。本轮没有继续扩大 Rewards 业务源码修改。
+- 最终实时核对：三个 Bing 特例在运行规则和持久源中一致，使用既有香港 02 TCP 节点；微软分组仍 DIRECT，廉价手动与风控敏感选择器未改。没有残留诊断 profile 副本或本轮浏览器进程。正式 delivery 均由既有启动器写入，没有手工替换。
+- 16:24 启动检查仍只有既有 `tailscale` 缺项、`ai-resource-center` / `personal-crm` 未登记，以及三个已知 SillyTavern 忽略对象；`stopped_planned=[]`，未操作这些容器。福利文件执行 `git diff --check`；仅提交本项目改动，其他项目未跟踪目录保留。
