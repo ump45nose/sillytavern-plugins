@@ -20,6 +20,7 @@ const REASONS = new Set([
   "missing_configuration", "invalid_configuration", "private_configuration_unreadable",
   "signature_parameters_unsupported", "invalid_action_state", "account_identity_mismatch",
   "action_state_io_error", "authentication_invalid", "signature_invalid", "rate_limited",
+  "request_parameters_invalid",
   "access_denied", "provider_unavailable", "unexpected_redirect", "response_limit",
   "invalid_provider_response", "network_error", "request_timeout", "checkin_rejected",
 ]);
@@ -174,6 +175,10 @@ function rejection(response) {
   if (!Number.isInteger(status) || status >= 500) return "provider_unavailable";
   if (status < 200 || status >= 300) return "checkin_rejected";
   const message = String(response.payload?.retmsg ?? "").slice(0, 4096);
+  // Observed on the live read-only endpoint with missing client query parameters.
+  if (response.payload?.retcode === 100004 && /^\s*Missing param or param error\.?\s*$/i.test(message)) {
+    return "request_parameters_invalid";
+  }
   if (/签名.{0,12}(?:错误|无效|失败|不正确)|(?:invalid|incorrect|bad)[ _-]*(?:signature|sign\b)|signature[ _-]*(?:error|invalid|mismatch)|signDate.{0,12}(?:error|invalid|expired)/i.test(message)) {
     return "signature_invalid";
   }
@@ -258,9 +263,9 @@ async function run(request, state, { statusOnly = false } = {}) {
     checkin = "complete";
   } catch (error) {
     submitFailure = reasonOf(error);
-    // An explicit authentication/signature/rate rejection did not accept this write.
+    // An explicit parameter/authentication/signature/rate rejection did not accept this write.
     // A later invocation may try after a fresh successful eligibility query.
-    if (["authentication_invalid", "signature_invalid", "rate_limited", "access_denied"].includes(submitFailure)) {
+    if (["authentication_invalid", "signature_invalid", "rate_limited", "access_denied", "request_parameters_invalid"].includes(submitFailure)) {
       try {
         state.set("unknown");
       } catch (saveError) {
