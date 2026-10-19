@@ -21,7 +21,7 @@
 
 | 任务 | 所有权 | 依赖 | 进度 |
 | --- | --- | --- | --- |
-| GLaDOS | platforms/glados、对应测试、平台说明及独立计划 | 无 | 真实认证通过、今日已签到，整理复核 |
+| GLaDOS | platforms/glados、对应测试、平台说明及独立计划 | 无 | 真实认证、官方今日已签、Hermes 包装复核通过 |
 | 影视飓风 | platforms/yingshijufeng、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 真实签到 +10，重复运行通过 |
 | Olé | platforms/ole、对应测试、平台说明及独立计划 | 共用 YYB 取码客户端；可先用模拟取码开发 | 空门店真实签到、状态 N→Y，积分无增量 |
 | 雨云 | platforms/rainyun、独立依赖锁、对应测试与说明 | 现有浏览器租约 | 真实签到 +500、独立读回和重复运行通过 |
@@ -98,3 +98,5 @@
 - 最新 Mac 同步已读取（2026-10-19T09:10:58.009Z）；WeTalk 只有两个 Cookie，没有 localStorage 或客户端参数。其原 fork 继续只读核对，GLaDOS 原 fork 从实际 Mac Chrome 核对 UA。
 - YYB 微信扫码已成功确认并持久保存；两个实际目标 AppID 都已取码、登录商家。影视飓风真实签到积分 0→10，run `4019fa56-316c-4d15-a223-2d3e0ab30610`；重复运行 `2049d203-dbb2-4a38-9e80-70c3f5c992ba` 保留完成、积分 10→10。Olé 初次因适配器多余的必填门店限制受阻，核对固定参考后已移除；空门店真实签到 run `995b5518-cbaf-413d-9422-07ac54b4c603`，官方 N→Y、积分 0→0，重复执行确认 already_complete。
 - 实测凭据错误的共同原因是既有 `hermes-yuwk-access.service` 会持续恢复 Hermes/本机管理身份的命名 ACL，0600 立即显示为 0660。保留服务与授权；三个 Node 平台复用 `common/private_file.cjs` 核对普通文件、当前 owner、当前 group 和无 other/执行权限，支持本身份管理组；不放宽到任意组。新增 ACL 场景回归，与受影响平台合计 70 项 Node 测试通过。
+- GLaDOS 用实际 Chrome UA 后认证成功，官方确认今日已签；集成 Hermes 复核 `ab61c0c4-4a38-4a80-a92c-42eeadf41647`，积分 10、本日奖励 10、delta 0，没有新增签到 POST。雨云真实 +500、WorkBuddy 国内 +100；国际单次 hy3 请求完成，奖励仍未知。
+- 集成包装实际以 Hermes 身份复核 GLaDOS、影视飓风、Olé、雨云、WorkBuddy 双版共六个作业，结果与账号分区一致。YYB 重启后两个目标 AppID 再取码成功；原有生产调度和主线中的 Epic 并行修改未被覆盖，新增定时尚未启用。
