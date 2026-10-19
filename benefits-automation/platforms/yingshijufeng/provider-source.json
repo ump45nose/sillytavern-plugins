@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/smallfawn/QLScriptPublic",
+  "commit": "640dbac72a991fbc3c8cdedb17ad204eee3c15d9",
+  "reference_files": {
+    "wxapp/yingshujufeng.js": "08292eaa655105abd671d8f3983bbbea70610423c263b0c38bdb5d110c581f55"
+  },
+  "license": "No repository license declared; full source is not redistributed",
+  "usage": "Independent narrow protocol implementation; no upstream source is loaded at runtime",
+  "observed_at": "2026-10-19",
+  "public_readonly_observations": {
+    "show_checkin_page_v2.json": "code=0 with checkinId/showPage/isShow does not prove authentication or today's check-in",
+    "user_points.json": "Unauthenticated code=0 with do_ext=false has no confirmed balance"
+  },
+  "unverified": [
+    "Real-account clientBiz authorization and returned session",
+    "Real-account check-in response shape and exact already-checked-in response",
+    "Independent server-side daily check-in readback fields"
+  ]
+}
