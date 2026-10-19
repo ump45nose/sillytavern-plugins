@@ -20,9 +20,10 @@ def bounded(path, limit=65536):
     return json.loads(raw)
 
 
-def main(platform):
+def main(task_id):
     cfg = bounded(CONFIG)
-    task = cfg["tasks"][platform]
+    task = cfg["tasks"][task_id]
+    platform = task.get("platform", task_id)
     if task.get("enabled", True) is False:
         print(task["label"] + "：已停用")
         return 0
@@ -65,7 +66,7 @@ def main(platform):
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         pass
     # Record this attempt; a prior successful latest must not conceal busy/failure.
-    atomic_json(runtime / "delivery" / (platform + ".json"), output)
+    atomic_json(runtime / "delivery" / (task_id + ".json"), output)
     print(task["label"] + "：结果已保存（" + output["execution_status"] + "）")
     return 0
 

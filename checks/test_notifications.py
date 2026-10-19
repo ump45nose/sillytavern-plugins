@@ -115,7 +115,9 @@ class BenefitsTests(unittest.TestCase):
             root = Path(tmp) / "runtime/delivery"
             root.mkdir(parents=True)
             deployment = root.parents[1] / "benefits-deployment.json"
-            deployment.write_text(json.dumps({"tasks": {"aliyun": {"enabled": False}}}))
+            deployment.write_text(json.dumps({"tasks": {
+                "rewards": {"label": "Rewards"},
+                "aliyun": {"label": "Aliyun", "enabled": False}}}))
             with patch.object(benefits, "DELIVERY_ROOT", root), \
                     patch.object(benefits, "TASKS", {"rewards": "Rewards", "aliyun": "Aliyun"}), \
                     patch.object(benefits, "load_result", return_value=(self.row(reason="authentication_invalid"), None)):
