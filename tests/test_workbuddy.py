@@ -1,5 +1,6 @@
 """Offline protocol, credential, and one-send recovery checks. No platform access."""
 import io
+from http.cookiejar import CookieJar
 from http.client import IncompleteRead
 import json
 import os
@@ -14,7 +15,7 @@ from urllib.error import HTTPError
 from common.model import atomic_json, validate
 from platforms.workbuddy.adapter import execute
 from platforms.workbuddy.client import BASES, Client, HTTP, MAX_BODY, parse_status, validate_chat
-from platforms.workbuddy.login import Login, authorization_url, import_plaintext
+from platforms.workbuddy.login import Login, authorization_url, cookiecloud_login, import_plaintext
 from platforms.workbuddy.state import Credentials, Journal, WorkBuddyError, durable_json
 
 CONTEXT = {"run_id": "offline", "platform": "workbuddy", "account": "cn-main", "business_date": "2026-10-19"}
@@ -439,6 +440,112 @@ class ClientTests(unittest.TestCase):
 
 
 class AuthAndStateTests(unittest.TestCase):
+    def test_login_alias_keeps_private_target_and_uses_canonical_lock(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            target, alias, source = base / "private.json", base / "alias.json", base / "import.json"
+            durable_json(target, session())
+            durable_json(source, {**session(), "access_token": "new-import-fixture"})
+            alias.symlink_to(target)
+            command = [sys.executable, str(root / "platforms/workbuddy/login.py"), "--edition", "cn",
+                       "--session-file", str(alias), "--import-client", str(source)]
+            child = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            self.assertEqual(child.returncode, 0, child.stdout)
+            self.assertTrue(alias.is_symlink())
+            self.assertEqual(Credentials(alias, "cn").session["access_token"], "new-import-fixture")
+            self.assertTrue(base.joinpath("private.json.lock").exists())
+            self.assertFalse(base.joinpath("alias.json.lock").exists())
+
+    def web_transport(self, edition="cn", *, accounts=None, identity=None, token=None):
+        host = "www.workbuddy.cn" if edition == "cn" else "www.workbuddy.ai"
+        account = {"uid": "uid-fixture", "type": "personal", "pluginEnabled": True}
+        def handler(method, url, headers, payload):
+            if "/auth/state?" in url:
+                return response({"state": "fixture", "authUrl": "https://" +
+                    ("www.codebuddy.cn" if edition == "cn" else host) + "/login?state=fixture"})
+            if "/console/login/enterprise?" in url:
+                return response(token if token is not None else {
+                    "accessToken": "new-web-access", "refreshToken": "new-web-refresh"})
+            if url.endswith("/console/account/switch"):
+                self.assertEqual(payload, {})
+                return response({"switched": True})
+            self.assertEqual(url, BASES[edition][0] + "/v2/plugin/login/account")
+            self.assertEqual(len(transport.cookies), 0)
+            self.assertEqual(headers["Authorization"], "Bearer new-web-access")
+            return response(identity if identity is not None else account)
+        transport = Transport(handler)
+        transport.cookies = CookieJar()
+        def navigate(url, headers, origin):
+            self.assertEqual(url, "https://" + host + "/console/accounts")
+            self.assertEqual(origin, "https://" + host)
+            self.assertEqual(len(transport.cookies), 1)
+            return response({"accounts": accounts if accounts is not None else [account]})
+        transport.navigate = navigate
+        return transport
+
+    def web_cookies(self, config, host):
+        self.assertEqual(config, Path("cookiecloud-fixture.json"))
+        self.assertIn(host, {"www.workbuddy.cn", "www.workbuddy.ai"})
+        return [{"name": "sso-fixture", "value": "private-cookie-fixture", "domain": host,
+                 "path": "/", "secure": True, "expires": -1}]
+
+    def test_cookiecloud_web_grant_validates_bearer_without_cookies(self):
+        for edition in ("cn", "intl"):
+            with self.subTest(edition=edition):
+                transport = self.web_transport(edition)
+                value = cookiecloud_login(edition, Path("cookiecloud-fixture.json"),
+                                          transport, self.web_cookies)
+                self.assertEqual(value["refresh_token"], "new-web-refresh")
+                self.assertEqual(value["uid"], "uid-fixture")
+                self.assertEqual(len(transport.calls), 4)
+
+    def test_cookiecloud_requires_one_enabled_personal_account(self):
+        for accounts in ([], [{}, {}], [{"uid": "u", "type": "enterprise", "pluginEnabled": True}],
+                         [{"uid": "u", "type": "personal", "pluginEnabled": False}]):
+            transport = self.web_transport(accounts=accounts)
+            with self.subTest(accounts=accounts), self.assertRaisesRegex(WorkBuddyError, "web_account_selection_required"):
+                cookiecloud_login("cn", Path("cookiecloud-fixture.json"), transport, self.web_cookies)
+            self.assertEqual(transport.calls, [])
+
+    def test_cookiecloud_rejects_mismatched_identity_or_missing_refresh(self):
+        for overrides, reason in (({"identity": {"uid": "another"}}, "web_account_identity_mismatch"),
+            ({"identity": {"uid": "uid-fixture", "enterpriseId": "enterprise"}}, "web_account_identity_mismatch"),
+            ({"token": {"accessToken": "new-web-access"}}, "refresh_token_missing")):
+            with self.subTest(overrides=overrides), self.assertRaisesRegex(WorkBuddyError, reason):
+                cookiecloud_login("cn", Path("cookiecloud-fixture.json"),
+                                  self.web_transport(**overrides), self.web_cookies)
+
+    def test_cookiecloud_errors_are_redacted(self):
+        def failed_reader(*args):
+            raise ValueError("private-response-fixture")
+        with self.assertRaisesRegex(WorkBuddyError, "^web_session_unavailable$"):
+            cookiecloud_login("cn", Path("cookiecloud-fixture.json"), self.web_transport(), failed_reader)
+
+    def test_web_login_preserves_service_failure_and_identifies_login_page(self):
+        for answer, reason in ((response({}, status=429), "rate_limited"),
+                               (response({}, status=503), "platform_unavailable"),
+                               ((200, b'<html>login</html>'), "web_authentication_required")):
+            transport = self.web_transport()
+            transport.navigate = lambda *args: answer
+            with self.subTest(reason=reason), self.assertRaisesRegex(WorkBuddyError, reason):
+                cookiecloud_login("cn", Path("cookiecloud-fixture.json"), transport, self.web_cookies)
+
+    def test_web_navigation_follows_only_same_origin_and_has_limit(self):
+        transport, origin = HTTP(), "https://www.workbuddy.ai"
+        answers = [(302, b'', {"Location": "/auth/next"}), (200, b'ok', {})]
+        with patch.object(transport, "_response", side_effect=answers) as request:
+            self.assertEqual(transport.navigate(origin + "/console/accounts", {}, origin), (200, b'ok'))
+            self.assertEqual(request.call_args.args[1], origin + "/auth/next")
+        with patch.object(transport, "_response", return_value=(302, b'', {"Location": "https://other.test/"})) as request:
+            with self.assertRaisesRegex(WorkBuddyError, "unexpected_authorization_redirect"):
+                transport.navigate(origin + "/console/accounts", {}, origin)
+            self.assertEqual(request.call_count, 1)
+        with patch.object(transport, "_response", return_value=(302, b'', {"Location": "/loop"})) as request:
+            with self.assertRaisesRegex(WorkBuddyError, "authorization_redirect_limit"):
+                transport.navigate(origin + "/console/accounts", {}, origin)
+            self.assertEqual(request.call_count, 8)
+
     def test_credentials_rotation_is_atomic_private_and_survives_reload(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "session.json"
