@@ -12,10 +12,10 @@ PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --ignore-scripts
 npx patchright install chromium
 ```
 
-在仓库外的 `state/rewards/<account>/` 准备 `storage-state.json` 和 `capabilities.json`。当前迁移保留旧部署启用的八项：
+在仓库外的 `state/rewards/<account>/` 准备 `storage-state.json` 和 `capabilities.json`。原迁移保留旧部署启用的八项，当前另加日常连续打卡核查与桌面 App 周任务：
 
 ```json
-{"schema_version":1,"enabled":["daily","extra","punchcards","desktop_search","more_promotions","claim","app_daily","app_promotions"]}
+{"schema_version":1,"enabled":["daily","extra","punchcards","desktop_app_weekly","desktop_search","more_promotions","claim","app_daily","app_promotions","daily_streaks"]}
 ```
 
 可选 `native-config.json` 保存已有稳定地区/设备和搜索配置，例如：
@@ -35,17 +35,23 @@ python3 platforms/rewards/run.py --runtime-root /absolute/private/runtime \
 
 ## 能力与确认
 
-- `daily`：逐个执行当前每日活动卡片，重新读进度到上限。
+- `daily`：逐个执行当前每日活动卡片。点击前保存 intent，按当前 offer ID 读回确认；整体计数增加不能替代对应卡片完成。未确认点击保留记录，不重放。
 - `extra`：社交、已配置目标和探索必应。探索先用当前任务 hash 激活，再用对应主题搜索，以该任务自身的完成/积分读回确认。锁定任务保留 blocked。
 - `desktop_search`：读取当前账号桌面额度，未满时搜索、等待入账，达到额度或连续停滞则退出；已满不重复搜索。账号、设备和日期各有查询 journal，发出前记录，当天重跑跳过已提交查询，次日重新允许。
 - `punchcards`：旧部署白名单 onboarding 任务；完整清单没有分配该任务时不适用。不会把其他任务组冒充同一任务。
+- `desktop_app_weekly`：按用户授权模拟桌面 App 请求，复用现有 Cookie、地区、代理与 HTTP 客户端，在原设备 User-Agent 后追加官方客户端 `MSRewards/Desktop/1.4.56` 标识。只处理当前 `RewardsApp_weekly_Exclusive` 周任务中的七个积分子项，跳过锁定项，不提交安装奖励或其它任务卡。当前页面的 action ID、部署 ID 与 hash 绑定；每项仅提交一次，对应子项完成标记与周积分同时读回才确认。按当前周卡持久保存 intent，未确认请求不重放。`complete` 表示当前已开放活动完成；周积分和未来锁定项仍单独保留，不代表本周 70 分已全部获得。无任务分配时为不适用。无需安装桌面客户端或启动 Chromium，资源实测见 [成本记录](../../docs/desktop-app-cost-2026-10-13.md)。
 - `more_promotions`：当前可执行 URL 活动，当前 action ID 和任务 hash 绑定，发出前记录 intent。journal 按业务日期保存，避免循环使用的活动 ID 被此前日期的提交永久阻塞；迁移时保留当天已有 intent。
 - `claim`：明确有待收积分时提交一次；无待收积分不适用。
 - `app_daily` / `app_promotions`：通过已有浏览器登录进行 OAuth，token 存在私有账号目录；随后一次性 HTTP 客户端执行 APP 任务，不保留后台浏览器。APP 签到优先用当前页面进度确认，不能把 1000 分连续签到奖励误认作每日签到。
+- `daily_streaks`：在日常阶段完成后核对必应、每日活动、APP 三项连续打卡的当日完成标记、计数及连续天数。必应仍为 0/1 时，独立进行一次真实搜索并读回，即使桌面搜索积分额度已满；未激活的 Edge、视觉搜索不在本阶段的执行范围。
+
+当前可见每日卡片与平台清单共同确定任务周期，结果以 `platform_task_cycle` 明细保存，完整报告的前后快照也保存 `cycle`。正式 `full` 入口的每日卡片、探索、更多活动、桌面搜索及必应连续打卡 journal 按该周期归属，业务日期仍按调用方时区用于审计。跨周期调用不能把上一轮完成当作新一轮完成；完整任务期间发生周期切换则返回 `full_task_cycle_changed`。已有 intent 保留，不删除此前记录。
+
+Hermes 既有 Rewards 作业自 2026-10-13 起为北京时间每天 09:30、16:30：上午核查上一轮，下午处理平台重置后的当前任务；没有新增作业或通知入口。账号现场返回 HK，私有配置显式使用 HK 与既有英文语言，账号身份、代理、Cookie 与 token 保留。十月月卡、Edge 激活等其它新增项目按用户要求搁置。
 
 完整任务在开始时也读取 APP 活动的当前清单。中途遇到验证码等人工处理条件时立即停止后续动作，但保留本次开始快照已确认完成的任务。APP 签到只有重新读取到对应页面计数完成后才确认，提交响应或余额上涨不足以确认；APP 授权与限流失败保留固定公开原因，不输出私有响应。
 
-APP token 到期时，先使用同一登录 Cookie、代理和既有 HTTP 客户端完成 OAuth 跳转。只有官方回跳地址、随机 `state` 和授权 code 均有效且没有错误参数时才交换 token；需要页面交互时仍使用原浏览器和障碍检测。浏览器等待导航 commit，并在超时时核查真实回跳，不等待回跳页面的 DOM 加载。一次完整调用共享授权尝试及其失败，避免快照与各阶段反复启动授权浏览器；token 交换不自动重放，超时和导航失败有固定公开原因。
+APP token 到期时，先使用同一登录 Cookie、代理和既有 HTTP 客户端完成 OAuth 跳转。只有官方回跳地址、随机 `state` 和授权 code 均有效且没有错误参数时才交换 token；需要页面交互时仍使用原浏览器和障碍检测。浏览器等待导航 commit，并在超时时核查真实回跳，不等待回跳页面的 DOM 加载。同一授权会话及其失败在完整调用内共享，避免快照与各阶段反复启动授权浏览器。已成功的会话在后续 APP 阶段前重新检查 token 有效期，临近到期时关闭旧 HTTP 上下文并通过原会话重新授权；不重放已提交动作。token 交换不自动重放，超时和导航失败有固定公开原因。
 
 探索使用 [上游完整主题词库](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/f61f4e982bbb435f37133bed0dc5b4c582ed1e73/src/functions/bing-search-activity-queries.json)，固定 commit `f61f4e9`、GPL-3.0-or-later，共 74 个标题词条。原始 JSON 随源码保存在 `vendor/rewards-parser/src/functions/bing-search-activity-queries.json`，来源及 SHA-256 记录在 `PROVENANCE.json`；加载时校验字节摘要，无运行时下载或模型调用。匹配标题时清除零宽字符、统一大小写和空白；原有 27 个稳定 offer ID 也映射到该词库，支持标题本地化。酒店、珠宝、房产、体育等新轮换任务可直接按上游标题匹配。未识别主题仍显示 `search_topic_unsupported`，每个任务最多使用词库中的 10 个查询，逐项读回任务自身进度。
 
@@ -79,7 +85,17 @@ APP 签到在正式 `full` 入口使用独立的 `app-checkin-journal.json` 记�
 
 真实 Chromium 本地隔离验证 `435973a2-c735-4d29-888d-b987cd8da171` 使用空登录状态并拦截所有网络，确认真实按键事件、单次 Enter 提交、单次点击及滚动阅读；实际搜索等待 40.533 秒、阅读等待 12.224 秒。独立 HTTP 诊断 `3a0bc85a-8851-4fd4-9fe5-a851c217b294` 仅在进程内把 token 读数设为到期，真实 HTTP 授权、交换及 APP 4/4 读回用时 7.9 秒，未启动 Chromium，也未提交 APP 活动。两项诊断不覆盖正式 full 结果。157 项相关测试全部通过；关闭浏览器取消请求的日志分类补充后，59 项针对性测试再次通过，其中包含 1 项新增用例，累计覆盖 158 项不同用例。
 
+2026-10-13 上午正式运行 `ca027c04-f3a0-4ef4-ae90-9718a379abca` 仅 APP 签到失败：每日 3/3、桌面搜索 200/200、探索 40/40、更多活动 140/140、APP 活动 4/4 均已完成，签到最终为 0/1。09:31 的 HTTP OAuth 和 token 交换成功，新 token 到期时间为次日 09:31；签到记录在 10:21 已开启 generation 2，但状态仍为 null，没有持久提交 intent。异常发生在轮次重置与提交 intent 之间，结合代码路径，主要怀疑提交前 APP 清单读取遇到临时故障。事件日志在 10:14 达到 512 KiB 上限，原回执只保存 `capability_failed`，因此无法确认具体异常，也没有把浏览器资源请求的连接错误直接当作签到错误。
+
+18:18 的独立只读诊断 `2e08317e-f320-4c3a-bcd3-49ecd4b5b40f` 确认 APP 接口可读、活动 4/4、签到 0/1。18:20 用正式 APP binding 单独执行签到与活动核查，运行 `1b547bb1-d57a-43c3-a327-35a029a37e9b` 在 31.2 秒内成功：一次 intent、一次签到 POST，页面读回 1/1，余额由 73,223 增至 73,228，generation 2 持久确认为 confirmed，结束无清理阻塞。此时网页任务已发生平台轮换，诊断按独立 partition 保存，正式 full latest 和 delivery 仍保留上午完整运行的回执。源码现将脱敏错误分类、固定原因、网络错误码及源码位置保存在 `rewards-report.json` 的失败阶段 `diagnostic` 中，事件日志写满后仍可追查。71 项授权、签到、APP、完整任务与日志测试通过，包含日志已截断时仍保留脱敏阶段异常的新增用例。
+
+2026-10-13 桌面 App 周任务按用户授权改用请求模拟，复用现有身份，在 Linux 上只加官方桌面客户端标识，无需 Windows、macOS 或桌面 App 安装。周一真实请求 `135a8b8d-c797-424d-a12f-e41b4e24da22` 入账 10 分后，已完成卡片不再提供 offerId/hash，首次读回因此未确认；修复完成状态解析后，独立读取 `037efc27-104b-48d3-8cdd-8f5cbb77451f` 确认周卡 10/70、对应完成勾选与余额 73,688。随后正式组件 `75c654f3-f666-4c45-b07b-75801341fa78` 持久确认周一，不重放其请求，只对周二发送一次 POST；读回周卡 20/70、当前开放 2/2、余额 73,698。完整 Hermes 入口 `f1168869-8572-445c-b0c9-02f66dce58a1` 再次确认，十项启用能力均完成或不适用，delivery、full latest、历史回执一致，Rewards 异常为空，结束无清理标记。本次完整核查没有再次提交周任务或新增余额。87 项相关 Node 用例与 31 项通知用例通过；成本与资源见专门记录。
+
 ## 操作节奏与诊断日志
+
+2026-10-13 19:39（北京时间）原 Hermes 完整入口 `5633bac0-4459-49cf-9bef-c779c31a6c97` 成功，耗时 41.3 分钟：每日活动 3/3、桌面搜索 200/200、当前探索 40/40、更多活动 140/140、APP 签到 1/1、APP 活动 4/4；必应连续打卡 1/1、每日活动连续打卡 3/3、APP 连续打卡 1/1。九项启用能力均完成或不适用，平台任务周期为 2026-10-13，四项明日解锁的探索任务保留 blocked。每日三张卡片各有一次点击及对应 offer 完成读回，当前极速问答和每日投票通过真实点击即可完成，没有伪造答题或投票提交。本次余额变动 +305，最终余额 73,678。
+
+正式 delivery、full latest 和历史回执一致，Rewards 异常报告为空，结束无浏览器清理阻塞；19:45 的独立只读快照 `47400bcf-6a2d-45c8-96a4-f04f6566a057` 再次确认上述页面进度，没有覆盖正式 full 结果。128 项相关脚本用例和 30 项通知用例通过，容器启动计划检查通过。额度已满时单独补一次必应连续打卡搜索、长任务内 token 到期后续期，以及检测重置后停止后续动作的分支由隔离测试验证；本次正常搜索已推进连续打卡且 token 有效，未触发补搜索或续期。
 
 默认按顺序执行：阶段间等待 2–5 秒；提交或点击前等待 1.5–3.5 秒；搜索框逐字输入，每字间隔 40–110 毫秒；搜索导航后等待 1.2–2.8 秒，入账等待 30–42 秒。每完成 8 次搜索，在下一次前休息 45–75 秒；活动页面轻滚动后停留 10–15 秒。已配置更长的搜索等待仍生效。APP 提交也有动作间隔，阅读任务保留至少 30 秒等待。额度已满或活动已完成时只读确认；搜索和网页任务在等待结束后重新检查页面障碍，再持久记录 intent 并提交。已有账号、设备、地区、代理及防重复提交规则继续使用。
 
@@ -91,11 +107,11 @@ APP 签到在正式 `full` 入口使用独立的 `app-checkin-journal.json` 记�
 
 每次实际调用在 `<runtime-root>/runs/<run_id>/rewards-events.jsonl` 写独立结构化日志，与该运行的 `result.json`、`rewards-report.json` 同目录。日志同步写入，开始事件在等待操作之前落盘；进程被终止时，可从最后一条尚无结束事件的操作定位卡住阶段。每行包含 UTC 时间、运行 ID、账号代号和业务日期，并按情况记录阶段、操作、耗时、HTTP 状态、等待时长、进度、授权缓存是否到期、错误分类、固定原因及 Rewards 源码文件/行号。浏览器启动、上下文、页面导航、OAuth 跳转与交换、API、提交 intent、读回、阶段和最终结果均有埋点；阶段边界附进程 RSS、系统内存、交换空间和负载。
 
-日志最多 512 KiB，以 `0600` 创建；生产访问权沿用既有私有运行目录的 FnOS ACL。达到上限记录一次 `log.truncated` 后停止增长。仅允许固定字段与值，不记录 Cookie、token、授权 code/state、完整 URL、搜索词、请求体、原始错误消息或完整堆栈；活动/查询标识只存摘要。写日志失败只输出固定诊断提示，不改变业务动作或结果。排查时先看本次回执，再按同一运行 ID 查看 `error` 和对应的 `start`/`finish`，从而区分授权超时、网络/TLS、导航上下文失效、限流或业务未确认。完整回执还保留失败阶段的诊断条目。
+日志最多 512 KiB，以 `0600` 创建；生产访问权沿用既有私有运行目录的 FnOS ACL。达到上限记录一次 `log.truncated` 后停止增长。仅允许固定字段与值，不记录 Cookie、token、授权 code/state、完整 URL、搜索词、请求体、原始错误消息或完整堆栈；活动/查询标识只存摘要。写日志失败只输出固定诊断提示，不改变业务动作或结果。排查时先看本次回执，再按同一运行 ID 查看 `error` 和对应的 `start`/`finish`，从而区分授权超时、网络/TLS、导航上下文失效、限流或业务未确认。完整回执还保留失败阶段的诊断条目；阶段抛出异常时，`stages.<capability>.diagnostic` 独立保存同一套脱敏错误字段，不受事件日志上限影响。
 
 ## 独立模式与边界
 
-`--mode activities / snapshot / extra / desktop-search / mobile-search / punchcards` 可单独调用。snapshot 只读，结果按 mode 保存，避免覆盖 full 日报事实。
+`--mode activities / snapshot / extra / desktop-search / mobile-search / punchcards / desktop-app-weekly` 可单独调用。snapshot 只读，结果按 mode 保存，避免覆盖 full 日报事实。
 
 移动搜索需要自己的 `storage-state.mobile.json`，以及 `native-config.json` 中 `mobile.isMobile=true` 和稳定 userAgent；不拿桌面会话冒充移动设备。read_to_earn 有独立 APP 组件，但不是当前旧部署启用项。Edge 时长、视觉搜索、实验 API 搜索等未绑定的请求会明确保持未完成，不静默跳过。
 

@@ -3,7 +3,7 @@
 const { publish } = require("../../common/result.cjs");
 const common = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
-const { parseProgress, progress } = require("./activities.cjs");
+const { parseProgress, progress, cards } = require("./activities.cjs");
 const {metric, number} = require("../../common/details.cjs");
 function details(raw, daily, app) {
   const {quota, quotas} = require("./search.cjs");
@@ -112,8 +112,16 @@ async function run(chromium, state, options = {}, deps = common) {
             max: rows[0].getAttribute('aria-valuemax')} : null;
         });
         business.app_daily = app ? counter(app.current, app.max) : "unknown";
-        return { execution: "ok", reason: "fresh_readonly_snapshot", business,
-          details: details(raw, daily, app) };
+        const current = require("./daily_cycle.cjs").inventory(raw, await cards(page)), cycle = current.date;
+        const streaks = require("./streaks.cjs").summary(
+          require("./parser_loader.cjs").loadParser().snapshotPage(await deps.boundedHtml(page)).streaks);
+        const observed = details(raw, daily, app);
+        return { execution: "ok", reason: "fresh_readonly_snapshot", cycle,
+          business: {...business, ...streaks.business},
+          details: {metrics: {...observed.metrics, ...streaks.details.metrics},
+            items: [...observed.items, ...current.rows.map(row => ({id: row.offerId, name: row.title,
+              status: row.complete ? "complete" : "incomplete", reason: "fresh_readback"})),
+              ...streaks.details.items, require("./daily_cycle.cjs").item(cycle)]} };
       },
     );
   } catch (error) {

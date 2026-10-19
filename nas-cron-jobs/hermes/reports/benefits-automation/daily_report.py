@@ -27,12 +27,18 @@ REASONS = {
     "cookiecloud_auth_pair_incomplete": "登录 Cookie 不完整，需重新登录并同步",
     "cart_preserved": "购物车状态无法确认，领取已停止",
     "full_requested_capabilities_partial": "已启用任务部分未完成",
+    "full_task_cycle_changed": "平台任务已重置，需核查新一轮",
     "human_required": "需要人工验证",
     "launcher_failed": "启动失败",
     "deadline_exceeded": "执行超时",
     "configuration_or_io_error": "配置或结果保存失败",
     "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "配置或浏览器异常",
+    "store_assets_access_denied": "商店资源被拒绝访问（403），领取已停止",
+    "challenge_timeout": "验证码处理超时",
+    "challenge_unconfirmed": "验证码未通过",
+    "product_state_unconfirmed": "商品页状态未确认",
+    "checkout_state_unconfirmed": "结算页状态未确认",
     "full_intervention_pending": "遇到验证或登录问题",
     "steam_login_required": "需要首次登录或恢复 Steam 会话",
     "steam_account_mismatch": "Steam 账号身份不匹配",
@@ -56,6 +62,8 @@ TASK_LABELS = {
     "discovery": "自动发现",
     "app_daily": "APP签到",
     "app_promotions": "APP活动",
+    "daily_streaks": "连续打卡",
+    "desktop_app_weekly": "桌面APP周任务",
 }
 STATE_LABELS = {
     "unknown": "未确认",
@@ -141,6 +149,12 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         if uncredited:
             parts.append("积分未确认：" + "、".join(uncredited[:8]))
         if platform == "rewards":
+            streaks = [str(item.get("name")) + STATE_LABELS.get(str(item.get("status")), str(item.get("status")))
+                       for item in items if isinstance(item, Mapping)
+                       and item.get("id") in {"bing_streak", "daily_set_streak", "app_streak"}
+                       and item.get("status") not in {"complete", "not_applicable"}]
+            if streaks:
+                parts.append("、".join(streaks))
             unsupported = [str(item.get("name") or item.get("id")) for item in items
                            if isinstance(item, Mapping) and item.get("reason") == "search_topic_unsupported"]
             if unsupported:

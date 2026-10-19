@@ -11,6 +11,7 @@ const ORDER = Object.freeze([
   "daily",
   "extra",
   "punchcards",
+  "desktop_app_weekly",
   "desktop_search",
   "mobile_search",
   "bonus_search",
@@ -20,6 +21,7 @@ const ORDER = Object.freeze([
   "streak_protection",
   "app_daily",
   "app_promotions",
+  "daily_streaks",
   "read_to_earn",
   "visual_search",
   "experimental_api_search",
@@ -55,6 +57,7 @@ const PUBLIC_FAILURES = new Set([
   "app_inventory_unavailable", "app_response_unavailable",
   "app_response_too_large", "app_locale_invalid", "journal_invalid",
   "journal_limit", "business_date_invalid",
+  "daily_cycle_unavailable", "daily_cycle_changed", "streak_progress_unavailable",
 ]);
 function manifest(value) {
   if (
@@ -103,6 +106,7 @@ function validateOutput(out) {
         : "capability_finished",
     business: Object.fromEntries(entries),
     ...(out.details ? {details: validateDetails(out.details)} : {}),
+    ...(out.cycle ? {cycle: out.cycle} : {}),
   };
 }
 function overall(out) {
@@ -115,6 +119,7 @@ function overall(out) {
   return "incomplete";
 }
 function stopReason(out) {
+  if (["daily_cycle_changed", "desktop_app_weekly_changed"].includes(out.reason)) return "full_task_cycle_changed";
   if (out.execution === "timeout") return "full_deadline_exceeded";
   if (out.execution === "busy") return "full_resource_busy";
   return STOP.has(out.reason) ? "full_intervention_pending" : null;
@@ -214,6 +219,7 @@ async function execute(
           execution: "failed",
           reason: PUBLIC_FAILURES.has(error.message) ? error.message : "capability_failed",
           business: { [capability]: "unknown" },
+          diagnostic: trace.errorFields(error),
           details: {metrics: {}, items: [{id: capability + "_diagnostic", name: capability,
             status: "unknown", reason: PUBLIC_FAILURES.has(error.message) ? error.message : "capability_failed"}]},
         };
@@ -242,6 +248,33 @@ async function execute(
       reason: "not_run_after_stop",
       business: { snapshot: "unknown" },
     };
+  const weeklyQuest = out => out?.details?.items?.find(row => row.id === "desktop_app_weekly_quest")?.url;
+  const weeklyBefore = weeklyQuest(snapshots.before), weeklyAfter = weeklyQuest(snapshots.after);
+  const weeklyChanged = enabled.includes("desktop_app_weekly") &&
+    weeklyBefore && weeklyAfter && weeklyBefore !== weeklyAfter;
+  if (!stopped && enabled.includes("desktop_app_weekly") &&
+      (stages.desktop_app_weekly.execution !== "ok" || business.desktop_app_weekly !== "complete") &&
+      snapshots.after.execution === "ok" && weeklyBefore && weeklyBefore === weeklyAfter &&
+      (!weeklyQuest(stages.desktop_app_weekly) || weeklyQuest(stages.desktop_app_weekly) === weeklyAfter) &&
+      snapshots.after.business.desktop_app_weekly === "complete") {
+    // The final weekly read verifies every opened child and its credited points.
+    // Replace stale stage rows as well as the aggregate; never replay the POST.
+    business.desktop_app_weekly = "complete";
+    const week = weeklyAfter.split("/quest/")[1].replace("WW_pcparent_", "");
+    stages.desktop_app_weekly = {execution: "ok", reason: "desktop_app_confirmed_by_fresh_snapshot",
+      business: {desktop_app_weekly: "complete"}, details: {
+        metrics: Object.fromEntries(Object.entries(snapshots.after.details.metrics)
+          .filter(([key]) => key.startsWith("desktop_app_"))),
+        items: snapshots.after.details.items.filter(row => row.id === "desktop_app_weekly_quest" ||
+          /^WW_pcchild[2-8]_urlreward_/.test(row.id) && row.id.endsWith("_" + week)),
+      }};
+    failed = Object.values(stages).some(out => out.execution !== "ok");
+  }
+  if (weeklyChanged) {
+    failed = true;
+    stopped = "full_task_cycle_changed";
+    business.desktop_app_weekly = "unknown";
+  }
   // Only a fresh, attributable page counter confirms APP check-in. A POST ACK
   // or a balance increase cannot establish which task credited those points.
   if (!stopped && enabled.includes("app_daily") &&
@@ -253,13 +286,29 @@ async function execute(
       business: {app_daily: "complete"}};
     failed = Object.values(stages).some(out => out.execution !== "ok");
   }
+  if (!stopped && enabled.includes("daily_streaks") && snapshots.after.execution === "ok" &&
+      ["bing_streak", "daily_set_streak", "app_streak"].every(key =>
+        ["complete", "not_applicable"].includes(snapshots.after.business[key]))) {
+    business.daily_streaks = "complete";
+    stages.daily_streaks = {execution: "ok", reason: "streaks_readback_finished",
+      business: Object.fromEntries(["bing_streak", "daily_set_streak", "app_streak"].map(key =>
+        [key, snapshots.after.business[key]]))};
+    failed = Object.values(stages).some(out => out.execution !== "ok");
+  }
   const complete = Object.values(business).every((v) =>
     ["complete", "not_applicable"].includes(v),
   );
+  const cycleChanged = snapshots.before.cycle && snapshots.after.cycle &&
+    snapshots.before.cycle !== snapshots.after.cycle;
+  if (cycleChanged) {
+    failed = true;
+    for (const key of ["daily", "extra", "desktop_search", "more_promotions", "daily_streaks"])
+      if (enabled.includes(key)) business[key] = "unknown";
+  }
   return {
     execution: terminal || (failed ? "failed" : "ok"),
     reason:
-      stopped ||
+      stopped || (cycleChanged ? "full_task_cycle_changed" : null) ||
       (complete && !failed
         ? "full_requested_capabilities_complete"
         : "full_requested_capabilities_partial"),
@@ -283,9 +332,11 @@ function createBindings({
     "daily",
     "extra",
     "punchcards",
+    "desktop_app_weekly",
     "desktop_search",
     "more_promotions",
     "claim",
+    "daily_streaks",
   ].some((capability) => requested.has(capability));
   const mobileRequired = requested.has("mobile_search");
   // Check every required browser account before snapshots or any mutation.
@@ -340,7 +391,7 @@ function createBindings({
           journal: journal("goal-journal.json"),
         }
       : undefined;
-  const browserSnapshot = host.browserSnapshot || (
+  const observeBrowser = host.browserSnapshot || (
     desktopRequired || mobileRequired
       ? () =>
           require("./snapshot.cjs").run(
@@ -353,10 +404,20 @@ function createBindings({
           reason: "browser_snapshot_not_required",
           business: { snapshot: "not_applicable" },
         }));
+  let taskCycle = host.businessDate;
+  const browserSnapshot = async () => {
+    const out = await observeBrowser();
+    if (out.cycle) taskCycle = out.cycle;
+    return out;
+  };
+  const cycleDate = () => {
+    if (!taskCycle) throw Error("daily_cycle_unavailable");
+    return taskCycle;
+  };
   const bindings = {
     more_promotions: () => require("./promotions.cjs").run(
       chromium, state("desktop"), parser(), {...base,
-        journal: journal("promotions-" + (host.businessDate || process.env.BENEFITS_BUSINESS_DATE) + ".json"),
+        journal: journal("promotions-" + cycleDate() + ".json"),
         businessDate: process.env.BENEFITS_BUSINESS_DATE,
         timezoneOffset: config.timezoneOffset}, "more_promotions"),
     claim: () => require("./promotions.cjs").run(
@@ -364,12 +425,13 @@ function createBindings({
         journal: journal("claim-journal.json"),
         businessDate: process.env.BENEFITS_BUSINESS_DATE}, "claim"),
     daily: () =>
-      require("./activities.cjs").run(chromium, state("desktop"), base),
+      require("./activities.cjs").run(chromium, state("desktop"), {...base,
+        journalForCycle: date => journal("daily-" + date + ".json")}),
     extra: () =>
       require("./extra.cjs").run(chromium, state("desktop"), parser(), {
         ...base,
         goal: goal(),
-        journal: journal("explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json"),
+        journal: journal("explore-" + cycleDate() + ".json"),
         timezoneOffset: config.timezoneOffset,
       }),
     punchcards: () =>
@@ -379,13 +441,18 @@ function createBindings({
         timezoneOffset: config.timezoneOffset,
         journal: journal("punchcard-journal.json"),
       }),
+    desktop_app_weekly: () => desktopApp(false),
     desktop_search: () =>
       require("./search.cjs").run(chromium, state("desktop"), "desktop", {
         ...base,
         search: config.search,
         journal: require("./search.cjs").dailyJournal(stateDir, "desktop",
-          host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
+          cycleDate()),
       }),
+    daily_streaks: () => require("./streaks.cjs").run(chromium, state("desktop"), {
+      ...base, search: config.search,
+      journal: journal("bing-streak-" + cycleDate() + ".json"),
+    }),
     mobile_search: () =>
       require("./search.cjs").run(chromium, state("mobile"), "mobile", {
         ...mobile,
@@ -394,8 +461,17 @@ function createBindings({
           host.businessDate || process.env.BENEFITS_BUSINESS_DATE),
       }),
   };
+  const desktopApp = readOnly => require("./desktop_app.cjs").run(chromium, state("desktop"),
+    parser(), {...base, readOnly, timezoneOffset: config.timezoneOffset,
+      journalForQuest: parent => journal("desktop-app-weekly-" + trace.reference(parent) + ".json")});
   let appSession, appSessionPromise;
   const appClient = host.appClient || (async () => {
+    if (appSession && appSession.expiresAt <= Date.now() + 60000) {
+      trace.emit("auth.cache", {refresh_required: true, ttl_ms: appSession.expiresAt - Date.now()});
+      await appSession.close();
+      appSession = undefined;
+      appSessionPromise = undefined;
+    }
     // Share even a rejected authorization attempt within this invocation. A
     // snapshot failure must not launch the same OAuth flow again at each stage.
     appSession = await (appSessionPromise ||= require("./app_auth.cjs").create({
@@ -406,6 +482,17 @@ function createBindings({
   });
   const snapshot = async () => {
     const out = await browserSnapshot();
+    if (requested.has("desktop_app_weekly") && out.execution === "ok") {
+      const weekly = await desktopApp(true);
+      Object.assign(out.business, weekly.business);
+      out.details ||= {metrics: {}, items: []};
+      Object.assign(out.details.metrics, weekly.details.metrics);
+      out.details.items.push(...weekly.details.items);
+      if (weekly.execution !== "ok") {
+        out.execution = weekly.execution;
+        out.reason = weekly.reason;
+      }
+    }
     if (requested.has("app_daily") && require("./app_checkin.cjs").counter(out) === 1)
       require("./app.cjs").checkinJournal(stateDir,
         host.businessDate || process.env.BENEFITS_BUSINESS_DATE).confirm();

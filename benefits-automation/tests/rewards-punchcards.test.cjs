@@ -140,6 +140,15 @@ test("bounded sequential action discovery rejects conflicting action IDs", async
   );
   assert.equal(calls, 2);
 });
+test("loaded-only discovery checks every referenced script without fetching unrelated graph branches", async () => {
+  const calls = [], parser = {extractActionIds: text => ({byName: text.includes("source") ? {reportActivity: "a".repeat(40)} : {}})};
+  const ids = await a.discover(null, parser, "static/chunks/a.js static/chunks/b.js", async (_page, route) => {
+    calls.push(route);
+    return {status: 200, text: route.endsWith("a.js") ? "source static/chunks/unloaded.js" : "other"};
+  }, {loadedOnly: true});
+  assert.equal(ids.reportActivity, "a".repeat(40));
+  assert.deepEqual(calls, ["/_next/static/chunks/a.js", "/_next/static/chunks/b.js"]);
+});
 test("real server action binding sends exact source payload once", async () => {
   let sent;
   await a.submit(

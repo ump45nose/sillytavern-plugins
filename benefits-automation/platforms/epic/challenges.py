@@ -9,8 +9,23 @@ import importlib
 import sys
 
 
+def load_sdk(name="hcaptcha_challenger.agent"):
+    # Package initialization installs file sinks inside site-packages before
+    # AgentConfig can redirect its runtime files. Dependencies are read-only for
+    # the task identity, and SDK debug logs may contain challenge tokens.
+    from loguru import logger
+    add = logger.add
+    logger.remove()
+    try:
+        logger.add = lambda *args, **kwargs: 0
+        return importlib.import_module(name)
+    finally:
+        logger.add = add
+        logger.remove()
+
+
 class HCaptchaHandler:
-    def __init__(self, page, config, *, loader=importlib.import_module):
+    def __init__(self, page, config, *, loader=load_sdk):
         self.page = page
         self.config = config
         self.loader = loader

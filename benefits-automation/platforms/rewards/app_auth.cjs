@@ -139,7 +139,7 @@ async function create({stateDir, proxy, state, chromium, config = {}, onVerified
         return new Response(bytes, {status: response.status()});
       } finally { await response.dispose(); }
     };
-    return {client: require("./app.cjs").createClient({token: token.access_token,
+    return {expiresAt: token.expires_at, client: require("./app.cjs").createClient({token: token.access_token,
       country: config.region || "US", language: config.language || "en-US", fetchImpl}),
       close: () => http.dispose()};
   } catch (error) { trace.failure("auth.cache", error); await http?.dispose(); throw error; }

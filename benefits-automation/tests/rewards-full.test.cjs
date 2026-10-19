@@ -12,6 +12,48 @@ const ok = (business = { task: "complete" }) => ({
   business,
 });
 const manifest = (enabled) => ({ schema_version: 1, enabled });
+test("desktop weekly capability reads before/after credit and uses its own weekly journal", async () => {
+  const weekly = require("../platforms/rewards/desktop_app.cjs"), saved = weekly.run;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-weekly-full-"));
+  const calls = []; let credited = false;
+  fs.writeFileSync(path.join(dir, "storage-state.json"), JSON.stringify({cookies: [], origins: []}));
+  try {
+    weekly.run = async (_c, _s, _p, options) => {
+      calls.push(options.readOnly);
+      if (!options.readOnly) {
+        const journal = options.journalForQuest("WW_pcparent_RewardsApp_weekly_Exclusive_Octw2_2026_punchcard");
+        await journal.mark("weekly_offer", "confirmed");
+        credited = true;
+      }
+      return {execution: "ok", reason: "desktop_app_weekly_complete",
+        business: {desktop_app_weekly: credited ? "complete" : "incomplete"},
+        details: {metrics: {desktop_app_weekly: require("../common/details.cjs").metric("points", credited ? 10 : 0, 70)}, items: []}};
+    };
+    const native = full.createBindings({chromium: {}, stateDir: dir, enabled: ["desktop_app_weekly"],
+      host: {browserSnapshot: async () => ({...ok(), cycle: "2026-10-13", details: {metrics: {}, items: []}})}});
+    try {
+      const out = await full.execute(manifest(["desktop_app_weekly"]), native.bindings, {snapshot: native.snapshot});
+      assert.deepEqual(calls, [true, false, true]);
+      assert.equal(out.business.desktop_app_weekly, "complete");
+      assert.equal(out.details.metrics.desktop_app_weekly.before, 0);
+      assert.equal(out.details.metrics.desktop_app_weekly.after, 10);
+      assert.equal(out.details.metrics.desktop_app_weekly.delta, 10);
+      assert.equal(fs.readdirSync(dir).filter(name => /^desktop-app-weekly-.*\.json$/.test(name)).length, 1);
+    } finally {await native.close();}
+  } finally {
+    weekly.run = saved;
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+test("desktop weekly rotation stops subsequent searches", async () => {
+  let searched = false;
+  const out = await full.execute(manifest(["desktop_app_weekly", "desktop_search"]), {
+    desktop_app_weekly: async () => ({execution: "failed", reason: "desktop_app_weekly_changed", business: {desktop_app_weekly: "unknown"}}),
+    desktop_search: async () => {searched = true; return ok();},
+  });
+  assert.equal(searched, false);
+  assert.equal(out.reason, "full_task_cycle_changed");
+});
 test("manifest rejects absent empty duplicate unknown and extra fields", () => {
   for (const value of [
     undefined,
@@ -445,6 +487,33 @@ test("production APP authorization failures are shared across snapshots and stag
   }
 });
 
+test("a cached APP session that expires during full execution refreshes before the later APP stage", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-app-expiry-"));
+  const auth = require("../platforms/rewards/app_auth.cjs"), savedCreate = auth.create, savedNow = Date.now;
+  let now = savedNow(), creations = 0, closes = 0;
+  try {
+    Date.now = () => now;
+    auth.create = async () => {
+      creations++;
+      return {expiresAt: now + (creations === 1 ? 61000 : 86400000), close: async () => {closes++;},
+        client: {read: async () => ({response: {profile: {ruid: "fixture"}, balance: 100,
+          promotions: [{attributes: {type: "sapphire", offerid: "fixture_offer", complete: "true"}}]}}),
+          submit: async () => assert.fail("completed offers must not be submitted")}};
+    };
+    const native = full.createBindings({stateDir: dir, enabled: ["app_promotions"],
+      config: {interaction: {enabled: false}}});
+    await native.snapshot();
+    assert.equal(creations, 1);
+    now += 90000;
+    assert.equal((await native.bindings.app_promotions()).business.app_promotions, "complete");
+    await native.snapshot();
+    assert.equal(creations, 2);
+    assert.equal(closes, 1);
+    await native.close();
+    assert.equal(closes, 2);
+  } finally {auth.create = savedCreate; Date.now = savedNow; fs.rmSync(dir, {recursive: true, force: true});}
+});
+
 test("APP check-in uses its cycle journal, reading and promotions retain their journals", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rewards-full-"));
   const app = require("../platforms/rewards/app.cjs");
@@ -663,7 +732,7 @@ function entryFixture(
 
 const browserFixture = `
   common.dependency = () => ({});
-  require("./platforms/rewards/snapshot.cjs").run = async () => fixture();
+  require("./platforms/rewards/snapshot.cjs").run = async () => ({...fixture(), cycle: "2026-10-01"});
   require("./platforms/rewards/activities.cjs").run = async () => fixture();
   require("./platforms/rewards/search.cjs").run = async () => fixture();
   require("./platforms/rewards/parser_loader.cjs").loadParser = () => { throw Error("unexpected_parser"); };
