@@ -11,6 +11,7 @@ REASONS = {
     "launcher_failed": "启动失败", "deadline_exceeded": "执行超时",
     "configuration_or_io_error": "配置或结果保存失败", "lock_busy": "已有任务执行中",
     "native_configuration_or_browser_error": "Epic 配置或浏览器异常",
+    "browser_timeout": "Epic 浏览器操作超时",
     "full_intervention_pending": "微软任务遇到验证或登录问题",
     "full_task_cycle_changed": "平台任务已重置，需核查新一轮",
     "steam_login_required": "Steam 需要首次登录或恢复会话",

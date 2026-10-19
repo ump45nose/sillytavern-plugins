@@ -81,6 +81,11 @@ class BenefitsTests(unittest.TestCase):
         self.assertIn("Offer A", issue)
         self.assertIn("Topic B", issue)
 
+    def test_epic_browser_timeout_is_distinct_from_a_failed_challenge(self):
+        row = self.row(platform="epic", execution_status="failed", reason="browser_timeout",
+                       business={"claim": "unknown"})
+        self.assertEqual(benefits.issue_for("epic", row, NOW.date().isoformat()), "浏览器操作超时")
+
     def test_rewards_streak_alert_names_the_unfinished_daily_task(self):
         row = self.row(business={"daily_streaks": "incomplete"}, details={"items": [
             {"id": "bing_streak", "name": "必应连续打卡", "status": "incomplete", "reason": "fresh_readback"},
