@@ -1,0 +1,39 @@
+schema_version: 1
+id: personal-crm
+name: Personal CRM
+deployment_mode: existing
+command: [personal-crm-server]
+public_url: https://crm-home.172906573.xyz
+port: 8080
+host_port: 18186
+bind_address: 192.168.31.201
+compose_project: personal-crm-independent
+compose_service: crm
+external_networks: [data_net]
+expected_tools:
+  - list_people
+  - get_person
+  - create_person
+  - update_person
+  - delete_person
+  - merge_people
+  - bind_person_identity
+  - list_interactions
+  - get_interaction
+  - create_interaction
+  - update_interaction
+  - delete_interaction
+  - upload_attachment
+  - read_attachment
+auth:
+  client_id: personal-crm
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+plugin:
+  name: personal-crm
+  version: 0.3.0
+  display_name: CRM
+  description: 保存人物基本属性和可编辑交互历史，支持微信私聊采集、附件归档及 HTTP/MCP 读写。
+  short_description: 人物与交互历史，用户和 AI 共同维护
+  app_id: asdk_app_6ac28369423081918d34fa531d15a62d
+  app_binding: dev-6ac28369423081918d34fa531d15a62d
+  keywords: [CRM, 人物, 交互历史, 微信, 附件]

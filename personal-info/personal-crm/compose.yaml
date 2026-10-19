@@ -1,0 +1,22 @@
+services:
+  crm:
+    image: local/personal-crm:0.3.0
+    command: [personal-crm-server]
+    env_file: [server.env]
+    environment:
+      HOST: 0.0.0.0
+      PORT: '8080'
+      CRM_ASSET_ROOT: /assets
+      OAUTH_STORAGE_PATH: /data/oauth
+      MCP_DEVELOPMENT_NO_AUTH: 'false'
+    ports: ['127.0.0.1:18186:8080']
+    volumes:
+      - ./assets:/assets
+      - ./data:/data
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    networks: [data_net]
+networks:
+  data_net:
+    external: true
