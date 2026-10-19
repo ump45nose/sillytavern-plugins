@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import stat
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.details import metric, number
@@ -24,20 +24,31 @@ def load_config(filename):
         raise RainyunError("invalid_configuration")
     try:
         with path.open("rb") as stream:
-            if stat.S_IMODE(os.fstat(stream.fileno()).st_mode) & 0o077:
-                raise RainyunError("private_file_permissions")
+            mode = stat.S_IMODE(os.fstat(stream.fileno()).st_mode)
             raw = stream.read(16385)
         config = json.loads(raw)
     except (OSError, ValueError, UnicodeDecodeError):
         raise RainyunError("invalid_configuration") from None
-    required = {"username", "password", "chromium_path", "chromedriver_path", "provider_root"}
+    required = {"chromium_path", "chromedriver_path", "provider_root"}
+    optional = {"username", "password", "cookiecloud_config", "proxy"}
     if (len(raw) > 16384 or not isinstance(config, dict)
-            or set(config) - required - {"proxy"} or not required <= set(config)
+            or set(config) - required - optional or not required <= set(config)
             or any(not isinstance(config[k], str) or not config[k]
-                   or len(config[k]) > 4096 or "\x00" in config[k] for k in required)):
+                   or len(config[k]) > 4096 or "\x00" in config[k]
+                   for k in set(config) - {"proxy"})):
         raise RainyunError("invalid_configuration")
+    # A CookieCloud-only file holds paths, not credentials. FnOS preserves named
+    # operator ACLs as group-mode bits; don't mistake that reference for a secret.
+    if mode & (0o077 if config.get("password") else 0o007):
+        raise RainyunError("private_file_permissions")
     if any(not Path(config[k]).is_absolute()
            for k in ("chromium_path", "chromedriver_path", "provider_root")):
+        raise RainyunError("invalid_configuration")
+    if bool(config.get("username")) != bool(config.get("password")):
+        raise RainyunError("invalid_configuration")
+    if not config.get("cookiecloud_config") and not config.get("username"):
+        raise RainyunError("missing_authentication")
+    if config.get("cookiecloud_config") and not Path(config["cookiecloud_config"]).is_absolute():
         raise RainyunError("invalid_configuration")
     proxy = config.get("proxy")
     if proxy:
@@ -52,6 +63,38 @@ def load_config(filename):
     elif proxy not in (None, ""):
         raise RainyunError("invalid_proxy")
     return config
+
+
+def cookie_session(config_file):
+    """Read only Rainyun cookies; the ID binds a profile, not authentication proof."""
+    from common.cookiecloud import browser_cookies
+    try:
+        cookies = [row for row in browser_cookies(config_file, "app.rainyun.com")
+                   if row["domain"].lstrip(".") in {"rainyun.com", "app.rainyun.com"}]
+    except ImportError:
+        raise RainyunError("dependency_unavailable") from None
+    except (OSError, ValueError):
+        raise RainyunError("cookiecloud_session_unavailable") from None
+    required = {"rain-session", "X-CSRF-Token", "user-data"}
+    by_name = {name: [row for row in cookies if row["name"] == name and row["path"] == "/"]
+               for name in required}
+    if any(len(rows) != 1 or not rows[0]["value"] for rows in by_name.values()):
+        raise RainyunError("cookiecloud_auth_pair_incomplete")
+    try:
+        user = json.loads(unquote(by_name["user-data"][0]["value"]))
+        identifier = user["ID"]
+        if type(identifier) is not int or identifier <= 0:
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
+        raise RainyunError("cookiecloud_identity_unavailable") from None
+    normalized = []
+    for row in cookies:
+        value = {key: row[key] for key in ("name", "value", "domain", "path", "secure", "httpOnly")}
+        if row.get("expires") is not None and row["expires"] > 0:
+            value["expires"] = row["expires"]
+        normalized.append(value)
+    identity = hashlib.sha256(f"rainyun-user-id:{identifier}".encode()).hexdigest()[:24]
+    return identity, normalized
 
 
 def execute(context, browser, journal, *, read_only=False):
@@ -134,14 +177,18 @@ def main():
     browser = None
     try:
         config = load_config(os.environ.get("RAINYUN_CONFIG"))
-        identity = hashlib.sha256(config["username"].encode()).hexdigest()[:24]
+        cookies = None
+        if config.get("cookiecloud_config"):
+            identity, cookies = cookie_session(config["cookiecloud_config"])
+        else:
+            identity = hashlib.sha256(config["username"].encode()).hexdigest()[:24]
         directory = Path(os.environ["BENEFITS_STATE_DIR"]) / identity
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             journal = Journal(context, directory)
         except (OSError, ValueError):
             raise RainyunError("invalid_action_state") from None
-        browser = Browser(config, directory)
+        browser = Browser(config, directory, cookies=cookies)
         output = execute(context, browser, journal, read_only="--status" in sys.argv[1:])
     except RainyunError as error:
         output = result(context, reason=str(error))
