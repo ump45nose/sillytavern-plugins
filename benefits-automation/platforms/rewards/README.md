@@ -57,7 +57,7 @@ Hermes 既有 Rewards 作业自 2026-10-13 起为北京时间每天 09:30、16:3
 
 APP token 到期时，先使用同一登录 Cookie、代理和既有 HTTP 客户端完成 OAuth 跳转。只有官方回跳地址、随机 `state` 和授权 code 均有效且没有错误参数时才交换 token；需要页面交互时仍使用原浏览器和障碍检测。浏览器等待导航 commit，并在超时时核查真实回跳，不等待回跳页面的 DOM 加载。同一授权会话及其失败在完整调用内共享，避免快照与各阶段反复启动授权浏览器。已成功的会话在后续 APP 阶段前重新检查 token 有效期，临近到期时关闭旧 HTTP 上下文并通过原会话重新授权；不重放已提交动作。token 交换不自动重放，超时和导航失败有固定公开原因。
 
-探索使用 [上游完整主题词库](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/f61f4e982bbb435f37133bed0dc5b4c582ed1e73/src/functions/bing-search-activity-queries.json)，固定 commit `f61f4e9`、GPL-3.0-or-later，共 74 个标题词条。原始 JSON 随源码保存在 `vendor/rewards-parser/src/functions/bing-search-activity-queries.json`，来源及 SHA-256 记录在 `PROVENANCE.json`；加载时校验字节摘要，无运行时下载或模型调用。匹配标题时清除零宽字符、统一大小写和空白；原有 27 个稳定 offer ID 也映射到该词库，支持标题本地化。酒店、珠宝、房产、体育等新轮换任务可直接按上游标题匹配。未识别主题仍显示 `search_topic_unsupported`，每个任务最多使用词库中的 10 个查询，逐项读回任务自身进度。
+探索使用 [上游完整主题词库](https://github.com/TheNetsky/Microsoft-Rewards-Script/blob/f61f4e982bbb435f37133bed0dc5b4c582ed1e73/src/functions/bing-search-activity-queries.json)，固定 commit `f61f4e9`、GPL-3.0-or-later，共 74 个标题词条。原始 JSON 随源码保存在 `vendor/rewards-parser/src/functions/bing-search-activity-queries.json`，来源及 SHA-256 记录在 `PROVENANCE.json`；加载时校验字节摘要，无运行时下载或模型调用。匹配标题时清除零宽字符、统一大小写和空白；31 个稳定 offer ID 也映射到该词库，支持标题本地化。酒店、珠宝、房产、体育等新轮换任务可直接按上游标题匹配。未识别主题仍显示 `search_topic_unsupported`，每个任务最多使用词库中的 10 个查询，逐项读回任务自身进度。
 
 搜索导航可能销毁正在读取的 DOM；仅对明确的导航上下文失效等待后重做一次只读 guard。登录、验证码等障碍仍立即停止，搜索 intent 和激活请求不重放。
 
