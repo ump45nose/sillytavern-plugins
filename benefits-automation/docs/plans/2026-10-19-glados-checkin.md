@@ -30,5 +30,19 @@
 - 已实现独立入口、stdlib 有界 HTTPS 客户端、只读状态模式、可选既有 CookieCloud、持久 intent 和当日确认事实。没有新增基础依赖或修改公共接口。
 - 离线验证覆盖 39 项平台/协议/真实入口及 CookieCloud 绑定用例，在默认 Python 3.11.2 和生产 HTTP venv 的 Python 3.12.13 中均通过；首次测试暴露毫秒时间戳超出普通业务数字上限的问题，改为独立时间转换后，时区及超时恢复测试通过。CookieCloud 用例验证仅请求所选主机、配置后不回退旧 Cookie、缺 UA 不先访问凭据服务。
 - 公网只读实测：本地 Client 使用无效占位 Cookie 分别访问 status/points，两者都返回 authentication_invalid，验证现行端点和认证拒绝路径；没有访问真实账号或提交签到。
-- 当前没有 GLaDOS 专用 origin/UA/Cookie，真实认证、签到、奖励到账和 CookieCloud 此平台联调未验证。按 README 的 status → 一次签到 → 重复执行顺序验收。
+- 初次开发验收时没有 GLaDOS 专用 origin/UA/Cookie，真实认证、签到、奖励到账和 CookieCloud 此平台联调未验证；后续真实访问诊断见下节。按 README 的 status → 一次签到 → 重复执行顺序验收。
 - 集成建议：按 Task 现有 allowlist 注入环境变量即可；日报补充 device_mismatch、automated_checkin_rejected、access_denied、transport_error、checkin_pending_confirmation 等原因文案及 balance/reward/remaining_days 展示，不需要改 schema 或 runner。
+
+## 2026-10-19 真实访问诊断与私有配置
+
+- 根聊天授权配置和真实验收后，使用已存在的 CookieCloud 私有配置取得 glados.cloud 的完整 gld:sess/gld:sess.sig 配对。未输出或另存 Cookie 值。
+- 同一宿主侧的直接读取中，真实 Cookie 和无 Cookie 的 `/api/user/status` 都返回 HTTP 403、`server=cloudflare`、JSON `cloudflare_error=true`、`error_code=1010`、`error_name=browser_signature_banned`、`retryable=false`。直连与既有代理的无 Cookie 对照也一致；没有修改共享代理或路由。
+- 响应没有 GLaDOS 业务码，也没有 `cf-mitigated: challenge`。当前确定的是 Cloudflare 浏览器签名拒绝，不能据此判断 Cookie 失效，也不能认定为可等待完成的挑战页。含义依据 [Cloudflare 1010](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/)、[结构化错误说明](https://developers.cloudflare.com/fundamentals/reference/error-responses/) 与 [挑战响应标记](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)。
+- CookieCloud 解密数据只有 cookie_data/local_storage_data/update_time，没有浏览器 UA 字段；目标 session Cookie 是不含可读 UA 的不透明值，现有服务日志只有启动记录。没有找到可信的准确浏览器 UA，没有猜测 UA 或提交签到。
+- 已创建仓库外 `benefits-runtime/credentials/glados.json`，只包含 GLADOS_ORIGIN 与 COOKIECLOUD_CONFIG，未填写未知的 GLADOS_USER_AGENT；身份 988:984、权限 0600。以 Hermes 的实际 UID/GID 读取配置、解密 Cookie 并做只读请求，确认权限和 Cookie 来源可用。
+- 本地适配器新增 `cloudflare_browser_signature_banned` 与 `cloudflare_challenge` 原因；只凭 403 或缺少明确 Cloudflare 标志仍保留通用 access_denied。生产 Python 3.12.13 的 43 项测试通过，覆盖实际 1010 响应结构、挑战头和读取受阻时零签到提交。
+- 同一 Hermes 身份下，更新后的 Client 使用诚实 Python-urllib/3.12 UA 进行诊断读取，真实返回 `cloudflare_browser_signature_banned`；该 UA 仅用于读诊断，未配置为 Cookie 对应浏览器身份。脱敏证据保存在 `benefits-runtime/diagnostics/glados-20261019/diagnosis.json`，不覆盖正式 delivery。
+- 用户在 Mac 再次同步后，重新解密的 CookieCloud update_time 为 `2026-10-19T09:10:58.009Z`，完整 Cookie 配对仍在；Hermes 身份使用这份最新数据的只读请求仍返回同一 1010 原因，没有提交签到。
+- 已按根聊天提供的新设备 ID 在 192.168.31.103 验证 `uname -s=Darwin`，执行 UID 与控制台 UID 均为 501。该设备 Chrome 实际 JavaScript 读取返回错误 12，未取得 navigator.userAgent；读取时临时创建的 about:blank 窗口已关闭，没有修改远程设置。旧远程工作台连接也无可读 Chrome 窗口，另一连接要求重新认证，不据这些失败推造 UA。
+- 待根聊天取得获取 Cookie 时的准确 UA 私有路径后，保持既有权限补入 GLADOS_USER_AGENT，先复测 status/points。UA 匹配不保证 Cloudflare 接受 HTTP 客户端；只有真实认证与状态完整确认后，再执行一次签到、账目读回和重复运行验证。真实认证、签到与积分到账尚未确认。
+- 集成追加事项：日报为 cloudflare_browser_signature_banned 显示“Cloudflare 拒绝客户端浏览器签名”，为 cloudflare_challenge 显示“Cloudflare 挑战未通过”，不能映射为 Cookie 失效。

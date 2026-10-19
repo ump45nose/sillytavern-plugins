@@ -80,6 +80,9 @@ def validate_settings(origin, cookie, user_agent, token="", proxy=None):
 
 
 def failure(payload, status=200):
+    if (status == 403 and payload.get("cloudflare_error") is True
+            and type(payload.get("error_code")) is int and payload["error_code"] == 1010):
+        return "cloudflare_browser_signature_banned"
     if payload.get("reason") == "device-mismatch":
         return "device_mismatch"
     message = payload.get("message")
@@ -122,6 +125,8 @@ class Client:
                 response = error
             with response:
                 status = response.status
+                if response.headers.get("cf-mitigated") == "challenge":
+                    raise ProviderError("cloudflare_challenge")
                 if 300 <= status < 400:
                     raise ProviderError("unexpected_redirect")
                 length = response.headers.get("Content-Length")
