@@ -1,0 +1,9 @@
+{
+  "platform": "linux64",
+  "version": "153.0.8010.12",
+  "source": "https://googlechromelabs.github.io/chrome-for-testing/153.0.8010.12.json",
+  "chrome_url": "https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.12/linux64/chrome-linux64.zip",
+  "chromedriver_url": "https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.12/linux64/chromedriver-linux64.zip",
+  "chromedriver_zip_sha256": "b7d5f7c120f7827f3538b416e08b82418eb702f18b680c183f0411c8d7f2df69",
+  "note": "Use explicit preinstalled executables at this exact version. Selenium Manager is never invoked by the task."
+}
