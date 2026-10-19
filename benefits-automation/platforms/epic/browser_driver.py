@@ -357,6 +357,10 @@ class BrowserDriver:
             container.locator("#email,#password")
         )
         signals["remembered_account"] = "welcome back" in text and "/id/" in target
+        if phase == "product" and not any(signals.values()):
+            signals["login_required"] = await container.locator(
+                'egs-navigation[isloggedin="false"]'
+            ).count() == 1
         signals["store_sso"] = (
             urlsplit(target).hostname == "store.epicgames.com"
             and urlsplit(target).path == "/login"
