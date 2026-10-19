@@ -1,5 +1,6 @@
 """Offline Rainyun behavior checks: no account, browser or network required."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,8 +11,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
-from platforms.rainyun.adapter import RainyunError, execute, load_config
-from platforms.rainyun.browser import Browser, checkin_state, click_offsets, points, verify_runtime
+from platforms.rainyun.adapter import RainyunError, cookie_session, execute, load_config
+from platforms.rainyun.browser import Browser, checkin_state, click_offsets, verify_runtime
 from platforms.rainyun.run import TASK
 from platforms.rainyun.state import Journal
 
@@ -180,13 +181,6 @@ class ParsingTests(unittest.TestCase):
         for text in ("", "...", "加载中", "领取中", "已完成 0/1", "签到成功？"):
             self.assertEqual(checkin_state(text), "unknown")
 
-    def test_points_not_digits_joined_from_arbitrary_text(self):
-        self.assertEqual(points("1,234"), 1234)
-        self.assertEqual(points("0"), 0)
-        self.assertEqual(points("12.5"), 12.5)
-        for text in ("余额 1 奖励 20", "12,34", "NaN", "-1", "", "999999999999999"):
-            self.assertIsNone(points(text))
-
     def test_captcha_coordinates_preserve_sprite_order_and_scale(self):
         matches = [{"sprite_idx": i, "bg_rect": [i * 60 + 10, 20, 20, 20]}
                    for i in (2, 0, 1)]
@@ -275,6 +269,28 @@ class CaptchaTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_cookiecloud_reference_needs_no_password_and_preserves_private_acl(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "config.json"
+            value = {"chromium_path": "/a/chrome", "chromedriver_path": "/a/chromedriver",
+                     "provider_root": "/a/provider", "cookiecloud_config": "/private/cookiecloud.json"}
+            path.write_text(json.dumps(value))
+            path.chmod(0o660)
+            self.assertEqual(load_config(str(path)), value)
+            del value["cookiecloud_config"]
+            path.write_text(json.dumps(value))
+            with self.assertRaisesRegex(RainyunError, "missing_authentication"):
+                load_config(str(path))
+
+    def test_stale_cookiecloud_session_does_not_fall_back_to_password(self):
+        browser = Browser({"cookiecloud_config": "/private/cookiecloud.json",
+                           "username": "fixture", "password": "fixture"}, "/tmp/not-created")
+        browser._navigate = MagicMock(return_value="/auth/login")
+        browser._login = MagicMock()
+        with self.assertRaisesRegex(RainyunError, "authentication_invalid"):
+            browser.read()
+        browser._login.assert_not_called()
+
     def test_private_config_required_and_proxy_is_explicit(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "config.json"
@@ -330,6 +346,82 @@ class ConfigurationTests(unittest.TestCase):
             browser._image("http://127.0.0.1/private")
         browser.driver.execute_script.assert_not_called()
 
+
+class CookieCloudTests(unittest.TestCase):
+    def rows(self):
+        return [{"name": name, "value": value, "domain": ".rainyun.com", "path": "/",
+                 "httpOnly": name == "rain-session", "secure": False, "expires": None}
+                for name, value in [("rain-session", "fixture-session"), ("X-CSRF-Token", "fixture-csrf"),
+                                     ("user-data", '%7B%22ID%22%3A123%2C%22Name%22%3A%22fixture%22%7D')]]
+
+    def test_session_is_targeted_and_identity_survives_session_rotation(self):
+        rows = self.rows()
+        with patch("common.cookiecloud.browser_cookies", return_value=rows) as reader:
+            identity, normalized = cookie_session("/private/cookiecloud.json")
+            reader.assert_called_once_with("/private/cookiecloud.json", "app.rainyun.com")
+        self.assertTrue(all("expires" not in row for row in normalized))
+        rows[0]["value"] = "rotated-fixture-session"
+        with patch("common.cookiecloud.browser_cookies", return_value=rows):
+            self.assertEqual(cookie_session("/private/cookiecloud.json")[0], identity)
+
+    def test_required_auth_pair_is_not_replaced_with_partial_session(self):
+        with patch("common.cookiecloud.browser_cookies", return_value=self.rows()[1:]):
+            with self.assertRaisesRegex(RainyunError, "cookiecloud_auth_pair_incomplete"):
+                cookie_session("/private/cookiecloud.json")
+
+    def test_ambiguous_or_unparseable_identity_is_explicit(self):
+        rows = self.rows()
+        rows[2]["value"] = '{"ID":false}'
+        with patch("common.cookiecloud.browser_cookies", return_value=rows):
+            with self.assertRaisesRegex(RainyunError, "cookiecloud_identity_unavailable"):
+                cookie_session("/private/cookiecloud.json")
+
+
+class BalanceTests(unittest.TestCase):
+    class Timeout(Exception):
+        pass
+
+    class DriverError(Exception):
+        pass
+
+    def browser(self):
+        identity = hashlib.sha256(b"rainyun-user-id:123").hexdigest()[:24]
+        browser = Browser({"cookiecloud_config": "/private/cookiecloud.json"}, "/tmp/" + identity)
+        browser.driver = MagicMock()
+        browser.Timeout, browser.WebDriverError = self.Timeout, self.DriverError
+        return browser
+
+    def test_points_are_from_authenticated_summary_and_identity_matches(self):
+        browser = self.browser()
+        browser.driver.execute_async_script.return_value = {"code": 200, "points": 1234, "user_id": 123}
+        self.assertEqual(browser._balance(), 1234)
+        browser.driver.execute_async_script.return_value["points"] = 0
+        self.assertEqual(browser._balance(), 0)
+
+    def test_summary_for_another_account_is_not_accepted(self):
+        browser = self.browser()
+        browser.driver.execute_async_script.return_value = {"code": 200, "points": 1234, "user_id": 456}
+        with self.assertRaisesRegex(RainyunError, "account_identity_mismatch"):
+            browser._balance()
+
+    def test_explicit_summary_auth_rejection_is_visible(self):
+        browser = self.browser()
+        browser.driver.execute_async_script.return_value = {"code": 30038}
+        with self.assertRaisesRegex(RainyunError, "authentication_invalid"):
+            browser._balance()
+
+    def test_transient_summary_failure_keeps_unknown_balance(self):
+        browser = self.browser()
+        browser.driver.execute_async_script.return_value = {"code": 200, "points": 1234, "user_id": 123}
+        self.assertEqual(browser._balance(), 1234)
+        browser.driver.execute_async_script.side_effect = self.Timeout()
+        self.assertIsNone(browser._balance())
+
+    def test_initial_identity_must_be_verified_before_business(self):
+        browser = self.browser()
+        browser.driver.execute_async_script.side_effect = self.Timeout()
+        with self.assertRaisesRegex(RainyunError, "account_identity_unconfirmed"):
+            browser._balance()
 
 if __name__ == "__main__":
     unittest.main()

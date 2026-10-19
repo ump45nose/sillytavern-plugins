@@ -9,6 +9,17 @@
     "ICR.py": "7b6d57cbbfb5e4d615f562973fc707b2b33be21164a458317caa10018da66d8c",
     "stealth.min.js": "5206b1bf8203801f299db41337386f816f13ec470bbf5e642ee42c71d791d2ea"
   },
-  "runtime_symbols": ["ICR.main"],
-  "adaptation": "Independent single-account Selenium binding to observed Rainyun page selectors; exact external ICR and stealth bytes only. No upstream launcher, scheduling, reporting, proxy discovery, screenshots or account pool."
+  "runtime_symbols": [
+    "ICR.main"
+  ],
+  "adaptation": "Independent single-account Selenium binding to observed Rainyun page selectors; exact external ICR and stealth bytes only. No upstream launcher, scheduling, reporting, proxy discovery, screenshots or account pool.",
+  "live_frontend_reference": {
+    "verified_on": "2026-10-19",
+    "url": "https://app.rainyun.com/js/chunk-common.65c83d3f.js",
+    "sha256": "7770dda9433718429369b07b879dd7497e762cfe82a063a3fcc23e72658ddc47",
+    "user_summary": "GET https://api.v2.rainyun.com/user/?no_cache=true",
+    "balance_field": "data.Points",
+    "identity_field": "data.ID",
+    "initialization": "Official public page populates localStorage user-data before protected-route navigation"
+  }
 }
