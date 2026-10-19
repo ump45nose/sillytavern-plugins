@@ -53,6 +53,10 @@ HTTP 403 本身不表示 Cookie 失效。明确的 Cloudflare 1010 JSON（cloudf
 python3 -m unittest discover -s tests -p test_glados.py -v
 ```
 
-43 项离线测试覆盖真实入口与结果落盘、HTTP 请求格式及大小上限、重定向阻断、认证/设备/自动化拒绝、当天记录去重、毫秒时间及时区、单次 intent、跨次只读恢复、CookieCloud 绑定及 Cloudflare 拦截分类。初次开发曾以无效占位 Cookie 对公网 status/points 验证认证拒绝；后续真实 Cookie 的当前只读诊断返回 Cloudflare 1010，两次访问条件不同，不能以前次成功访问认证接口推断本次 Cookie 状态。上述检查不等于真实账号签到成功。
+43 项离线测试覆盖真实入口与结果落盘、HTTP 请求格式及大小上限、重定向阻断、认证/设备/自动化拒绝、当天记录去重、毫秒时间及时区、单次 intent、跨次只读恢复、CookieCloud 绑定及 Cloudflare 拦截分类。初次开发曾以无效占位 Cookie 对公网 status/points 验证认证拒绝；真实 Cookie 的 Python 默认 UA 诊断曾返回 Cloudflare 1010。模拟测试及不同访问条件下的历史成功不能替代下面的真实账号验收。
 
-现已从既有 CookieCloud 取得完整 Cookie 配对，私有 glados.json 已准备 origin 与 CookieCloud 引用，尚缺获取 Cookie 时的准确浏览器 UA。用户再次同步后的最新数据（2026-10-19 17:10:58 Asia/Shanghai）仍在 Hermes 身份下被 Cloudflare 1010 拒绝。远程 Mac Chrome 的实际 JavaScript 读取返回错误 12，未取得 UA，也未修改远程设置；没有提交签到。补齐 UA 后先 `--execute --status`；匹配 UA 不保证站点接受该 HTTP 客户端，须以实际响应确认。认证和当前记录可读后执行一次签到，核对官网当天记录和积分，再重复执行确认没有第二次 POST。保留真实拒绝原因，不以镜像切换、猜测设备或关闭证书校验来冒充修复。调度及异常日报由集成任务完成。
+2026-10-19 已从 Mac Chrome 的 `chrome://version/` 页面通过原生保存 HTML 读取真实 UA，写入 Hermes 私有 glados.json；Cookie 继续来自既有 CookieCloud。同一 Cookie 和访问路径下，Python 默认 UA 返回 1010，实际 Chrome UA 可正常读取认证后的 status，期间没有改变共享代理或浏览器设置。
+
+Hermes 身份的只读入口和正式 `--execute` 入口均退出 0，checkin/reward/balance 全部确认。正式 run `9b99c8fd-7649-4c82-8d7a-8eca20715cb9` 读到今日已签到、积分 10、本日奖励 10、连续 1 天、剩余 14 天，本次余额差为 0。重复真实业务调用只产生两个 GET，未发签到 POST；请求计数证据保存在私有诊断目录。
+
+本次验证覆盖真实认证、当前账目及已签去重场景。由于当天已经签到，没有为验收强行重发 POST；首次未签到日的新签到正向样本仍待实际运行覆盖。后续按先 `--execute --status`、再常规执行、再重复运行的顺序验收新账号。保留真实拒绝原因，不以镜像切换、猜测设备或关闭证书校验来冒充修复。调度及异常日报由集成任务完成。

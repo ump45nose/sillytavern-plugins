@@ -44,5 +44,15 @@
 - 同一 Hermes 身份下，更新后的 Client 使用诚实 Python-urllib/3.12 UA 进行诊断读取，真实返回 `cloudflare_browser_signature_banned`；该 UA 仅用于读诊断，未配置为 Cookie 对应浏览器身份。脱敏证据保存在 `benefits-runtime/diagnostics/glados-20261019/diagnosis.json`，不覆盖正式 delivery。
 - 用户在 Mac 再次同步后，重新解密的 CookieCloud update_time 为 `2026-10-19T09:10:58.009Z`，完整 Cookie 配对仍在；Hermes 身份使用这份最新数据的只读请求仍返回同一 1010 原因，没有提交签到。
 - 已按根聊天提供的新设备 ID 在 192.168.31.103 验证 `uname -s=Darwin`，执行 UID 与控制台 UID 均为 501。该设备 Chrome 实际 JavaScript 读取返回错误 12，未取得 navigator.userAgent；读取时临时创建的 about:blank 窗口已关闭，没有修改远程设置。旧远程工作台连接也无可读 Chrome 窗口，另一连接要求重新认证，不据这些失败推造 UA。
-- 待根聊天取得获取 Cookie 时的准确 UA 私有路径后，保持既有权限补入 GLADOS_USER_AGENT，先复测 status/points。UA 匹配不保证 Cloudflare 接受 HTTP 客户端；只有真实认证与状态完整确认后，再执行一次签到、账目读回和重复运行验证。真实认证、签到与积分到账尚未确认。
+- 该阶段曾等待准确 UA；后续通过下述 Chrome 版本页原生读取完成恢复，不再需要用户手工提供 UA。
 - 集成追加事项：日报为 cloudflare_browser_signature_banned 显示“Cloudflare 拒绝客户端浏览器签名”，为 cloudflare_challenge 显示“Cloudflare 挑战未通过”，不能映射为 Cookie 失效。
+
+## 实际 UA 恢复及已签到场景验收
+
+- JS 自动化错误 12 后，改为临时打开 Mac Chrome 自带的 `chrome://version/` 页面。无障碍遍历超时，随后使用 Chrome 原生 AppleScript Save（only html）保存该版本页，从原生页面中读取实际 User Agent；未执行网页 JavaScript，未修改浏览器设置。仅本任务创建的版本窗口和临时文件均已清理。
+- 将读取到的实际 UA 仅写入仓库外 glados.json 的 GLADOS_USER_AGENT，保留既有 origin 和 CookieCloud 引用；配置按 Hermes 988:984/0600 保存，没有在代码、日志、结果或文档中输出 UA/Cookie 值。
+- 同一新 Cookie、同一直接访问路径的只读对照：Python-urllib/3.12 返回 cloudflare_browser_signature_banned，版本页实际 Chrome UA 返回可读的已认证 status。由此确认本次 1010 与请求 UA 的差异直接相关，Cookie 并未因该 403 被证明失效。
+- Hermes 身份的独立只读入口 run `9bb395cc-0182-43a8-9df3-271bccc7b473` 返回退出 0、checkin/reward/balance 全部 complete。
+- 正式 runtime、账号 glados-main 的 `--execute` run `9b99c8fd-7649-4c82-8d7a-8eca20715cb9` 同样退出 0，确认今日已签到。当前积分 10，本日已确认签到奖励 10，连续 1 天，剩余 14 天，本次余额变动 0；不能把本日奖励当作本次新获得积分。
+- 同一账号公共租约下重复调用真实业务链 run `2dc02869-f33e-46a8-b851-c700b2f0b38e`，记录到的站点请求仅 GET /api/user/status 与 GET /api/user/points，POST 数为 0，结果仍全部 complete。正式 latest 保留正式入口的结果；请求计数和 UA 对照保存在私有诊断 JSON，不替换 delivery。
+- 43 项离线测试在本轮代码修复后通过；本阶段只更新验收文档和来源状态。真实认证、历史账目读回、标准入口及已签重复执行已确认；当日早已签到，没有强行发送重复 POST，首次未签到日的新增写请求正向样本尚待实际日期覆盖。调度启用与日报接入仍由集成任务处理。
