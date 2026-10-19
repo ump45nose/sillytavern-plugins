@@ -460,13 +460,15 @@ class EhAdapter:
     def _events(self, url):
         with self.config_file() as config:
             return read_events(config, url, self.cfg["command_timeout_seconds"],
-                               runner=command, warnings_are_errors=True)
+                               runner=command, warnings_are_errors=True,
+                               module=("favsync.eh_favorites" if url == "https://exhentai.org/favorites.php"
+                                       else "gallery_dl"))
 
     def scan(self, source, cursor=0, start=None):
         events = self._events("https://exhentai.org/favorites.php")
         records = {}
         for event in events:
-            if not isinstance(event, list) or event[0] not in (2, 3):
+            if not isinstance(event, list) or not event or event[0] != 6:
                 continue
             meta = event[-1]
             gid = str(meta.get("gallery_id") or meta.get("gid") or "")
