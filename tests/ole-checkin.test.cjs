@@ -61,6 +61,21 @@ test("today already signed uses one query without code, store lookup or submissi
   assert.equal(f.state.checkin, "complete");
 });
 
+test("status-only queries an unsigned member without looking up a shop or creating intent", async (t) => {
+  const configuration = config();
+  delete configuration.shop_code;
+  configuration.location = "121.5,31.2";
+  const f = fixture(t, {configuration});
+  const s = requests([["GET", ENDPOINTS.sign, status(false, 123)]]);
+  const out = await execute({...f, request: s.request, getCode: async () => assert.fail("cached session"),
+    statusOnly: true});
+  s.done();
+  assert.equal(out.reason, "status_only");
+  assert.deepEqual(out.business, {checkin: "incomplete", balance: "complete"});
+  assert.equal(f.state.checkin, "unknown");
+  assert.equal(s.calls.length, 1);
+});
+
 test("login keeps merchant identity separate from YYB reference, writes once and reads back", async (t) => {
   const f = fixture(t, {cached: false});
   const s = requests([

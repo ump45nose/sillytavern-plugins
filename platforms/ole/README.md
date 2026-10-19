@@ -26,10 +26,13 @@ Python 3.12 标准库、Node.js 24；不额外安装 npm 包或浏览器。首�
 ```sh
 export OLE_CONFIG=/absolute/private/ole.json
 python3 platforms/ole/run.py --runtime-root /absolute/private/benefits-data --account ole-main
+python3 platforms/ole/run.py --runtime-root /absolute/private/benefits-data --account ole-main --execute --status
 python3 platforms/ole/run.py --runtime-root /absolute/private/benefits-data --account ole-main --execute
 ```
 
 不加 `--execute` 不读凭据、不联网。每个微信会员使用不同账号代号和配置；同一账号代号已绑定的 YYB 地址/账号引用变化时返回 `account_configuration_mismatch`，避免重用另一个账号的商家会话。YYB token 轮换不改变该绑定。
+
+`--execute --status` 仅登录并读取当日签到与积分，不查询或切换门店、不创建签到 intent、不提交签到；未签到时保留 incomplete。
 
 ## 执行与结果
 
