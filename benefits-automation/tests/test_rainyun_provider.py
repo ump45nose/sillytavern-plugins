@@ -30,6 +30,23 @@ class LoaderTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("selenium"), "Install the locked Selenium environment")
 class ChromiumRuntimeTests(unittest.TestCase):
+    def test_cookiecloud_bootstraps_official_cache_before_protected_route(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = {"chromium_path": "/not-started/chrome", "chromedriver_path": "/not-started/chromedriver",
+                      "provider_root": "/not-imported/provider", "cookiecloud_config": "/private/cookiecloud.json"}
+            cookies = [{"name": "rain-session", "value": "fixture", "domain": ".rainyun.com"}]
+            browser = Browser(config, directory, cookies=cookies)
+            driver = MagicMock()
+            driver.current_url = "https://app.rainyun.com/"
+            driver.execute_script.return_value = True
+            with patch("platforms.rainyun.browser.verify_runtime"), \
+                 patch("platforms.rainyun.browser.read_provider", return_value=(lambda *_: [], "/* fixture */")), \
+                 patch("selenium.webdriver.Chrome", return_value=driver):
+                browser.open()
+                driver.execute_cdp_cmd.assert_any_call("Network.setCookies", {"cookies": cookies})
+                driver.get.assert_called_once_with("https://app.rainyun.com/")
+                browser.close()
+
     def test_long_common_tmpdir_uses_short_private_socket_directory(self):
         with tempfile.TemporaryDirectory(prefix="rainyun-long-" + "x" * 70) as directory:
             config = {"chromium_path": "/not-started/chrome", "chromedriver_path": "/not-started/chromedriver",

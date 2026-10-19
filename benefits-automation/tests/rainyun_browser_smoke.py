@@ -30,10 +30,15 @@ def worker():
         browser.open()
         browser.driver.get("chrome://sandbox/")
         text = browser.driver.find_element("tag name", "body").text
-        namespace = re.search(r"Namespace sandbox\s+Yes", text)
+        namespace = (re.search(r"Layer 1 Sandbox\s+Namespace", text)
+                     and re.search(r"PID namespaces\s+Yes", text)
+                     and re.search(r"Network namespaces\s+Yes", text))
         seccomp = re.search(r"Seccomp-BPF sandbox\s+Yes", text, re.I)
         args = browser.driver.execute_cdp_cmd("Browser.getBrowserCommandLine", {})["arguments"]
         if not namespace or not seccomp or "--no-sandbox" in args:
+            # chrome://sandbox contains sandbox capability status only; keep
+            # the diagnostic in the private run log without browser arguments.
+            print(text, file=sys.stderr)
             raise RainyunError("sandbox_not_confirmed")
         output = result(context, "ok", "browser_sandbox_confirmed",
                         {"browser": "complete", "sandbox": "complete"})
