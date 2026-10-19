@@ -13,6 +13,8 @@
 
 外部依赖由各自许可证约束：dailycheckin（MIT）、Playwright（Apache-2.0）及其传递依赖许可证随安装包保留。锁文件不替代许可证。
 
+Telegram 平台不含上游代码；页面结构仅参考 Telegram Web K（morethanwords/tweb，GPL-3.0），未复制其源码。
+
 候选 Rewards 上游 TheNetsky/Microsoft-Rewards-Script v4.3.2 为 GPL-3.0-or-later；本仓库包含下述精确解析器与协议适配代码；保留 GPL 要求，不将这些来源误标为 MIT。
 
 候选 Epic 上游 Ronchy2000/epic-freebies-helper 的 pyproject 声明 GPL-3.0-or-later；应用保留在外部受审阅目录，未复制进本仓库。具体来源组合及第三方模型/浏览器条款须在分发前逐项确认。

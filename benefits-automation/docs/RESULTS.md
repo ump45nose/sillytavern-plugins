@@ -37,6 +37,7 @@ current 表示本次调用最近可核实的值；before/after 分别是执行�
 - Aliyun：balance 前后值与差、pending_points，各社区分别报告签到和奖励状态。
 - V2EX：可解析时提供连续天数；上游没有明确的奖励数值契约时 reward 为 null，不重新解释旧余额列。
 - SMZDM：签到、奖励、额外奖励独立报告；没有可信数值时 metrics 为空。
+- Telegram：`checkin` 汇总全部启用机器人；`bots` 为已确认数/启用数（count）；每个机器人一项 items，含 `@username`、`https://t.me/<username>` 与原因。回复文本只在进程内匹配，不进入结果。
 
 退出 0 表示执行正常、请求的业务完成或不适用；3 表示执行正常但仍有未完成、未知或受限项。1、75、124 表示执行失败、锁忙、总时限耗尽。超时可保留部分业务事实。
 
