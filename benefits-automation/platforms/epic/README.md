@@ -37,7 +37,7 @@ model 是可选挑战路径使用的 OpenAI compatible 视觉模型。当前 NAS
 
 挑战 SDK 返回的执行超时和响应超时统一报告 `challenge_timeout`，与实际未通过区分。浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口、工作流和 SDK 内部捕获的错误保留异常类型及源码位置，不记录原始错误消息、会话 token、图片或模型响应。商店部分脚本的 403 不覆盖实际可用的业务控件或当前登录、验证码状态；有界观察后仍无法确认页面状态时，才报告资源拒绝。进入结算后仍须通过商品身份、零价和独立所有权回查，不能据此确认领取。
 
-主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型；初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
+主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。浏览器使用 Camoufox 的 [`disable_coop=True`](https://camoufox.com/python/usage/)，使 Turnstile 跨域 iframe 可读取和正常点击；自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型。初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
 
 hCaptcha 组件可能在显示前已取得题目。浏览器仅在内存保留当前页面最新的脚本与题目响应，处理器按需创建后读取一次，避免错过响应而空等 30 秒或丢失题型、题数。CORS OPTIONS 不交给题目/答案解析器；HTTP 400 的真实 POST 答案响应仍保留失败语义。没有重发验证码 API 请求，也不落盘响应或 token。
 
@@ -47,7 +47,7 @@ EPIC_CONFIG=/absolute/private/epic.json \
   --runtime-root /absolute/private/runtime --execute
 ```
 
-每次一个账号，profile 位于 `state/epic/<account>/browser/`。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。登录成功或验证码通过不代表游戏领取成功。
+每次一个账号，profile 位于 `state/epic/<account>/browser/`。同级 `browser-identity.json` 保存该账号的 Camoufox 身份，跨次启动复用，并与 profile 一起备份、恢复，保持指纹与 Cookie 对应；已有身份损坏时直接报错。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。登录成功或验证码通过不代表游戏领取成功。
 
 `proxy` 可省略以使用直连。目录读取复用已完成会话检查的商店页，避免重复加载首页；线路和验证码处理均须通过当前浏览器与所有权回查验证。
 
