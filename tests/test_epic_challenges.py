@@ -68,7 +68,7 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):
     async def test_payment_rejection_retains_its_code_without_account_or_token_fields(self):
-        response = SimpleNamespace(url="https://payment-website-pci.ol.epicgames.com/purchase/fixture",
+        response = SimpleNamespace(url="https://payment-website-pci.ol.epicgames.com/v2/purchase/confirm-order?token=private-account-and-token",
             status=400, request=SimpleNamespace(resource_type="xhr"),
             body=AsyncMock(return_value=json.dumps({"errorCode": "errors.com.epicgames.fixture",
                 "numericErrorCode": 1001, "errorMessage": "private-account-and-token",
@@ -77,7 +77,8 @@ class ChallengeTests(unittest.IsolatedAsyncioTestCase):
         with contextlib.redirect_stdout(stream):
             await report_purchase_error(response)
         self.assertEqual(json.loads(stream.getvalue()), {"event": "epic_purchase_error",
-            "status": 400, "error_code": "errors.com.epicgames.fixture", "numeric_code": 1001})
+            "status": 400, "operation": "confirm-order",
+            "error_code": "errors.com.epicgames.fixture", "numeric_code": 1001})
         self.assertNotIn("private-account", stream.getvalue())
 
     async def test_late_handler_receives_the_original_puzzle_once_and_ignores_preflights(self):
