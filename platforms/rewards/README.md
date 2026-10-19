@@ -26,6 +26,8 @@ npx patchright install chromium
 
 请用账号实际地区；不根据示例改变地区。凭据文件不进 Git。
 
+NAS 的微软服务分组仍选 DIRECT；国际 Rewards 的 `www.bing.com`、`rewards.bing.com`、`edgeservices.bing.com` 有独立路由特例。直连的积分接口实测会 302 到 `cn.bing.com`，因此这些既有特例使用经过验证的稳定美国出口。规则由仓库外 ShellCrash 管理，账号 HK 配置、Cookie、token 和微软分组选择不随节点验证改写。
+
 ```sh
 REWARDS_ROOT=/absolute/project/platforms/rewards \
 REWARDS_PROXY=http://your-existing-proxy:7890 \

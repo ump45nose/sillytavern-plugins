@@ -8,6 +8,44 @@ from platforms.epic.challenges import HCaptchaHandler, _sdk_error
 from platforms.epic.workflow import Obstacle, Paused
 from platforms.epic.native import Login
 from common.interventions import fingerprint
+from urllib.parse import parse_qs, urlsplit
+from dataclasses import replace
+
+
+class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
+    def fixture(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/login?redirectTo=%2Fpurchase%3Foffers%3Dfixture",
+            wait_for_timeout=AsyncMock())
+        driver = SimpleNamespace(page=page, offer=SimpleNamespace(id="fixture"), prepared={"fixture"},
+            _goto=AsyncMock(), prepare_checkout=AsyncMock(), submit_once=AsyncMock())
+        obstacle = Obstacle("store_sso", "https://store.epicgames.com/login", "fixture", "checkout",
+            {"_container": page})
+        return driver, obstacle
+
+    async def test_pending_checkout_uses_official_authentication_and_preserves_its_return_target_once(self):
+        driver, obstacle = self.fixture()
+        auth = Login(driver, {})
+        await auth.sso(obstacle, timeout=10)
+        target = driver._goto.await_args.args[0]
+        self.assertEqual(urlsplit(target).netloc, "www.epicgames.com")
+        self.assertEqual(urlsplit(target).path, "/id/login")
+        self.assertEqual(parse_qs(urlsplit(target).query)["redirectUrl"], [driver.page.url])
+        with self.assertRaises(Paused):
+            await auth.sso(obstacle, timeout=10)
+        driver._goto.assert_awaited_once()
+        driver.prepare_checkout.assert_not_awaited()
+        driver.submit_once.assert_not_awaited()
+
+    async def test_sso_cannot_redirect_unprepared_or_post_submit_pages(self):
+        for change in ["unprepared", "post_submit", "other_container", "other_origin"]:
+            driver, obstacle = self.fixture()
+            if change == "unprepared": driver.prepared.clear()
+            if change == "post_submit": obstacle = replace(obstacle, phase="post_submit")
+            if change == "other_container": obstacle.payload["_container"] = object()
+            if change == "other_origin": driver.page.url = "https://unrelated.invalid/login"
+            with self.subTest(change=change), self.assertRaises(Paused):
+                await Login(driver, {}).sso(obstacle, timeout=10)
+            driver._goto.assert_not_awaited()
 
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):

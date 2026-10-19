@@ -61,6 +61,16 @@ def _is_playwright_timeout(error):
     return isinstance(error, BrowserTimeoutError)
 
 
+def _same_target(actual, expected):
+    # The store canonicalizes its English /en-US/ path to the same / path.
+    target = clean_target(expected)
+    try:
+        current = clean_target(actual)
+    except Paused:
+        return False
+    return re.sub(r"/en-US/", "/", current) == re.sub(r"/en-US/", "/", target)
+
+
 class BrowserDriver:
     def __init__(
         self,
@@ -71,6 +81,7 @@ class BrowserDriver:
         now=None,
         checkout_evidence=None,
         cart_evidence=None,
+        sso_login=None,
     ):
         self.context, self.page, self.journal = context, page, journal
         self.now = now or (lambda: datetime.now(timezone.utc))
@@ -80,6 +91,7 @@ class BrowserDriver:
         self.prepared = set()
         self.checkout_evidence = checkout_evidence
         self.cart_evidence = cart_evidence
+        self.sso_login = sso_login
         self.current_offer_ids = set()
         self.observation_session = uuid.uuid4().hex
         self.device_acknowledged = set()
@@ -156,13 +168,17 @@ class BrowserDriver:
                 wait_until="domcontentloaded",
                 timeout=min(45000, int(timeout * 1000)),
             )
-        except Exception:
+        except Exception as error:
             # A navigation timeout may occur after useful DOM arrived. Require
             # the same expected path and a visible business marker to continue.
-            if clean_target(self.page.url) != clean_target(
-                url
-            ) or not (await self._visible(self.page.locator("egs-navigation"))
-                      or await self._purchase_button(self.page) is not None):
+            if not _is_playwright_timeout(error):
+                raise
+            if not _same_target(self.page.url, url) or not (
+                # egs-navigation uses display:contents and has no visible box.
+                await self.page.locator("egs-navigation").count() == 1
+                or await self._purchase_button(self.page) is not None
+                or await self._visible(self.page.locator("#email,#password"))
+            ):
                 raise
         clean_target(self.page.url)
 
@@ -250,8 +266,6 @@ class BrowserDriver:
         # Re-probe without navigation or interaction before declaring a layout gap.
         attempts = 20 if phase in {"checkout", "post_submit"} else 8
         for attempt in range(attempts):
-            if self.assets_denied:
-                raise Paused("store_assets_access_denied")
             state = await self._observe_once(phase, timeout=timeout)
             if state is None or state.kind != "unknown":
                 return state
@@ -263,6 +277,11 @@ class BrowserDriver:
                     if not _is_playwright_timeout(error):
                         raise
             if attempt == attempts - 1:
+                # A denied optional script does not negate a working control,
+                # ownership marker or a visible login/challenge. Report resource
+                # denial when the bounded observation cannot establish a state.
+                if self.assets_denied:
+                    raise Paused("store_assets_access_denied")
                 return state
             await asyncio.sleep(min(1, timeout / attempts))
 
@@ -338,6 +357,10 @@ class BrowserDriver:
             container.locator("#email,#password")
         )
         signals["remembered_account"] = "welcome back" in text and "/id/" in target
+        signals["store_sso"] = (
+            urlsplit(target).hostname == "store.epicgames.com"
+            and urlsplit(target).path == "/login"
+        )
         signals["device_modal"] = "device not supported" in text
         # No generic overlay flag from an arbitrary Continue label.
         signals["ready"] = not any(signals.values()) and await self._ready(
@@ -380,6 +403,9 @@ class BrowserDriver:
         return state
 
     async def recover(self, obstacle, *, timeout):
+        if obstacle.kind == "store_sso" and self.sso_login is not None:
+            await self.sso_login(obstacle, timeout=timeout)
+            return
         if obstacle.kind in {"delayed_result", "navigation_partial", "stale_locator"}:
             await asyncio.sleep(min(1, timeout))
             return
@@ -452,8 +478,7 @@ class BrowserDriver:
         await self._goto(offer.url, timeout)
 
     def _at_offer(self, page, offer):
-        actual, expected = clean_target(page.url), clean_target(offer.url)
-        return re.sub(r"/en-US/", "/", actual) == re.sub(r"/en-US/", "/", expected)
+        return _same_target(page.url, offer.url)
 
     async def verify(self, offer, *, timeout):
         if not self._at_offer(self.page, offer):
@@ -485,17 +510,19 @@ class BrowserDriver:
         # The current store can canonicalize /en-US/p/x to /p/x.
         if not self._at_offer(page, offer):
             return "unknown"
-        if self.assets_denied:
-            raise Paused("store_assets_access_denied")
         try:
             await self._purchase_controls(page).first.wait_for(
                 state="visible", timeout=min(15000, int(timeout * 1000)))
         except Exception as error:
             if not _is_playwright_timeout(error):
                 raise
+            if self.assets_denied:
+                raise Paused("store_assets_access_denied") from None
             return "unknown"
         button = await self._purchase_button(page)
         if button is None:
+            if self.assets_denied:
+                raise Paused("store_assets_access_denied")
             return "unknown"
         text = await self._purchase_text(button, timeout)
         if storefront_owned(text):
