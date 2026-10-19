@@ -2,11 +2,13 @@
 """Hermes deployment glue; business stays in benefits-automation."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 CONFIG = Path(os.environ.get("HERMES_HOME", "/home/hermes/.hermes/profiles/lingjun")) / "benefits-deployment.json"
@@ -21,6 +23,7 @@ def bounded(path, limit=65536):
 
 
 def main(task_id):
+    started_at, started = datetime.now(timezone.utc).isoformat(), time.monotonic()
     cfg = bounded(CONFIG)
     task = cfg["tasks"][task_id]
     platform = task.get("platform", task_id)
@@ -57,15 +60,22 @@ def main(task_id):
         if len(child.stdout.encode()) > 65536:
             raise ValueError("launcher_result_limit")
         candidate = json.loads(child.stdout)
-        context["run_id"] = candidate.get("run_id")
-        if not isinstance(context["run_id"], str) or len(context["run_id"]) > 64:
+        if not isinstance(candidate, dict):
+            raise ValueError("invalid_result")
+        run_id = candidate.get("run_id")
+        if not isinstance(run_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", run_id):
             raise ValueError("invalid_run_id")
-        output = validate(candidate, context)
+        output = validate(candidate, {**context, "run_id": run_id})
         if child.returncode not in {0, 1, 3, 75, 124}:
             output.update(execution_status="failed", reason="launcher_exit_unexpected")
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         pass
-    # Record this attempt; a prior successful latest must not conceal busy/failure.
+    # Reuse the platform's per-run record, including attempts that never reached it.
+    output.setdefault("started_at", started_at)
+    output.setdefault("finished_at", datetime.now(timezone.utc).isoformat())
+    output.setdefault("duration_ms", round((time.monotonic() - started) * 1000))
+    atomic_json(runtime / "runs" / output["run_id"] / "result.json", output)
+    # A prior successful latest must not conceal busy/failure.
     atomic_json(runtime / "delivery" / (task_id + ".json"), output)
     print(task["label"] + "：结果已保存（" + output["execution_status"] + "）")
     return 0
