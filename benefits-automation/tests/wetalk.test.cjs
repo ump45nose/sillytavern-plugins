@@ -240,6 +240,31 @@ test("authentication and signature errors stay distinct and never expose upstrea
   }
 });
 
+test("the live missing-client-parameters response is distinct from a rejected check-in", async () => {
+  const fake = scripted([{ httpStatus: 200, payload: {
+    retcode: 100004, retmsg: "Missing param or param error.", result: {},
+  } }]);
+  const output = await client.run(fake.request, memory());
+  assert.equal(output.reason, "request_parameters_invalid");
+  assert.equal(output.execution, "failed");
+  assert.deepEqual(output.business, { checkin: "unknown", balance: "unknown" });
+  assert.deepEqual(fake.calls, ["queryBalanceAndBonus"]);
+  assert.equal(client.rejection({ httpStatus: 200, payload: {
+    retcode: 100004, retmsg: "some different unverified condition", result: {},
+  } }), "checkin_rejected");
+});
+
+test("an explicit missing-parameters write rejection can be corrected after a fresh eligibility query", async () => {
+  const state = memory();
+  const fake = scripted([eligible(1), { httpStatus: 200, payload: {
+    retcode: 100004, retmsg: "Missing param or param error.", result: {},
+  } }]);
+  const output = await client.run(fake.request, state);
+  assert.equal(output.reason, "request_parameters_invalid");
+  assert.equal(state.status, "unknown");
+  assert.equal(fake.calls.length, 2);
+});
+
 test("a definite write rejection does not leave an ambiguous intent blocking corrected credentials", async () => {
   const state = memory();
   const fake = scripted([eligible(1), { httpStatus: 200, payload: { retcode: 1001, retmsg: "invalid signature" } }]);
