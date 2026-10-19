@@ -3,6 +3,7 @@
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
 const {metric} = require("../../common/details.cjs");
+const {requirePinned, withProfile, terminalLogin} = require("../../common/persistent_browser.cjs");
 const challenge = require("./challenge.cjs");
 const { createIntent } = require("./intent.cjs");
 const URL = "https://laowang.vip/plugin.php?id=k_misign:sign";
@@ -41,169 +42,9 @@ async function run(
     onError = () => {},
   } = {},
 ) {
-  let context;
   let cookiecloudAuthIncomplete = false;
-  try {
-    context = await firefox.launchPersistentContext(profile, {
-      headless: true,
-      ...(proxy ? { proxy: { server: proxy } } : {}),
-      viewport: { width: 1280, height: 800 },
-    });
-    const page = context.pages()[0] || (await context.newPage());
-    if (process.env.COOKIECLOUD_CONFIG) {
-      const script = "import sys,json;sys.path.insert(0,sys.argv[1]);" +
-        "from common.cookiecloud import browser_cookies;" +
-        "print(json.dumps(browser_cookies(sys.argv[2],'laowang.vip')))";
-      const bytes = require("node:child_process").execFileSync(process.env.BENEFITS_PYTHON,
-        ["-c", script, path.resolve(__dirname, "../.."), process.env.COOKIECLOUD_CONFIG],
-        {timeout: 35000, maxBuffer: 65536, stdio: ["ignore", "pipe", "ignore"]});
-      const cookies = JSON.parse(bytes);
-      // Discuz derives its auth key from saltkey. Import the login pair
-      // together, so a partial sync cannot overwrite a working profile.
-      const auth = cookies.filter(cookie => cookie.name.endsWith("_auth") && cookie.value);
-      const complete = auth.length > 0 && auth.every(cookie => cookies.some(salt =>
-        salt.name === cookie.name.slice(0, -4) + "saltkey" && salt.value &&
-        salt.domain === cookie.domain && salt.path === cookie.path));
-      if (complete) await context.addCookies(cookies);
-      else cookiecloudAuthIncomplete = true;
-    }
-    await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 45000 });
-    challenge.safeTarget(page);
-    await page.waitForTimeout(1000);
-    let status = await readStatus(page);
-    const result = (complete, reason) => ({
-      execution: complete ? "ok" : "failed",
-      reason,
-      checkin: complete ? "complete" : "unknown",
-      details: status.details,
-    });
-    if (status.signed) return result(true, "already_signed");
-    if (statusOnly && cookiecloudAuthIncomplete && status.details.days === null)
-      return { execution: "failed", reason: "cookiecloud_auth_pair_incomplete",
-        checkin: "blocked", details: status.details };
-    if (statusOnly)
-      return {
-        execution: "ok",
-        reason: "not_signed",
-        checkin: "incomplete",
-        details: status.details,
-      };
-    if (!intent || typeof intent.mark !== "function") {
-      if (
-        (await page.locator("#tncode").count()) > 0 &&
-        typeof authorize !== "function"
-      )
-        throw new challenge.PendingChallenge(
-          await challenge.observe(
-            page,
-            "tncode_open",
-            challengeOptions.readEvidence,
-          ),
-        );
-      return result(false, "sign_intent_required");
-    }
-    // A prior uncertain request/submit only permits readback, never blind replay.
-    async function verify() {
-      const verification = context.newPage ? await context.newPage() : page;
-      try {
-        for (let i = 0; i < 3; i++) {
-          try {
-            await verification.goto(URL, {
-              waitUntil: "domcontentloaded",
-              timeout: 20000,
-            });
-            challenge.safeTarget(verification);
-            status = await readStatus(verification);
-            if (status.signed) return true;
-          } catch {}
-          if (i < 2) await page.waitForTimeout(1500);
-        }
-        return false;
-      } finally {
-        if (verification !== page) await verification.close();
-      }
-    }
-    const hasChallenge = async () =>
-      (await page.locator("#tncode").count()) > 0;
-    if (intent.phase !== "idle") {
-      const unsignedAuthenticated = status.details.days !== null;
-      const confirmed = await verify();
-      if (confirmed) return result(true, "previous_sign_reconciled");
-      const resumable =
-        ["challenge_pending", "captcha_rejected"].includes(intent.phase) &&
-        intent.attempts < 2 &&
-        (await hasChallenge()) &&
-        (await page.locator("#submit-btn").count()) === 1 &&
-        (await page.locator('input[type="password"]').count()) === 0;
-      // No final submit was sent. A fresh authenticated unsigned page permits
-      // rebuilding the challenge; attempts stay bounded across processes.
-      const beforeSubmit = ["challenge_pending", "captcha_attempted", "captcha_rejected"]
-        .includes(intent.phase) && intent.attempts < 2 && unsignedAuthenticated;
-      if (!resumable && !beforeSubmit)
-        return result(false, "previous_sign_action_requires_reconciliation");
-      // The server still exposes an actual challenge form. Fresh authorization
-      // may continue it, without repeating the earlier qiandao request.
-    }
-    if (!(await hasChallenge())) {
-      // Limit HTML before transfer. No page body is saved or logged.
-      const html = page.evaluate
-        ? await page.evaluate(() => {
-            const value = document.documentElement.outerHTML;
-            if (value.length > 262144) throw Error("page_too_large");
-            return value;
-          })
-        : await page.content();
-      const hash = html.match(/formhash=([a-f0-9]{8})/);
-      if (!hash)
-        return {
-          execution: "failed",
-          reason: cookiecloudAuthIncomplete
-            ? "cookiecloud_auth_pair_incomplete" : "authentication_unconfirmed",
-          checkin: "blocked",
-          details: status.details,
-        };
-      if (intent.phase === "idle") intent.mark("request_attempted");
-      try {
-        await page.goto(
-          URL + "&operation=qiandao&formhash=" + hash[1] + "&format=empty",
-          { waitUntil: "domcontentloaded", timeout: 45000 },
-        );
-        challenge.safeTarget(page);
-      } catch {
-        return result(await verify(), "sign_request_reconciled");
-      }
-    }
-    if (await hasChallenge()) {
-      intent.mark("challenge_pending");
-      const solved = await challenge.solve(page, {
-        ...challengeOptions,
-        authorize,
-        beforeDrag: async () => intent.mark("captcha_attempted"),
-        onOutcome: async (status) => {
-          if (status === "accepted") intent.mark("captcha_accepted");
-          if (status === "rejected") intent.mark("captcha_rejected");
-        },
-      });
-      if (solved.status !== "accepted")
-        return result(false, solved.reason || "captcha_unconfirmed");
-      // Solver ACK is not sign-in success. Reconcile before a changing click.
-      if (await verify())
-        return result(true, "sign_reconciled_after_challenge");
-      challenge.safeTarget(page);
-      const button = page.locator("#submit-btn");
-      if ((await button.count()) !== 1)
-        return result(false, "sign_control_ambiguous");
-      intent.mark("submit_attempted");
-      try {
-        await button.click({ timeout: 15000 });
-      } catch {} // May have reached the server.
-    }
-    const confirmed = await verify();
-    return result(
-      confirmed,
-      confirmed ? "sign_confirmed" : "business_unconfirmed",
-    );
-  } catch (error) {
+  let entered = false;
+  const fail = (error) => {
     onError(error);
     challenge.record(error);
     return {
@@ -223,52 +64,191 @@ async function run(
       checkin:
         error instanceof challenge.PendingChallenge ? "blocked" : "unknown",
     };
-  } finally {
-    if (context) await context.close();
+  };
+  try {
+    return await withProfile(firefox, {
+      profile,
+      proxy,
+      headless: true,
+      contextOptions: { viewport: { width: 1280, height: 800 } },
+    }, async (context, page) => {
+      entered = true;
+      try {
+        if (process.env.COOKIECLOUD_CONFIG) {
+          const script = "import sys,json;sys.path.insert(0,sys.argv[1]);" +
+            "from common.cookiecloud import browser_cookies;" +
+            "print(json.dumps(browser_cookies(sys.argv[2],'laowang.vip')))";
+          const bytes = require("node:child_process").execFileSync(process.env.BENEFITS_PYTHON,
+            ["-c", script, path.resolve(__dirname, "../.."), process.env.COOKIECLOUD_CONFIG],
+            {timeout: 35000, maxBuffer: 65536, stdio: ["ignore", "pipe", "ignore"]});
+          const cookies = JSON.parse(bytes);
+          // Discuz derives its auth key from saltkey. Import the login pair
+          // together, so a partial sync cannot overwrite a working profile.
+          const auth = cookies.filter(cookie => cookie.name.endsWith("_auth") && cookie.value);
+          const complete = auth.length > 0 && auth.every(cookie => cookies.some(salt =>
+            salt.name === cookie.name.slice(0, -4) + "saltkey" && salt.value &&
+            salt.domain === cookie.domain && salt.path === cookie.path));
+          if (complete) await context.addCookies(cookies);
+          else cookiecloudAuthIncomplete = true;
+        }
+        await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+        challenge.safeTarget(page);
+        await page.waitForTimeout(1000);
+        let status = await readStatus(page);
+        const result = (complete, reason) => ({
+          execution: complete ? "ok" : "failed",
+          reason,
+          checkin: complete ? "complete" : "unknown",
+          details: status.details,
+        });
+        if (status.signed) return result(true, "already_signed");
+        if (statusOnly && cookiecloudAuthIncomplete && status.details.days === null)
+          return { execution: "failed", reason: "cookiecloud_auth_pair_incomplete",
+            checkin: "blocked", details: status.details };
+        if (statusOnly)
+          return {
+            execution: "ok",
+            reason: "not_signed",
+            checkin: "incomplete",
+            details: status.details,
+          };
+        if (!intent || typeof intent.mark !== "function") {
+          if (
+            (await page.locator("#tncode").count()) > 0 &&
+            typeof authorize !== "function"
+          )
+            throw new challenge.PendingChallenge(
+              await challenge.observe(
+                page,
+                "tncode_open",
+                challengeOptions.readEvidence,
+              ),
+            );
+          return result(false, "sign_intent_required");
+        }
+        // A prior uncertain request/submit only permits readback, never blind replay.
+        async function verify() {
+          const verification = context.newPage ? await context.newPage() : page;
+          try {
+            for (let i = 0; i < 3; i++) {
+              try {
+                await verification.goto(URL, {
+                  waitUntil: "domcontentloaded",
+                  timeout: 20000,
+                });
+                challenge.safeTarget(verification);
+                status = await readStatus(verification);
+                if (status.signed) return true;
+              } catch {}
+              if (i < 2) await page.waitForTimeout(1500);
+            }
+            return false;
+          } finally {
+            if (verification !== page) await verification.close();
+          }
+        }
+        const hasChallenge = async () =>
+          (await page.locator("#tncode").count()) > 0;
+        if (intent.phase !== "idle") {
+          const unsignedAuthenticated = status.details.days !== null;
+          const confirmed = await verify();
+          if (confirmed) return result(true, "previous_sign_reconciled");
+          const resumable =
+            ["challenge_pending", "captcha_rejected"].includes(intent.phase) &&
+            intent.attempts < 2 &&
+            (await hasChallenge()) &&
+            (await page.locator("#submit-btn").count()) === 1 &&
+            (await page.locator('input[type="password"]').count()) === 0;
+          // No final submit was sent. A fresh authenticated unsigned page permits
+          // rebuilding the challenge; attempts stay bounded across processes.
+          const beforeSubmit = ["challenge_pending", "captcha_attempted", "captcha_rejected"]
+            .includes(intent.phase) && intent.attempts < 2 && unsignedAuthenticated;
+          if (!resumable && !beforeSubmit)
+            return result(false, "previous_sign_action_requires_reconciliation");
+          // The server still exposes an actual challenge form. Fresh authorization
+          // may continue it, without repeating the earlier qiandao request.
+        }
+        if (!(await hasChallenge())) {
+          // Limit HTML before transfer. No page body is saved or logged.
+          const html = page.evaluate
+            ? await page.evaluate(() => {
+                const value = document.documentElement.outerHTML;
+                if (value.length > 262144) throw Error("page_too_large");
+                return value;
+              })
+            : await page.content();
+          const hash = html.match(/formhash=([a-f0-9]{8})/);
+          if (!hash)
+            return {
+              execution: "failed",
+              reason: cookiecloudAuthIncomplete
+                ? "cookiecloud_auth_pair_incomplete" : "authentication_unconfirmed",
+              checkin: "blocked",
+              details: status.details,
+            };
+          if (intent.phase === "idle") intent.mark("request_attempted");
+          try {
+            await page.goto(
+              URL + "&operation=qiandao&formhash=" + hash[1] + "&format=empty",
+              { waitUntil: "domcontentloaded", timeout: 45000 },
+            );
+            challenge.safeTarget(page);
+          } catch {
+            return result(await verify(), "sign_request_reconciled");
+          }
+        }
+        if (await hasChallenge()) {
+          intent.mark("challenge_pending");
+          const solved = await challenge.solve(page, {
+            ...challengeOptions,
+            authorize,
+            beforeDrag: async () => intent.mark("captcha_attempted"),
+            onOutcome: async (status) => {
+              if (status === "accepted") intent.mark("captcha_accepted");
+              if (status === "rejected") intent.mark("captcha_rejected");
+            },
+          });
+          if (solved.status !== "accepted")
+            return result(false, solved.reason || "captcha_unconfirmed");
+          // Solver ACK is not sign-in success. Reconcile before a changing click.
+          if (await verify())
+            return result(true, "sign_reconciled_after_challenge");
+          challenge.safeTarget(page);
+          const button = page.locator("#submit-btn");
+          if ((await button.count()) !== 1)
+            return result(false, "sign_control_ambiguous");
+          intent.mark("submit_attempted");
+          try {
+            await button.click({ timeout: 15000 });
+          } catch {} // May have reached the server.
+        }
+        const confirmed = await verify();
+        return result(
+          confirmed,
+          confirmed ? "sign_confirmed" : "business_unconfirmed",
+        );
+      } catch (error) {
+        return fail(error);
+      }
+    });
+  } catch (error) {
+    // Closing the profile failed after work began: propagate, as before.
+    if (entered) throw error;
+    return fail(error);
   }
 }
-async function login(firefox, profile, proxy) {
-  let context;
-  try {
-    if (!process.stdin.isTTY)
-      return {
-        execution: "failed",
-        reason: "interactive_terminal_required",
-        checkin: "unknown",
-      };
-    context = await firefox.launchPersistentContext(profile, {
-      headless: false,
-      ...(proxy ? { proxy: { server: proxy } } : {}),
-    });
-    const page = context.pages()[0] || (await context.newPage());
-    await page.goto("https://laowang.vip/forum.php", {
-      waitUntil: "domcontentloaded",
-      timeout: 45000,
-    });
-    const input = require("node:readline/promises").createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    try {
-      await input.question("Complete login manually, then press Enter.");
-    } finally {
-      input.close();
-    }
-    return {
-      execution: "ok",
-      reason: "manual_login_closed_unverified",
-      checkin: "unknown",
-    };
-  } finally {
-    if (context) await context.close();
-  }
+async function login(firefox, profile, proxy, terminal) {
+  const outcome = await terminalLogin(firefox, { profile, proxy, headless: false }, {
+    url: "https://laowang.vip/forum.php",
+    prompt: "Complete login manually, then press Enter.",
+    terminal,
+  });
+  return { ...outcome, checkin: "unknown" };
 }
 async function main() {
   let firefox;
   try {
-    const version = require("playwright-firefox/package.json").version;
-    if (version !== "1.63.0") throw Error("version");
-    firefox = require("playwright-firefox").firefox;
+    firefox = requirePinned(__dirname, "playwright-firefox", "1.63.0").firefox;
   } catch {
     return publish("failed", "dependency_unavailable_or_incompatible", {
       checkin: "unknown",
@@ -327,4 +307,4 @@ async function main() {
   }, items: []});
 }
 if (require.main === module) main();
-module.exports = { run, readStatus };
+module.exports = { run, readStatus, login };

@@ -25,7 +25,7 @@ CookieCloud 的格式、可选 crypto 依赖见 [公共凭据说明](../../docs/
 
 Discuz 登录需要同一前缀、域名和路径下有效的 `auth` / `saltkey` 配对。同步中缺少配套 Cookie 时不覆盖持久 profile；仍会只读打开签到页，已有有效会话可继续使用。页面也无法确认登录时返回 `cookiecloud_auth_pair_incomplete`，需要在原同步浏览器重新登录后同步，不能仅根据 `auth` 的过期时间判断登录有效。
 
-`--execute --status` 只读查询；`--execute --login` 是可选的交互登录入口，需要 TTY 和 DISPLAY。profile 位于 `state/laowang/<account>/browser/`，均在仓库外。返回通用 JSON，`checkin=complete` 仅在站点读回已签到时产生。
+`--execute --status` 只读查询；`--execute --login` 是可选的交互登录入口，需要 TTY 和 DISPLAY，提示写到该终端（运行日志仍只收 stdout）。profile 位于 `state/laowang/<account>/browser/`，均在仓库外，由 `common/persistent_browser.cjs` 打开和关闭；登录结果仍为 `manual_login_closed_unverified`，以后续 `--status` 读回为准。返回通用 JSON，`checkin=complete` 仅在站点读回已签到时产生。
 
 ## 验证码与恢复
 
