@@ -39,7 +39,7 @@
 - 同一宿主侧的直接读取中，真实 Cookie 和无 Cookie 的 `/api/user/status` 都返回 HTTP 403、`server=cloudflare`、JSON `cloudflare_error=true`、`error_code=1010`、`error_name=browser_signature_banned`、`retryable=false`。直连与既有代理的无 Cookie 对照也一致；没有修改共享代理或路由。
 - 响应没有 GLaDOS 业务码，也没有 `cf-mitigated: challenge`。当前确定的是 Cloudflare 浏览器签名拒绝，不能据此判断 Cookie 失效，也不能认定为可等待完成的挑战页。含义依据 [Cloudflare 1010](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/)、[结构化错误说明](https://developers.cloudflare.com/fundamentals/reference/error-responses/) 与 [挑战响应标记](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)。
 - CookieCloud 解密数据只有 cookie_data/local_storage_data/update_time，没有浏览器 UA 字段；目标 session Cookie 是不含可读 UA 的不透明值，现有服务日志只有启动记录。没有找到可信的准确浏览器 UA，没有猜测 UA 或提交签到。
-- 已创建仓库外 `benefits-runtime/credentials/glados.json`，只包含 GLADOS_ORIGIN 与 COOKIECLOUD_CONFIG，未填写未知的 GLADOS_USER_AGENT；身份 988:984、权限 0600。以 Hermes 的实际 UID/GID 读取配置、解密 Cookie 并做只读请求，确认权限和 Cookie 来源可用。
+- 已创建仓库外 `benefits-runtime/credentials/glados.json`，当时只包含 GLADOS_ORIGIN 与 COOKIECLOUD_CONFIG，未填写未知的 GLADOS_USER_AGENT；所有者为 Hermes 988:984。以 Hermes 的实际 UID/GID 读取配置、解密 Cookie 并做只读请求，确认权限和 Cookie 来源可用；FnOS 权限复核见本节末尾。
 - 本地适配器新增 `cloudflare_browser_signature_banned` 与 `cloudflare_challenge` 原因；只凭 403 或缺少明确 Cloudflare 标志仍保留通用 access_denied。生产 Python 3.12.13 的 43 项测试通过，覆盖实际 1010 响应结构、挑战头和读取受阻时零签到提交。
 - 同一 Hermes 身份下，更新后的 Client 使用诚实 Python-urllib/3.12 UA 进行诊断读取，真实返回 `cloudflare_browser_signature_banned`；该 UA 仅用于读诊断，未配置为 Cookie 对应浏览器身份。脱敏证据保存在 `benefits-runtime/diagnostics/glados-20261019/diagnosis.json`，不覆盖正式 delivery。
 - 用户在 Mac 再次同步后，重新解密的 CookieCloud update_time 为 `2026-10-19T09:10:58.009Z`，完整 Cookie 配对仍在；Hermes 身份使用这份最新数据的只读请求仍返回同一 1010 原因，没有提交签到。
@@ -50,9 +50,10 @@
 ## 实际 UA 恢复及已签到场景验收
 
 - JS 自动化错误 12 后，改为临时打开 Mac Chrome 自带的 `chrome://version/` 页面。无障碍遍历超时，随后使用 Chrome 原生 AppleScript Save（only html）保存该版本页，从原生页面中读取实际 User Agent；未执行网页 JavaScript，未修改浏览器设置。仅本任务创建的版本窗口和临时文件均已清理。
-- 将读取到的实际 UA 仅写入仓库外 glados.json 的 GLADOS_USER_AGENT，保留既有 origin 和 CookieCloud 引用；配置按 Hermes 988:984/0600 保存，没有在代码、日志、结果或文档中输出 UA/Cookie 值。
+- 将读取到的实际 UA 仅写入仓库外 glados.json 的 GLADOS_USER_AGENT，保留既有 origin 和 CookieCloud 引用；配置所有者为 Hermes 988:984，没有在代码、日志、结果或文档中输出 UA/Cookie 值。
 - 同一新 Cookie、同一直接访问路径的只读对照：Python-urllib/3.12 返回 cloudflare_browser_signature_banned，版本页实际 Chrome UA 返回可读的已认证 status。由此确认本次 1010 与请求 UA 的差异直接相关，Cookie 并未因该 403 被证明失效。
 - Hermes 身份的独立只读入口 run `9bb395cc-0182-43a8-9df3-271bccc7b473` 返回退出 0、checkin/reward/balance 全部 complete。
 - 正式 runtime、账号 glados-main 的 `--execute` run `9b99c8fd-7649-4c82-8d7a-8eca20715cb9` 同样退出 0，确认今日已签到。当前积分 10，本日已确认签到奖励 10，连续 1 天，剩余 14 天，本次余额变动 0；不能把本日奖励当作本次新获得积分。
 - 同一账号公共租约下重复调用真实业务链 run `2dc02869-f33e-46a8-b851-c700b2f0b38e`，记录到的站点请求仅 GET /api/user/status 与 GET /api/user/points，POST 数为 0，结果仍全部 complete。正式 latest 保留正式入口的结果；请求计数和 UA 对照保存在私有诊断 JSON，不替换 delivery。
 - 43 项离线测试在本轮代码修复后通过；本阶段只更新验收文档和来源状态。真实认证、历史账目读回、标准入口及已签重复执行已确认；当日早已签到，没有强行发送重复 POST，首次未签到日的新增写请求正向样本尚待实际日期覆盖。调度启用与日报接入仍由集成任务处理。
+- 收尾权限复核：FnOS 会在移除 POSIX ACL 并设为 0600 后重新附加 profile 的继承 ACL，后续独立进程观察为 0660；不能将瞬时 chmod 成功报告为持久 0600。Hermes 988:984 实际读取成功，无附加组的 UID/GID 65534 实际读取被拒绝。未更改 profile 或目录的共享 Trim ACL；若需严格限制为仅 Hermes，需由维护该 profile 的集成任务按 FnOS Trim ACL 处理文件级权限。
