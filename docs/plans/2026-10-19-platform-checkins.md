@@ -66,3 +66,23 @@
 - 网易严选历史脚本仅作线索；没有当前接口证据时报告准确阻塞，不按旧接口猜测批量任务或假装已可签到。
 - 平台交付包含分支/工作区、提交、关键接口、测试结果与未验证项。完成必要本地提交检查点，留待集成审查，不自动合并或上线。
 - 集成核对主线变化、各平台改动归属、入口/结果兼容、WorkBuddy 双版不互相覆盖、YYB 故障聚合与日报行为；验收后逐平台启用生产任务。
+
+
+## 原生 fork 派发记录
+
+已从原聊天原生 fork 八个独立 session，并逐个下发平台范围、文件所有权、独立 worktree、必要接口与验收要求。`wait_threads` 首次快照确认全部为 active / inProgress，未报告启动错误。此状态只代表开发已开始，不代表功能完成或真实签到验收通过。
+
+| 任务 | 分支 | 状态 |
+| --- | --- | --- |
+| [GLaDOS 自动签到开发](codex://threads/01a1532a-c968-7073-b858-4bd24c185f94) | `codex/benefits-glados-20261019` | 已派发，状态快照确认执行中 |
+| [影视飓风自动签到开发](codex://threads/01a1532c-83a6-77e3-a7a7-0213b10d041a) | `codex/benefits-yingshijufeng-20261019` | 已派发，状态快照确认执行中 |
+| [Olé 自动签到开发](codex://threads/01a1532c-8b2c-7043-8e41-5eeddf9dbe7e) | `codex/benefits-ole-20261019` | 已派发，状态快照确认执行中 |
+| [雨云自动签到开发](codex://threads/01a1532c-9126-7c62-a384-0a27b035e492) | `codex/benefits-rainyun-20261019` | 已派发，状态快照确认执行中 |
+| [WorkBuddy 国内国际版自动签到开发](codex://threads/01a1532c-981c-7e91-83bd-44779c4ce003) | `codex/benefits-workbuddy-20261019` | 已派发，状态快照确认执行中 |
+| [网易严选自动签到开发](codex://threads/01a1532c-a0d6-7541-9b87-7daa131f8861) | `codex/benefits-yanxuan-20261019` | 已派发，状态快照确认执行中 |
+| [WeTalk 自动签到开发](codex://threads/01a1532c-ab10-7af2-84e6-af064b128a97) | `codex/benefits-wetalk-20261019` | 已派发，状态快照确认执行中 |
+| [YYB 微信取码共用能力开发](codex://threads/01a1532c-b351-7eb0-aec7-d956aacc7df8) | `codex/benefits-yyb-20261019` | 已派发，状态快照确认执行中 |
+
+所有任务的工作区为 `/home/yuwk/code/.worktree/benefits-<platform>-20261019`，业务项目在其中 `benefits-automation/`。各 fork 会话保留原对话历史，已明确要求只在分配的工作区写入、只提交自身变更。
+
+首次尝试应用自动创建 worktree 的 fork，仅返回排队标识 `client-new-thread:ccd08b9a-0f55-456d-a82c-829af1577c99`，尚未取得可派发的子 thread ID。实际开发使用已返回真实 thread ID 的原生同目录 fork，并在项目 `.worktree/` 预建隔离分支；上表八项均已成功启动。该排队请求未下发任何开发任务。
