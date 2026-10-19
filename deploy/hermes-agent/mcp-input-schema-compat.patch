@@ -1,0 +1,29 @@
+diff --git a/tools/mcp_tool.py b/tools/mcp_tool.py
+--- a/tools/mcp_tool.py
++++ b/tools/mcp_tool.py
+@@
++def _extract_mcp_input_schema(mcp_tool: Any) -> dict:
++    """Return a tool schema across MCP SDK camelCase and snake_case models.
++
++    MCP 2.x exposes ``input_schema`` while older SDK objects use
++    ``inputSchema``. Reading only the legacy attribute silently turns every
++    parameterized tool into an empty-object schema.
++    """
++
++    schema = getattr(mcp_tool, "inputSchema", None)
++    if not isinstance(schema, dict):
++        schema = getattr(mcp_tool, "input_schema", None)
++    if isinstance(schema, dict):
++        return schema
++    if hasattr(schema, "model_dump"):
++        dumped = schema.model_dump(by_alias=True, exclude_none=True)
++        return dumped if isinstance(dumped, dict) else {}
++    return {}
+@@
+-    parameters = _normalize_mcp_input_schema(
+-        getattr(mcp_tool, "inputSchema", None)
+-    )
++    parameters = _normalize_mcp_input_schema(_extract_mcp_input_schema(mcp_tool))
+@@
+-                schema_obj = getattr(mcp_tool, "inputSchema", None)
++                schema_obj = _extract_mcp_input_schema(mcp_tool)
