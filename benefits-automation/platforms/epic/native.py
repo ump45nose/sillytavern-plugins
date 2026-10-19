@@ -26,6 +26,8 @@ async def report_purchase_error(response):
             or response.request.resource_type not in {"xhr", "fetch"}):
         return
     record = {"event": "epic_purchase_error", "status": response.status}
+    if re.fullmatch(r"/v2/purchase/[a-z][a-z-]{1,50}", target.path):
+        record["operation"] = target.path.rsplit("/", 1)[1]
     try:
         raw = await asyncio.wait_for(response.body(), timeout=3)
         if len(raw) <= 65536:
