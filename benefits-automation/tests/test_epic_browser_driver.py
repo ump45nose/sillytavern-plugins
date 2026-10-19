@@ -55,6 +55,24 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_catalog_read_keeps_the_settled_canonical_store_page(self):
+        page=SimpleNamespace(url="https://store.epicgames.com/free-games",goto=AsyncMock(),
+            evaluate=AsyncMock(return_value={"data":{"Catalog":{"searchStore":{"elements":[]}}}}))
+        inventory=await BrowserDriver(None,page,None).inventory(timeout=1)
+        self.assertTrue(inventory.complete)
+        self.assertEqual(inventory.offers,[])
+        page.goto.assert_not_awaited()
+        page.evaluate.assert_awaited_once()
+
+    async def test_catalog_read_still_initializes_a_new_page_on_the_store_origin(self):
+        page=SimpleNamespace(url="about:blank",
+            evaluate=AsyncMock(return_value={"data":{"Catalog":{"searchStore":{"elements":[]}}}}))
+        async def goto(url,**kwargs):page.url=url
+        page.goto=AsyncMock(side_effect=goto)
+        inventory=await BrowserDriver(None,page,None).inventory(timeout=1)
+        self.assertTrue(inventory.complete)
+        self.assertEqual(page.goto.await_args.args[0],"https://store.epicgames.com/en-US/free-games")
+
     async def test_denied_assets_report_when_bounded_business_observation_stays_unknown(self):
         driver = BrowserDriver(None, None, None)
         driver.observe_response(SimpleNamespace(
