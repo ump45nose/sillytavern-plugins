@@ -131,6 +131,50 @@ test("completed React tile with no offer ID is confirmed by its keyed success ch
     assert.equal(result.business.desktop_app_weekly, "unknown");
   });
 });
+test("localized task counters and inline completed tiles retain all seven daily states", () => {
+  const rows = children().filter(row => !row.offerId.includes("_Sunday_")).map(({reportable, name, ...row}) => row);
+  const tile = ["$", "div", "1", {className: "flex flex-row gap-2 sm:gap-4", children: [
+    ["$", "div", null, {children: ["$", "div", null, {className: "flex bg-statusSuccessRewardsBg",
+      children: ["$", "svg", null, {}]}]}],
+    ["$", "div", null, {children: "Completed Sunday"}],
+  ]}];
+  const root = ["$", "div", null, {children: [tile]}];
+  for (const label of ["2/8 个任务", "2 / 8 Aufgaben", "2/8 tâches"]) {
+    const html = flight(rows, 10).replace("1/8 tasks", label) +
+      '<script>self.__next_f.push([1,' + JSON.stringify("\n4b:" + JSON.stringify(root) + "\n") + '])</script>';
+    const out = app.parse({offerId: parent, title: "Weekly"}, html, app.visibleText(html), loadParser());
+    assert.equal(out.children.length, 7);
+    assert.equal(out.children.find(row => row.offerId.includes("_Sunday_")).isCompleted, true);
+    assert.equal(out.children.find(row => row.offerId.includes("_Monday_")).reportable, true);
+    assert.equal(out.children.find(row => row.offerId.includes("_Wednesday_")).isLocked, true);
+    assert.deepEqual(out.tasks, {current: 2, max: 8});
+    assert.deepEqual(out.points, {current: 10, max: 70});
+  }
+});
+test("missing, contradictory or out-of-range weekly counters remain unavailable", () => {
+  for (const counters of ["(0/70)", "(0/70) 1/8 tasks 2/8 tasks", "(71/70) 1/8 tasks", "(0/70) 9/8 tasks"]) {
+    const html = flight(children());
+    assert.throws(() => app.parse({offerId: parent}, html, counters, loadParser()), /progress_unavailable/);
+  }
+});
+test("a newly completed tile resolves its shared Flight checkmark without using placeholders as completion", () => {
+  const rows = children().filter(row => !/_(Sunday|Monday)_/.test(row.offerId))
+    .map(({reportable, name, ...row}) => ({...row, isLocked: true}));
+  const tile = (key, children) => ["$", "div", key, {className: "flex flex-row gap-2 sm:gap-4", children: [
+    ["$", "div", null, {children: ["$", "div", null, {className: "bg-statusSuccessRewardsBg", children}]}],
+  ]}];
+  for (const reference of ["$L4c", "$4c"]) {
+    const root = ["$", "div", null, {children: [tile("1", ["$", "svg", null, {}]), tile("2", reference)]}];
+    const records = "\n4b:" + JSON.stringify(root) + "\n4c:" + JSON.stringify(["$", "svg", null, {}]) + "\n";
+    const html = flight(rows, 20).replace("1/8 tasks", "3/8 tasks") +
+      '<script>self.__next_f.push([1,' + JSON.stringify(records) + '])</script>';
+    const out = app.parse({offerId: parent}, html, app.visibleText(html), loadParser());
+    assert.equal(out.children.filter(row => row.isCompleted).length, 2);
+    assert.equal(app.summary({...out, balance: 120}).business.desktop_app_weekly, "complete");
+    const missing = html.replace('4c:', '4d:');
+    assert.throws(() => app.parse({offerId: parent}, missing, app.visibleText(missing), loadParser()), /progress_unavailable/);
+  }
+});
 test("HTTP binding sends current server action and preserves browser origins without launching Chromium", async () => {
   const rows = children(), entries = new Map(), state = {cookies: [], origins: [{origin: "https://rewards.bing.com", localStorage: [{name: "kept", value: "yes"}]}]};
   let posts = 0, disposed = 0, contextDisposed = 0, handoff;

@@ -104,7 +104,10 @@ class Login:
             outcome = await self.challenge.handle(obstacle, timeout=min(timeout, 120))
         except TimeoutError:
             raise Paused("challenge_timeout") from None
-        if outcome.get("solver_signal") != "success":
+        signal = outcome.get("solver_signal")
+        if signal in {"challenge_execution_timeout", "challenge_response_timeout"}:
+            raise Paused("challenge_timeout")
+        if signal != "success":
             raise Paused("challenge_unconfirmed")
 
     async def login(self, obstacle, *, timeout):

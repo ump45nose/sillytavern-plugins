@@ -35,6 +35,8 @@ python3 -m venv .venv-epic
 
 model 是可选挑战路径使用的 OpenAI compatible 视觉模型。当前 NAS 延用已有 CPA 的 `gemini-3.8-flash-high` 配置。图片只在挑战期间临时使用，不保留截图/录屏；调用不自动重试。不要将邮箱、密码或 key 放命令行或 Git。
 
+挑战 SDK 返回的执行超时和响应超时统一报告 `challenge_timeout`，与实际未通过区分。浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口、工作流和 SDK 内部捕获的错误保留异常类型及源码位置，不记录原始错误消息、会话 token、图片或模型响应。商店脚本被 403 拒绝时停止领取，不把静态商品按钮当作可用页面。
+
 ```sh
 EPIC_CONFIG=/absolute/private/epic.json \
 .venv-epic/bin/python platforms/epic/run.py \
