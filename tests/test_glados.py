@@ -141,6 +141,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("checkin", client.calls)
         self.assertEqual(out["reason"], "transport_error")
 
+    def test_cloudflare_preflight_block_is_not_cookie_expiry_or_a_write(self):
+        client = FakeClient(initial=ProviderError("cloudflare_browser_signature_banned"))
+        client.status_error = ProviderError("cloudflare_browser_signature_banned")
+        out = self.run_client(client)
+        self.assertEqual(client.calls, ["status", "points"])
+        self.assertEqual(out["reason"], "cloudflare_browser_signature_banned")
+        self.assertEqual(out["business"]["checkin"], "unknown")
+
     def test_post_timeout_recovers_with_history_without_second_write(self):
         client = FakeClient(reply=ProviderError("transport_error"))
         out = self.run_client(client)
@@ -348,6 +356,29 @@ class ProtocolTests(unittest.TestCase):
                 client, _ = self.client(Response(raw, status=403))
                 with self.assertRaisesRegex(ProviderError, "^access_denied$"):
                     client.points()
+
+    def test_actual_cloudflare_1010_json_reports_browser_signature_block(self):
+        raw = json.dumps({"cloudflare_error": True, "error_code": 1010,
+                          "error_name": "browser_signature_banned", "error_category": "access_denied",
+                          "retryable": False, "owner_action_required": True}).encode()
+        client, _ = self.client(Response(raw, status=403))
+        with self.assertRaisesRegex(ProviderError, "^cloudflare_browser_signature_banned$"):
+            client.status()
+
+    def test_plain_403_or_1010_without_cloudflare_marker_stays_generic(self):
+        for body in ({"error_code": 1010}, {"cloudflare_error": False, "error_code": 1010},
+                     {"cloudflare_error": True, "error_code": "1010"}):
+            client, _ = self.client(Response(json.dumps(body).encode(), status=403))
+            with self.assertRaisesRegex(ProviderError, "^access_denied$"):
+                client.points()
+
+    def test_cloudflare_challenge_header_is_distinct_from_1010(self):
+        response = Response(b'<html>challenge</html>', status=403)
+        response.headers["cf-mitigated"] = "challenge"
+        client, _ = self.client(response)
+        with self.assertRaisesRegex(ProviderError, "^cloudflare_challenge$"):
+            client.points()
+        self.assertTrue(response.closed)
 
     def test_known_messages_only_accept_the_expected_code(self):
         for message in ALREADY_MESSAGES:
