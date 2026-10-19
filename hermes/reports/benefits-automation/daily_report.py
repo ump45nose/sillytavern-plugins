@@ -55,10 +55,12 @@ REASONS = {
     "wechat_code_service_unavailable": "微信取码服务或账号不可用",
     "wechat_code_connection_failed": "无法连接微信取码服务",
     "wechat_code_timeout": "微信取码服务超时",
-    "missing_shop_configuration": "需要配置实际 Olé 门店",
     "activity_sent_reward_unconfirmed": "国际版活跃请求已发送，奖励未确认",
     "automated_checkin_rejected": "平台拒绝自动签到",
     "device_mismatch": "登录设备信息不匹配",
+    "cloudflare_browser_signature_banned": "Cloudflare 拦截当前浏览器签名",
+    "cloudflare_challenge": "Cloudflare 要求浏览器验证",
+    "request_parameters_invalid": "需要有效的客户端请求参数",
 }
 TASK_LABELS = {
     "checkin": "签到",
