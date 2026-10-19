@@ -16,11 +16,13 @@ import re
 from urllib.parse import urlsplit
 from common.interventions import fingerprint
 from .catalog import parse_catalog, storefront_owned
+from .challenges import response_kind
 from .guard import zero_total
 from .obstacles import classify
 from .workflow import Paused
 
 STORE = "https://store.epicgames.com/en-US"
+CHECKOUT = "https://store.epicgames.com/purchase"
 PROMOTIONS = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
 ALLOWED = {"store.epicgames.com", "www.epicgames.com", "accounts.epicgames.com"}
 PURCHASE_NAMES = re.compile(
@@ -97,6 +99,7 @@ class BrowserDriver:
         self.device_acknowledged = set()
         self.assets_denied = False
         self.cloudflare_document = None
+        self.challenge_responses = {}
 
     def observe_response(self, response):
         target = urlsplit(response.url)
@@ -105,11 +108,19 @@ class BrowserDriver:
             self.assets_denied = True
         if (response.request.resource_type == "document"
                 and response.frame is self.page.main_frame):
+            self.challenge_responses.pop("payload", None)
             self.cloudflare_document = (
                 clean_target(response.url)
                 if target.hostname in ALLOWED and response.headers.get("cf-mitigated") == "challenge"
                 else None
             )
+        kind = response_kind(response)
+        if kind in {"script", "payload"} and response.frame.page is self.page:
+            # At most the latest script and payload, held only in this process.
+            # A failed replacement must not leave an older puzzle to be replayed.
+            self.challenge_responses.pop(kind, None)
+            if response.status == 200:
+                self.challenge_responses[kind] = response
 
     def _purchase_controls(self, page):
         # Both storefront versions expose named buttons. Test IDs are absent
@@ -625,6 +636,16 @@ class BrowserDriver:
             "加入购物车",
         }:
             raise Paused("purchase_control_unknown")
+        if text not in {"add to cart", "加入购物车"}:
+            # Get now runs an automatic quick-purchase before any order page.
+            # Open the official independent checkout instead, so the workflow
+            # still checks its exact identity/zero total and journals submission.
+            identity = re.fullmatch(r"([a-f0-9]{32}):([a-f0-9]{32})", offer.id)
+            if identity is None:
+                raise Paused("checkout_identity_unconfirmed")
+            self.prepared.add(offer.id)
+            await self._goto(CHECKOUT + "?offers=1-" + identity[1] + "-" + identity[2] + "--", timeout)
+            return
         self.prepared.add(offer.id)
         await button.click(timeout=min(5000, int(timeout * 1000)))
         if text in {"add to cart", "加入购物车"}:

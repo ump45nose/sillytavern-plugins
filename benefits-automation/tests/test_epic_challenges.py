@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from platforms.epic.challenges import HCaptchaHandler, _sdk_error
 from platforms.epic.workflow import Obstacle, Paused
-from platforms.epic.native import Login
+from platforms.epic.native import Login, report_purchase_error
 from common.interventions import fingerprint
 from dataclasses import replace
 
@@ -67,6 +67,50 @@ class StoreSsoTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ChallengeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_payment_rejection_retains_its_code_without_account_or_token_fields(self):
+        response = SimpleNamespace(url="https://payment-website-pci.ol.epicgames.com/purchase/fixture",
+            status=400, request=SimpleNamespace(resource_type="xhr"),
+            body=AsyncMock(return_value=json.dumps({"errorCode": "errors.com.epicgames.fixture",
+                "numericErrorCode": 1001, "errorMessage": "private-account-and-token",
+                "token": "private-account-and-token"}).encode()))
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            await report_purchase_error(response)
+        self.assertEqual(json.loads(stream.getvalue()), {"event": "epic_purchase_error",
+            "status": 400, "error_code": "errors.com.epicgames.fixture", "numeric_code": 1001})
+        self.assertNotIn("private-account", stream.getvalue())
+
+    async def test_late_handler_receives_the_original_puzzle_once_and_ignores_preflights(self):
+        received = []
+        page = SimpleNamespace(on=lambda event, callback: setattr(page, "response", callback))
+        def response(path, method, status=200, host="api.hcaptcha.com"):
+            return SimpleNamespace(url="https://" + host + path, status=status,
+                                   request=SimpleNamespace(method=method))
+        script = response("/asset/hsw.js", "GET", host="newassets.hcaptcha.com")
+        payload = response("/getcaptcha/fixture", "POST")
+        preflight = response("/getcaptcha/fixture", "OPTIONS")
+        class Agent:
+            def __init__(self, page, **kwargs): page.on("response", self._task_handler)
+            async def _task_handler(self, response): received.append(response)
+            async def wait_for_challenge(self):
+                self.assert_puzzle()
+                return SimpleNamespace(value="success")
+            def assert_puzzle(self):
+                if received[:2] != [script, payload]: raise ValueError("missing_original_puzzle")
+        handler = HCaptchaHandler(page, None, loader=lambda _: SimpleNamespace(AgentV=Agent),
+                                  initial_responses=[script, preflight, payload])
+        obstacle = Obstacle("captcha", "fixture", fingerprint("x"), "checkout")
+        out = await handler.handle(obstacle, timeout=1)
+        self.assertEqual(received, [script, payload])
+        self.assertTrue(out["requires_readback"])
+        await page.response(response("/checkcaptcha/fixture", "OPTIONS"))
+        await page.response(response("/checkcaptcha/fixture", "POST", host="unrelated.invalid"))
+        failed = response("/checkcaptcha/fixture", "POST", status=400)
+        await page.response(failed)
+        await handler.handle(obstacle, timeout=1)
+        self.assertEqual(received, [script, payload, failed])
+        self.assertEqual(handler.initial_responses, ())
+
     async def test_managed_cloudflare_without_widget_waits_without_loading_hcaptcha(self):
         page=SimpleNamespace(frames=[],wait_for_timeout=AsyncMock())
         auth=Login(SimpleNamespace(page=page),{})

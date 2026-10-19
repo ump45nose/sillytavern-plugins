@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from platforms.epic.browser_driver import BrowserDriver, clean_target
-from platforms.epic.workflow import Paused, Obstacle
+from platforms.epic.workflow import Paused, Obstacle, Offer
 from platforms.epic.native import checkout_evidence
 
 
@@ -55,6 +55,62 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_free_offer_uses_a_guarded_order_page_without_clicking_quick_purchase(self):
+        offer = Offer("a" * 32 + ":" + "b" * 32,
+                      "https://store.epicgames.com/p/fixture", True)
+        page = SimpleNamespace(url=offer.url)
+        button = SimpleNamespace(inner_text=AsyncMock(return_value="Get"), click=AsyncMock())
+        driver = BrowserDriver(None, page, None)
+        driver._purchase_controls = lambda _: SimpleNamespace(first=SimpleNamespace(wait_for=AsyncMock()))
+        driver._purchase_button = AsyncMock(return_value=button)
+        driver._goto = AsyncMock()
+        await driver.prepare_checkout(offer, timeout=30)
+        target = driver._goto.await_args.args[0]
+        self.assertEqual(target, "https://store.epicgames.com/purchase?offers=1-" + "a" * 32 + "-" + "b" * 32 + "--")
+        self.assertEqual(await checkout_evidence(SimpleNamespace(url=target), timeout=1),
+                         {"complete": True, "offer_ids": [offer.id]})
+        button.click.assert_not_awaited()
+        self.assertIn(offer.id, driver.prepared)
+
+    async def test_unrecognized_direct_offer_identity_cannot_start_a_purchase(self):
+        offer = Offer("unrecognized", "https://store.epicgames.com/p/fixture", True)
+        button = SimpleNamespace(inner_text=AsyncMock(return_value="Get"), click=AsyncMock())
+        driver = BrowserDriver(None, SimpleNamespace(url=offer.url), None)
+        driver._purchase_controls = lambda _: SimpleNamespace(first=SimpleNamespace(wait_for=AsyncMock()))
+        driver._purchase_button = AsyncMock(return_value=button)
+        driver._goto = AsyncMock()
+        with self.assertRaises(Paused) as raised:
+            await driver.prepare_checkout(offer, timeout=30)
+        self.assertEqual(raised.exception.reason, "checkout_identity_unconfirmed")
+        driver._goto.assert_not_awaited()
+        button.click.assert_not_awaited()
+        self.assertEqual(driver.prepared, set())
+
+    def test_challenge_capture_keeps_only_the_current_pages_real_puzzle_responses(self):
+        page = SimpleNamespace(main_frame=object())
+        driver = BrowserDriver(None, page, None)
+        def response(path, method, owner=page, status=200):
+            return SimpleNamespace(url="https://api.hcaptcha.com" + path, status=status,
+                request=SimpleNamespace(resource_type="xhr", method=method),
+                frame=SimpleNamespace(page=owner))
+        script = response("/asset/hsw.js", "GET")
+        payload = response("/getcaptcha/fixture", "POST")
+        for value in [script, payload, response("/getcaptcha/fixture", "OPTIONS"),
+                      response("/getcaptcha/other", "POST", owner=object())]:
+            driver.observe_response(value)
+        self.assertEqual(driver.challenge_responses, {"script": script, "payload": payload})
+        driver.observe_response(response("/getcaptcha/fixture", "POST", status=400))
+        self.assertEqual(driver.challenge_responses, {"script": script})
+
+    def test_new_document_discards_the_previous_puzzle_without_loading_the_sdk(self):
+        page = SimpleNamespace(main_frame=object())
+        driver = BrowserDriver(None, page, None)
+        driver.challenge_responses = {"script": object(), "payload": object()}
+        driver.observe_response(SimpleNamespace(url="https://store.epicgames.com/p/fixture",
+            status=200, headers={}, frame=page.main_frame,
+            request=SimpleNamespace(resource_type="document")))
+        self.assertEqual(set(driver.challenge_responses), {"script"})
+
     async def test_catalog_read_keeps_the_settled_canonical_store_page(self):
         page=SimpleNamespace(url="https://store.epicgames.com/free-games",goto=AsyncMock(),
             evaluate=AsyncMock(return_value={"data":{"Catalog":{"searchStore":{"elements":[]}}}}))
