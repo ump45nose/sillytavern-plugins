@@ -4,7 +4,7 @@
 
 ## 配置与调用
 
-在仓库外准备权限为 `0600` 的私有 JSON，将其绝对路径传给 `YINGSHIJUFENG_CONFIG`：
+在仓库外准备归当前运行身份所有的私有 JSON，将其绝对路径传给 `YINGSHIJUFENG_CONFIG`。通常权限为 `0600`；兼容当前身份所属组的 `0640/0660`，拒绝其他用户权限、可执行文件与符号链接。Hermes 的既有命名 ACL 会使权限显示为 `0660`，保留其管理授权：
 
 ```json
 {
@@ -33,7 +33,7 @@ YINGSHIJUFENG_CONFIG=/absolute/private/yingshijufeng.json \
   --account account1 --execute
 ```
 
-首次需要先在微信内打开影视飓风小程序，完成商家要求的注册或授权，并在自建 YYB 中完成扫码。YYB 共用客户端 `common/wechat_code.cjs` 由本批集成提供，调用合同为 `getCode(config, appid) -> Promise<string>`；只在没有缓存会话或商家明确拒绝认证时读取一次 code。客户端尚未合入时返回 `wechat_code_client_unavailable`，不退回其他取码服务。
+首次需要先在微信内打开影视飓风小程序，完成商家要求的注册或授权，并在自建 YYB 中完成扫码。已集成的 YYB 共用客户端 `common/wechat_code.cjs` 合同为 `getCode(config, appid) -> Promise<string>`；只在没有缓存会话或商家明确拒绝认证时读取一次 code。
 
 只读模式在没有当日已确认回执时保留 `checkin=unknown` 并退出 3；即使积分可读取，也不将其显示为今日签到已完成。
 

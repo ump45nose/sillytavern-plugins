@@ -8,6 +8,7 @@ const { validateHeaderName, validateHeaderValue } = require("node:http");
 const { publish } = require("../../common/result.cjs");
 const { metric, number } = require("../../common/details.cjs");
 const { journal } = require("./state.cjs");
+const {isPrivateFile} = require("../../common/private_file.cjs");
 
 const ORIGIN = "https://api.wetalkapp.com";
 const SIGNING_SUFFIX = "0fOiukQq7jXZV2GRi9LGlO"; // Public application protocol constant, not an account secret.
@@ -85,7 +86,7 @@ function loadConfig(filename) {
     const fd = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
     try {
       const stat = fs.fstatSync(fd);
-      if (!stat.isFile() || (stat.mode & 0o077) !== 0) {
+      if (!isPrivateFile(stat)) {
         throw failure("private_configuration_unreadable");
       }
       const bytes = Buffer.alloc(16385);

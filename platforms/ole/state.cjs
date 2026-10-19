@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const {isPrivateFile} = require("../../common/private_file.cjs");
 
 class OleError extends Error {
   constructor(code) {
@@ -21,7 +22,7 @@ function readPrivateJson(file) {
   try {
     fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
     const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || (stat.mode & 0o077) || stat.size > 16384)
+    if (!isPrivateFile(stat) || stat.size > 16384)
       throw new OleError("private_file_invalid");
     const buffer = Buffer.alloc(16385);
     const size = fs.readSync(fd, buffer, 0, buffer.length, 0);
