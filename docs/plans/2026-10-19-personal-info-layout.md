@@ -19,9 +19,9 @@
 ## 进度
 
 - [x] 确认源码、仓库、运行身份和实际依赖。
-- [x] 迁移聚合路径、同步源码引用；独立仓库待推送本次文档。
+- [x] 迁移聚合路径、同步源码引用和独立仓库。
 - [x] 备份受影响私有配置，切换新启动路径并验证。
-- [ ] 记录最终路径、检查点与剩余集成边界。
+- [x] 记录最终路径、检查点与剩余集成边界。
 
 ## 实测结果
 
@@ -30,3 +30,10 @@
 - Plaud 只重启本进程，新 WorkingDirectory 生效；两个 /healthz 正常，6 组真实读取结果逐字节一致，两条公网 :28443 TLS 鉴权读取通过。15 份 MD 和 33 条音频未变化，凭据未变化，Records 原镜像未重启。
 - 私有备份与候选比较记录：/vol1/1000/personal-data-hub/source-backups/20261019-personal-info-layout/{before.json,journal.json,after.json}。
 - 主树原有 tracked diff 摘要及 Plaud 原工作区状态均未变化。主线合并仍以主树干净和归属检查为前提；原 Plaud 定时作业不恢复。
+
+## 完成检查点
+
+- 独立仓库已推送：personal-records main `be0d089c45d01859440bf464df1073e2cc80dbab`，plaud-archive main `50087a389279ddae13b7907b5e2e4729c476193f`。两者均为原 main 的后续提交，导出树与新聚合目录完全一致，平台目录固定到对应新提交。
+- 已实际读取 Lingjun 作业 58d4a4c46d49：enabled=false、state=paused；原运行包装未切换。Plaud systemd 仍 linked（未 enable）。
+- 宿主启动检查已执行；仍有此前的 tailscale 缺失及 ai-resource-center / personal-crm 未登记差异，本次未新增启动差异。
+- 主工作区尚有并行修改；两个 Code/personal-info 源码入口暂用符号链接，指向本工作区的真实迁移目录。未来集成时先核对并移除这两个链接，再合入同名真实目录，保留数据、凭据和既有服务身份；不要删除本工作区，生产 personal-review 仍有其他路径引用。
