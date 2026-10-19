@@ -18,12 +18,12 @@ Hermes deterministic task code and report modules are deployed to
 `/home/yuwk/cron/model`. `retired/` preserves historical container wrappers.
 Hermes still owns task scheduling and delivery state.
 
-PLAUD three-source v3 uses `model/plaud-daily.sh`, forwarded by the Lingjun
-profile's trusted `scripts/plaud-daily.sh`. Its no-agent schedule is
-`*/30 0-7 * * *` (Asia/Taipei): synchronize and prepare all previous-day
-recordings, then at/after 07:30 send one complete, validated daily Markdown
-to CPA Grok. App settings, credentials and isolated business state remain in
-the PLAUD app; no keys or runtime job records belong in this repository.
+Plaud Archive's wrapper is `model/plaud-daily.sh`, forwarded by Lingjun's trusted
+`scripts/plaud-daily.sh`. It reads the private `PLAUD_PYTHON` and `PLAUD_CONFIG`
+paths in `/home/yuwk/cron/env/plaud-archive.env`; business code lives in
+`personal-info/plaud-archive/`. The existing job stays paused until archive
+acceptance and an explicit scheduler cutover; deploying source does not resume it.
+See [host entry](plaud-archive/README.md) for the native service.
 
 `/etc/systemd/system` contains symlinks only. Custom host scheduling uses
 systemd timers; user crontabs are intentionally kept empty unless an
@@ -161,12 +161,14 @@ cache and never launches interactive authorization. On this host,
 read-only bridge and email container, without copying account credentials or
 OAuth caches. Both clients normalize MCP 1.x/2.x result fields.
 
-Health cron readers use `health_api_url` and an existing viewer token file when
-configured, including the Personal Review health source. They paginate bounded
-time windows and report failures rather than falling back to stale SQLite.
-Legacy SQLite remains supported on hosts without a configured hub. The token
-stays outside this repository; this NAS requires group `hermes`, mode 0640 for
-the existing viewer token because named ACL alone did not allow runtime reads.
+Health and financial report consumers use Personal Records directly, configured
+with `records_api_url` and `records_token_file` in the private Hermes config.
+Install the `personal-records` base wheel in the consumer environment (no server
+extra). Health freshness reads `/api/v1/sources`; reports request business date
+summaries. Missing credentials or HTTP errors are explicit failures. Health
+SQLite and bill JSONL/daily files have left the runtime chain.
+`daily_health_summary.py --start-date YYYY-MM-DD --end-date YYYY-MM-DD`
+returns inclusive-date API results. The read token stays outside this repository.
 Set `ha_url` and `npm_health_url` to the actual listener addresses in private
 configuration. The probes bypass outbound proxies for these local services.
 Set `moviepilot_api_base` to MoviePilot's actual private IP listener, including
