@@ -55,15 +55,74 @@ class Controls:
 
 
 class DriverTests(unittest.IsolatedAsyncioTestCase):
-    async def test_forbidden_product_assets_stop_before_a_static_button_can_be_used(self):
+    async def test_denied_assets_report_when_bounded_business_observation_stays_unknown(self):
         driver = BrowserDriver(None, None, None)
         driver.observe_asset_response(SimpleNamespace(
             url="https://store.epicgames.com/egs-v2/assets/fixture.js", status=403))
-        driver._observe_once = AsyncMock(return_value=None)
-        with self.assertRaises(Paused) as raised:
-            await driver.observe("product", timeout=1)
+        driver._observe_once = AsyncMock(return_value=SimpleNamespace(kind="unknown"))
+        driver._purchase_controls = lambda _: SimpleNamespace(first=SimpleNamespace(wait_for=AsyncMock()))
+        with patch("platforms.epic.browser_driver.asyncio.sleep", new=AsyncMock()), self.assertRaises(Paused) as raised:
+            await driver.observe("product", timeout=10)
         self.assertEqual(raised.exception.reason, "store_assets_access_denied")
-        driver._observe_once.assert_not_awaited()
+        self.assertEqual(driver._observe_once.await_count, 8)
+
+    async def test_optional_asset_denial_cannot_mask_working_controls_or_a_real_obstacle(self):
+        for state in [None, SimpleNamespace(kind="login"), SimpleNamespace(kind="captcha")]:
+            driver = BrowserDriver(None, None, None)
+            driver.assets_denied = True
+            driver._observe_once = AsyncMock(return_value=state)
+            self.assertIs(await driver.observe("product", timeout=1), state)
+            driver._observe_once.assert_awaited_once()
+
+    async def test_store_login_transition_uses_only_the_explicit_sso_binding(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/login?redirectTo=fixture",
+            locator=lambda _: object(), get_by_role=lambda *a, **kw: object())
+        callback = AsyncMock()
+        driver = BrowserDriver(None, page, None, sso_login=callback)
+        driver._text = AsyncMock(return_value="Loading")
+        driver._visible = AsyncMock(return_value=False)
+        driver._ready = AsyncMock(return_value=False)
+        obstacle = await driver._observe_container(page, "checkout", timeout=1)
+        self.assertEqual(obstacle.kind, "store_sso")
+        self.assertIs(obstacle.payload["_container"], page)
+        await driver.recover(obstacle, timeout=1)
+        callback.assert_awaited_once_with(obstacle, timeout=1)
+
+    async def test_navigation_timeout_accepts_the_canonical_page_with_its_navigation_component(self):
+        try:
+            from playwright.async_api import TimeoutError as BrowserTimeout
+        except ImportError:
+            self.skipTest("optional browser dependency unavailable")
+        page = SimpleNamespace(url="https://store.epicgames.com/free-games",
+            goto=AsyncMock(side_effect=BrowserTimeout("fixture")),
+            locator=lambda _: SimpleNamespace(count=AsyncMock(return_value=1)))
+        driver = BrowserDriver(None, page, None)
+        await driver._goto("https://store.epicgames.com/en-US/free-games", 1)
+        page.goto.assert_awaited_once()
+        page.url = "https://store.epicgames.com/p/unrelated"
+        with self.assertRaises(BrowserTimeout):
+            await driver._goto("https://store.epicgames.com/en-US/free-games", 1)
+        page.url = "about:blank"
+        with self.assertRaises(BrowserTimeout):
+            await driver._goto("https://store.epicgames.com/en-US/free-games", 1)
+
+    async def test_navigation_does_not_hide_other_browser_errors_behind_existing_dom(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/free-games",
+            goto=AsyncMock(side_effect=RuntimeError("protocol failure")),
+            locator=lambda _: SimpleNamespace(count=AsyncMock(return_value=1)))
+        with self.assertRaises(RuntimeError):
+            await BrowserDriver(None, page, None)._goto(page.url, 1)
+
+    async def test_denied_optional_assets_do_not_replace_current_ownership_markers(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/p/fixture")
+        driver = BrowserDriver(None, page, None)
+        driver.assets_denied = True
+        driver._purchase_controls = lambda _: SimpleNamespace(first=SimpleNamespace(wait_for=AsyncMock()))
+        button = object()
+        driver._purchase_button = AsyncMock(return_value=button)
+        for text, expected in [("In Library", "owned"), ("Get", "not_owned")]:
+            driver._purchase_text = AsyncMock(return_value=text)
+            self.assertEqual(await driver._ownership(page, SimpleNamespace(url=page.url), timeout=1), expected)
 
     async def test_unrelated_tracking_failure_does_not_block_the_product(self):
         driver = BrowserDriver(None, None, None)

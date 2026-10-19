@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 import shutil
 import re
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urlencode
 
 from common.model import atomic_json
 from .browser_driver import BrowserDriver, STORE, clean_target
@@ -88,6 +88,25 @@ class Login:
         self.driver, self.config = driver, config
         self.acted = set()
         self.challenge = None
+
+    async def sso(self, obstacle, *, timeout):
+        page, offer = self.driver.page, self.driver.offer
+        if (obstacle.phase != "checkout" or (obstacle.payload or {}).get("_container") is not page
+                or offer is None or offer.id not in self.driver.prepared
+                or clean_target(page.url) != "https://store.epicgames.com/login"
+                or obstacle.target != clean_target(page.url)):
+            raise Paused("login_not_confirmed")
+        key = ("sso", offer.id)
+        if key in self.acted:
+            raise Paused("login_not_confirmed")
+        self.acted.add(key)
+        # The store login transition retains the pending purchase in its URL.
+        # Return there after official authentication, without replaying Get or
+        # an order submission. Ordinary login/challenge handlers run afterward.
+        target = "https://www.epicgames.com/id/login?" + urlencode({
+            "lang": "en-US", "noHostRedirect": "true", "redirectUrl": page.url})
+        await self.driver._goto(target, timeout)
+        await page.wait_for_timeout(3000)
 
     async def captcha(self, obstacle, *, timeout):
         page = self.driver.page
@@ -189,14 +208,15 @@ async def execute(context, config, state_dir):
             await route.continue_(headers=headers)
         await browser.route("**/hsw.js*", identity_encoding)
         page = browser.pages[0] if browser.pages else await browser.new_page()
-        await page.goto(STORE + "/free-games", wait_until="domcontentloaded", timeout=45000)
-        await page.wait_for_timeout(5000)
         driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
         browser.on("response", driver.observe_asset_response)
+        await driver._goto(STORE + "/free-games", 45)
+        await page.wait_for_timeout(5000)
         if await page.locator('egs-navigation[isloggedin="true"]').count() == 0:
-            await page.goto(LOGIN, wait_until="domcontentloaded", timeout=45000)
+            await driver._goto(LOGIN, 45)
             await page.wait_for_timeout(3000)
         auth = Login(driver, config)
+        driver.sso_login = auth.sso
         workflow = ClaimWorkflow(driver, context, deadline=time.monotonic() + 1100,
             expires_at=context["business_date"] + "T23:59:59+08:00",
             automatic_kinds={"login", "captcha", "account_link"},
