@@ -246,8 +246,9 @@ async def execute(context, config, state_dir):
     if not cache.is_absolute() or not (cache / "camoufox-bin").is_file():
         raise Paused("browser_cache_unavailable")
     pkgman.INSTALL_DIR = cache
+    # Firefox must expose Turnstile's cross-origin frame for the normal click.
     options = dict(persistent_context=True, user_data_dir=str(Path(state_dir) / "browser"),
-                   headless=True, humanize=0.2, locale="en-US",
+                   headless=True, disable_coop=True, humanize=0.2, locale="en-US",
                    firefox_user_prefs={"network.dns.disableIPv6": True, "network.trr.mode": 5})
     if config.get("proxy"):
         options["proxy"] = {"server": config["proxy"]}
