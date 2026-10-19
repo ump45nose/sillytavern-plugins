@@ -457,7 +457,10 @@ class BrowserDriver:
         raise Paused("recovery_binding_pending")
 
     async def inventory(self, *, timeout):
-        await self._goto(STORE + "/free-games", timeout)
+        # Session settlement already brought the public entry to this page.
+        # Keep that session instead of restarting the storefront before fetch.
+        if not _same_target(self.page.url, STORE + "/free-games"):
+            await self._goto(STORE + "/free-games", timeout)
         raw = await self.page.evaluate(
             """async ({url,max,ms})=>{
               const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),ms);
