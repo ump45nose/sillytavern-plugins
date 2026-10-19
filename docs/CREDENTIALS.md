@@ -22,4 +22,4 @@
 
 ## 其他平台
 
-SMZDM/V2EX 使用各自 README 的 Cookie 变量。Rewards 使用私有 storage-state，必要时由已有会话获取 APP token。Epic 使用私有配置及账号 profile。没有把凭据统一放进共享数据库，也不新增凭据服务。
+SMZDM/V2EX 使用各自 README 的 Cookie 变量。Rewards 使用私有 storage-state，必要时由已有会话获取 APP token。Epic 使用私有配置及账号 profile。Telegram 使用私有 `TELEGRAM_CONFIG`（只有机器人、命令和回复关键词）和每账号的 Web K 浏览器 profile；不使用 `api_id` / `api_hash` 或 session 字符串。没有把凭据统一放进共享数据库，也不新增凭据服务。

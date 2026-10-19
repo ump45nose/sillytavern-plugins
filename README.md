@@ -21,7 +21,7 @@
 
 ## 结构
 
-2026-10-19 新增 [GLaDOS](platforms/glados/README.md)、[影视飓风](platforms/yingshijufeng/README.md)、[Olé](platforms/ole/README.md)、[雨云](platforms/rainyun/README.md)、[WorkBuddy 双版](platforms/workbuddy/README.md)、[WeTalk](platforms/wetalk/README.md) 的独立执行器。[网易严选](platforms/yanxuan/README.md) 目前只有积分只读查询，尚未实现当前活动签到，不能为它注册签到任务。微信两平台共用 [YYB 取码服务](docs/YYB_LOGIN.md)。配置、真实账号验收和仍需处理的事项见 [新增平台验收记录](docs/NEW_PLATFORM_ACCEPTANCE_2026-10-19.md)；代码或离线测试通过不代表已经签到。
+2026-10-19 新增 [GLaDOS](platforms/glados/README.md)、[影视飓风](platforms/yingshijufeng/README.md)、[Olé](platforms/ole/README.md)、[雨云](platforms/rainyun/README.md)、[WorkBuddy 双版](platforms/workbuddy/README.md)、[WeTalk](platforms/wetalk/README.md) 的独立执行器。[Telegram 机器人签到](platforms/telegram/README.md) 通过账号自己的 Telegram Web 会话按 `--account` 给配置的机器人发送签到命令，支持多账号，尚待用户扫码登录后真实验收。[网易严选](platforms/yanxuan/README.md) 目前只有积分只读查询，尚未实现当前活动签到，不能为它注册签到任务。微信两平台共用 [YYB 取码服务](docs/YYB_LOGIN.md)。配置、真实账号验收和仍需处理的事项见 [新增平台验收记录](docs/NEW_PLATFORM_ACCEPTANCE_2026-10-19.md)；代码或离线测试通过不代表已经签到。
 
 ```text
 common/                小型公共库；没有平台名分支或常驻进程

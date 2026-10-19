@@ -1,0 +1,32 @@
+{
+  "spacing_seconds": [5, 20],
+  "accounts": {
+    "tg-ai": {
+      "bots": [
+        {
+          "id": "example-checkin",
+          "username": "ExampleCheckinBot",
+          "command": "/checkin",
+          "success": ["签到成功"],
+          "already": ["已签到", "already checked in"],
+          "failure": ["签到失败"],
+          "reply_timeout_seconds": 30
+        }
+      ]
+    },
+    "tg-nsfw": {
+      "spacing_seconds": [10, 30],
+      "bots": [
+        {
+          "id": "example-button",
+          "username": "ExampleMenuBot",
+          "command": "/start",
+          "button": {"text": "签到"},
+          "success": ["签到成功"],
+          "already": ["今日已签到"],
+          "enabled": true
+        }
+      ]
+    }
+  }
+}
