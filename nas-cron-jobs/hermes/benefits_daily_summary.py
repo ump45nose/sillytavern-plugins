@@ -20,6 +20,9 @@ REASONS = {
     "private_file_unreadable": "Steam 私有配置未准备完成",
     "discovery_coverage_incomplete": "自动发现覆盖不完整",
     "discovery_candidates_require_review": "候选证据需要核对",
+    "cloudflare_browser_signature_banned": "Cloudflare 拦截当前浏览器签名",
+    "cloudflare_challenge": "Cloudflare 要求浏览器验证",
+    "request_parameters_invalid": "需要有效的客户端请求参数",
 }
 
 
@@ -96,6 +99,19 @@ def describe(platform, row):
         parts.append("本次余额变动 " + fmt(metrics.get("balance", {}).get("delta")) + " 分")
     elif platform == "v2ex":
         parts.append("连续 " + count("streak") + " 天")
+    elif platform in {"glados", "yingshijufeng", "ole", "rainyun", "wetalk", "workbuddy"}:
+        if business.get("activity") == "complete":
+            parts.append("活跃请求已完成")
+        if business.get("reward") == "unknown":
+            parts.append("奖励未确认")
+        elif business.get("reward") == "complete" and metrics.get("reward", {}).get("current") is not None:
+            parts.append("奖励 " + count("reward") + "分")
+        if "balance" in metrics:
+            balance = metrics["balance"]
+            unit = {"points": "分", "coins": "Coins"}.get(balance.get("unit"), "")
+            parts.append("余额 " + fmt(balance.get("current")) + unit)
+            if balance.get("delta") is not None:
+                parts.append("本次余额变动 " + fmt(balance["delta"]) + unit)
     return status + ("（" + "；".join(parts) + "）" if parts else "")
 
 
@@ -103,12 +119,13 @@ def render(day):
     cfg = bounded(CONFIG)
     root = Path(cfg["runtime_root"]) / "delivery"
     lines = [f"每日签到结果 {day}"]
-    for platform, task in cfg["tasks"].items():
+    for task_id, task in cfg["tasks"].items():
+        platform = task.get("platform", task_id)
         if task.get("enabled", True) is False:
             lines.append(task["label"] + "：已停用")
             continue
         try:
-            row = bounded(root / (platform + ".json"))
+            row = bounded(root / (task_id + ".json"))
             if (row.get("business_date") != day or row.get("platform") != platform
                     or row.get("account") != task["account"]):
                 row = None

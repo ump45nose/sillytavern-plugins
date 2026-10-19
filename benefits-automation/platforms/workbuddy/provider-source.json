@@ -1,0 +1,41 @@
+{
+  "sources": [
+    {
+      "repository": "https://github.com/autumnsentiment/workbuddy-helper",
+      "commit": "11808853e53ae195a329182f5655baa1783de64c",
+      "files": {
+        "internal/client/client.go": "a09e6f7ce4f6bea62e8a5d7eb6a8b58667863b6d57ba84904974e5a33b2f2556"
+      },
+      "license": "MIT",
+      "usage": "Narrow Python protocol port: official login/refresh, edition-specific headers and origins, international conversation/chat/growthEvent and points pagination. Full upstream application stays outside this repository."
+    },
+    {
+      "repository": "https://github.com/Cat-zaizai/ZaiZaiCat-Checkin",
+      "commit": "d6a334e43d0a0c8f41b039cd410be33593efc35b",
+      "files": {
+        "script/workbuddy/api.py": "47505fe28c5de8c621fa093f75dd584b51dfca27f0a7b8608b6e2f27534c521a"
+      },
+      "usage": "Protocol and response-field comparison only; no bundled upstream code."
+    },
+    {
+      "provider": "Official WorkBuddy web login frontend",
+      "retrieved": "2026-10-19",
+      "assets": {
+        "https://assets.workbuddy.cn/web/login/b9a69077f024982f020f550f20a609c6171c412d/assets/index-CS69Y5ea.js": "f36f20b22c25a62f1ebd2e1f4b3671416ae7ab2a24468d13a9a3d7c95e6c87ef",
+        "https://assets.workbuddy.cn/web/login/b9a69077f024982f020f550f20a609c6171c412d/assets/index-CfrteQ7j.js": "833cd3b53502579b3aeaac646344fd2d4e1ca446f66abe9edbecc382fb020509",
+        "https://download.codebuddy.ai/web/login/ca3767016a37e69bd2a888a0b760a58f84b3dbec/assets/index-Dgih-XKe.js": "83f14ac01821d469e6912975f585f6bb4064314a4827ac2252d5ea159341a5e0",
+        "https://download.codebuddy.ai/web/login/ca3767016a37e69bd2a888a0b760a58f84b3dbec/assets/index-BF0V4T5b.js": "46056d275cf1d5c9c237110ec9fcfe2e277fafe441f44ce8482ac8c67db2558f"
+      },
+      "usage": "Protocol observation only: same-origin SSO, personal-account web grant and account switch. No frontend code copied. Independently issued bearer verified through the official plugin account endpoint without cookies."
+    }
+  ],
+  "changes": [
+    "Use the existing one-account Task runner and schema v1; no GUI, background scheduler, notification SDK, DNS fallback or proxy selection.",
+    "Bind private sessions and daily intent to edition and UID; save rotated tokens before further requests.",
+    "Reconcile uncertain check-in writes by reads and never replay an uncertain international activity request.",
+    "Use the authorized fixed international model hy3 and prompt only print:1.",
+    "Require complete usable chat responses and keep request confirmation separate from unverified reward attribution.",
+    "Treat missing status/point fields as unknown, permit the legacy status route only on 404, and reject incomplete points pagination.",
+    "Optional one-time CookieCloud bootstrap reads only the edition-specific web domain, follows bounded same-origin SSO, requires one enabled personal account, and verifies the new bearer identity without browser cookies."
+  ]
+}

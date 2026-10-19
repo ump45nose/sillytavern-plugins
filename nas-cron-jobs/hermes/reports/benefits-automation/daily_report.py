@@ -50,6 +50,17 @@ REASONS = {
     "private_file_permissions_or_size": "Steam 私有配置权限不符合要求",
     "discovery_coverage_incomplete": "自动发现覆盖不完整",
     "discovery_candidates_require_review": "候选证据需要核对",
+    "wechat_code_authentication_invalid": "微信取码服务认证失效",
+    "wechat_code_account_unavailable": "微信账号需要检查或重新扫码",
+    "wechat_code_service_unavailable": "微信取码服务或账号不可用",
+    "wechat_code_connection_failed": "无法连接微信取码服务",
+    "wechat_code_timeout": "微信取码服务超时",
+    "activity_sent_reward_unconfirmed": "国际版活跃请求已发送，奖励未确认",
+    "automated_checkin_rejected": "平台拒绝自动签到",
+    "device_mismatch": "登录设备信息不匹配",
+    "cloudflare_browser_signature_banned": "Cloudflare 拦截当前浏览器签名",
+    "cloudflare_challenge": "Cloudflare 要求浏览器验证",
+    "request_parameters_invalid": "需要有效的客户端请求参数",
 }
 TASK_LABELS = {
     "checkin": "签到",
@@ -66,6 +77,10 @@ TASK_LABELS = {
     "app_promotions": "APP活动",
     "daily_streaks": "连续打卡",
     "desktop_app_weekly": "桌面APP周任务",
+    "balance": "余额查询",
+    "points": "积分查询",
+    "points_query": "积分查询",
+    "activity": "活跃请求",
 }
 STATE_LABELS = {
     "unknown": "未确认",
@@ -181,26 +196,37 @@ def build_report(day: str | None = None) -> str:
     # Disabled tasks retain their old results but no longer produce missing or
     # failed-result alerts. Unreadable configuration must still fail visibly.
     deployment_path = DELIVERY_ROOT.parents[1] / "benefits-deployment.json"
-    disabled = set()
+    tasks = {name: {"label": label} for name, label in TASKS.items()}
     if deployment_path.exists():
         with deployment_path.open("rb") as stream:
             raw = stream.read(MAX_JSON_BYTES + 1)
         if len(raw) > MAX_JSON_BYTES:
             raise ValueError("benefits deployment configuration exceeds read limit")
         config = json.loads(raw)
-        disabled = {name for name, task in config["tasks"].items()
-                    if task.get("enabled", True) is False}
-    for platform, label in TASKS.items():
-        if platform in disabled:
+        tasks = config["tasks"]
+    shared_wechat: dict[str, list[str]] = {}
+    for task_id, task in tasks.items():
+        if task.get("enabled", True) is False:
             continue
-        row, read_error = load_result(platform)
+        platform = task.get("platform", task_id)
+        label = task["label"]
+        row, read_error = load_result(task_id)
         if read_error:
             problems.append((label, read_error))
             continue
         assert row is not None
         issue = issue_for(platform, row, report_day)
+        if task.get("account") and row.get("account") != task["account"]:
+            issue = "结果账号与配置不一致"
         if issue:
-            problems.append((label, issue))
+            if (platform in {"ole", "yingshijufeng"}
+                    and row.get("reason", "").startswith("wechat_code_")
+                    and issue == REASONS.get(row.get("reason"))):
+                shared_wechat.setdefault(issue, []).append(label)
+            else:
+                problems.append((label, issue))
+    for issue, labels in shared_wechat.items():
+        problems.append(("微信取码服务", issue + "（影响：" + "、".join(labels) + "）"))
     if not problems:
         return ""
     lines = ["**福利任务异常**"]

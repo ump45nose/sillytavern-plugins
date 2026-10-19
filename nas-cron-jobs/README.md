@@ -204,6 +204,15 @@ cycle in the morning and handles the reset cycle in the afternoon. Receipts
 include the platform task date and name unfinished daily streaks.
 unconfirmed login and cart checks remain visible with their actual meaning.
 Benefits exception reports show only each affected platform and its problem.
+The verified GLaDOS, Yingshijufeng, Olé, Rainyun and WorkBuddy CN/international
+jobs use this same path. Each attempt keeps its structured record at
+`benefits-runtime/runs/<run_id>/result.json` and updates its independent delivery
+receipt, including launcher failures and lock contention. Their no-agent jobs
+use local delivery, so successful operations remain in execution history and
+do not produce success notifications. Unknown business outcomes, including an
+unconfirmed international WorkBuddy reward, remain visible in the exception
+report. WeTalk and Yanxuan are not scheduled until credentials and current
+interfaces are accepted.
 Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on
 each invocation; previously sent messages retain the snapshot from their send
 time. Successful repair runs therefore remove the platform from the next

@@ -34,3 +34,10 @@ Epic `native.py`、`model_bridge.py` 现在包含参考 Ronchy2000/epic-freebies
 Rewards `promotions.cjs`、`app_auth.cjs` 以及 `extra.cjs` 的探索激活部分，窄范围改造自 TheNetsky/Microsoft-Rewards-Script v4.3.2 的 URL 活动、积分领取、OAuth 与 SearchOnBing 协议，沿用 GPL-3.0-or-later，完整许可在 `platforms/rewards/vendor/rewards-parser/LICENSE`。本段取代前述“Epic 上游未复制”和仅 parser 被分发的旧检查点描述。
 
 公共 Task 契约、CookieCloud 读取器为本项目新增代码；可选 cryptography 及传递依赖的原许可随安装包保留。CookieCloud AES 格式的互操作不改变服务本身或其许可。
+
+## 2026-10-19 新平台
+
+- WorkBuddy 的登录、刷新及国际活跃协议窄范围移植自 MIT 的 workbuddy-helper，原许可保留在 `platforms/workbuddy/LICENSE.provider`；对照的其他来源及固定提交在平台 `provider-source.json`。
+- GLaDOS、影视飓风、Olé、WeTalk 根据公开协议独立实现，不复制未确认许可的完整第三方脚本；各平台 `provider-source.json` 保存精确来源、hash、证据和使用边界。网易严选只依据官方可观察接口实现积分查询，未复制官方前端资源或旧签到脚本。
+- 雨云上游未发现 LICENSE，完整源码保持在聚合 Git 外；运行时只加载按 hash 校验的 ICR 算法与 stealth 文件。Selenium、OpenCV、Chrome for Testing 和 ChromeDriver 的原许可及 notices 随外部安装保留，专用依赖锁不授予再分发权。
+- YYB 客户端为独立协议实现；YYB-Go-Enhanced 服务固定镜像和源码版本见 `docs/YYB_LOGIN.md`。服务镜像、完整上游和登录数据库不纳入本仓库，也不将其未知许可声明为 MIT。

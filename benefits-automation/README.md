@@ -1,6 +1,6 @@
 # benefits-automation
 
-七个平台的 Linux 一次性脚本集合。每个平台有独立入口和业务模块，按需使用 `common/` 的运行、锁、结果和凭据能力。HTTP 签到不加载浏览器库；浏览器任务串行，用完即关闭。
+各平台的 Linux 一次性脚本集合。每个平台有独立入口和业务模块，按需使用 `common/` 的运行、锁、结果和凭据能力。HTTP 签到不加载浏览器库；浏览器任务串行，用完即关闭。
 
 **Hermes 负责调度、日报汇总和通知。** 本仓库的边界是执行平台操作、输出 JSON 并保存执行结果，不包含 Hermes cron、Telegram 推送、消息队列、浏览器池或容器部署要求。
 
@@ -21,6 +21,8 @@
 
 ## 结构
 
+2026-10-19 新增 [GLaDOS](platforms/glados/README.md)、[影视飓风](platforms/yingshijufeng/README.md)、[Olé](platforms/ole/README.md)、[雨云](platforms/rainyun/README.md)、[WorkBuddy 双版](platforms/workbuddy/README.md)、[WeTalk](platforms/wetalk/README.md) 的独立执行器。[网易严选](platforms/yanxuan/README.md) 目前只有积分只读查询，尚未实现当前活动签到，不能为它注册签到任务。微信两平台共用 [YYB 取码服务](docs/YYB_LOGIN.md)。配置、真实账号验收和仍需处理的事项见 [新增平台验收记录](docs/NEW_PLATFORM_ACCEPTANCE_2026-10-19.md)；代码或离线测试通过不代表已经签到。
+
 ```text
 common/                小型公共库；没有平台名分支或常驻进程
 platforms/<platform>/  run.py、业务模块、平台 README、各自依赖
@@ -40,7 +42,7 @@ python3 platforms/smzdm/run.py --runtime-root /absolute/private/benefits-data
 python3 platforms/smzdm/run.py --runtime-root /absolute/private/benefits-data --account account1 --execute
 ```
 
-不加 `--execute` 不访问平台，只验证入口/目录/锁并报告 `execution_not_requested`。凭据通过平台环境变量或仓库外私有配置提供，禁止放命令行、源码或 Git。可选 `COOKIECLOUD_CONFIG` 是一次性读取已有 CookieCloud 的配置文件路径，目前接入 Aliyun、Laowang；不增加同步服务。
+不加 `--execute` 不访问平台，只验证入口/目录/锁并报告 `execution_not_requested`。凭据通过平台环境变量或仓库外私有配置提供，禁止放命令行、源码或 Git。可选 `COOKIECLOUD_CONFIG` 是一次性读取已有 CookieCloud 的配置文件路径，已接入 Aliyun、Laowang、GLaDOS；不增加同步服务。
 
 所有入口在同一主机使用同一个绝对 `--runtime-root`，共享浏览器互斥锁。默认业务日期时区为 Asia/Shanghai，可用 `--timezone` 修改；平台任务资格和积分按其当前返回值判断，不强行执行其他地区下一天的活动。
 
