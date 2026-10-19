@@ -68,8 +68,8 @@
   {
     "name": "personal-records",
     "path": "personal-records",
-    "remote_url": null,
-    "branch": "codex/personal-records-20261016"
+    "remote_url": "https://github.com/ump45nose/personal-records.git",
+    "branch": "main"
   },
   {
     "name": "sillytavern-workbench",

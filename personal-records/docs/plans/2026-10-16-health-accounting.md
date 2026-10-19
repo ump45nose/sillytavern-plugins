@@ -84,3 +84,7 @@ SQLite WAL、短事务；接收状态和业务写入同事务成功后才 ACK。
 
 
 修正后 19 项核心测试通过；已单独更新 personal-records 目标镜像 `sleep-awake-fc474b0`（sha256:f6857d6f24168730ad11f5eea50222276f73b60ea919c685db2eb29cf8be236e），密钥、业务数据库、OAuth 状态和反代配置均沿用既有对象。公网重新核对 17 日睡眠 39,794 秒、18 日 22,350 秒，扣除了重叠清醒时间；生产快照上的 6 个 MCP 读取操作再次与公网 HTTP 完全一致，完整性及自然身份去重通过。此次按用户要求导出健康日表与账单表的业务数据样例（JSON 列展开），导出文件置于 Git 外，不建设自动镜像或归档任务。
+
+## 2026-10-19 独立 GitHub 仓库
+
+用户要求新建并推送独立仓库，定位为个人信息统一 Webhook 收集端。独立仓库 https://github.com/ump45nose/personal-records，默认分支 main；沿用产品名 personal-records，当前只实现 Health / AutoAccounting 两种来源，不扩展未定义的业务适配器。默认创建私有仓库，Topic 使用 GitHub 规范名称 personal-info。仅拆分 personal-records 子目录提交，生产数据库、凭据、导出样例及聚合仓库其他项目不随推送上传。
