@@ -238,6 +238,9 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
 // QR login in the persistent profile; the QR image refreshes in a 0600 file in
 // the private run directory and is removed when login ends. A two-step
 // password is read from the terminal without echo and never stored.
+// Long enough for the QR to be relayed to another device and scanned.
+const LOGIN_WAIT_MS = 600000;
+
 async function login(firefox, {profile, proxy, captureFile, terminal}) {
   let attempts = 0;
   const outcome = await terminalLogin(firefox, {profile, proxy, headless: true, create: true,
@@ -247,7 +250,7 @@ async function login(firefox, {profile, proxy, captureFile, terminal}) {
       "Press Enter to stop waiting.",
     captureFile,
     terminal,
-    deadlineMs: 240000,
+    deadlineMs: LOGIN_WAIT_MS,
     capture: async (page) => {
       if (!(await web.snapshot(page)).qr) return null;
       return page.locator(web.SELECTORS.qrCanvas).locator("visible=true").first()

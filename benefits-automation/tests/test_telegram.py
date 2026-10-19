@@ -36,6 +36,19 @@ class TelegramEntrypointTests(unittest.TestCase):
             self.assertEqual(json.loads(r.stdout)["reason"], "execution_not_requested")
             self.assertFalse((Path(root) / "results").exists())
 
+    def test_login_timeout_covers_qr_wait(self):
+        import argparse
+        from unittest import mock
+        from platforms.telegram.run import TASK
+        for given, expected in ((600.0, 900.0), (1200.0, 1200.0)):
+            args = argparse.Namespace(login=True, status=False, timeout=given)
+            with mock.patch.object(sys, "stdin", mock.Mock(isatty=lambda: True)):
+                TASK.validate(argparse.ArgumentParser(), args)
+            self.assertEqual(args.timeout, expected)
+        args = argparse.Namespace(login=False, status=True, timeout=600.0)
+        TASK.validate(argparse.ArgumentParser(), args)
+        self.assertEqual(args.timeout, 600.0)
+
     def test_login_requires_terminal_and_excludes_status(self):
         with tempfile.TemporaryDirectory() as root:
             for args in (("--login",), ("--login", "--status")):

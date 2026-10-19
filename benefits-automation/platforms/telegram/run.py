@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 
 DIRECTORY = Path(__file__).resolve().parent
+# The adapter waits up to 600 s for the QR scan; leave room for browser start and close.
+LOGIN_TIMEOUT = 900
 sys.path.insert(0, str(DIRECTORY.parents[1]))
 from common.runner import run
 from common.task import Task
@@ -15,6 +17,8 @@ def configure(parser):
 def validate(parser, args):
     if args.login and (args.status or not sys.stdin.isatty()):
         parser.error("--login requires an interactive terminal and cannot combine with --status")
+    if args.login:
+        args.timeout = max(args.timeout, LOGIN_TIMEOUT)
 
 def command(args):
     return [args.node, str(DIRECTORY / "adapter.cjs"),
