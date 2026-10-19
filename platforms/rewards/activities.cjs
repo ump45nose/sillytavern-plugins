@@ -62,12 +62,20 @@ async function section(page) {
   await page.waitForTimeout(1000);
   return control.locator("xpath=ancestor::section[1]");
 }
-function outcome(complete, reason, observed = null) {
+async function cards(page) {
+  const panel = await section(page);
+  return panel.locator("a").evaluateAll(xs => xs.slice(0, 100).map(x => ({
+    title: x.innerText.split("\n")[0].trim().slice(0, 300),
+    text: x.innerText.slice(0, 1000), href: x.href,
+  })).filter(x => x.title));
+}
+function outcome(complete, reason, observed = null, items = [], cycle) {
   return {
     execution: complete ? "ok" : "failed",
     reason,
     business: { daily: complete ? "complete" : "unknown" },
-    details: {metrics: {daily: metric("count", observed?.current, observed?.max)}, items: []},
+    details: {metrics: {daily: metric("count", observed?.current, observed?.max)}, items},
+    ...(cycle ? {cycle} : {}),
   };
 }
 async function run(chromium, storageState, options = {}, deps = common) {
@@ -85,25 +93,23 @@ async function run(chromium, storageState, options = {}, deps = common) {
         await deps.guard(page);
         let after = await progress(page);
         if (!after) return outcome(false, "daily_progress_unavailable");
-        if (after.current >= after.max)
-          return outcome(true, "daily_already_complete", after);
-        common.assertAccountAvailable(
+        const raw = common.assertAccountAvailable(
           await deps.readFlyout(context),
           options.region,
         );
-        const panel = await section(page);
-        const cards = await panel.locator("a").evaluateAll((xs) =>
-          xs
-            .slice(0, 100)
-            .map((x) => ({
-              title: x.innerText.split("\n")[0].trim().slice(0, 300),
-              text: x.innerText.slice(0, 1000),
-              href: x.href,
-            }))
-            .filter((x) => x.title && !/已完成|Completed/i.test(x.text)),
-        );
-        // Never let malformed task counts turn into an unbounded work loop.
-        for (const card of cards.slice(0, Math.min(20, Math.ceil(after.max)))) {
+        const visible = await cards(page);
+        const current = require("./daily_cycle.cjs").inventory(raw, visible);
+        const journal = options.journalForCycle?.(current.date);
+        for (const row of current.rows)
+          if (row.complete) await journal?.mark(row.offerId, "confirmed");
+        const items = current.rows.map(row => ({id: row.offerId, name: row.title,
+          status: row.complete ? "complete" : "incomplete", reason: "fresh_readback"}));
+        items.push(require("./daily_cycle.cjs").item(current.date));
+        if (after.current >= after.max)
+          return outcome(true, "daily_already_complete", after, items, current.date);
+        for (const row of current.rows) {
+          const card = visible.find(card => require("./daily_cycle.cjs").matches(row, card));
+          if (row.complete || journal?.has(row.offerId)) continue;
           if (!allowedCard(card.href)) continue;
           await deps.guard(page);
           const currentPanel = await section(page);
@@ -112,7 +118,6 @@ async function run(chromium, storageState, options = {}, deps = common) {
             .filter({ hasText: card.title })
             .first();
           if (/已完成|Completed/i.test(await link.innerText())) continue;
-          const previous = after.current;
           let popup;
           const popupPromise = page
             .waitForEvent("popup", { timeout: 15000 })
@@ -122,6 +127,8 @@ async function run(chromium, storageState, options = {}, deps = common) {
             await deps.guard(page);
             await pacing.pause(page, "action");
             await deps.guard(page);
+            await journal?.mark(row.offerId, "attempted");
+            trace.emit("journal.intent", {capability: "daily", offer_ref: trace.reference(row.offerId), state: "attempted"});
             await trace.span("activity.click", {offer_ref: trace.reference(card.href)}, () =>
               link.click({ timeout: 15000, delay: 120 }));
             popup = await popupPromise;
@@ -139,18 +146,28 @@ async function run(chromium, storageState, options = {}, deps = common) {
               });
               await deps.guard(page);
               after = await progress(page);
-              if (!after) return outcome(false, "daily_progress_unavailable");
-              if (after.current > previous) break;
+              if (!after) return outcome(false, "daily_progress_unavailable", null, items, current.date);
+              const fresh = require("./daily_cycle.cjs").inventory(
+                await deps.readFlyout(context), await cards(page));
+              if (fresh.date !== current.date)
+                return outcome(false, "daily_cycle_changed", after, items, fresh.date);
+              if (fresh.rows.find(x => x.offerId === row.offerId)?.complete === true) {
+                await journal?.mark(row.offerId, "confirmed");
+                Object.assign(items.find(x => x.id === row.offerId), {status: "complete", reason: "fresh_readback"});
+                break;
+              }
               await page.waitForTimeout(5000);
             }
           } finally {
             popup = popup || (await popupPromise);
             if (popup) await popup.close();
           }
+          if (items.find(x => x.id === row.offerId).status !== "complete")
+            Object.assign(items.find(x => x.id === row.offerId), {status: "unknown", reason: "daily_activity_not_credited"});
           if (after.current >= after.max)
-            return outcome(true, "daily_complete", after);
+            return outcome(items.filter(x => x.id !== "rewards_cycle_" + current.date).every(x => x.status === "complete"), "daily_complete", after, items, current.date);
         }
-        return outcome(false, "daily_activity_not_credited", after);
+        return outcome(false, "daily_activity_not_credited", after, items, current.date);
       },
     );
   } catch (error) {
@@ -200,7 +217,9 @@ async function main() {
     output = await run(
       common.dependency(process.env.REWARDS_ROOT),
       common.readState(process.env.BENEFITS_STATE_DIR),
-      { proxy: process.env.REWARDS_PROXY },
+      { proxy: process.env.REWARDS_PROXY,
+        journalForCycle: date => require("./punchcards.cjs").journal(
+          path.join(process.env.BENEFITS_STATE_DIR, "daily-" + date + ".json")) },
     );
   } catch (error) {
     trace.failure("run", error, {capability: "daily"});
@@ -208,6 +227,6 @@ async function main() {
   }
   return publish(output.execution, output.reason, output.business, output.details);
 }
-module.exports = { parseProgress, progress, allowedCard, run, loadState };
+module.exports = { parseProgress, progress, cards, allowedCard, run, loadState };
 if (require.main === module)
   main().catch(() => publish("failed", "adapter_error", { daily: "unknown" }));

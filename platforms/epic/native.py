@@ -100,7 +100,12 @@ class Login:
                     return
         if self.challenge is None:
             self.challenge = build_challenge(page, self.config)
-        await self.challenge.handle(obstacle, timeout=min(timeout, 120))
+        try:
+            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, 120))
+        except TimeoutError:
+            raise Paused("challenge_timeout") from None
+        if outcome.get("solver_signal") != "success":
+            raise Paused("challenge_unconfirmed")
 
     async def login(self, obstacle, *, timeout):
         page = self.driver.page
@@ -141,8 +146,8 @@ class Login:
 
 def build_challenge(page, config):
     """Only the challenge path loads the model SDK/image libraries."""
-    from hcaptcha_challenger.agent import AgentConfig
-    from .challenges import HCaptchaHandler
+    from .challenges import HCaptchaHandler, load_sdk
+    AgentConfig = load_sdk().AgentConfig
     from .model_bridge import install
     from hcaptcha_challenger.tools.internal.providers.gemini import GeminiProvider
     from tenacity import stop_after_attempt
@@ -184,6 +189,7 @@ async def execute(context, config, state_dir):
         await page.goto(STORE + "/free-games", wait_until="domcontentloaded", timeout=45000)
         await page.wait_for_timeout(5000)
         driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
+        browser.on("response", driver.observe_asset_response)
         if await page.locator('egs-navigation[isloggedin="true"]').count() == 0:
             await page.goto(LOGIN, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(3000)

@@ -86,7 +86,7 @@ function chunkPaths(text) {
   }
   return [...found].map(safePath);
 }
-async function discover(page, parser, html, read = request) {
+async function discover(page, parser, html, read = request, {loadedOnly = false} = {}) {
   const queue = chunkPaths(html),
     seen = new Set(),
     ids = {};
@@ -120,8 +120,9 @@ async function discover(page, parser, html, read = request) {
       if (ids[name] && ids[name] !== id) throw Error("ambiguous_action_id");
       ids[name] = id;
     }
-    for (const path of chunkPaths(response.text))
-      if (!seen.has(path) && !queue.includes(path)) queue.push(path);
+    if (!loadedOnly)
+      for (const path of chunkPaths(response.text))
+        if (!seen.has(path) && !queue.includes(path)) queue.push(path);
   }
   return ids;
 }

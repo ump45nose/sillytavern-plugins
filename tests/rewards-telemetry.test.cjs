@@ -108,6 +108,25 @@ test("full report preserves confirmed tasks and app failure while telemetry reta
   assert.ok(f.rows().some(r => r.operation === "stage" && r.event === "error" &&
     r.capability === "app_promotions" && r.reason === "app_authorization_timeout"));
 });
+test("full report retains a private-safe stage failure after the event log fills", async t => {
+  const f = fixture(t), {execute} = require("../platforms/rewards/full.cjs");
+  for (let i = 0; i < 6000; i++) trace.emit("page.request_failed", {route: "other"});
+  assert.equal(f.rows().at(-1).operation, "log.truncated");
+  const secret = "PRIVATE_FAILURE_SENTINEL";
+  const error = Object.assign(new Error("socket failure " + secret), {code: "ECONNRESET"});
+  error.stack = `Error: ${secret}\n    at send (/repo/platforms/rewards/app.cjs:133:30)`;
+  const out = await execute({schema_version: 1, enabled: ["app_daily"]}, {
+    app_daily: async () => {throw error;},
+  }, {snapshot: async () => ({execution: "ok", reason: "fresh_readonly_snapshot", business: {app_daily: "incomplete"}})});
+  const diagnostic = out.report.stages.app_daily.diagnostic;
+  assert.equal(out.execution, "failed");
+  assert.equal(out.business.app_daily, "unknown");
+  assert.equal(diagnostic.failure_class, "network");
+  assert.equal(diagnostic.error_code, "ECONNRESET");
+  assert.equal(diagnostic.source, "app.cjs");
+  assert.equal(diagnostic.line, 133);
+  assert.equal(JSON.stringify(out.report).includes(secret), false);
+});
 test("page cleanup cancellations remain informational while transport failures keep fixed codes", t => {
   const f = fixture(t), handlers = {}, lifecycle = {closing: false};
   trace.instrumentPage({on: (name, handler) => {handlers[name] = handler;}}, lifecycle);

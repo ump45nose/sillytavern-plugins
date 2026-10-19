@@ -9,7 +9,7 @@ from common.task import Task
 
 MODES = {"full": "full.cjs", "activities": "activities.cjs", "snapshot": "snapshot.cjs",
          "extra": "extra.cjs", "desktop-search": "search.cjs", "mobile-search": "search.cjs",
-         "punchcards": "punchcards.cjs"}
+         "punchcards": "punchcards.cjs", "desktop-app-weekly": "desktop_app.cjs"}
 def configure(parser):
     parser.add_argument("--mode", choices=MODES, default="full")
 def command(args):

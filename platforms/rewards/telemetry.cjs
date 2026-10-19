@@ -5,7 +5,7 @@ const {AsyncLocalStorage} = require("node:async_hooks");
 const scope = new AsyncLocalStorage();
 const LIMIT = 512 * 1024;
 const CAPABILITIES = new Set(("full snapshot before after daily extra punchcards desktop_search mobile_search " +
-  "more_promotions claim app_daily app_promotions read_to_earn social explore goal local_smoke").split(" "));
+  "more_promotions claim app_daily app_promotions daily_streaks bing_streak daily_set_streak app_streak desktop_app_weekly read_to_earn social explore goal local_smoke").split(" "));
 const REASONS = new Set(("human_required captcha login_required terms_changed age_required security_prompt " +
   "account_restricted region_mismatch account_link_required app_token_missing app_token_invalid " +
   "app_token_expired_or_scope_changed app_rate_limited app_authorization_unavailable app_authorization_timeout " +
@@ -24,7 +24,11 @@ const REASONS = new Set(("human_required captcha login_required terms_changed ag
   "full_in_progress full_preflight_or_reporting_failed full_deadline_exceeded full_resource_busy " +
   "snapshot_binding_unavailable confirmed_before_intervention app_readback_finished " +
   "app_checkin_confirmed_by_fresh_snapshot fresh_readonly_snapshot invalid_interaction_config " +
-  "invalid_interaction_random request_cancelled_during_cleanup unclassified_failure").split(" "));
+  "invalid_interaction_random request_cancelled_during_cleanup daily_cycle_unavailable daily_cycle_changed " +
+  "streak_progress_unavailable streaks_readback_finished full_task_cycle_changed platform_task_cycle " +
+  "desktop_app_progress_unavailable desktop_app_weekly_changed desktop_app_weekly_unavailable " +
+  "desktop_app_weekly_not_assigned desktop_app_weekly_complete desktop_app_weekly_pending desktop_app_weekly_locked " +
+  "unclassified_failure").split(" "));
 const NAMES = new Set(["Error", "TimeoutError", "AbortError", "TypeError", "SyntaxError",
   "RewardsObstacle", "AppAuthenticationRequired"]);
 const CODES = new Set(["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN",

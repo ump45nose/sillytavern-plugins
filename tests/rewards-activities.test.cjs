@@ -40,6 +40,8 @@ function fixture({
   challenge = false,
   login = false,
   restricted = false,
+  credit = true,
+  attributed = true,
 } = {}) {
   const state = {
     contextClosed: false,
@@ -58,7 +60,7 @@ function fixture({
     click: async () => {
       state.clicks++;
       if (clickFail) throw Error("fixture");
-      now = max;
+      if (credit) now = max;
     },
   };
   const panel = {
@@ -87,6 +89,8 @@ function fixture({
     evaluate: async () => ({
       userInfo: { isRewardsUser: true },
       flyoutResult: {
+        dailySetPromotions: {"10/13/2026": [{offerId: "daily_fixture", title: "Card",
+          destinationUrl: "https://www.bing.com/search?q=fixture", complete: attributed && now === max}]},
         userStatus: { isRewardsUser: true },
         userWarnings: restricted
           ? [{ name: "Fraud_UserWarning_BotScore_UX" }]
@@ -117,6 +121,7 @@ function fixture({
   };
   return {
     state,
+    complete: () => {now = max;},
     chromium: {
       launch: async (opts) => {
         state.launch = opts;
@@ -160,6 +165,28 @@ test("one click then readback confirms progress and closes popup", async () => {
   assert.equal(r.business.daily, "complete");
   assert.equal(f.state.clicks, 1);
   assert.ok(f.state.popupClosed && f.state.browserClosed);
+});
+test("unconfirmed daily click keeps intent and cannot be repeated on the same platform day", async () => {
+  const f = fixture({now: "0", max: "1", credit: false}), entries = new Map();
+  const options = {journalForCycle: date => {
+    assert.equal(date, "2026-10-13");
+    return {has: id => entries.has(id), mark: async (id, value) => entries.set(id, value)};
+  }};
+  const first = await run(f.chromium, {}, options);
+  assert.equal(first.business.daily, "unknown");
+  assert.equal(entries.get("daily_fixture"), "attempted");
+  await run(f.chromium, {}, options);
+  assert.equal(f.state.clicks, 1);
+  f.complete();
+  assert.equal((await run(f.chromium, {}, options)).business.daily, "complete");
+  assert.equal(entries.get("daily_fixture"), "confirmed");
+  assert.equal(f.state.clicks, 1);
+});
+test("an aggregate counter increase without this offer's completion cannot confirm the click", async () => {
+  const f = fixture({now: "0", max: "1", attributed: false});
+  const out = await run(f.chromium, {});
+  assert.equal(out.business.daily, "unknown");
+  assert.equal(out.details.items.find(row => row.id === "daily_fixture").status, "unknown");
 });
 test("click failure never retried and popup cleaned", async () => {
   const f = fixture({ now: "0", max: "1", clickFail: true });
