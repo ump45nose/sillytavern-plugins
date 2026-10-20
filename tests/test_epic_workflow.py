@@ -143,6 +143,26 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.uncertain, [])
         self.assertEqual(d.submitted, [])
 
+    async def test_manual_claim_resolves_existing_uncertain_intent_on_first_ownership_read(self):
+        for prior in ("submitting", "submitted", "uncertain"):
+            d = Driver()
+            d.owned = True
+            d.journal.states["a"] = prior
+            out = await self.engine(d).run()
+            self.assertEqual(out.reason, "complete")
+            self.assertEqual(out.already_owned, ["a"])
+            self.assertEqual(out.confirmed, [])
+            self.assertEqual(d.journal.states["a"], "confirmed")
+            self.assertEqual(d.submitted, [])
+
+    async def test_preexisting_ownership_without_an_intent_does_not_create_a_claim_record(self):
+        d = Driver()
+        d.owned = True
+        out = await self.engine(d).run()
+        self.assertEqual(out.already_owned, ["a"])
+        self.assertEqual(d.journal.states, {})
+        self.assertEqual(d.submitted, [])
+
     async def test_readback_transport_failure_retried_readonly(self):
         d = Driver()
         d.verify = AsyncMock(side_effect=["not_owned", TimeoutError(), "owned"])
