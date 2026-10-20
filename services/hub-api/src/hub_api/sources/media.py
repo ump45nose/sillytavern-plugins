@@ -101,10 +101,11 @@ class Media:
             r.raise_for_status()
             if r.text != "Ok.":
                 raise ValueError("download login failed")
-        if not self.qbit.cookies:
+        has_login = bool(self.settings.qbittorrent_user and self.settings.qbittorrent_password and self.settings.qbittorrent_password.get_secret_value())
+        if has_login and not self.qbit.cookies:
             await login()
         r = await self.qbit.get(url + "/api/v2/torrents/info", params={"filter": "incomplete", "limit": 6, "sort": "added_on", "reverse": "true"})
-        if r.status_code == 403:
+        if r.status_code == 403 and has_login:
             await login()
             r = await self.qbit.get(url + "/api/v2/torrents/info", params={"filter": "incomplete", "limit": 6, "sort": "added_on", "reverse": "true"})
         r.raise_for_status()
@@ -121,5 +122,5 @@ class Media:
         configured = {"emby": bool(self.settings.emby_token and self.settings.emby_user_id),
                       "navidrome": bool(self.settings.navidrome_user and self.settings.navidrome_password),
                       "moviepilot": bool(self.settings.moviepilot_token),
-                      "qbittorrent": bool(self.settings.qbittorrent_user and self.settings.qbittorrent_password)}
+                      "qbittorrent": self.settings.qbittorrent_user is not None and self.settings.qbittorrent_password is not None}
         return [Adapter(name, name, 30, getattr(self, name) if enabled else None) for name, enabled in configured.items()]

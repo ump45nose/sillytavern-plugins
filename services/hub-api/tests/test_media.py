@@ -65,3 +65,19 @@ def test_media_independent_failures_cover_signing_and_cookie_isolation(settings,
         clock[0] += timedelta(hours=24, seconds=1)
         assert client.get("/api/v1/media/image", params={"ref": ref}, headers=headers).status_code == 400
         assert all(secret not in caplog.text for secret in settings.secrets())
+
+
+async def test_existing_trusted_network_access_does_not_attempt_login(settings):
+    from hub_api.sources.media import Media
+    settings.qbittorrent_user = ""
+    settings.qbittorrent_password = SecretStr("")
+    def handle(request):
+        assert request.method == "GET" and request.url.path == "/api/v2/torrents/info"
+        return httpx.Response(200, json=[])
+    async with httpx.AsyncClient() as shared:
+        media = Media(shared, settings, lambda: NOW, httpx.MockTransport(handle))
+        try:
+            assert media.adapters()[-1].fetch is not None
+            assert await media.qbittorrent() == {"downloads": []}
+        finally:
+            await media.qbit.aclose()

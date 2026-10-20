@@ -107,8 +107,10 @@ Emby uses the existing theme-worker API key and the unique account matching the 
 owner `yuwk`. Navidrome credentials come from the existing taglab worker; Subsonic
 read operations use POST form parameters so credentials cannot enter URL/access logs.
 MoviePilot uses header `X-API-KEY` with its existing integration key; qBittorrent
-uses the current qbit_manage account, a separate SID cookie jar and one login refresh
-on 403. Stateless source requests discard cookies so credentials cannot cross sources
+reuses the current qbit_manage connection configuration. When that configuration
+explicitly has empty credentials, use its existing trusted-network read access; never
+change the source authentication policy. Configured credentials use a separate SID
+cookie jar and one login refresh on 403. Stateless source requests discard cookies so credentials cannot cross sources
 sharing the same LAN address and different ports.
 
 MoviePilot's actual API is `http://moviepilot:3001`, reached by adding **only hub-api**

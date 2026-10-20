@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     moviepilot_token: SecretStr | None = None
     qbittorrent_url: str = "http://192.168.31.201:18080"
     qbittorrent_public_url: str = "http://192.168.31.201:18080"
-    qbittorrent_user: str = ""
+    qbittorrent_user: str | None = None
     qbittorrent_password: SecretStr | None = None
 
     def secrets(self):
