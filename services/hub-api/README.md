@@ -39,8 +39,8 @@ Formal entry: `/vol2/1000/Docker/stacks/hub/compose.yaml`. Build this directory'
 Dockerfile, use a source commit tag, set `HUB_IMAGE_TAG` in the stack `.env`, and copy
 `deploy/compose.yaml` to that entry. Actual credentials belong only in `env/hub.env`.
 The container writes only `/data` and bounded `/tmp`, and exposes LAN port 18190.
-The bind directory `/vol2/1000/Docker/hub/data` is the `hub-data` store; it sits under
-Duplicati's existing `/source` mount. Source containers are accessed through existing
+The bind directory `/vol2/1000/Docker/hub/data` is the `hub-data` store; it is registered as `/source/hub/data/` in
+Duplicati's existing selected-source backup (schedule and credentials retained). Source containers are accessed through existing
 LAN listeners and require no configuration changes.
 
 Run verification from **this directory**: `uv run pytest`.

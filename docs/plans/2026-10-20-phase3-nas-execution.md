@@ -17,7 +17,20 @@ Progress (each step is tested and committed separately):
   cache/stale/24h expiry, concurrency/deduplication/timeout isolation).
   Live modules: none; LAN deployment is step 2.
 - Step 2 code: read-only health/bills adapters, fake-source tests (6 tests pass),
-  pinned Python Dockerfile and hardened Compose template. Deployment pending.
+  pinned Python Dockerfile and hardened Compose template. Deployed image `local/hub-api:4be5e1f` in independent `hub` stack.
+  Live modules: health and bills; both real LAN module/status calls returned ok,
+  each has 14 day rows. Actual wrong-port instance returned health=error/bills=ok.
+  Host and Dockge Compose validation passed; browser card rendering not verified
+  because this session has no browser controller. Runtime UID/GID, readonly root,
+  cap drop and no-new-privileges verified.
+  Boot source checkpoint: aggregate branch `codex/hub-api-sources-20261020`, `33c3d77`;
+  deployed only the added hub-api line, preserving unrelated main edits.
+  Boot check: missing=[], stopped_planned=[], active_unplanned=[ai-resource-center,
+  oauth-disclosure] (outside this task). The main aggregate worktree remains dirty,
+  so the source checkpoint is not integrated into main.
+  Duplicati's existing selected-source backup now includes `/source/hub/data/`;
+  existing schedule/destination/credentials retained, no backup run or restore test.
+  Stack/runtime documentation updated. No source service restarted.
 - Steps 3–7: pending.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
