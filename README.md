@@ -234,3 +234,8 @@ The NAS archive is private. `skysight-archive-read.sh` calls exactly
 the sudoers rule permits only that command. The reader accepts a time window
 and checkpoint, reads a fixed archive, and returns evidence over stdout without
 writing a data copy. It does not accept paths or commands.
+
+## Hermes 报告源码收束
+
+独立 `hermes-cron-reports` 的报告统一在 [hermes/reports](hermes/reports/README.md) 维护。
+已核对源文件并保留本仓库较新的修复；部署入口和现有调度不变。原仓库保留历史。
