@@ -197,7 +197,9 @@ are hashed. Provider access/ID tokens are validated in memory and never stored.
 
 ID tokens require RS256 signature, issuer, audience, timestamps, nonce and an allowed
 subject. Discovery/JWKS cache for five minutes and must remain on the configured HTTPS
-issuer origin; an unknown signing key triggers one refresh. All `/auth/*` responses
+issuer hostname; Authelia advertises issuer on 443 and protocol endpoints on
+28443, so the metadata may select a different HTTPS port on that same host.
+An unknown signing key triggers one refresh. All `/auth/*` responses
 are no-store/no-referrer; requests are limited to 30 per minute per observed peer,
 with at most 1,024 rate counters and 1,000 unexpired login records. Forwarded client
 addresses are not implicitly trusted. The private single-owner deployment can share

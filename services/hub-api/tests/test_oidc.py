@@ -23,7 +23,8 @@ def oidc(settings):
     def provider(request):
         state['provider_calls'].append(request)
         if request.url.path=='/.well-known/openid-configuration':
-            return httpx.Response(200,json={'issuer':'https://idp.test','authorization_endpoint':'https://idp.test/authorize','token_endpoint':'https://idp.test/token','jwks_uri':'https://idp.test/keys'})
+            origin=state.get('endpoint_origin','https://idp.test')
+            return httpx.Response(200,json={'issuer':'https://idp.test','authorization_endpoint':origin+'/authorize','token_endpoint':origin+'/token','jwks_uri':origin+'/keys'})
         if request.url.path=='/keys':return httpx.Response(200,json={'keys':[state.get('published_key',key).as_dict(private=False)]})
         assert request.url.path=='/token' and request.method=='POST'
         body=parse_qs(request.content.decode())
@@ -108,3 +109,15 @@ def test_key_rotation_and_invalid_signature(oidc):
 def test_development_token_cannot_coexist_with_oidc(settings):
     settings.oidc_issuer='https://idp.test'
     with pytest.raises(ValueError):create_app(settings)
+
+
+def test_discovery_advertised_https_port_and_host_restriction(oidc):
+    client,app,state,_=oidc
+    state['endpoint_origin']='https://idp.test:28443'
+    server_state,_=start(oidc)
+    assert callback(oidc,server_state).status_code==302
+    for origin in ['https://foreign.test','http://idp.test']:
+        app.state.oidc.fetched=0
+        state['endpoint_origin']=origin
+        r=client.get('/auth/start',params={'device_name':'Mac','redirect_uri':'personalhub://auth','code_challenge':challenge('v'*43),'state':'client-state'},follow_redirects=False)
+        assert r.status_code==502

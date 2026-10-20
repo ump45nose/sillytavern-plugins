@@ -51,7 +51,7 @@ class OIDC:
             origin=urlsplit(issuer)
             for field in ('authorization_endpoint','token_endpoint','jwks_uri'):
                 parsed=urlsplit(metadata[field])
-                if parsed.scheme!='https' or parsed.netloc!=origin.netloc or parsed.username or parsed.password or parsed.fragment:
+                if parsed.scheme!='https' or parsed.hostname!=origin.hostname or parsed.username or parsed.password or parsed.fragment:
                     raise ValueError('invalid discovery endpoint')
             response=await self.client.get(metadata['jwks_uri']);response.raise_for_status()
             keys=KeySet.import_key_set(response.json())
