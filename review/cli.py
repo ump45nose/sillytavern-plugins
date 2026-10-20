@@ -58,7 +58,9 @@ def _parser() -> argparse.ArgumentParser:
     git_input.add_argument("--date", required=True, help="GitHub MCP 查询对应的业务日期")
     git_input.add_argument("--content-file", help="MCP 聚合后的最小 JSON")
 
-
+    crm = commands.add_parser("crm")
+    crm.add_argument("action", choices=["read"])
+    crm.add_argument("--date", required=True, help="日报材料的业务日期，只读本机 CRM API")
 
     daily = commands.add_parser("daily")
     daily.add_argument("action", choices=["prepare", "refresh", "acknowledge", "finalize"])
@@ -254,6 +256,10 @@ def run(argv: Iterable[str] | None = None) -> int:
         logger.emit("reviewctl.command", "started", command=args.command, action=getattr(args, "action", None))
         if args.command == "config":
             _json_print({"status": "ok", "schema_version": config.policy["schema_version"], "flags": config.flags.__dict__})
+            return 0
+        if args.command == "crm":
+            source = CrmActivitySource(config.values["REVIEW_CRM_API_URL"], config.path("REVIEW_CRM_TOKEN_FILE"))
+            _json_print(source.read_conversations(_day_window(config, args.date)))
             return 0
         state, memos = _runtime(config)
         if args.command == "doctor":

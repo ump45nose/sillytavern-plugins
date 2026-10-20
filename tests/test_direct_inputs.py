@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
 
 from review.domain import TimeWindow
 from review.sources.crm_activity import CrmActivitySource
@@ -23,7 +24,7 @@ class DirectInputsTest(unittest.TestCase):
         self.window = TimeWindow(datetime(2026, 10, 19, tzinfo=timezone.utc),
                                  datetime(2026, 10, 19, 21, 30, tzinfo=timezone.utc))
 
-    def serve_crm(self, failed=False):
+    def serve_crm(self, failed=False, detail_failed=False):
         requests = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -34,7 +35,17 @@ class DirectInputsTest(unittest.TestCase):
                     self.send_error(503); return
                 row = {'id':'one', 'date':'2026-10-19', 'started_at':'2026-10-19T10:00:00+00:00',
                        'updated_at':'2026-10-19T10:10:00+00:00', 'person_ids':['p'], 'preview':'private text'}
-                if path.path.endswith('/people'):
+                if path.path.endswith(('/interactions/one', '/interactions/two')):
+                    if detail_failed:
+                        self.send_error(503); return
+                    data = {**row, 'source':'wechat', 'content':'18:00 联系人：' + '完整正文' * 150 + '\n多行消息'}
+                    if path.path.endswith('/two'):
+                        data.update(date='2026-10-18', content=(
+                            '23:55 联系人：昨天的内容\n昨天的续行\n'
+                            '2026-10-19 00:05 我：当天的内容\n当天的续行\n'
+                            '2026-10-19 21:30 联系人：截止后的内容\n截止后的续行\n'
+                            '2026-10-20 00:01 我：明天的内容'))
+                elif path.path.endswith('/people'):
                     data = {'items':[{'id':'p','name':'测试联系人'}], 'next_cursor':None}
                 elif 'cursor' in query:
                     data = {'items':[{**row, 'id':'two'}], 'next_cursor':None}
@@ -60,6 +71,27 @@ class DirectInputsTest(unittest.TestCase):
     def test_crm_unavailable_is_not_reported_as_zero_interactions(self):
         source,_ = self.serve_crm(failed=True)
         with self.assertRaises(HTTPError):source.collect(self.window,None)
+
+    def test_crm_reads_full_api_bodies_and_filters_messages_to_business_window(self):
+        source, requests = self.serve_crm()
+        zone = ZoneInfo('Asia/Shanghai')
+        window = TimeWindow(datetime(2026,10,19,tzinfo=zone), datetime(2026,10,19,21,30,tzinfo=zone))
+        report = source.read_conversations(window)
+        self.assertEqual(len(report['conversations']), 2)
+        self.assertEqual(report['conversations'][0]['people'], ['测试联系人'])
+        self.assertGreater(len(report['conversations'][0]['content']), 500)
+        self.assertIn('当天的内容\n当天的续行', report['conversations'][1]['content'])
+        self.assertNotIn('昨天的', str(report))
+        self.assertNotIn('截止后的', str(report))
+        self.assertNotIn('明天的', str(report))
+        self.assertNotIn('private text', str(report))
+        self.assertNotIn('person_ids', report['conversations'][0])
+        self.assertEqual(len(requests), 5)
+        self.assertTrue(all(auth == 'Bearer test-read' for _,_,auth in requests))
+
+    def test_crm_body_failure_is_not_reported_as_empty_conversations(self):
+        source,_ = self.serve_crm(detail_failed=True)
+        with self.assertRaises(HTTPError):source.read_conversations(self.window)
 
     def test_skysight_uses_published_objects_and_keeps_other_device_detail(self):
         def publish(device, documents):
