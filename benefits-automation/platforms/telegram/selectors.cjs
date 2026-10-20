@@ -2,13 +2,20 @@
 // Every Telegram Web K page assumption lives here. Checked against
 // morethanwords/tweb 579e559 (2026-10-16): #auth-pages hosts the login cards
 // (CSS-module class names, so only stable ids/tags are used), #column-left
-// appears once signed in, bubbles carry data-mid with is-in/is-out.
+// appears once signed in, bubbles carry data-mid with is-in/is-out. The password
+// card (PasswordCard.tsx, passwordInputField.ts, base.scss .stealthy) was
+// rechecked against tweb 1da254b (2026-10-19).
 const BASE_URL = "https://web.telegram.org/k/";
 
 const SELECTORS = Object.freeze({
   authPages: "#auth-pages",
+  // The password card also renders a canvas (the monkey sticker), so a canvas
+  // only means QR while no password field is shown.
   qrCanvas: "#auth-pages canvas",
-  passwordInput: '#auth-pages input[type="password"]',
+  // PasswordInputHelpers wraps the real field in two decoy password inputs
+  // (class "stealthy", aria-hidden, 1px, opacity 0). Playwright counts them as
+  // visible and the first one precedes the real field, so they must be excluded.
+  passwordInput: '#auth-pages input[type="password"]:not(.stealthy):not([aria-hidden="true"])',
   appColumn: "#column-left",
   messageInput: '.input-message-input[contenteditable="true"]',
   sendButton: ".btn-send",
@@ -46,11 +53,15 @@ function readPage({selectors, limits}) {
         .slice(0, limits.buttons)
         .map((button) => text(button, limits.buttonText).trim()),
     }));
+  const password = all(selectors.passwordInput).find(visible);
   return {
     auth: anyVisible(selectors.authPages),
     authenticated,
-    qr: anyVisible(selectors.qrCanvas),
-    passwordRequired: anyVisible(selectors.passwordInput),
+    qr: !password && anyVisible(selectors.qrCanvas),
+    passwordRequired: Boolean(password),
+    // Web K disables the field while checking and marks it .error when rejected.
+    passwordBusy: Boolean(password && password.disabled),
+    passwordRejected: Boolean(password && !password.disabled && password.classList.contains("error")),
     inputReady: Boolean(input),
     startRequired: !input && anyVisible(selectors.startButton),
     messages,
