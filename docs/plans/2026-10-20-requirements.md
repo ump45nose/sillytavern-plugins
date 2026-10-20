@@ -53,16 +53,17 @@ flowchart LR
 
 | 组件 | 技术 | 说明 |
 | --- | --- | --- |
-| Mac App | SwiftUI + AppKit，macOS 14+；`NSStatusItem` + `NSPopover`；`KeyboardShortcuts`；GRDB；Keychain；XcodeGen | 菜单栏常驻，关闭主窗口后隐藏 Dock 图标 |
+| Mac App | SwiftUI + AppKit，macOS 14+；`NSStatusItem` + `NSPopover`；Carbon 全局快捷键；Keychain；SwiftPM + 打包脚本（只需 Command Line Tools，不依赖 Xcode） | 菜单栏常驻，关闭主窗口后隐藏 Dock 图标；阶段 1 无第三方依赖 |
 | 安卓 App | Kotlin + Jetpack Compose | 与 Mac 共用模块定义和布局配置；没有日程与任务模块 |
 | hub-api | Python（FastAPI），部署在 NAS Docker，经 NPM + Authelia 暴露 | 与现有采集服务技术栈一致 |
-| 本地缓存 | Mac：GRDB（SQLite）；安卓：Room | 只用于秒开和离线展示，删除后可重新拉取 |
+| 本地缓存 | Mac：阶段 2 引入 GRDB（SQLite）；安卓：Room | 只用于秒开和离线展示，删除后可重新拉取；阶段 1 只有布局 JSON |
 
 ### 3.2 仓库结构
 
 ```text
-apps/macos/          Mac App（XcodeGen project.yml、App target）
-apps/macos/HubKit/   SwiftPM 本地包：模块协议、数据客户端、缓存、设计系统
+apps/macos/                      Mac App（SwiftPM 包、Info.plist、scripts/ 构建签名安装测试）
+apps/macos/Sources/HubKit/       纯逻辑：布局模型与存储、数据模型、示例数据（有单元测试）
+apps/macos/Sources/PersonalHub/  App：AppKit 外壳、设计系统、模块视图
 apps/android/        安卓 App（阶段 4 起）
 services/hub-api/    薄后端（阶段 3 起）
 docs/design/         设计稿
@@ -178,7 +179,7 @@ archive/v0/          旧实现，只读参考
 以设计稿为准，要点：
 
 - 色彩：米色纸张底 + 深墨文字，陶土 `#D97757` 为唯一主强调色；每个模块一个低饱和大地色（牛皮纸、橄榄、天青、藕荷、鼠尾草、赭石、玫瑰、钢蓝）。
-- 字体：标题与数字用衬线（Source Serif 4 / 宋体回退），界面用 Inter / 苹方。
+- 字体：标题与数字用衬线（Mac 上为系统自带 New York + 宋体回退，不打包字体），界面用系统无衬线 / 苹方。New York 需从字体文件加载：系统 UI 字体实例会把中文全角标点撑到 1.5 个字宽。
 - 动效：页面进入错峰浮现、数字滚动、图表生长、简 / 详与页面切换形变过渡；系统开启"减弱动态效果"时关闭。
 - SwiftUI 对应实现：`matchedGeometryEffect`（简 / 详切换）、`.contentTransition(.numericText())`（数字）、Swift Charts 动画（图表）、带延迟的 `.transition`（错峰进入）、`accessibilityReduceMotion`（减弱动效）。
 
@@ -188,7 +189,8 @@ archive/v0/          旧实现，只读参考
 - **离线**：没网时显示缓存和"更新于"时间；Google 任务的修改进入本地变更队列，联网后提交。
 - **凭据**：Google 令牌存 Mac Keychain；hub-api 设备令牌存 Keychain / Android Keystore；来源凭据只在后端。
 - **可观测**：每个来源有状态（正常 / 过期 / 失败）和最后更新时间，侧栏显示"N / M 来源正常"。
-- **签名**：Mac 使用固定签名，保证 Keychain 授权不因重新构建而失效（沿用 v0 经验）。
+- **签名**：Mac 复用 v0 的持久自签名证书（只读，不新建、不轮换，无 ad hoc 回退），保证 Keychain 授权不因重新构建而失效。新应用 bundle ID 为 `com.yuwk.personal-hub`，安装到 `~/Applications/Personal Hub.app`，与仍在运行采集的 v0 应用（`com.yuwk.personal-data-hub`）并存。
+- **性能**：常驻时主线程空闲；无限循环动画用 Core Animation 图层实现。全尺寸内容窗口中，SwiftUI 每帧动画会触发 AppKit 重算窗口拖拽区域，代价很高。
 
 ## 11. 分阶段计划
 
@@ -196,7 +198,7 @@ archive/v0/          旧实现，只读参考
 
 目标：一个能日常常驻的空壳，所有页面、模块和交互面都已就位，数据来自本地示例数据。
 
-- XcodeGen 工程 + `HubKit` 本地包；固定签名构建脚本。
+- SwiftPM 工程（`HubKit` + App 两个 target）；`scripts/build.sh [--install]` 构建、打包、渲染图标、固定签名；`scripts/test.sh` 跑单元测试。
 - 应用生命周期：菜单栏常驻、关闭主窗口隐藏 Dock 图标、登录时启动。
 - 菜单栏图标（模板图 + 动态文字）、弹出面板外壳。
 - 主窗口：侧栏导航、⌘1–⌘5、工具栏（搜索占位、刷新、编辑布局）。
