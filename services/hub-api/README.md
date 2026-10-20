@@ -99,3 +99,27 @@ bytes represent observed traffic and may omit collection gaps. The current colle
 has no quota/expiry facts, and none of its 21 Mihomo providers exposes subscriptionInfo.
 `pools` therefore remains null; the network module reports partial so this is visible.
 No route class or month traffic is presented as subscription billing usage.
+
+## Media
+
+Each of the four media services is isolated with its own 30-second source cache.
+Emby uses the existing theme-worker API key and the unique account matching the NAS
+owner `yuwk`. Navidrome credentials come from the existing taglab worker; Subsonic
+read operations use POST form parameters so credentials cannot enter URL/access logs.
+MoviePilot uses header `X-API-KEY` with its existing integration key; qBittorrent
+uses the current qbit_manage account, a separate SID cookie jar and one login refresh
+on 403. Stateless source requests discard cookies so credentials cannot cross sources
+sharing the same LAN address and different ports.
+
+MoviePilot's actual API is `http://moviepilot:3001`, reached by adding **only hub-api**
+to the existing `media_net`. No media service is reconfigured. LAN 28300 is its website;
+28900 is the separate Emby STRM endpoint, rather than the MoviePilot API. Other
+media APIs use their existing LAN listeners. Service links use existing NPM domains
+on 28443; qBittorrent retains its existing LAN WebUI because it has no NPM entry.
+
+Resume/latest/albums/downloads are bounded at 8/8/6/6. MoviePilot is probed through
+its authenticated download API; qBittorrent supplies active incomplete download rows
+without duplicating them. An unavailable service leaves only its own fields null.
+Image references contain a source/item ID and 24-hour expiry signed by a dedicated
+server key. Authenticated proxies accept only these references and fixed source
+routes, never arbitrary URLs, and expose no upstream key or cookie to clients.

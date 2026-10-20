@@ -16,6 +16,8 @@ from .sources.base import Adapter, SourceManager
 from .sources.records import Records
 from .sources.personal import Personal
 from .sources.usage import Usage
+from .sources.media import Media
+from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
 from .store import Store
 
@@ -26,7 +28,12 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     settings = settings or Settings()
     now = now or (lambda: datetime.now(ZONE))
     store = Store(settings.database)
-    client = httpx.AsyncClient(timeout=settings.source_timeout_seconds, transport=transport, follow_redirects=False)
+    async def discard_cookies(request):
+        # Bearer sources can share a LAN IP across ports; never forward one source's cookies.
+        request.headers.pop("cookie", None)
+    client = httpx.AsyncClient(timeout=settings.source_timeout_seconds, transport=transport, follow_redirects=False,
+                               event_hooks={"request": [discard_cookies]})
+    media = Media(client, settings, now, transport)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -34,6 +41,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     async def lifespan(app):
         yield
         await client.aclose()
+        await media.qbit.aclose()
 
     class SafeJSONResponse(JSONResponse):
         def render(self, content):
@@ -52,10 +60,11 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
     personal = Personal(client, settings, now)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters()}
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters()}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
+    manager.media_links = {s: getattr(settings, s + "_public_url") for s in ("emby", "navidrome", "moviepilot", "qbittorrent")}
     app.state.store, app.state.sources, app.state.client = store, manager, client
 
     def error(status):
@@ -122,4 +131,5 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         return Response(status_code=204)
 
     personal_routes(app, settings, personal, authenticated, now, manager)
+    media_routes(app, settings, media, authenticated)
     return app

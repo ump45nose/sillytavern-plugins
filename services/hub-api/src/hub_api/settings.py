@@ -25,5 +25,22 @@ class Settings(BaseSettings):
     usage_url: str = "http://192.168.31.201:18103"
     usage_token: SecretStr | None = None
 
+    media_signing_key: SecretStr | None = None
+    emby_url: str = "http://192.168.31.201:28096"
+    emby_public_url: str = "https://emby-home.172906573.xyz:28443"
+    emby_token: SecretStr | None = None
+    emby_user_id: str = ""
+    navidrome_url: str = "http://192.168.31.201:14533"
+    navidrome_public_url: str = "https://navidrome-home.172906573.xyz:28443"
+    navidrome_user: str = ""
+    navidrome_password: SecretStr | None = None
+    moviepilot_url: str = "http://moviepilot:3001"
+    moviepilot_public_url: str = "https://moviepilot-home.172906573.xyz:28443"
+    moviepilot_token: SecretStr | None = None
+    qbittorrent_url: str = "http://192.168.31.201:18080"
+    qbittorrent_public_url: str = "http://192.168.31.201:18080"
+    qbittorrent_user: str = ""
+    qbittorrent_password: SecretStr | None = None
+
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]

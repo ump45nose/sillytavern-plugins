@@ -36,6 +36,14 @@ async def modules(manager, ids, token_range="day"):
         data = results[0]["data"] if len(results) == 1 else None
         if identifier == "crm":
             data = crm_module(values["crm"]["data"], values["plaud"]["data"], manager.now())
+        if identifier == "media":
+            def part(source, field):
+                value = values[source]["data"]
+                return value.get(field) if value is not None else None
+            data = {"continue_watching": part("emby", "continue_watching"), "latest": part("emby", "latest"),
+                    "recent_albums": part("navidrome", "recent_albums"), "downloads": part("qbittorrent", "downloads"),
+                    "services": [{"id": s, "status": "ok" if values[s]["status"] == "ok" else "error",
+                                  "link": manager.media_links[s]} for s in MODULE_SOURCES["media"]]}
         if identifier == "token":
             data = token_module(values["token"]["data"], token_range, manager.now())
         if identifier == "net" and values["usage"]["data"] is not None:
