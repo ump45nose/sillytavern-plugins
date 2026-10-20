@@ -43,3 +43,12 @@
 - 最终 config validate 通过；网关自 11:23:03 恢复后至 11:33 未再出现 Telegram 连接错误。历史 delivery_failed/error 留作真实历史，未伪造成功、未推进 pending checkpoint。
 - 部署后启动检查无新增差异，仍只有已有 tailscale 缺失及 ai-resource-center 未登记，无 stopped_planned。
 - 没有手工运行模型日报或实际补发消息。今晚 21:30 的完整生成与实际投递尚未发生，不能把只读协议验证宣称为实投成功。
+
+## 用户要求的昨日手工验收（2026-10-20 11:36–11:43）
+
+- 用户要求“手动启动脚本拉下昨天的测试下”，显式测试日期为 2026-10-19。复制 SQLite 到私有测试目录，并仅删除副本中的同日会话，实际运行正式 CLI `daily prepare --date 2026-10-19 --dry-run` 与 `crm read --date 2026-10-19`，确认 mode=dry-run，测试库也没有冻结该会话。生产状态、调度和 pending checkpoint 保持。
+- Google 使用现有脚本的历史日期参数，得到 Tasks 5 条、Calendar 0 条，无错误。邮件复用正式 transport、四账户和筛选策略，仅在手工查询中显式绑定 since/before 为昨天自然日，得到 0 条、无错误；这与摘要文件缺失区分开。两类输入只写测试目录。Skysight、健康、账单、Git、CRM 及已有目标/确认记录正常进入新材料。
+- 正式 CRM CLI 得到 15 段、8 位联系人、4356 字符。Hermes 使用同一日报 model=grok-4.7、provider=custom:cpa-local 对已实际读取的材料生成本地测试稿，1 次主模型调用、0 次工具调用，首行和日期正确，8 位联系人均出现在结果中。
+- 主模型耗时 227.3 秒，输入 37964 / 输出 15960 token，正文 9377 字符，正常 stop。实际正文生成通过；CLI 的辅助会话标题请求曾返回 401，不影响主模型报告生成，未将该辅助请求宣称为通过。
+- 完整测试产物在 `/vol2/1000/Docker/personal-review/artifacts/manual/2026-10-19-test-20261020-113644/`，用户可读的结果为 `report.md`；原始材料、CRM 返回、输入摘要、stdout/stderr 和状态回执均在同一私有目录。它们不进入 Git。
+- 没有手工发送消息、发布终稿或确认 checkpoint。本次验证了真实读取与同模型编辑，没有执行 scheduler 的实际 Telegram 投递。
