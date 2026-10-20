@@ -68,7 +68,7 @@ class GitHub:
                 "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "personal-hub"}
 
     async def get(self, path, params=None):
-        response = await self.client.get("https://api.github.com" + path, params=params, headers=self.headers)
+        response = await self.client.get("https://api.github.com" + path, params=params, headers=self.headers, timeout=self.settings.github_timeout_seconds)
         response.raise_for_status()
         return response
 
@@ -76,7 +76,7 @@ class GitHub:
         # Query text is built here, never supplied by a client or source response.
         assert query.lstrip().startswith("query ")
         response = await self.client.post("https://api.github.com/graphql", headers=self.headers,
-                                          json={"query": query, "variables": variables or {}})
+                                          json={"query": query, "variables": variables or {}}, timeout=self.settings.github_timeout_seconds)
         response.raise_for_status()
         data = response.json()
         if data.get("errors") or not isinstance(data.get("data"), dict):
