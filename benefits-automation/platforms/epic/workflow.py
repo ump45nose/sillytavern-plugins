@@ -263,13 +263,15 @@ class ClaimWorkflow:
                 await self.driver.open_offer(offer, timeout=self.remaining())
                 await self.settle("product")
                 owned = await self.driver.verify(offer, timeout=self.remaining())
+                prior = await self.driver.journal.read(offer.id)
                 if owned == "owned":
+                    if prior in {"submitting", "submitted", "uncertain"}:
+                        await self.driver.journal.write(offer.id, "confirmed")
                     out.already_owned.append(offer.id)
                     continue
                 if owned not in {"not_owned", "unknown"}:
                     out.uncertain.append(offer.id)
                     continue
-                prior = await self.driver.journal.read(offer.id)
                 if prior in {"submitting", "submitted", "uncertain", "confirmed"}:
                     # Uncertain previous submissions require readback, not replay.
                     out.uncertain.append(offer.id)
