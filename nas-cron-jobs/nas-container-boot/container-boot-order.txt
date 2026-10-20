@@ -47,6 +47,7 @@
 30 benefits-yyb
 
 30 face-baseline
+30 hub-api
 40 qbit_manage qbittorrent
 40 IYUUPlus qbittorrent
 40 emby-theme-worker embyserver
