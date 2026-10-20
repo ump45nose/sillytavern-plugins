@@ -70,3 +70,32 @@ Both write endpoints forward once without retries. `person_name` must uniquely m
 an existing CRM contact; ambiguous/unknown names return 409, and no contact is invented.
 Unit tests exercise writes with fake services; no test memo or interaction is inserted
 into production merely for validation.
+
+## Token and network data coverage
+
+Token Monitor stats is fetched once per 30 seconds, with limits projected from the
+same response. No Token Monitor changes or restarts are needed. `cost` is the source's
+estimated **USD**, consistent with Mac's existing dollar display. It is not subscription
+spend. Daily total/tool/device values and overall dated history are available.
+
+Stats currently has no hourly tokens or historical per-tool/per-device attribution:
+
+| Range | Available | Null fields |
+| --- | --- | --- |
+| day | total/cost/tools/devices/limits | all hourly cells |
+| week | totals from exact daily history, limits | tools/devices, hourly cells |
+| month | totals from exact daily history, limits | tools/devices/buckets |
+| year | exact daily history in a 53-week grid, limits | tools/devices, absent/future cells |
+
+Unknown historical days make the total/cost/previous interval unknown rather than
+assuming zero. Year starts on Monday 52 weeks before the current week's Monday; the
+371-cell grid ends on Sunday, with future cells null. `period.end` is today, and
+`previous` covers the immediately preceding interval with the same number of observed
+days. The source retains only its own available history; the backend does not archive it.
+
+Usage Monitor GET `/api/v1/net` reads the existing ShellCrash SQLite through a read-only
+transaction and grouped SQL queries. Missing and future hours remain null. Recorded
+bytes represent observed traffic and may omit collection gaps. The current collector
+has no quota/expiry facts, and none of its 21 Mihomo providers exposes subscriptionInfo.
+`pools` therefore remains null; the network module reports partial so this is visible.
+No route class or month traffic is presented as subscription billing usage.

@@ -15,6 +15,7 @@ from .settings import Settings
 from .sources.base import Adapter, SourceManager
 from .sources.records import Records
 from .sources.personal import Personal
+from .sources.usage import Usage
 from .personal_routes import register as personal_routes
 from .store import Store
 
@@ -51,7 +52,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
     personal = Personal(client, settings, now)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters()}
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters()}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
@@ -102,10 +103,12 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         return {"modules": await modules(manager, selected)}
 
     @app.get("/api/v1/modules/{identifier}", dependencies=[Depends(authenticated)])
-    async def module(identifier: str):
+    async def module(identifier: str, range: str = "day"):
+        if range not in ("day", "week", "month", "year"):
+            raise HTTPException(400)
         if identifier not in MODULE_SOURCES:
             raise HTTPException(404)
-        return (await modules(manager, [identifier]))[identifier]
+        return (await modules(manager, [identifier], token_range=range))[identifier]
 
     @app.get("/api/v1/devices", dependencies=[Depends(authenticated)])
     def devices():

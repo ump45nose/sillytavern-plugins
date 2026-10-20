@@ -20,5 +20,10 @@ class Settings(BaseSettings):
     memos_public_url: str = "https://memos-home.172906573.xyz:28443"
     memos_token: SecretStr | None = None
 
+    token_url: str = "http://192.168.31.201:17321"
+    token_secret: SecretStr | None = None
+    usage_url: str = "http://192.168.31.201:18103"
+    usage_token: SecretStr | None = None
+
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]
