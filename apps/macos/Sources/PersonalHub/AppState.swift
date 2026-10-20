@@ -9,17 +9,15 @@ final class AppState {
     static let shared = AppState()
 
     let snapshot = Sample.snapshot
+    let agenda = AgendaModel()
     let tokenSummaries = TokenSample.summaries(usage: Sample.snapshot.token)
 
     var layout: LayoutDocument { didSet { persistLayout() } }
     var currentPage = "home"
     var editing = false
     var tokenRange: TokenRange = .week
-    var doneTasks: Set<String>
     var focusedModule: ModuleID?
     var skySelection = 0
-    var syncing = false
-    var lastSync = "17:58"
 
     var memosURL: String { didSet { UserDefaults.standard.set(memosURL, forKey: Keys.memosURL) } }
 
@@ -38,20 +36,26 @@ final class AppState {
     private init() {
         layout = store.load()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
-        let t = Sample.snapshot.tasks
-        doneTasks = Set((t.overdue + t.today + t.upcoming).filter(\.done).map(\.title))
     }
 
     var page: Page { layout.page(currentPage) ?? layout.pages[0] }
 
-    var dueCount: Int {
-        let t = snapshot.tasks
-        return (t.overdue + t.today).filter { !doneTasks.contains($0.title) }.count
-    }
+    var dueCount: Int { agenda.view.dueCount }
 
-    var statusTitle: String {
-        let next = snapshot.events.first { $0.start > snapshot.now.hour }
-        return next.map { "\(dueCount) · \(Clock.hhmm($0.start)) \($0.title)" } ?? "\(dueCount)"
+    var statusTitle: String { Agenda.menuTitle(agenda.view, now: agenda.now) }
+
+    var syncing: Bool { agenda.status == .syncing }
+
+    var lastSync: String {
+        switch agenda.status {
+        case .offline: return "离线"
+        case .needsReconnect: return "需重新连接"
+        case .failed: return "同步失败"
+        default: break
+        }
+        guard agenda.mode == .google else { return "示例数据" }
+        guard let at = agenda.lastSync else { return "未同步" }
+        return agenda.now.timeIntervalSince(at) < 60 ? "刚刚" : Agenda.clock(at)
     }
 
     func go(_ pageID: String) {
@@ -68,12 +72,6 @@ final class AppState {
         focusedModule = module
     }
 
-    func toggleTask(_ title: String) {
-        withAnimation(Motion.spring) {
-            if doneTasks.contains(title) { doneTasks.remove(title) } else { doneTasks.insert(title) }
-        }
-    }
-
     func editPage(_ change: (inout Page) -> Void) {
         withAnimation(Motion.spring) { layout.update(currentPage, change) }
     }
@@ -82,14 +80,7 @@ final class AppState {
         withAnimation(Motion.spring) { layout = .default }
     }
 
-    func sync() {
-        guard !syncing else { return }
-        syncing = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            self.syncing = false
-            self.lastSync = "刚刚"
-        }
-    }
+    func sync() { agenda.refresh() }
 
     private func persistLayout() {
         do { try store.save(layout) } catch { NSLog("Personal Hub: layout save failed: \(error.localizedDescription)") }

@@ -25,7 +25,18 @@ final class QuickPanel: NSPanel {
 
     override func resignKey() {
         super.resignKey()
-        dismiss()
+        // Editors and menus opened from the panel take key focus without ending the session.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isKeyWindow else { return }
+            if let key = NSApp.keyWindow, key !== self, key.className.contains("Popover") || key.parent === self { return }
+            self.dismiss()
+        }
+    }
+
+    /// Resizes to the SwiftUI content while keeping the top edge in place.
+    func fit() {
+        guard let size = contentView?.fittingSize, size != frame.size, size.height > 0 else { return }
+        setFrame(NSRect(x: frame.midX - size.width / 2, y: frame.maxY - size.height, width: size.width, height: size.height), display: true)
     }
 
     func present() {
@@ -55,50 +66,39 @@ final class QuickPanel: NSPanel {
 
 enum QuickKind { case task, memo }
 
-struct QuickPanelView: View {
-    var kind: QuickKind
+/// Quick memo: kept as a local draft until the Memos integration lands.
+struct QuickMemoView: View {
     var close: () -> Void
     @ViewState private var text = ""
-    @ViewState private var mode = 0
+    @ViewState private var visibility = 0
     @ViewState private var submitted = false
     @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text(kind == .task ? HotKeyCenter.shared.shortcut(for: .quickTask).display : HotKeyCenter.shared.shortcut(for: .quickMemo).display)
+                Text(HotKeyCenter.shared.shortcut(for: .quickMemo).display)
                     .font(Typo.sans(10.5, .semibold)).foregroundStyle(Palette.ink3)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Palette.sunk))
-                Text(kind == .task ? "快速任务" : "快速 Memo").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                Text("快速 Memo").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 Spacer()
-                Segmented(options: kind == .task ? [(0, "新增"), (1, "搜索"), (2, "今天")] : [(0, "私密"), (1, "公开")], selection: $mode)
+                Segmented(options: [(0, "私密"), (1, "公开")], selection: $visibility)
                     .scaleEffect(0.9, anchor: .trailing)
             }
-            Group {
-                if kind == .task {
-                    TextField("明天下午3点 和李雷对齐迁移方案 #工作", text: $text)
-                        .font(Typo.serif(22))
-                        .onSubmit(submit)
-                } else {
-                    TextField("现在的想法是…", text: $text, axis: .vertical)
-                        .font(Typo.serif(18))
-                        .lineLimit(4...8)
-                }
-            }
-            .textFieldStyle(.plain)
-            .focused($focused)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
+            TextField("现在的想法是…", text: $text, axis: .vertical)
+                .font(Typo.serif(18))
+                .lineLimit(4...8)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
 
             HStack(spacing: 6) {
                 if submitted {
-                    Chip(text: "已记录到本地草稿（阶段 2 起写入 \(kind == .task ? "Google Tasks" : "Memos")）", tone: .olive, systemImage: "checkmark")
+                    Chip(text: "已记录到本地草稿（之后的阶段写入 Memos）", tone: .olive, systemImage: "checkmark")
                         .transition(.opacity.combined(with: .offset(y: 4)))
-                } else if kind == .task {
-                    Chip(text: "自然语言日期在阶段 2 接入", tone: .sky)
-                    Chip(text: "#清单", tone: .olive)
                 } else {
                     Chip(text: "#日报", tone: .sky)
                     Chip(text: "#想法", tone: .sky)
@@ -108,11 +108,7 @@ struct QuickPanelView: View {
             .frame(minHeight: 26, alignment: .leading)
 
             HStack(spacing: 16) {
-                if kind == .task {
-                    Text("↩ 添加"); Text("⌘↩ 添加并打开"); Text("⇥ 切换模式")
-                } else {
-                    Text("⌘↩ 发布到 Memos"); Text("⌘⇧↩ 发布并打开")
-                }
+                Text("⌘↩ 发布到 Memos"); Text("⌘⇧↩ 发布并打开")
                 Spacer()
                 Text("Esc 关闭")
             }
@@ -120,7 +116,7 @@ struct QuickPanelView: View {
             .padding(.top, 14)
         }
         .padding(.horizontal, 22).padding(.vertical, 18)
-        .frame(width: kind == .task ? 640 : 560)
+        .frame(width: 560)
         .background(RoundedRectangle(cornerRadius: 18).fill(Palette.card))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.line))
         .background {
@@ -136,18 +132,165 @@ struct QuickPanelView: View {
 
     private func submit() {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        QuickDrafts.append(kind: kind, text: text)
+        QuickDrafts.appendMemo(text)
         withAnimation(Motion.spring) { submitted = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
     }
 }
 
-/// Stage 1 keeps quick entries locally so nothing typed is lost before the real integrations exist.
+/// Quick task: add with natural-language dates and #lists, search every list, or work through today.
+struct QuickTaskView: View {
+    var close: () -> Void
+    var resize: () -> Void
+    var openMain: () -> Void
+    var initialText = ""
+    var initialMode = 0
+    @Environment(AppState.self) private var state
+    @ViewState private var text = ""
+    @ViewState private var mode = 0
+    @ViewState private var timeBlock = true
+    @ViewState private var added: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let agenda = state.agenda
+        let entry = QuickEntryParser.parse(text, now: agenda.now)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(HotKeyCenter.shared.shortcut(for: .quickTask).display)
+                    .font(Typo.sans(10.5, .semibold)).foregroundStyle(Palette.ink3)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Palette.sunk))
+                Text("快速任务").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                if agenda.mode == .demo { Chip(text: "示例数据", tone: .ochre) }
+                Spacer()
+                Segmented(options: [(0, "新增"), (1, "搜索"), (2, "今天")], selection: $mode)
+                    .scaleEffect(0.9, anchor: .trailing)
+            }
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(Typo.serif(22))
+                .focused($focused)
+                .onSubmit { submit(entry, open: false) }
+                .onKeyPress(.tab) {
+                    withAnimation(Motion.spring) { mode = (mode + 1) % 3 }
+                    return .handled
+                }
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
+
+            Group {
+                switch mode {
+                case 1: results(text.isEmpty ? [] : agenda.search(text).prefix(8).map { $0 },
+                                empty: text.isEmpty ? "输入关键词，搜索全部清单的标题和备注" : "没有找到「\(text)」")
+                case 2: results(agenda.view.overdue + agenda.view.today, empty: "今天没有到期的任务")
+                default: EmptyView()
+                }
+            }
+            if mode != 1 {
+                Group {
+                    if let added {
+                        Chip(text: added, tone: .olive, systemImage: "checkmark")
+                            .transition(.opacity.combined(with: .offset(y: 4)))
+                    } else if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Flow(spacing: 6) {
+                            ForEach(["明天下午3点", "下周五", "月底", "后天晚上8点"], id: \.self) { Chip(text: $0, tone: .sky) }
+                            Chip(text: "#清单", tone: .olive)
+                        }
+                    } else {
+                        QuickEntryChips(entry: mode == 2 ? today(entry) : entry, timeBlock: timeBlock) { timeBlock.toggle() }
+                    }
+                }
+                .padding(.top, 12)
+                .frame(minHeight: 26, alignment: .leading)
+            }
+
+            HStack(spacing: 16) {
+                if mode == 1 {
+                    Text("右键任务可完成、改期或编辑")
+                } else {
+                    Text("↩ 添加"); Text("⌘↩ 添加并打开"); Text("⌘T 时间块")
+                }
+                Text("⇥ 切换模式")
+                Spacer()
+                Text("Esc 关闭")
+            }
+            .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+            .padding(.top, 14)
+        }
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .frame(width: 640)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.line))
+        .background {
+            Button("") { submit(entry, open: true) }.keyboardShortcut(.return, modifiers: .command).opacity(0)
+            Button("") { timeBlock.toggle() }.keyboardShortcut("t", modifiers: .command).opacity(0)
+        }
+        .preferredColorScheme(.light)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in DispatchQueue.main.async(execute: resize) }
+        .onAppear {
+            text = initialText
+            mode = initialMode
+            added = nil
+            timeBlock = true
+            DispatchQueue.main.async { focused = true }
+        }
+    }
+
+    private var placeholder: String {
+        switch mode {
+        case 1: "搜索任务…"
+        case 2: "加一条今天的任务…"
+        default: "明天下午3点 和李雷对齐迁移方案 #工作"
+        }
+    }
+
+    private func results(_ tasks: [AgendaTask], empty: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(tasks) { TaskRow(task: $0) }
+            if tasks.isEmpty {
+                Text(empty).font(Typo.sans(12.5)).foregroundStyle(Palette.ink3).padding(.vertical, 10)
+            }
+        }
+        .padding(.top, 6)
+        .animation(Motion.spring, value: tasks.map(\.completed))
+    }
+
+    /// In 今天 mode an undated entry is due today.
+    private func today(_ entry: QuickEntry) -> QuickEntry {
+        var e = entry
+        if e.due == nil { e.due = Calendar.hub.startOfDay(for: state.agenda.now) }
+        return e
+    }
+
+    private func submit(_ parsed: QuickEntry, open: Bool) {
+        guard mode != 1 else { return }
+        let entry = mode == 2 ? today(parsed) : parsed
+        guard state.agenda.add(entry, timeBlock: timeBlock) else { return }
+        let list = entry.listTag ?? state.agenda.defaultList?.title ?? ""
+        let when = entry.due.map { Agenda.relativeDay($0, now: state.agenda.now) + (entry.hasTime ? " " + Agenda.clock($0) : "") }
+        withAnimation(Motion.spring) { added = "已添加到「\(list)」" + (when.map { " · " + $0 } ?? "") }
+        text = ""
+        if open {
+            state.focus(.agenda)
+            openMain()
+            close()
+        } else if mode == 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { withAnimation(Motion.spring) { added = nil } }
+        }
+    }
+}
+
+/// Keeps quick memos locally so nothing typed is lost before the Memos integration exists.
 enum QuickDrafts {
-    static func append(kind: QuickKind, text: String) {
+    static func appendMemo(_ text: String) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PersonalHub", isDirectory: true)
-        let url = base.appendingPathComponent(kind == .task ? "drafts-tasks.jsonl" : "drafts-memos.jsonl")
+        let url = base.appendingPathComponent("drafts-memos.jsonl")
         let line = (try? JSONSerialization.data(withJSONObject: ["at": ISO8601DateFormatter().string(from: Date()), "text": text])) ?? Data()
         do {
             try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

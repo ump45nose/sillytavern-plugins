@@ -56,7 +56,7 @@ flowchart LR
 | Mac App | SwiftUI + AppKit，macOS 14+；`NSStatusItem` + `NSPopover`；Carbon 全局快捷键；Keychain；SwiftPM + 打包脚本（只需 Command Line Tools，不依赖 Xcode） | 菜单栏常驻，关闭主窗口后隐藏 Dock 图标；阶段 1 无第三方依赖 |
 | 安卓 App | Kotlin + Jetpack Compose | 与 Mac 共用模块定义和布局配置；没有日程与任务模块 |
 | hub-api | Python（FastAPI），部署在 NAS Docker，经 NPM + Authelia 暴露 | 与现有采集服务技术栈一致 |
-| 本地缓存 | Mac：阶段 2 引入 GRDB（SQLite）；安卓：Room | 只用于秒开和离线展示，删除后可重新拉取；阶段 1 只有布局 JSON |
+| 本地缓存 | Mac：日程与任务缓存为单个 JSON 文件（`agenda.json`，0600，含离线变更队列）；安卓：Room | 只用于秒开和离线展示，删除后可重新拉取；数据量小，暂不引入 SQLite |
 
 ### 3.2 仓库结构
 
@@ -187,7 +187,7 @@ archive/v0/          旧实现，只读参考
 
 - **秒开**：弹出面板和主页先显示本地缓存，再后台刷新；从点击到出现内容 < 200ms。
 - **离线**：没网时显示缓存和"更新于"时间；Google 任务的修改进入本地变更队列，联网后提交。
-- **凭据**：Google 令牌存 Mac Keychain；hub-api 设备令牌存 Keychain / Android Keystore；来源凭据只在后端。
+- **凭据**：Google 刷新令牌存 Mac 登录钥匙串，只经固定的凭据助手 `Personal Hub Credentials.app`（`com.yuwk.personal-hub.credentials`）读写。助手只构建签名一次、之后只做逐字节校验，并只响应同证书签名的 `com.yuwk.personal-hub` 父进程；这样主程序重新构建不会触发钥匙串授权。打包进 App 的 `google-oauth.json` 只含客户端信息，含令牌字段时构建失败。hub-api 设备令牌存 Keychain / Android Keystore；来源凭据只在后端。
 - **可观测**：每个来源有状态（正常 / 过期 / 失败）和最后更新时间，侧栏显示"N / M 来源正常"。
 - **签名**：Mac 复用 v0 的持久自签名证书（只读，不新建、不轮换，无 ad hoc 回退），保证 Keychain 授权不因重新构建而失效。新应用 bundle ID 为 `com.yuwk.personal-hub`，安装到 `~/Applications/Personal Hub.app`，与仍在运行采集的 v0 应用（`com.yuwk.personal-data-hub`）并存。
 - **性能**：常驻时主线程空闲；无限循环动画用 Core Animation 图层实现。全尺寸内容窗口中，SwiftUI 每帧动画会触发 AppKit 重算窗口拖拽区域，代价很高。
@@ -221,6 +221,12 @@ archive/v0/          旧实现，只读参考
 - 离线变更队列；本地到期提醒通知。
 
 验收：不打开浏览器即可完成日常任务管理；断网修改后联网能正确同步；中文日期解析覆盖常用说法。
+
+实现记录：
+- 首版只支持一个 Google 账号（§13-2）；换账号会清空本地缓存和队列。
+- `calendar.events.owned` 只能读取自己拥有的日历，订阅日历（节假日等）读事件会 403，因此只同步 `accessRole == owner` 且已勾选的日历。
+- 首次全量同步用 `timeMin`（昨天起）+ `singleEvents`，Google 会同时返回 `nextSyncToken`，之后走增量；令牌过期（410）自动全量重来。
+- 验证手段：`scripts/test.sh`（内存假 Google 服务）；调试版 `PersonalHub --qa-render DIR [--qa-now 2026-10-20T17:58]` 离屏渲染主要界面为 PNG，不弹窗口、不抢焦点；安装版 `PersonalHub --agenda-smoke` 用真实账号在临时清单上走一遍离线队列、时间块和增量同步，结束后删除，只输出通过 / 失败。
 
 ### 阶段 3：薄后端与数据模块（v2）
 
@@ -274,7 +280,7 @@ archive/v0/          旧实现，只读参考
 每项附推荐，需在对应阶段开始前确认。
 
 1. **离开家里局域网时怎么访问 hub-api**（阶段 3）：推荐经 NPM 公网域名 + Authelia；备选 Tailscale。
-2. **Google 账号数量**（阶段 2）：推荐首版只支持一个账号，数据模型预留多账号。
+2. **Google 账号数量**（阶段 2）：已定为首版只支持一个账号，缓存按账号隔离，之后可扩展为多账号。
 3. **Apple Developer 账号**（阶段 1 签名、之后的 Widget）：推荐阶段 1 继续用固定自签名，Widget 需要时再开通。
 4. **日报确认以哪端为主**（阶段 5）：推荐 App 内确认后通知 Telegram 已确认，Telegram 保留为提醒渠道。
 5. **Mac 本机 Clash Verge 流量**（阶段 3）：推荐首版只看 NAS ShellCrash，不重建本机采集。

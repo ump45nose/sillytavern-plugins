@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.showQuickTask = { [weak self] in self?.toggleQuickPanel(.task) }
         state.showQuickMemo = { [weak self] in self?.toggleQuickPanel(.memo) }
 
+        state.agenda.start()
         setUpStatusItem()
         HotKeyCenter.shared.bind(.quickTask) { [weak self] in self?.toggleQuickPanel(.task) }
         HotKeyCenter.shared.bind(.quickMemo) { [weak self] in self?.toggleQuickPanel(.memo) }
@@ -47,7 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         popover.behavior = .transient
         popover.animates = true
-        popover.contentViewController = NSHostingController(rootView: PopoverView().environment(state))
+        let host = NSHostingController(rootView: PopoverView().environment(state))
+        host.sizingOptions = .preferredContentSize
+        popover.contentViewController = host
     }
 
     private func updateStatusTitle() {
@@ -72,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            state.sync()
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
@@ -104,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
+        state.sync()
     }
 
     #if DEBUG
@@ -163,7 +168,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let existing, existing.isVisible { existing.dismiss(); return }
         popover.performClose(nil)
         let panel = existing ?? QuickPanel(width: kind == .task ? 640 : 560)
-        panel.contentView = NSHostingView(rootView: QuickPanelView(kind: kind) { [weak panel] in panel?.dismiss() }.environment(state))
+        let root = switch kind {
+        case .task:
+            AnyView(QuickTaskView(close: { [weak panel] in panel?.dismiss() },
+                                  resize: { [weak panel] in panel?.fit() },
+                                  openMain: { [weak self] in self?.showMainWindow(page: nil) }))
+        case .memo:
+            AnyView(QuickMemoView { [weak panel] in panel?.dismiss() })
+        }
+        let host = NSHostingView(rootView: root.environment(state))
+        host.sizingOptions = []
+        panel.contentView = host
         if kind == .task { taskPanel = panel } else { memoPanel = panel }
         panel.present()
     }

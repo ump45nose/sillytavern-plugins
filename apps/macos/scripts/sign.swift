@@ -24,7 +24,7 @@ func codesign(_ arguments: [String]) throws {
 
 struct Identity: Codable { let certificateSHA1: String }
 
-let allowedIdentifiers = ["com.yuwk.personal-hub"]
+let allowedIdentifiers = ["com.yuwk.personal-hub", "com.yuwk.personal-hub.credentials"]
 let folder = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Application Support/PersonalDataHub/Signing")
 let keychainPath = folder.appendingPathComponent("identity.keychain-db").path

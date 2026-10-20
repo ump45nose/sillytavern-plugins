@@ -18,10 +18,12 @@ rm -rf "$iconset"
 "$app/Contents/MacOS/PersonalHub" --render-iconset "$iconset"
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
 rm -rf "$iconset"
+python3 "$root/scripts/bundle-google.py" "$app"
 
 swift -suppress-warnings "$root/scripts/sign.swift" "$app"
 printf '%s\n' "$app"
 
 if [[ "${1:-}" == "--install" ]]; then
+  "$root/scripts/install-credentials.sh"
   "$root/scripts/install.sh" "$app"
 fi

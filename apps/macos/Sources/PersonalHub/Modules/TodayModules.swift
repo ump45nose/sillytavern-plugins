@@ -16,7 +16,7 @@ struct BriefModule: View {
                     Text("下午好，玮康").font(Typo.serif(30))
                 }
                 Spacer()
-                Text("\(state.dueCount) 项任务到期 · 19:00 羽毛球 · 日报待确认")
+                Text(([Self.dueLine(state.agenda.view)] + [Self.eventLine(state.agenda.view)].compactMap { $0 } + ["日报待确认"]).joined(separator: " · "))
                     .font(Typo.serif(15)).foregroundStyle(Palette.ink2)
             }
             .padding(.trailing, 70)
@@ -54,16 +54,42 @@ struct BriefModule: View {
     }
 
     private var summary: AttributedString {
-        var s = AttributedString("今天有 ")
-        s += link("\(state.dueCount) 项任务", .agenda)
-        s += AttributedString("到期，其中 1 项已经逾期；")
-        s += link("19:00", .agenda)
-        s += AttributedString(" 去打羽毛球。步数完成了 86%，支出 ¥128.50，仍在预算之内。昨天的")
+        let v = state.agenda.view
+        var s = AttributedString()
+        if v.dueCount == 0 {
+            s += AttributedString("今天的任务都完成了；")
+        } else {
+            s += AttributedString("今天有 ")
+            s += link("\(v.dueCount) 项任务", .agenda)
+            s += AttributedString(v.overdue.isEmpty ? "到期；" : "到期，其中 \(v.overdue.count) 项已经逾期；")
+        }
+        if let e = v.currentEvent {
+            s += AttributedString("「\(e.title)」正在进行，")
+            s += link(Agenda.clock(e.end), .agenda)
+            s += AttributedString(" 结束。")
+        } else if let e = v.nextEvent, Calendar.hub.isDate(e.start, inSameDayAs: state.agenda.now) {
+            s += AttributedString("接下来 ")
+            s += link(Agenda.clock(e.start), .agenda)
+            s += AttributedString(" 是「\(e.title)」。")
+        } else {
+            s += AttributedString("今天没有别的日程了。")
+        }
+        s += AttributedString("步数完成了 86%，支出 ¥128.50，仍在预算之内。昨天的")
         s += link("日报", .goals)
         s += AttributedString("还在等你确认，GitHub 上有 ")
         s += link("3 条回复", .git)
         s += AttributedString("在等你。")
         return s
+    }
+
+    static func dueLine(_ v: AgendaView) -> String {
+        v.dueCount == 0 ? "任务都完成了" : "\(v.dueCount) 项任务到期"
+    }
+
+    static func eventLine(_ v: AgendaView) -> String? {
+        if let e = v.currentEvent { return "\(e.title) 进行中" }
+        guard let e = v.nextEvent, Calendar.hub.isDateInToday(e.start) else { return nil }
+        return "\(Agenda.clock(e.start)) \(e.title)"
     }
 
     private func link(_ text: String, _ module: ModuleID) -> AttributedString {
@@ -111,46 +137,63 @@ struct CommandBar: View {
 struct AgendaModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
+    @ViewState private var listFilter: String?
 
     var body: some View {
         if size == .compact { compact } else { detail }
     }
 
     private var compact: some View {
-        let t = state.snapshot.tasks, all = t.overdue + t.today
-        let done = all.filter { state.doneTasks.contains($0.title) }.count
+        let v = state.agenda.view, now = state.agenda.now
         return VStack(alignment: .leading, spacing: 0) {
-            EventBlock(event: state.snapshot.events[2], caption: "下一个 · 1 小时后", compact: true)
+            if let e = v.currentEvent {
+                EventBlock(event: e, caption: "进行中 · \(Agenda.clock(e.end)) 结束", compact: true)
+            } else if let e = v.nextEvent {
+                EventBlock(event: e, caption: "下一个 · \(Agenda.countdown(to: e.start, now: now))", compact: true)
+            } else {
+                Text("接下来没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3).frame(height: 44)
+            }
             Spacer(minLength: 8)
-            Hero(value: Double(state.dueCount), unit: "项今天到期 · 1 项逾期", size: 30)
-            Track(value: Double(done) / Double(all.count) * 100, color: Tone.sky.color, height: 4).padding(.top, 10)
-            Text("已完成 \(done) / \(all.count)").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+            Hero(value: Double(v.dueCount), unit: v.overdue.isEmpty ? "项今天到期" : "项到期 · \(v.overdue.count) 项逾期", size: 30)
+            Track(value: v.todayTotal == 0 ? 0 : Double(v.todayDone) / Double(v.todayTotal) * 100, color: Tone.sky.color, height: 4).padding(.top, 10)
+            Text("已完成 \(v.todayDone) / \(v.todayTotal)").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
         }
     }
 
     private var detail: some View {
-        let d = state.snapshot
+        let v = state.agenda.view, d = state.snapshot
+        let keep = { (t: AgendaTask) in listFilter == nil || t.listID == listFilter }
+        let groups: [(String, [AgendaTask])] = [
+            ("逾期", v.overdue.filter(keep)), ("今天 · \(v.today.filter(keep).count)", v.today.filter(keep)),
+            ("即将", v.upcoming.filter(keep)), ("以后", v.later.filter(keep)), ("无日期", v.undated.filter(keep)),
+        ]
         return HStack(alignment: .top, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+                Flow(spacing: 6) {
                     Chip(text: "全天 · 阶段第 \(d.cycle.day) 天", tone: .clay)
-                    Chip(text: "妈妈生日还有 6 天")
+                    ForEach(v.allDay) { Chip(text: $0.title, tone: $0.tone) }
                 }
-                DayTimeline(events: d.events, nowHour: d.now.hour, nowText: d.now.time)
+                DayTimeline(events: v.events, now: state.agenda.now)
             }
             .frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 0) {
-                SectionTitle("逾期").padding(.top, -18)
-                ForEach(d.tasks.overdue) { TaskRow(task: $0, late: true) }
-                SectionTitle("今天 · \(d.tasks.today.count)")
-                ForEach(d.tasks.today) { TaskRow(task: $0) }
-                SectionTitle("即将")
-                ForEach(d.tasks.upcoming) { TaskRow(task: $0) }
-                Button { state.showQuickTask() } label: {
-                    MiniInput(placeholder: "明天下午3点 和李雷对齐方案", shortcut: "↩")
+                ListChips(selection: $listFilter).padding(.bottom, 2)
+                SyncNotice().padding(.top, 6)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(groups.filter { !$0.1.isEmpty || $0.0.hasPrefix("今天") }, id: \.0) { title, tasks in
+                            SectionTitle(title)
+                            ForEach(tasks) { TaskRow(task: $0, showList: listFilter == nil) }
+                            if tasks.isEmpty {
+                                Text("今天没有到期的任务").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
+                            }
+                        }
+                    }
+                    .animation(Motion.spring, value: v.allTasks.map(\.completed))
                 }
-                .buttonStyle(.plain).padding(.top, 14)
-                FlowChips(chips: [("10 月 21 日 周三", .sky), ("15:00 · 同时建时间块", .clay), ("清单：工作", .olive)]).padding(.top, 8)
+                .scrollIndicators(.never)
+                .frame(maxHeight: 360)
+                InlineQuickAdd().padding(.top, 12)
             }
             .frame(maxWidth: .infinity)
         }
@@ -204,106 +247,6 @@ struct Flow: Layout {
             rows[rows.count - 1].height = max(rows[rows.count - 1].height, size.height)
         }
         return rows
-    }
-}
-
-struct EventBlock: View {
-    var event: CalendarEvent
-    var caption: String
-    var compact = false
-
-    var body: some View {
-        HStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 2).fill(event.tone.color).frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(caption).font(Typo.sans(11)).foregroundStyle(Palette.ink2)
-                HStack(spacing: 4) {
-                    Text(compact ? "\(Clock.hhmm(event.start)) \(event.title)" : event.title).font(Typo.sans(13, .semibold))
-                    if !compact { Text("· \(event.location)").font(Typo.sans(11)).foregroundStyle(Palette.ink2) }
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            Spacer(minLength: 0)
-        }
-        .background(RoundedRectangle(cornerRadius: 9).fill(event.tone.tint))
-        .clipShape(RoundedRectangle(cornerRadius: 9))
-    }
-}
-
-struct DayTimeline: View {
-    var events: [CalendarEvent]
-    var nowHour: Double
-    var nowText: String
-    private let pph: CGFloat = 30, h0 = 8.0, top: CGFloat = 12
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach([8, 10, 12, 14, 16, 18, 20, 22], id: \.self) { h in
-                HStack(spacing: 8) {
-                    Text(abs(Double(h) - nowHour) < 0.6 ? "" : String(format: "%02d:00", h))
-                        .font(Typo.sans(10)).foregroundStyle(Palette.ink4).monospacedDigit().frame(width: 34, alignment: .trailing)
-                    Rectangle().fill(Palette.line2).frame(height: 1)
-                }
-                .offset(y: y(Double(h)) - 6)
-            }
-            ForEach(events.indices, id: \.self) { i in
-                let e = events[i]
-                EventBlock(event: e, caption: "\(Clock.hhmm(e.start)) – \(Clock.hhmm(e.end))")
-                    .frame(height: CGFloat(e.end - e.start) * pph - 4, alignment: .top)
-                    .padding(.leading, 46)
-                    .offset(y: y(e.start) + 2)
-                    .rise(i + 2)
-            }
-            HStack(spacing: 4) {
-                Text(nowText).font(Typo.sans(10, .semibold)).foregroundStyle(Tone.clay.color).monospacedDigit().frame(width: 34, alignment: .trailing)
-                Dot(color: Tone.clay.color, pulse: true)
-                Rectangle().fill(Tone.clay.color).frame(height: 1.5)
-            }
-            .offset(y: y(nowHour) - 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .frame(height: 440, alignment: .topLeading)
-        .padding(.horizontal, 6)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.sunk.opacity(0.7)))
-    }
-
-    private func y(_ hour: Double) -> CGFloat { CGFloat(hour - h0) * pph + top }
-}
-
-struct TaskRow: View {
-    var task: TaskItem
-    var late = false
-    var showList = true
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        let done = state.doneTasks.contains(task.title)
-        HStack(spacing: 10) {
-            Button { state.toggleTask(task.title) } label: {
-                ZStack {
-                    Circle().strokeBorder(done ? Tone.olive.color : Palette.ink4, lineWidth: 1.5)
-                    Circle().fill(Tone.olive.color).scaleEffect(done ? 1 : 0.01)
-                    Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
-                        .scaleEffect(done ? 1 : 0.3).opacity(done ? 1 : 0)
-                }
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(task.title).font(Typo.sans(13)).foregroundStyle(done ? Palette.ink3 : Palette.ink).strikethrough(done, color: Palette.ink3).lineLimit(1)
-                if showList { Text(task.list).font(Typo.sans(11)).foregroundStyle(Palette.ink3) }
-            }
-            Spacer(minLength: 4)
-            if let due = task.due {
-                Text(due).font(Typo.sans(11, late ? .semibold : .regular)).monospacedDigit()
-                    .foregroundStyle(late ? Tone.rose.color : Palette.ink2)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(late ? Tone.rose.tint : Palette.sunk))
-            }
-        }
-        .padding(.vertical, 8)
-        .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
     }
 }
 
