@@ -120,6 +120,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_owned_marker_not_disabled(self):
         self.assertTrue(storefront_owned(" In Library "))
+        self.assertTrue(storefront_owned("已在库中"))
         for text in ("Unavailable", "Coming Soon", "Get", None, ""):
             self.assertFalse(storefront_owned(text))
 

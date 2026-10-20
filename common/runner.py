@@ -1,4 +1,4 @@
-"""One-shot Linux task launcher, using only the Python standard library."""
+"""One-shot task launcher, using only the Python standard library."""
 
 import argparse
 from contextlib import ExitStack
@@ -128,7 +128,9 @@ def run(task: Task):
                 scope = None
                 try:
                     with ExitStack() as process_stack:
-                        if task.browser:
+                        # pidfd containment is Linux-only. macOS still uses the
+                        # process-group supervisor around the installed Chrome.
+                        if task.browser and sys.platform != "darwin":
                             scope = process_stack.enter_context(
                                 BrowserScope(
                                     runtime / "locks/browser-cleanup.json",

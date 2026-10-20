@@ -158,4 +158,5 @@ def storefront_owned(button_text):
     return isinstance(button_text, str) and button_text.strip().casefold() in {
         "in library",
         "in your library",
+        "已在库中",
     }
