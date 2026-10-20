@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER root
 WORKDIR /app
 # 部署端只注入已固定提交和校验摘要的 wheel；不把 Git 凭据加入构建。
+# Base images can retain earlier release wheels; install only this release.
+RUN rm -rf /wheels
 COPY wheels/ /wheels/
 # 基础镜像复用 CRM 的依赖环境；只在新镜像层移除其旧业务分发包。
 RUN python -m pip uninstall -y personal-crm \
