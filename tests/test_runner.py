@@ -21,7 +21,7 @@ class RunnerTests(unittest.TestCase):
     def test_original_platform_time_budgets(self):
         from importlib import import_module
         budgets = {name: import_module("platforms." + name + ".run").TASK.timeout
-                   for name in ("smzdm", "v2ex", "aliyun", "laowang", "rewards", "epic")}
+                   for name in ("smzdm", "v2ex", "aliyun", "laowang")}
 
         self.assertEqual(
             budgets,
@@ -30,8 +30,6 @@ class RunnerTests(unittest.TestCase):
                 "v2ex": 240,
                 "aliyun": 480,
                 "laowang": 360,
-                "rewards": 7500,
-                "epic": 1300,
             },
         )
 
@@ -50,9 +48,9 @@ class RunnerTests(unittest.TestCase):
             timeout=5,
         )
 
-    def test_six_offline_entrypoints(self):
+    def test_offline_entrypoints(self):
         with tempfile.TemporaryDirectory() as root:
-            for platform in ["smzdm", "v2ex", "aliyun", "laowang", "epic", "rewards"]:
+            for platform in ["smzdm", "v2ex", "aliyun", "laowang"]:
                 r = self.invoke(platform, root)
                 self.assertEqual(r.returncode, 1)
                 self.assertEqual(
@@ -109,7 +107,7 @@ class RunnerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as root:
             with Lease(Path(root) / "locks/browser.lock"):
-                for p in ["laowang", "rewards", "epic"]:
+                for p in ["laowang", "telegram"]:
                     self.assertEqual(self.invoke(p, root).returncode, 75)
 
     def test_malformed_cache_does_not_crash(self):
@@ -156,31 +154,6 @@ class RunnerTests(unittest.TestCase):
             r = self.invoke("smzdm", root, "--execute")
             self.assertEqual(r.returncode, 1)
             self.assertEqual(json.loads(r.stdout)["reason"], "missing_session")
-
-    def test_rewards_full_requires_manifest_before_browser(self):
-        with tempfile.TemporaryDirectory() as root:
-            response = self.invoke("rewards", root, "--execute")
-            self.assertEqual(response.returncode, 1)
-            self.assertEqual(
-                json.loads(response.stdout)["reason"], "capability_manifest_required"
-            )
-
-    def test_rewards_explicit_modes_remain_separate(self):
-        with tempfile.TemporaryDirectory() as root:
-            for mode in ("snapshot", "extra"):
-                response = self.invoke("rewards", root, "--mode", mode, "--execute")
-                self.assertEqual(response.returncode, 1)
-                self.assertEqual(
-                    json.loads(response.stdout)["execution_status"], "failed"
-                )
-                self.assertTrue(
-                    (
-                        Path(root) / "results/rewards/default" / mode / "latest.json"
-                    ).exists()
-                )
-            self.assertFalse(
-                (Path(root) / "results/rewards/default/full/latest.json").exists()
-            )
 
     def fake_adapter(self, root, after):
         file = Path(root) / "fake-node"
@@ -285,16 +258,16 @@ class RunnerTests(unittest.TestCase):
                 },
             )
             fake = self.fake_adapter(root, "raise SystemExit(0)")
-            response = self.invoke("rewards", root, "--execute", "--node", str(fake))
+            response = self.invoke("laowang", root, "--execute", "--node", str(fake))
             self.assertEqual(
                 json.loads(response.stdout)["reason"], "browser_cleanup_unverified"
             )
-            self.assertFalse((Path(root) / "state/rewards/default/invoked").exists())
+            self.assertFalse((Path(root) / "state/laowang/default/invoked").exists())
 
     def test_cleanup_failure_dominates_intervention_preserving_business(self):
         from common.lifecycle import Outcome
         from common.runner import run
-        from platforms.rewards.run import TASK
+        from platforms.laowang.run import TASK
 
         for signal_result in ({"kind": "captcha"}, ValueError("invalid_signal")):
             with (
@@ -313,10 +286,10 @@ class RunnerTests(unittest.TestCase):
                             "schema_version": 1,
                             **context,
                             "execution_status": "failed",
-                            "reason": "full_in_progress",
+                            "reason": "fixture_in_progress",
                             "business": {
-                                "daily": "complete",
-                                "desktop_search": "unknown",
+                                "checkin": "complete",
+                                "reward": "unknown",
                             },
                         },
                     )
@@ -338,14 +311,14 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual(output["reason"], "browser_cleanup_unverified")
                 self.assertEqual(
                     output["business"],
-                    {"daily": "complete", "desktop_search": "unknown"},
+                    {"checkin": "complete", "reward": "unknown"},
                 )
                 self.assertTrue((Path(root) / "locks/browser-cleanup.json").exists())
 
     def test_cleanup_marker_io_failure_preserves_business(self):
         from common.lifecycle import Outcome
         from common.runner import run
-        from platforms.rewards.run import TASK
+        from platforms.laowang.run import TASK
 
         with tempfile.TemporaryDirectory() as root:
 
@@ -361,7 +334,7 @@ class RunnerTests(unittest.TestCase):
                         **context,
                         "execution_status": "ok",
                         "reason": "fixture",
-                        "business": {"daily": "complete"},
+                        "business": {"checkin": "complete"},
                     },
                 )
                 return Outcome(0)
@@ -381,12 +354,12 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual(run(TASK), 1)
             output = json.loads(captured.getvalue())
             self.assertEqual(output["reason"], "browser_cleanup_unverified")
-            self.assertEqual(output["business"], {"daily": "complete"})
+            self.assertEqual(output["business"], {"checkin": "complete"})
 
     def test_unsupported_pidfd_kernel_refuses_before_adapter_spawn(self):
         import errno
         from common.runner import run
-        from platforms.rewards.run import TASK
+        from platforms.laowang.run import TASK
 
         for code in (errno.ENOSYS, errno.EPERM):
             with self.subTest(errno=code), tempfile.TemporaryDirectory() as root:
