@@ -31,7 +31,12 @@ Progress (each step is tested and committed separately):
   Duplicati's existing selected-source backup now includes `/source/hub/data/`;
   existing schedule/destination/credentials retained, no backup run or restore test.
   Stack/runtime documentation updated. No source service restarted.
-- Step 3 code: CRM/Plaud/Memos adapters, write forwarding, audio Range and transcript proxies; 8 tests pass. Live deployment pending.
+- Step 3 code: CRM/Plaud/Memos adapters, write forwarding, audio Range and transcript proxies; 8 tests pass. Deployed `local/hub-api:946a9af`; real LAN CRM/Plaud/Memos status=ok.
+  CRM today=13 participant rows, Memos=20 rows at verification. Real existing
+  audio Range returned 206/4096 bytes; transcript returned 200 text/markdown.
+  POST forwarding tested against fake sources; no production records created.
+  Existing source credentials reused; no source configuration or restart.
+  Boot differences unchanged. Live modules: health, bills, crm/recordings, memos.
 - Steps 4–7: pending.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
