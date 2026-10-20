@@ -370,5 +370,25 @@
     },
     "no_agent": true,
     "source": "hermes/benefits_workbuddy_intl.py"
+  },
+  {
+    "name": "benefits-telegram-ai",
+    "schedule": {
+      "kind": "cron",
+      "expr": "40 8 * * *",
+      "display": "40 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_telegram_ai.py"
+  },
+  {
+    "name": "benefits-telegram-nsfw",
+    "schedule": {
+      "kind": "cron",
+      "expr": "43 8 * * *",
+      "display": "43 8 * * *"
+    },
+    "no_agent": true,
+    "source": "hermes/benefits_telegram_nsfw.py"
   }
 ]

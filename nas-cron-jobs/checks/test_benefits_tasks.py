@@ -169,6 +169,57 @@ class JobTests(unittest.TestCase):
             self.assertEqual(text.count("\n- "), 1)
             self.assertIn("微信取码服务认证失效（影响：Olé、影视飓风）", text)
 
+    def test_telegram_accounts_report_each_unconfirmed_bot_and_stay_silent_when_complete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            delivery = root / "runtime/delivery"
+            delivery.mkdir(parents=True)
+            tasks = {"telegram-ai": {"label": "Telegram tg-ai", "platform": "telegram", "account": "tg-ai"},
+                     "telegram-nsfw": {"label": "Telegram tg-nsfw", "platform": "telegram", "account": "tg-nsfw"}}
+            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": tasks}))
+            def write(key, **row):
+                base = {"platform": "telegram", "account": tasks[key]["account"], "business_date": "2026-10-19",
+                        "execution_status": "ok", "reason": "all_bots_confirmed", "business": {"checkin": "complete"},
+                        "details": {"metrics": {}, "items": []}}
+                (delivery / (key + ".json")).write_text(json.dumps({**base, **row}))
+            write("telegram-ai")
+            write("telegram-nsfw")
+            with patch.object(report, "DELIVERY_ROOT", delivery):
+                self.assertEqual(report.build_report("2026-10-19"), "")
+                write("telegram-nsfw", reason="bots_incomplete", business={"checkin": "incomplete"},
+                      details={"metrics": {}, "items": [
+                          {"id": "a", "name": "@xhgsgk_bot", "status": "incomplete", "reason": "bot_rejected"},
+                          {"id": "b", "name": "@okbot", "status": "complete", "reason": "checkin_confirmed"},
+                          {"id": "c", "name": "@offbot", "status": "not_applicable", "reason": "bot_disabled"},
+                          {"id": "d", "name": "@slowbot", "status": "unknown", "reason": "reply_timeout"}]})
+                write("telegram-ai", execution_status="failed", reason="telegram_app_unavailable",
+                      business={"checkin": "unknown"})
+                text = report.build_report("2026-10-19")
+            self.assertIn("- Telegram tg-ai：无法打开 Telegram 网页", text)
+            self.assertIn("- Telegram tg-nsfw：@xhgsgk_bot被拒绝（验证题或入群门槛），需手动签到、@slowbot未回复", text)
+            self.assertNotIn("@okbot", text)
+            self.assertNotIn("@offbot", text)
+            self.assertNotIn("签到未完成", text)
+
+    def test_telegram_jobs_are_installed_scheduled_and_summarised(self):
+        manifest = json.loads((ROOT / "hermes/manifest.json").read_text())["profile_scripts"]
+        schedules = {row["name"]: row for row in json.loads((ROOT / "hermes/schedules.json").read_text())}
+        for key, name in (("telegram-ai", "benefits_telegram_ai.py"), ("telegram-nsfw", "benefits_telegram_nsfw.py")):
+            self.assertEqual(manifest[name], "hermes/" + name)
+            self.assertIn("main('" + key + "')", (ROOT / "hermes" / name).read_text())
+            job = schedules["benefits-" + key]
+            self.assertEqual(job["source"], "hermes/" + name)
+            self.assertTrue(job["no_agent"])
+            minute, hour = job["schedule"]["expr"].split()[:2]
+            self.assertGreaterEqual(int(hour), 1)
+        text = summary.describe("telegram", {"execution_status": "ok", "business": {"checkin": "incomplete"},
+            "details": {"metrics": {"bots": {"unit": "count", "current": 6, "max": 7},
+                                     "points_qingbaoju": {"unit": "points", "current": 6}},
+                        "items": [{"name": "@xhgsgk_bot", "status": "incomplete", "reason": "bot_rejected"}]}})
+        self.assertIn("机器人 6/7", text)
+        self.assertIn("@xhgsgk_bot bot_rejected", text)
+        self.assertIn("qingbaoju 6", text)
+
 
 if __name__ == "__main__":
     unittest.main()

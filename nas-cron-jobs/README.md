@@ -182,6 +182,14 @@ do not produce success notifications. Unknown business outcomes, including an
 unconfirmed international WorkBuddy reward, remain visible in the exception
 report. WeTalk and Yanxuan are not scheduled until credentials and current
 interfaces are accepted.
+Telegram bot check-ins run as `benefits-telegram-ai` (08:40) and
+`benefits-telegram-nsfw` (08:43, Asia/Taipei) through the same launcher, with
+deployment keys `telegram-ai` / `telegram-nsfw` and `platform: telegram`; the
+shared browser lock serialises them. Some bots roll their day over after Taipei
+midnight, so they run after 08:00. The exception report names each unconfirmed
+bot; `bot_rejected` (captcha or join-channel gate) is shown as needing a manual
+check-in. Opening Telegram Web is retried for about three minutes when the proxy
+drops; commands are never resent.
 Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on
 each invocation; previously sent messages retain the snapshot from their send
 time. Successful repair runs therefore remove the platform from the next
