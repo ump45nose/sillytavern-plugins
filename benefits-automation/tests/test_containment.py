@@ -130,7 +130,6 @@ class ContainmentTests(unittest.TestCase):
         # Uses installed, pinned launch code, not real Firefox/Chromium or a site.
         for package, engine in [
             ("laowang/node_modules/playwright-firefox", "firefox"),
-            ("rewards/node_modules/patchright", "chromium"),
         ]:
             with (
                 self.subTest(engine=engine),
@@ -233,7 +232,7 @@ class ContainmentTests(unittest.TestCase):
             fake.chmod(0o700)
             argv = [
                 sys.executable,
-                str(ROOT / "platforms/rewards/run.py"),
+                str(ROOT / "platforms/laowang/run.py"),
                 "--runtime-root",
                 str(root),
                 "--execute",

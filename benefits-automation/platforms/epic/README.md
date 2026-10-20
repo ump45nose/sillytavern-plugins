@@ -71,6 +71,6 @@ NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当�
 
 2026-10-09 原 Hermes 入口实跑成功，run ID 为 `78d5a00f-76ab-4b77-a834-67b095fc846d`。当期 Out of Sight 和 TerraScape 两款均确认在库；正式任务记录一款已在库、一款新领、零项未确认。已有付费购物车未被修改。
 
-2026-10-20 正式回执已确认用户手动领取的 Bad Cheese 在库，Agent A 仍未在库；商品与独立零元结算均可加载，但间歇性资源 403 尚未根治。本日经额外授权只对 Agent A 点击一次提交，失败于 hCaptcha SDK 的 `RetryError` 及后续刷新异常，没有发送 confirm-order 或 challenge-order；旧 intent 和本次独立 intent 均保留。2026-10-19 的 `epic.error.captcha.challenge.failed` 支付拒绝尚无成功领取对照，不能称已解决。详细证据与未完成项见 [持续排查计划](../../docs/plans/2026-10-20-benefits-followup.md)。
+2026-10-20 正式回执已确认用户手动领取的 Bad Cheese 在库，Agent A 仍未在库；自动领取未通过核心验收。最新尝试卡在验证码 SDK，未发送支付确认；模型调用另有超时，昨日验证码通过后的支付拒绝与间歇性资源 403 也未解决。专属回归及浏览器夹具已按用户要求删除，当前结论只依据真实执行和所有权读回。完整阻塞与证据见 [当前阻塞记录](../../docs/plans/2026-10-20-benefits-regression-cleanup.md)。
 
 业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。

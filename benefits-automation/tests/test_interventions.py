@@ -13,11 +13,11 @@ class InterventionTests(unittest.TestCase):
     def setUp(self):
         self.now = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
         self.req = request(
-            {"run_id": "r", "platform": "epic", "account": "default"},
+            {"run_id": "r", "platform": "fixture", "account": "default"},
             "claim",
             "checkout",
             "terms",
-            "https://www.epicgames.com/site/en-US/tos",
+            "https://example.test/terms",
             fingerprint("terms text fixture", "version1"),
             expires_at="2026-10-01T13:00:00Z",
         )
