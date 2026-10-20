@@ -1,0 +1,23 @@
+services:
+  hub-api:
+    image: local/hub-api:${HUB_IMAGE_TAG:?set a source commit tag}
+    container_name: hub-api
+    user: "1000:1001"
+    restart: on-failure
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    environment:
+      HUB_DATABASE: /data/hub.sqlite
+    env_file: [./env/hub.env]
+    ports: ["192.168.31.201:18190:8080"]
+    volumes: ["/vol2/1000/Docker/hub/data:/data"]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    networks: [hub]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+networks:
+  hub: {}

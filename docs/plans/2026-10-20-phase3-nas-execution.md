@@ -16,7 +16,9 @@ Progress (each step is tested and committed separately):
   safe errors, module envelopes, batch/status endpoints. Python 3.12 unit verification: 4 tests passed (authentication/revocation/hash, safe errors,
   cache/stale/24h expiry, concurrency/deduplication/timeout isolation).
   Live modules: none; LAN deployment is step 2.
-- Steps 2–7: pending.
+- Step 2 code: read-only health/bills adapters, fake-source tests (6 tests pass),
+  pinned Python Dockerfile and hardened Compose template. Deployment pending.
+- Steps 3–7: pending.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
 credentials, and the Authelia restart window. Defaults for budget/health/cycle apply.

@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .modules import MODULE_SOURCES, modules
 from .settings import Settings
 from .sources.base import Adapter, SourceManager
+from .sources.records import Records
 from .store import Store
 
 ZONE = ZoneInfo("Asia/Shanghai")
@@ -47,10 +48,10 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             return super().render(scrub(content))
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
-    manager = SourceManager(adapters if adapters is not None else [
-        Adapter(identifier, identifier, 60 if identifier.startswith("records") or identifier in ("crm", "plaud", "memos") else (120 if identifier == "github" else 30))
-        for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids)
-    ], now, settings.source_timeout_seconds)
+    defaults = {a.id: a for a in Records(client, settings, now).adapters()}
+    for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
+        defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
+    manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
     app.state.store, app.state.sources, app.state.client = store, manager, client
 
     def error(status):

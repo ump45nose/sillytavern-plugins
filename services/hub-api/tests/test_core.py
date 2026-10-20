@@ -11,9 +11,6 @@ from hub_api.settings import Settings
 from hub_api.sources.base import Adapter, SourceManager
 
 
-@pytest.fixture
-def settings(tmp_path):
-    return Settings(database=tmp_path / "hub.sqlite", dev_token=SecretStr("SENTINEL-DEV-SECRET"))
 
 
 def test_auth_devices_and_safe_errors(settings, caplog):
