@@ -123,13 +123,13 @@ class V2exRecoveryTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             first = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
-            self.assertEqual(first["business"]["checkin"], "unknown")
+            self.assertEqual(first["business"]["checkin"], "complete")
             second = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
             self.assertEqual(second["business"]["reward"], "complete")
             self.assertEqual(sum("/redeem" in url for url in calls), 1)
             calls.clear()
             execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
-            self.assertEqual(calls, [])
+            self.assertFalse(any("/redeem" in url for url in calls))
 
     def test_final_read_error_does_not_erase_balance_confirmation(self):
         import tempfile
@@ -167,6 +167,51 @@ class V2exRecoveryTests(unittest.TestCase):
                 ],
                 "ok",
             )
+
+    def test_transient_read_failure_before_redeem_is_retried_once(self):
+        import tempfile
+        from platforms.v2ex.provider import V2ex
+
+        calls = []
+
+        class Response:
+            def __init__(self, text):
+                self.text = text
+
+        class Fake(Session):
+            def get(self, url, **kwargs):
+                calls.append(url)
+                if len(calls) == 1:
+                    raise ConnectionResetError("fixture")
+                if url.endswith("/balance"):
+                    return Response(
+                        '<td class="d"><span class="gray">20261001 每日登录奖励</span></td>'
+                    )
+                return Response(
+                    '<input type="button" class="super normal button" value="领取" onclick="location.href = \'/mission/daily/redeem?once=fixture\';" /><div class="cell">1天</div>'
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            out = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory,
+                          retry_delay=0)
+        self.assertEqual(out["business"]["reward"], "complete")
+        self.assertEqual(sum("/redeem" in url for url in calls), 1)
+
+    def test_failure_reasons_are_classified_without_write(self):
+        import tempfile
+
+        for error, reason in ((ValueError("unexpected_redirect"), "authentication_invalid"),
+                              (ConnectionResetError("fixture"), "network_error"),
+                              (KeyError("fixture"), "provider_error")):
+            class Provider:
+                @staticmethod
+                def sign(*args, **kwargs):
+                    raise error
+
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                out = execute(self.context, Provider, Session, "synthetic",
+                              state_dir=directory, retry_delay=0)
+                self.assertEqual(out["reason"], reason)
 
     def test_legacy_result_import_requires_matching_account_and_date(self):
         import tempfile

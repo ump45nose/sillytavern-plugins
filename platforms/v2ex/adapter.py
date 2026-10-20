@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from common.model import result, atomic_json
 from common.details import metric
 import re
+import time
 
 
 def delivery_details(rows):
@@ -36,6 +37,18 @@ def classify(rows, today):
     )
 
 
+def failure_reason(error):
+    if isinstance(error, ValueError) and str(error) == "unexpected_redirect":
+        return "authentication_invalid"
+    if isinstance(error, ValueError) and str(error) == "response_limit":
+        return "response_limit"
+    names = {cls.__name__ for cls in type(error).__mro__}
+    if names & {"ConnectionError", "Timeout", "ProxyError", "SSLError",
+                "ChunkedEncodingError", "TimeoutError", "OSError"}:
+        return "network_error"
+    return "provider_error"
+
+
 def execute(
     context,
     provider,
@@ -44,6 +57,7 @@ def execute(
     proxy=None,
     state_dir=None,
     confirmed_path=None,
+    retry_delay=5,
 ):
     if not cookie or "\n" in cookie or "\r" in cookie:
         return result(context, reason="missing_or_invalid_cookie")
@@ -84,13 +98,23 @@ def execute(
                 journal.set("pending")
                 write_started = True
 
-            try:
-                rows = provider.sign(
+            def sign():
+                return provider.sign(
                     session,
                     read_only=already_complete or journal.status == "pending",
                     before_write=before_write,
                     on_balance=on_balance,
                 )
+
+            try:
+                try:
+                    rows = sign()
+                except Exception as error:
+                    # Nothing was redeemed yet, so one fresh read pass is safe.
+                    if write_started or failure_reason(error) != "network_error":
+                        raise
+                    time.sleep(retry_delay)
+                    rows = sign()
             except Exception:
                 if not write_started:
                     raise
@@ -108,9 +132,9 @@ def execute(
             confirmed(),
             delivery_details(rows),
         )
-    except Exception:
+    except Exception as error:
         return result(context, "ok" if already_complete else "failed",
-                      "reward_confirmed_details_unavailable" if already_complete else "provider_error",
+                      "reward_confirmed_details_unavailable" if already_complete else failure_reason(error),
                       confirmed(), {"metrics": {"streak": metric("days"), "reward": metric("coins")}, "items": []})
 
 
