@@ -485,3 +485,29 @@ test("classify and summary follow the result contract", () => {
   assert.equal(out.checkin, "unknown");
   validateDetails(out.details);
 });
+
+// Reply shapes observed on 2026-10-20 (links and numbers trimmed): a notice and a
+// "please wait" message precede the verdict, "您已经获得" must not read as already,
+// and a join-channel gate is a rejection, not a silent timeout.
+test("observed multi-message replies classify as success, already or gate", async () => {
+  const already = ["已签到", "已经签到", "签到过", "already checked in"];
+  const gate = ["签到失败", "人机验证", "请先加入以下频道"];
+  for (const [replies, expected] of [
+    [["\"广告\"是骗子 重 要 声 明", "正在签到,请稍后...", "签到成功\n您已经获得 1 积分。\n您现在的积分为：6分。"],
+      ["complete", "checkin_confirmed"]],
+    [["🎉签到成功！您获得了 5 积分！\n当前账户余额：20 分"], ["complete", "checkin_confirmed"]],
+    [["今天已经签到了，明天再来！"], ["complete", "already_checked_in"]],
+    [["人机验证\n请先加入以下频道/群组完成验证"], ["incomplete", "bot_rejected"]],
+  ]) {
+    const ws = workspace({accounts: {"tg-ai": {bots: [bot({command: "/sign", already, failure: gate})]}}});
+    try {
+      const fake = fakeTelegram({chats: {AlphaBot: {messages: [],
+        onCommand: ({incoming, later}) => replies.forEach((text, i) => later(i + 1, () => incoming(text)))}}});
+      const out = await run(fake, ws);
+      assert.deepEqual(out.details.items.map((i) => [i.status, i.reason]), [expected], replies.join(" / "));
+      assert.equal(fake.state.sends.length, 1);
+    } finally {
+      ws.cleanup();
+    }
+  }
+});
