@@ -44,3 +44,29 @@ Duplicati's existing selected-source backup (schedule and credentials retained).
 LAN listeners and require no configuration changes.
 
 Run verification from **this directory**: `uv run pytest`.
+
+
+## CRM, recordings and Memos
+
+CRM pages people and the current 42-day interaction window using cursor pagination.
+Only minimal contact fields, today's interaction previews and cycle counts enter the
+short-lived cache. A multi-person interaction appears once per participant in `today`;
+cycle interaction counts remain distinct. Never-contacted people have unknown elapsed
+days and are omitted from the stale-contact list.
+
+Recordings prefer existing available CRM audio attachments. Otherwise match Plaud
+recordings on the same local date by overlapping time intervals; point interactions
+must fall inside the recording. Prefer greatest overlap, then nearest start, then ID.
+Missing start/duration or no match yields null. Recording IDs encode only source,
+date and source ID. The proxy accepts those fixed ID formats, streams audio with Range
+and serves the whole day's Plaud Markdown transcript. CRM attachments have no transcript
+API, so their transcript request returns 404. No arbitrary URL is accepted.
+
+Live Plaud uses its existing LAN listener on **18095**, verified read-only; the plan's
+older 127.0.0.1:8092 observation did not describe the actual service. No source listener,
+container or network was changed. Memos uses its existing token, `/auth/me`, the latest
+20 own NORMAL memos and official per-user tag statistics; it never scans all memo bodies.
+Both write endpoints forward once without retries. `person_name` must uniquely match
+an existing CRM contact; ambiguous/unknown names return 409, and no contact is invented.
+Unit tests exercise writes with fake services; no test memo or interaction is inserted
+into production merely for validation.

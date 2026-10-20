@@ -14,6 +14,8 @@ from .modules import MODULE_SOURCES, modules
 from .settings import Settings
 from .sources.base import Adapter, SourceManager
 from .sources.records import Records
+from .sources.personal import Personal
+from .personal_routes import register as personal_routes
 from .store import Store
 
 ZONE = ZoneInfo("Asia/Shanghai")
@@ -48,7 +50,8 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             return super().render(scrub(content))
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters()}
+    personal = Personal(client, settings, now)
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters()}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
@@ -115,4 +118,5 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         from fastapi.responses import Response
         return Response(status_code=204)
 
+    personal_routes(app, settings, personal, authenticated, now, manager)
     return app

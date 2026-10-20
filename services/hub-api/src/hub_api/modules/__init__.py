@@ -1,4 +1,5 @@
 import asyncio
+from .crm import assemble as crm_module
 
 MODULE_SOURCES = {
     "health": ["records_health"], "bills": ["records_bills"],
@@ -32,5 +33,7 @@ async def modules(manager, ids):
     for identifier in ids:
         results = [values[s] for s in MODULE_SOURCES[identifier]]
         data = results[0]["data"] if len(results) == 1 else None
+        if identifier == "crm":
+            data = crm_module(values["crm"]["data"], values["plaud"]["data"], manager.now())
         output[identifier] = envelope(identifier, results, data)
     return output

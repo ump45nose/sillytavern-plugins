@@ -31,7 +31,8 @@ Progress (each step is tested and committed separately):
   Duplicati's existing selected-source backup now includes `/source/hub/data/`;
   existing schedule/destination/credentials retained, no backup run or restore test.
   Stack/runtime documentation updated. No source service restarted.
-- Steps 3–7: pending.
+- Step 3 code: CRM/Plaud/Memos adapters, write forwarding, audio Range and transcript proxies; 8 tests pass. Live deployment pending.
+- Steps 4–7: pending.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
 credentials, and the Authelia restart window. Defaults for budget/health/cycle apply.

@@ -77,6 +77,10 @@ class SourceManager:
 
     def result(self, identifier):
         cached = self.cache.get(identifier)
+        if cached and (self.now() - datetime.fromisoformat(cached["updated_at"])).total_seconds() > 86400:
+            self.cache.pop(identifier)
+            cached = None
+            self.states[identifier]["status"] = "error"
         return {"id": identifier, "status": self.states[identifier]["status"],
                 "updated_at": cached["updated_at"] if cached else None,
                 "data": cached["data"] if cached else None}
