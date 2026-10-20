@@ -25,6 +25,15 @@ class SourceManager:
         self.states = {}
         self.locks = {a.id: asyncio.Lock() for a in adapters}
 
+    async def invalidate(self, *identifiers):
+        # Wait out reads using the old config, then discard their incompatible cache.
+        for identifier in identifiers:
+            if identifier not in self.locks:
+                continue
+            async with self.locks[identifier]:
+                self.cache.pop(identifier, None)
+                self.states.pop(identifier, None)
+
     def status(self, identifier):
         adapter = self.adapters[identifier]
         state = self.states.get(identifier, {})

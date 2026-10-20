@@ -65,3 +65,40 @@ class Store:
     def revoke(self, identifier):
         with self.connection() as db:
             return db.execute("DELETE FROM devices WHERE id=?", (identifier,)).rowcount > 0
+
+    def document(self, name):
+        import json
+        with self.connection() as db:
+            row = db.execute('SELECT * FROM documents WHERE name=?', (name,)).fetchone()
+        return {'version':row['version'],'updated_at':row['updated_at'],'document':json.loads(row['document'])} if row else None
+
+    def put_document(self, name, document, expected, now):
+        import json
+        encoded = json.dumps(document, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM documents WHERE name=?', (name,)).fetchone()
+            version = row['version'] if row else 0
+            if expected is not None and version != expected:
+                current = {'version':version,'updated_at':row['updated_at'],'document':json.loads(row['document'])} if row else None
+                return False, current
+            db.execute('INSERT INTO documents VALUES (?,?,?,?) ON CONFLICT(name) DO UPDATE SET version=excluded.version,updated_at=excluded.updated_at,document=excluded.document',
+                       (name,version+1,now,encoded))
+        return True, {'version':version+1,'updated_at':now,'document':document}
+
+    def observe_attention(self, active, scopes, now):
+        """Resolve only conditions whose source was observed; failed reads are not recovery."""
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for row in db.execute('SELECT id FROM attention_state').fetchall():
+                if row['id'].split(':',1)[0] in scopes and row['id'] not in active:
+                    db.execute('DELETE FROM attention_state WHERE id=?',(row['id'],))
+            for identifier, since in active.items():
+                db.execute('INSERT OR IGNORE INTO attention_state(id,since) VALUES (?,?)',(identifier,since or now))
+            return {r['id']:dict(r) for r in db.execute('SELECT * FROM attention_state')}
+
+    def handle_attention(self, identifier, until=None):
+        with self.connection() as db:
+            if until is None:
+                return db.execute('UPDATE attention_state SET dismissed=1,snooze_until=NULL WHERE id=?',(identifier,)).rowcount > 0
+            return db.execute('UPDATE attention_state SET dismissed=0,snooze_until=? WHERE id=?',(until,identifier)).rowcount > 0

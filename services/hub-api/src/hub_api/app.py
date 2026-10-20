@@ -21,6 +21,8 @@ from .sources.github import GitHub
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
 from .store import Store
+from .configuration import register as configuration_routes, preferences, subscriptions
+from .attention import register as attention_routes
 
 ZONE = ZoneInfo("Asia/Shanghai")
 
@@ -60,11 +62,12 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             return super().render(scrub(content))
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
-    personal = Personal(client, settings, now)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter()]}
+    personal = Personal(client, settings, now, lambda: preferences(store))
+    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
+    manager.store, manager.module_sources = store, MODULE_SOURCES
     manager.media_links = {s: getattr(settings, s + "_public_url") for s in ("emby", "navidrome", "moviepilot", "qbittorrent")}
     app.state.store, app.state.sources, app.state.client = store, manager, client
 
@@ -131,6 +134,8 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         from fastapi.responses import Response
         return Response(status_code=204)
 
+    configuration_routes(app, store, manager, authenticated, now)
+    attention_routes(app, manager, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)
     media_routes(app, settings, media, authenticated)
     return app

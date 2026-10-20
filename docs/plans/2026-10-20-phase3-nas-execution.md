@@ -62,7 +62,8 @@ Progress (each step is tested and committed separately):
   Its authentication policy was not modified. Source cookie isolation and signed
   reference tampering/expiry are covered by tests.
 - Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Deployed local/hub-api:2b48ca1; 14 fake-source tests pass. Live GitHub source=ok, git=partial (bounded coverage), waiting=13, blocked=23. Actual fetch 7.5s; only GitHub uses configurable 15s, all other sources retain 5s. Media remains ok.
-- Steps 6–7: not started, following §10 order. Authelia/NPM unchanged; no public
+- Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployment verification pending.
+- Step 7: not started, following §10 order. Authelia/NPM unchanged; no public
   endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.

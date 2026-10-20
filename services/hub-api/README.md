@@ -146,3 +146,39 @@ streak and partial status, rather than an invented count. Paginated notification
 results also produce partial. CI failure, changes requested, conflicts and no review
 are separate blocked conditions. Unknown onset remains null until local observation
 in the attention layer; it is never inferred from an unrelated PR update.
+
+## Configuration and attention
+
+Layout and preferences use atomic SQLite compare-and-swap with `If-Match`; the first
+version is zero. A conflict returns `current` in the error envelope. Layout documents
+remain opaque JSON objects, limited to 64 KiB; request streaming also has a bound.
+Preferences GET returns default values with version zero until first saved. PUT uses
+`{document: {...}}`, fills omitted preference fields with defaults and rejects unknown
+fields. Goals/budget are applied after cache reads. Cycle start selects one 42-day
+window; today's interactions/recordings are still read when outside that window.
+Changing cycle/config waits for affected in-flight reads before discarding their cache.
+
+Subscriptions replace `{items: [...]}`, at most 100 unique IDs. Amounts are CNY with
+cent precision; no currency conversion is implied. Annual prices divide by twelve,
+rounded to cents; monthly total sums the displayed equivalents. Last charge uses
+case-insensitive subscription-name substring matching in confirmed CNY expense item,
+merchant or note. One newest-first paginated stream covers the last 400 days, stops
+once every item matches and retains only matching date/amount. It is bounded to 10,000
+rows and the usual source deadline; truncation or unavailable source marks subs
+partial, while local subscription configuration remains available. Unmatched charges
+are null. Empty subscription configuration never queries bill history.
+
+Attention evaluates all seven NAS rules exclusively from available source caches and
+local configuration. Source data older than 24 hours is excluded. `source_down` uses
+collector `observed_at` when available, otherwise the last successful read; it reports
+continuous failure after 30 minutes or data age over six hours. Status/attention calls
+never refresh sources in the background. A client batch refreshes requested modules
+before attention is calculated. No notifications or background polling is added here.
+
+Handling state stores IDs, first onset, dismissed flag and snooze deadline only. Known
+GitHub onset is preserved; unknown conflict onset begins at local observation. All
+GitHub conditions are observed even before the age threshold so a card can be handled
+immediately. Both GitHub rows and attention rows respect the same state. An observed
+end removes handling state, allowing a new episode to notify again; incomplete or
+failed source reads do not establish that an absent condition has ended. Token windows
+with a known reset time get distinct IDs for the new quota period.

@@ -1,7 +1,7 @@
 import asyncio
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
 from .base import Adapter
@@ -12,9 +12,10 @@ def local_time(value, zone):
 
 
 class Personal:
-    def __init__(self, client, settings, now):
+    def __init__(self, client, settings, now, preferences=lambda: {}):
         self.client, self.settings, self.now = client, settings, now
         self.slots = asyncio.Semaphore(4)
+        self.preferences = preferences
 
     async def request(self, source, path, params=None, method="GET", body=None, write=False):
         token = getattr(self.settings, source + ("_write_token" if write and source == "crm" else "_token"))
@@ -39,20 +40,28 @@ class Personal:
                 raise ValueError("source cursor did not advance")
             seen.add(cursor)
 
+    def cycle(self):
+        start = date.fromisoformat(self.preferences()["cycle_start"]) if self.preferences().get("cycle_start") else self.now().date()-timedelta(days=41)
+        return start, min(start+timedelta(days=41),self.now().date())
+
     async def crm(self):
         today = self.now().date()
-        start = today - timedelta(days=41)
+        start, end = self.cycle()
         people = {}
         async for items in self.pages("people"):
             for p in items:
                 people[p["id"]] = {k: p.get(k) for k in ("id", "name", "relationship", "last_interaction_date")}
         interactions, active_people, recent = 0, set(), []
-        async for items in self.pages("interactions", start=start.isoformat(), end=today.isoformat()):
-            for item in items:
-                interactions += 1
-                active_people.update(item["person_ids"])
-                if item["date"] == today.isoformat():
-                    recent.append({k: item.get(k) for k in ("id", "person_ids", "channel", "date", "started_at", "ended_at", "preview", "attachment_count")})
+        ranges = [(start,end)] if start<=end else []
+        if not start<=today<=end: ranges.append((today,today))
+        for first,last in ranges:
+            async for items in self.pages("interactions", start=first.isoformat(), end=last.isoformat()):
+                for item in items:
+                    if start.isoformat() <= item["date"] <= end.isoformat():
+                        interactions += 1
+                        active_people.update(item["person_ids"])
+                    if item["date"] == today.isoformat():
+                        recent.append({k: item.get(k) for k in ("id", "person_ids", "channel", "date", "started_at", "ended_at", "preview", "attachment_count")})
         # Source lists deliberately omit attachment IDs. Resolve only today's linked items.
         async def attachments(item):
             if not item.get("attachment_count"):
@@ -68,12 +77,12 @@ class Personal:
 
     async def plaud(self):
         today = self.now().date()
-        start = today - timedelta(days=41)
-        page = await self.request("plaud", "/api/v1/archives", {"start_date": start.isoformat(), "end_date": today.isoformat(), "limit": 200})
-        # At most 42 archive days are possible in this date window.
+        start, end = self.cycle()
+        page = await self.request("plaud", "/api/v1/archives", {"start_date":start.isoformat(),"end_date":end.isoformat(),"limit":200}) if start<=end else {"items":[]}
         days = page["items"]
+        today_days = days if start<=today<=end else (await self.request("plaud", "/api/v1/archives", {"start_date":today.isoformat(),"end_date":today.isoformat(),"limit":1}))["items"]
         recordings = []
-        if any(d["date"] == today.isoformat() for d in days):
+        if any(d["date"] == today.isoformat() for d in today_days):
             detail = await self.request("plaud", "/api/v1/archives/" + today.isoformat())
             recordings = [{"id": "plaud:" + today.isoformat() + ":" + a["id"], "title": a["name"],
                 "start_at": local_time(a.get("start_at"), self.now().tzinfo),

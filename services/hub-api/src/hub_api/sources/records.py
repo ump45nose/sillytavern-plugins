@@ -46,9 +46,10 @@ def health_day(record):
 
 
 class Records:
-    def __init__(self, client, settings, now):
+    def __init__(self, client, settings, now, subscriptions=lambda: []):
         self.client, self.settings, self.now = client, settings, now
         self.slots = asyncio.Semaphore(4)
+        self.subscriptions = subscriptions
 
     async def get(self, path, params=None, missing=False):
         async with self.slots:
@@ -103,7 +104,31 @@ class Records:
                                      for r in sorted(categories["groups"], key=lambda r: Decimal(r["amount"]), reverse=True)[:8]],
                 "net_worth": None, "net_worth_months": None, "accounts": None}
 
+    async def charges(self):
+        items = self.subscriptions()
+        matches, offset = {}, 0
+        if not items:
+            return {"charges":{}, "partial":False}
+        today = self.now().date()
+        # One newest-first stream; retain only the latest matching charge per subscription.
+        while offset < 10000:
+            page = await self.get("bills", {"type":"expense","currency":"CNY","status":"confirmed",
+                "start_date":(today-timedelta(days=399)).isoformat(),"end_date":today.isoformat(),"limit":200,"offset":offset})
+            for row in page["records"]:
+                text = " ".join(str(row.get(k) or "") for k in ("item","merchant","note")).casefold()
+                for item in items:
+                    if item["id"] not in matches and item["name"].casefold() in text:
+                        matches[item["id"]] = {"date":datetime.fromisoformat(row["occurred_at"].replace("Z","+00:00")).astimezone(self.now().tzinfo).date().isoformat(),
+                            "amount":float(Decimal(row["amount"]).quantize(Decimal("0.01")))}
+            next_offset=page.get("next_offset")
+            if next_offset is None or len(matches)==len(items):
+                return {"charges":matches,"partial":False}
+            if next_offset<=offset: raise ValueError("invalid source pagination")
+            offset=next_offset
+        return {"charges":matches,"partial":True}
+
     def adapters(self):
         configured = bool(self.settings.records_token)
         return [Adapter("records_health", "Personal Records · 健康", 60, self.health if configured else None),
-                Adapter("records_bills", "Personal Records · 账单", 60, self.bills if configured else None)]
+                Adapter("records_bills", "Personal Records · 账单", 60, self.bills if configured else None),
+                Adapter("records_subscriptions", "Personal Records · 订阅扣款", 60, self.charges if configured else None)]

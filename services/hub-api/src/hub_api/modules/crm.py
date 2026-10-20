@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from ..sources.personal import local_time
 
 
-def assemble(crm, plaud, now, stale_days=30):
+def assemble(crm, plaud, now, stale_days=30, cycle_start=None):
     if crm is None and plaud is None:
         return None
     recordings = plaud["recordings"] if plaud else []
@@ -40,6 +40,6 @@ def assemble(crm, plaud, now, stale_days=30):
                     stale.append({"person_id": pid, "name": person["name"], "days": days})
         stale.sort(key=lambda p: (-p["days"], p["person_id"]))
         stale = stale[:5]
-    return {"today": recent, "cycle": {"start": (now.date() - timedelta(days=41)).isoformat(), "days": 42,
+    return {"today": recent, "cycle": {"start": cycle_start or (now.date() - timedelta(days=41)).isoformat(), "days": 42,
             "people": crm["cycle"]["people"] if crm else None, "interactions": crm["cycle"]["interactions"] if crm else None,
             "recordings": plaud["cycle_recordings"] if plaud else None}, "stale": stale}
