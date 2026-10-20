@@ -22,8 +22,8 @@
 
 - [x] 读取昨日迁移计划、部署规范和调度/执行/网关日志。
 - [x] 定位并恢复投递连接。
-- [ ] 修复迁移后的 CRM 实际接入与 skill 部署遗漏。
-- [ ] 验证、部署、提交检查点并报告。
+- [x] 修复迁移后的 CRM 实际接入与 skill 部署遗漏。
+- [x] 验证、部署、提交检查点并报告。
 
 ## 修复与接入决定
 
@@ -34,3 +34,12 @@
 - 新增 `reviewctl crm read --date` 只读命令，复用既有 API 和只读 token：完整读取列表分页、联系人与正文，按 CRM 北京时间消息格式裁切跨日/跨截止点内容，保留多行消息。原接口直接提供完整正文，无需 MCP 的分段工具；CLI 不初始化状态库、不复制聊天正文到复盘数据库。读取失败返回错误，不假装零条。
 - 日报 prompt 与 canonical/live skill 同步改用上述命令；保留原 Skysight 和近期已确认日报的有效交互说明。初次仅更新 skill 的版本已由本轮最终 API 指引替代。
 - 私有 skill 备份、隔离 SQLite 与诊断材料在 profile `cron/migration-backups/daily-repair-20261020/`。隔离窗口实读 2026-10-19 得到 Skysight 22、健康/账单/CRM/Git 各一份证据；昨日邮件/Google 输入未生成如实记录缺失，未改动生产冻结材料或 pending checkpoint。
+
+## 最终验收
+
+- 定向 HTTP 测试共 5 项通过，覆盖分页/认证、排除截止后的交互、完整正文超过列表预览、跨日/截止点和多行消息，以及 HTTP 失败不能变成零条。未扩大测试范围。
+- 集成 `d1ffbab` 到主线后，实际 Hermes 身份运行正式 `reviewctl crm read --date 2026-10-19`，成功读取 15 段对话、8 位联系人、4356 字符。特意使用空 MCP HOME 和不存在的测试状态库：无任何 MCP 凭据/缓存产生，状态库未创建，证明正文读取不依赖 MCP/OAuth，也不落库。
+- 正式源码链接已生效；live skill 与 canonical 字节一致，日报任务 prompt 来自 CronPlanner，746 字符，已去掉旧 CRM 工具指引。原 ID、enabled、21:30 调度和投递目标保持；Plaud 作业仍暂停。
+- 最终 config validate 通过；网关自 11:23:03 恢复后至 11:33 未再出现 Telegram 连接错误。历史 delivery_failed/error 留作真实历史，未伪造成功、未推进 pending checkpoint。
+- 部署后启动检查无新增差异，仍只有已有 tailscale 缺失及 ai-resource-center 未登记，无 stopped_planned。
+- 没有手工运行模型日报或实际补发消息。今晚 21:30 的完整生成与实际投递尚未发生，不能把只读协议验证宣称为实投成功。
