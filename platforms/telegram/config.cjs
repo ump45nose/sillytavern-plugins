@@ -41,7 +41,7 @@ function spacing(value, fallback) {
 
 function bot(value) {
   onlyKeys(value, ["id", "username", "command", "success", "already", "failure",
-    "button", "reply_timeout_seconds", "enabled"]);
+    "button", "reply_timeout_seconds", "enabled", "points"]);
   // Telegram requires bot usernames to end in "bot"; this keeps a typo from
   // sending a command to a person.
   if (!(typeof value.id === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(value.id)) ||
@@ -52,6 +52,20 @@ function bot(value) {
     onlyKeys(value.button, ["text"]);
     if (!line(value.button.text, 64)) invalid();
     button = {text: value.button.text};
+  }
+  let points = null;
+  if (value.points !== undefined) {
+    onlyKeys(value.points, ["pattern", "unit"]);
+    if (!line(value.points.pattern, 200) || !["points", "coins", "beans"].includes(value.points.unit ?? "points"))
+      invalid();
+    // Matched against the same NFKC, case-folded text as the other patterns,
+    // so a full-width colon in a reply reads as ":".
+    const source = value.points.pattern.normalize("NFKC");
+    let regex;
+    try { regex = new RegExp(source, "iu"); } catch { invalid(); }
+    // Exactly one capturing group: the number.
+    if (new RegExp("(?:" + source + ")|", "u").exec("").length !== 2) invalid();
+    points = {regex, unit: value.points.unit ?? "points"};
   }
   const timeout = value.reply_timeout_seconds ?? 30;
   if (!Number.isInteger(timeout) || timeout < 5 || timeout > 120) invalid();
@@ -64,6 +78,7 @@ function bot(value) {
     already: patterns(value.already, false),
     failure: patterns(value.failure, false),
     button,
+    points,
     replyTimeoutMs: timeout * 1000,
     enabled: value.enabled !== false,
   };

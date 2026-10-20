@@ -511,3 +511,101 @@ test("observed multi-message replies classify as success, already or gate", asyn
     }
   }
 });
+
+// The NAS proxy to web.telegram.org flaps for a minute or two.
+async function flakyGoto(fake, failures) {
+  const page = (await fake.firefox.launchPersistentContext()).pages()[0];
+  const goto = page.goto;
+  let left = failures;
+  page.goto = async (url) => {
+    if (url !== "about:blank" && left-- > 0) throw Error("NS_ERROR_PROXY_CONNECTION_REFUSED");
+    return goto(url);
+  };
+}
+
+test("a short app outage is retried before any bot is contacted", async () => {
+  const ws = workspace({accounts: {"tg-ai": {bots: [bot()]}}});
+  try {
+    const fake = fakeTelegram({chats: {AlphaBot: {messages: [], onCommand: ({incoming}) => incoming("签到成功")}}});
+    await flakyGoto(fake, 3);
+    const c = clock();
+    const out = await run(fake, ws, {clock: c});
+    assert.equal(out.checkin, "complete");
+    assert.equal(fake.state.sends.length, 1);
+    assert.ok(c.now() >= 90000, "waited between attempts");
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("a lasting outage reports telegram_app_unavailable and sends nothing", async () => {
+  for (const statusOnly of [false, true]) {
+    const ws = workspace({accounts: {"tg-ai": {bots: [bot()]}}});
+    try {
+      const fake = fakeTelegram({chats: {AlphaBot: {messages: []}}});
+      await flakyGoto(fake, Infinity);
+      const c = clock();
+      const out = await run(fake, ws, {clock: c, statusOnly});
+      assert.deepEqual(out, {execution: "failed", reason: "telegram_app_unavailable", checkin: "unknown"});
+      assert.deepEqual(fake.state.sends, []);
+      assert.ok(c.now() <= 240000, "bounded retry budget");
+    } finally {
+      ws.cleanup();
+    }
+  }
+});
+
+test("an outage while opening a later chat is retried and does not resend", async () => {
+  const ws = workspace({accounts: {"tg-ai": {bots: [bot(), bot({id: "beta", username: "BetaBot"})]}}});
+  try {
+    const reply = {messages: [], onCommand: ({incoming}) => incoming("签到成功")};
+    const fake = fakeTelegram({chats: {AlphaBot: {...reply}, BetaBot: {...reply, messages: []}}});
+    const page = (await fake.firefox.launchPersistentContext()).pages()[0];
+    const goto = page.goto;
+    let failed = 0;
+    page.goto = async (url) => {
+      if (url.endsWith("#@BetaBot") && failed++ < 2) throw Error("timeout");
+      return goto(url);
+    };
+    const out = await run(fake, ws);
+    assert.equal(out.checkin, "complete");
+    assert.deepEqual(fake.state.sends.map((s) => s.chat), ["AlphaBot", "BetaBot"]);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("a configured points pattern records only the number as a metric", async () => {
+  const ws = workspace({accounts: {"tg-ai": {bots: [
+    bot({command: "/sign", points: {pattern: "积分为:?\\s*(\\d+)"}}),
+    bot({id: "beta-2", username: "BetaBot", points: {pattern: "余额:?\\s*(\\d+)", unit: "coins"}}),
+    bot({id: "gamma", username: "GammaBot"}),
+  ]}}});
+  try {
+    const say = (text) => ({messages: [], onCommand: ({incoming}) => incoming(text)});
+    const fake = fakeTelegram({chats: {
+      AlphaBot: say("签到成功\n您已经获得 1 积分。\n您现在的积分为：6分。"),
+      BetaBot: say("签到成功"),
+      GammaBot: say("签到成功，余额：9"),
+    }});
+    const out = await run(fake, ws);
+    validateDetails(out.details);
+    assert.equal(out.details.metrics.points_alpha.current, 6);
+    assert.equal(out.details.metrics.points_alpha.unit, "points");
+    assert.deepEqual([out.details.metrics.points_beta_2.unit, out.details.metrics.points_beta_2.current], ["coins", null]);
+    assert.equal(out.details.metrics.points_gamma, undefined);
+    assert.ok(!JSON.stringify(out).includes("签到"), "no reply text in the result");
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("points config requires one capture group and a known unit", () => {
+  const ok = parseConfig({accounts: {a: {bots: [bot({points: {pattern: "余额：(\\d+)"}})]}}}, "a").bots[0];
+  assert.equal(ok.points.unit, "points");
+  assert.ok(ok.points.regex.test("余额:5"), "full-width colon matches the normalized reply");
+  for (const points of [{pattern: "\\d+"}, {pattern: "(\\d+)(x)"}, {pattern: "(["}, {pattern: "(\\d+)", unit: "usd"},
+    {pattern: "(\\d+)", extra: 1}, "(\\d+)"])
+    assert.throws(() => parseConfig({accounts: {a: {bots: [bot({points})]}}}, "a"), /configuration_invalid/,
+      JSON.stringify(points));
+});
