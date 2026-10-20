@@ -247,7 +247,8 @@ NAS 实现记录（按步骤更新）：
 - 第 4 步已上线 Token/net，hub 镜像 `local/hub-api:07f0eef`；usage-monitor 新增只读 HTTP（`local/usage-monitor-mcp:hub-http-ebd2389`），仅重建该来源，保留原 OAuth/卷/事件。Token 四区间通过；stats 缺少小时 Token、历史工具/设备，相关字段 null。网络实际流量通过，套餐额度/到期无来源数据，`pools=null`，模块 partial。Token 估算成本沿用 USD，与现有 Mac `$` 显示一致。
 - 第 5 步媒体已上线（`local/hub-api:46d53dd`），四来源均 ok，列表 8/8/6/6；真实签名封面代理通过。hub-api 加入原 `media_net` 访问 MoviePilot API `moviepilot:3001`，来源服务未改。qBittorrent 沿用 qbit_manage 已有的可信内网免登录访问。12 项 hub 测试通过。
 - 第 5 步 GitHub 已上线（`local/hub-api:2b48ca1`），按用户授权复用 NAS gh 的经典/OAuth 令牌，仅 GET REST 和固定 GraphQL query；来源 ok，git partial（分页/贡献覆盖限制），实测待回复 13、阻塞条目 23。完整读取约 7.5–9.5 秒，GitHub 独立 15 秒超时；其他来源仍默认 5 秒。14 项测试通过。
-- 第 6–7 步按顺序待续；Authelia/NPM 尚未改动，公网与 OIDC 验收尚未执行。
+- 第 6 步订阅、偏好、布局与需要注意已上线（`local/hub-api:d12898e`）。19 项测试通过，覆盖并发版本冲突、配置读取竞争和七条规则；真实 LAN 订阅/需要注意 ok、偏好 version0、未创建的布局 404，未写入生产测试配置。
+- 第 7 步待续；Authelia/NPM 尚未改动，公网与 OIDC 验收尚未执行。
 
 NAS 侧执行计划与 Mac / 安卓共用的接口约定见 [阶段 3 NAS 侧计划](2026-10-20-phase3-nas.md)。电脑历史在本阶段由 Mac 直接读本机归档。
 

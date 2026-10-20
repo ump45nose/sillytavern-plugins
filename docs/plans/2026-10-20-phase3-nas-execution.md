@@ -62,13 +62,13 @@ Progress (each step is tested and committed separately):
   Its authentication policy was not modified. Source cookie isolation and signed
   reference tampering/expiry are covered by tests.
 - Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Deployed local/hub-api:2b48ca1; 14 fake-source tests pass. Live GitHub source=ok, git=partial (bounded coverage), waiting=13, blocked=23. Actual fetch 7.5s; only GitHub uses configurable 15s, all other sources retain 5s. Media remains ok.
-- Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployment verification pending.
+- Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployed local/hub-api:d12898e. LAN all-module/status=200; subs/attention=ok (0/7 rows), preferences=200/version0, absent layout=404. No production configuration/test records were inserted.
 - Step 7: not started, following §10 order. Authelia/NPM unchanged; no public
   endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
-Production image is 2b48ca1 (later documentation commits do not change code).
+Production image is d12898e (later documentation commits do not change code).
 Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
 Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
 It is clean, with source changes committed and subtree release branches pushed;
