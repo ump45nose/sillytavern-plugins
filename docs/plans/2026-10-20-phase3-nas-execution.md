@@ -51,7 +51,34 @@ Progress (each step is tested and committed separately):
   Source release pushed to app-configs branch `codex/hub-api-read-http-20261020`;
   boot line pushed to nas-cron-jobs branch `codex/hub-api-boot-20261020`.
   Aggregate main remains dirty and is not overwritten or merged.
-- Steps 5–7: pending.
+- Step 5 media: deployed `local/hub-api:46d53dd`; 12 hub tests pass.
+  All four media sources=ok, rows resume/latest/albums/downloads=8/8/6/6.
+  Real authenticated signed cover proxy=200. Only hub-api additionally joined
+  existing media_net for the actual MoviePilot API at moviepilot:3001. All source
+  containers/configurations were retained. MoviePilot LAN 28900 was actually the
+  separate Emby STRM API; corrected the observations in the plan.
+  qbit_manage's existing user/pass are empty; a bounded read from the hub container
+  already returns 200, so the same trusted-network access is explicitly retained.
+  Its authentication policy was not modified. Source cookie isolation and signed
+  reference tampering/expiry are covered by tests.
+- Step 5 GitHub: waiting for the §8-2 credential decision; do not copy the NAS gh
+  credential into the service until the user authorizes reuse or supplies a file.
+- Steps 6–7: not started, following §10 order. Authelia/NPM unchanged; no public
+  endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
+
+Recovery: read this execution record, the phase-3 plan and requirements first.
+Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
+Production image is 46d53dd (later documentation commits do not change code).
+Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
+Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
+It is clean, with source changes committed and subtree release branches pushed;
+main has unrelated boot edits. Do not merge/overwrite that dirty main.
+Private deployment rollback files are `/vol2/1000/Docker/hub/deployment-backups/`;
+restore only this task's changed fields and preserve live business/OAuth data.
+Boot check still has only ai-resource-center/oauth-disclosure unplanned, no missing
+or stopped planned containers. Dockge browser cards remain unverified; both Compose
+contexts were validated. Duplicati backup/restore and production source writes were
+not triggered merely for testing.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
 credentials, and the Authelia restart window. Defaults for budget/health/cycle apply.
