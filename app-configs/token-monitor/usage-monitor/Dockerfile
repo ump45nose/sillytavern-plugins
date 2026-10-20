@@ -9,7 +9,7 @@ COPY wheels/ /wheels/
 RUN python -m pip uninstall -y personal-crm \
     && python -m pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl \
     && python -m pip check
-COPY src/ /app/src/
+COPY --chown=1000:1001 src/ /app/src/
 ENV PYTHONPATH=/app/src
 EXPOSE 8080
 USER 1000:1001

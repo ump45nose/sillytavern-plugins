@@ -29,6 +29,7 @@ environment:
   HOST: 0.0.0.0
   PORT: '8080'
   USAGE_DATA_DIR: /data
+  USAGE_HTTP_READ_TOKEN_FILE: /run/secrets/hub-http-read-token
   USAGE_TIMEZONE: Asia/Taipei
   SHELLCRASH_TIMEZONE: Asia/Shanghai
   USAGE_DAILY_HOUR: '23'

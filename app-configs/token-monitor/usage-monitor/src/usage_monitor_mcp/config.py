@@ -20,10 +20,12 @@ class Settings:
     schedule_minute: int = 0
     events_enabled: bool = False
     event_subject: str = ""
+    http_read_token_file: str = ""
 
     @classmethod
     def from_env(cls):
         value = cls(
+            http_read_token_file=os.getenv("USAGE_HTTP_READ_TOKEN_FILE", ""),
             data_dir=Path(os.getenv("USAGE_DATA_DIR", "/data")),
             token_data_file=Path(os.getenv("TOKEN_MONITOR_DATA_FILE", "/sources/token-monitor/devices.json")),
             traffic_db=Path(os.getenv("SHELLCRASH_TRAFFIC_DB", "/sources/shellcrash/traffic.sqlite3")),

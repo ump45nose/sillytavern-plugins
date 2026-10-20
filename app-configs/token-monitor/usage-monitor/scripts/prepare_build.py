@@ -31,7 +31,7 @@ def source_changes(baseline, revision):
     """Compare the original package tree with its current monorepo location."""
     prefix = command("git", "rev-parse", "--show-prefix")
     paths = ("src/usage_monitor_mcp", "pyproject.toml", "uv.lock")
-    old_prefix = next(candidate for candidate in (prefix, "apps/usage-monitor/", "")
+    old_prefix = next(candidate for candidate in (prefix, "token-monitor/usage-monitor/", "apps/usage-monitor/", "")
                       if subprocess.run(
                           ["git", "cat-file", "-e", baseline + ":" + candidate + "pyproject.toml"],
                           cwd=ROOT, capture_output=True,
