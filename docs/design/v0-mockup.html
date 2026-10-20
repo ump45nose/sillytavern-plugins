@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Personal Hub · 设计草图 v0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --desk:#E6E2D6; --bg:#F5F3EC; --side:#EDEAE0; --card:#FFFEFB; --line:#E4DED1; --line2:#EEE9DE;
+  --ink:#141413; --ink2:#5E5D59; --ink3:#8F8D85;
+  --clay:#D97757; --clay-d:#C15F3C; --clay-bg:#F6E3D9;
+  --kraft:#D4A27F; --manilla:#EBDBBC; --olive:#788C5D; --olive-bg:#E6EADB; --sky:#6A9BCC; --sky-bg:#E1EAF3; --heather:#CBCADB;
+  --serif:"Tiempos Text","Source Serif 4","Songti SC","Noto Serif SC",Georgia,serif;
+  --sans:"Styrene B",Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);font-family:var(--sans);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+.top{display:flex;align-items:center;gap:16px;padding:18px 32px 0}
+.top h1{font-family:var(--serif);font-weight:500;font-size:20px;margin:0}
+.top .note{color:var(--ink2)}
+.seg{display:flex;background:var(--side);border:1px solid var(--line);border-radius:10px;padding:3px;margin-left:auto}
+.seg button{border:0;background:none;padding:6px 14px;border-radius:7px;color:var(--ink2)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.stage{padding:18px 32px 40px}
+.hidden{display:none!important}
+
+/* window */
+.win{background:var(--bg);border:1px solid #D6D0C2;border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(60,50,30,.14);display:grid;grid-template-columns:216px 1fr;height:860px}
+.side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px 10px}
+.lights{display:flex;gap:7px;padding:4px 6px 18px}
+.lights i{width:12px;height:12px;border-radius:50%;background:#E0DBCF;display:block}
+.lights i:nth-child(1){background:#EC6A5E}.lights i:nth-child(2){background:#F4BF4F}.lights i:nth-child(3){background:#61C554}
+.brand{display:flex;align-items:center;gap:9px;padding:0 8px 16px;font-family:var(--serif);font-size:16px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav .grp{font-size:11px;color:var(--ink3);padding:14px 10px 6px;letter-spacing:.04em}
+.nav button{display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:7px 10px;border-radius:8px;color:var(--ink2)}
+.nav button:hover{background:rgba(0,0,0,.035)}
+.nav button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.nav button .k{margin-left:auto;font-size:11px;color:var(--ink3)}
+.nav button .tag{margin-left:auto;font-size:10px;color:var(--clay-d);background:var(--clay-bg);padding:1px 6px;border-radius:5px}
+.side .foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);color:var(--ink2);font-size:12px;display:flex;align-items:center;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--olive);display:inline-block;flex:none}
+.dot.warn{background:var(--clay)}.dot.sky{background:var(--sky)}.dot.mute{background:var(--heather)}
+.main{overflow:auto}
+.ph{display:flex;align-items:flex-end;gap:16px;padding:28px 36px 18px;position:sticky;top:0;background:linear-gradient(var(--bg) 82%,rgba(245,243,236,0));z-index:2}
+.ph h2{font-family:var(--serif);font-weight:500;font-size:30px;margin:0;letter-spacing:-.01em}
+.ph .sub{color:var(--ink2);margin-bottom:5px}
+.ph .acts{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--card);padding:6px 12px;border-radius:8px;color:var(--ink2)}
+.btn.pri{background:var(--ink);color:var(--ivory,#FAF9F5);border-color:var(--ink)}
+.btn.on{background:var(--clay);border-color:var(--clay);color:#fff}
+.muted{color:var(--ink3)}
+.page{padding:0 36px 36px}
+
+/* grid + card */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;position:relative;min-width:0}
+.ch{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.ch .t{font-weight:600;font-size:13px;white-space:nowrap}
+.ch .src{font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ch .sz{margin-left:auto;display:flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden}
+.ch .sz button{border:0;background:none;padding:2px 8px;font-size:11px;color:var(--ink3)}
+.ch .sz button.on{background:var(--side);color:var(--ink)}
+.edit-ctl{display:none;position:absolute;top:-10px;right:10px;gap:4px}
+.editing .edit-ctl{display:flex}
+.editing .card{outline:1.5px dashed var(--kraft);outline-offset:3px}
+.edit-ctl button{border:1px solid var(--line);background:var(--card);border-radius:6px;width:22px;height:22px;font-size:12px;line-height:1;color:var(--ink2)}
+.add-card{display:none;border:1.5px dashed var(--kraft);border-radius:14px;padding:16px;color:var(--ink2);background:rgba(255,254,251,.5)}
+.editing .add-card{display:block}
+.add-card .opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--ink2)}
+.chip.clay{background:var(--clay-bg);border-color:#EFCDBC;color:var(--clay-d)}
+.chip.olive{background:var(--olive-bg);border-color:#D3DAC2;color:#56693F}
+.chip.sky{background:var(--sky-bg);border-color:#C9D9EA;color:#40698F}
+
+.big{font-family:var(--serif);font-size:30px;line-height:1.1;letter-spacing:-.01em}
+.big small{font-family:var(--sans);font-size:12px;color:var(--ink3);margin-left:4px;letter-spacing:0}
+.mid{font-family:var(--serif);font-size:20px}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.kv .l{font-size:11px;color:var(--ink3)}.kv .v{font-family:var(--serif);font-size:17px;margin-top:2px}
+.row{display:flex;align-items:center;gap:10px}
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2)}
+.li:first-child{border-top:0}
+.li .r{margin-left:auto;color:var(--ink2);font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line2);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--clay);border-radius:99px}
+.bar.olive i{background:var(--olive)}.bar.sky i{background:var(--sky)}.bar.kraft i{background:var(--kraft)}
+.sect{font-size:11px;color:var(--ink3);letter-spacing:.04em;margin:14px 0 6px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.poster{border-radius:8px;aspect-ratio:2/3;background:linear-gradient(160deg,var(--manilla),var(--kraft));position:relative;overflow:hidden}
+.poster span{position:absolute;left:8px;right:8px;bottom:8px;font-family:var(--serif);font-size:12px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.35)}
+.poster .p{position:absolute;left:0;bottom:0;height:3px;background:var(--clay)}
+.posters{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.album{border-radius:8px;aspect-ratio:1;background:linear-gradient(135deg,var(--heather),var(--sky))}
+.cb{width:15px;height:15px;border:1.5px solid var(--ink3);border-radius:50%;flex:none}
+.cb.done{background:var(--olive);border-color:var(--olive)}
+.ev{border-left:3px solid var(--sky);background:var(--sky-bg);border-radius:6px;padding:6px 10px;margin:4px 0}
+.ev.clay{border-color:var(--clay);background:var(--clay-bg)}
+.ev .tm{font-size:11px;color:var(--ink2)}
+.tl{display:grid;grid-template-columns:44px 1fr;gap:4px 10px}
+.tl .h{font-size:11px;color:var(--ink3);padding-top:8px;text-align:right}
+.input{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);color:var(--ink3)}
+.kbd{font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--ink2);background:var(--card)}
+.goal{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg)}
+.goal .d{font-size:11px;color:var(--ink3)}
+.goals{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.att .li .dot{margin-top:1px}
+.att .act{margin-left:auto;font-size:12px;color:var(--clay-d)}
+.rec{display:inline-flex;align-items:center;gap:6px;border:1px solid #EFCDBC;background:var(--clay-bg);color:var(--clay-d);border-radius:8px;padding:3px 8px;font-size:11px;margin-top:6px}
+.person{width:28px;height:28px;border-radius:50%;background:var(--manilla);display:grid;place-items:center;font-family:var(--serif);font-size:13px;flex:none}
+.ver{font-size:10px;color:var(--clay-d);background:var(--clay-bg);padding:1px 6px;border-radius:5px}
+.greet{display:flex;align-items:flex-end;gap:20px}
+.greet .input{flex:1;max-width:520px;margin-left:auto}
+
+/* skysight page */
+.sky-wrap{display:grid;grid-template-columns:330px 1fr;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card);height:700px}
+.sky-list{border-right:1px solid var(--line);overflow:auto;padding:8px}
+.sky-list .day{font-size:11px;color:var(--ink3);padding:12px 10px 6px}
+.sky-item{padding:10px 12px;border-radius:10px;cursor:pointer}
+.sky-item.on{background:var(--bg)}
+.sky-item .tt{font-weight:600;margin:3px 0}
+.sky-item .meta{font-size:11px;color:var(--ink3)}
+.apps{display:flex;gap:4px;margin-top:6px}
+.app{width:18px;height:18px;border-radius:5px;background:var(--heather)}
+.sky-detail{padding:28px 36px;overflow:auto;line-height:1.75}
+.sky-detail h3{font-family:var(--serif);font-weight:500;font-size:24px;margin:6px 0 8px}
+.sky-detail h4{font-size:13px;margin:22px 0 6px}
+.sky-detail p,.sky-detail li{color:#33322E}
+
+/* memos page */
+.webview{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;height:700px;display:flex;flex-direction:column}
+.wv-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line2);background:var(--bg);font-size:12px;color:var(--ink3)}
+.wv-url{flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:4px 10px}
+.memos{display:grid;grid-template-columns:200px 1fr;flex:1;min-height:0}
+.memos .tags{border-right:1px solid #EEE;padding:16px;color:#555;font-size:12px;line-height:2.1}
+.memos .feed{padding:18px 26px;overflow:auto;background:#FAFAFA}
+.memo{background:#fff;border:1px solid #EEE;border-radius:10px;padding:12px 14px;margin-bottom:10px;line-height:1.6}
+.memo .m{font-size:11px;color:#999;margin-bottom:4px}
+.memo .tg{color:#3B82F6}
+
+/* menubar scene */
+.desk{position:relative;height:860px;border-radius:14px;overflow:hidden;background:radial-gradient(1200px 600px at 70% 20%,#EBDBBC,#D4A27F 55%,#B98762);border:1px solid #CDBFA8}
+.menubar{height:28px;background:rgba(250,249,245,.72);backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 14px;gap:18px;font-size:13px}
+.menubar .r{margin-left:auto;display:flex;gap:16px;align-items:center}
+.status{display:flex;align-items:center;gap:6px;background:rgba(20,20,19,.08);padding:2px 8px;border-radius:5px;font-variant-numeric:tabular-nums}
+.pop{position:absolute;top:36px;right:150px;width:380px;background:rgba(255,254,251,.96);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px rgba(40,30,10,.22);padding:14px}
+.pop:before{content:"";position:absolute;top:-7px;right:60px;width:12px;height:12px;background:inherit;border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.tabs{display:flex;gap:4px;background:var(--side);border-radius:9px;padding:3px;margin-bottom:12px}
+.tabs span{flex:1;text-align:center;padding:4px;border-radius:7px;color:var(--ink2);font-size:12px}
+.tabs span.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.qp{position:absolute;width:560px;background:rgba(255,254,251,.97);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(40,30,10,.28);padding:16px 18px}
+.qp .q{font-size:18px;font-family:var(--serif);padding:4px 0 12px;border-bottom:1px solid var(--line2)}
+.qp .q b{background:var(--clay-bg);color:var(--clay-d);font-weight:400;border-radius:5px;padding:0 4px}
+.qp .ft{display:flex;gap:14px;font-size:11px;color:var(--ink3);margin-top:12px}
+.qp .lbl{font-size:11px;color:var(--ink3);margin-bottom:8px;display:flex;gap:8px;align-items:center}
+.cap{position:absolute;font-size:12px;color:#5A4630;background:rgba(250,249,245,.8);border-radius:7px;padding:4px 9px}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Personal Hub · 设计草图 v0</h1>
+  <span class="note">示例数据；模块可切换简略 / 详细，「编辑布局」可增删、排序</span>
+  <div class="seg" id="scene">
+    <button class="on" data-s="window">主窗口</button>
+    <button data-s="menubar">菜单栏与快捷浮窗</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="win" id="win">
+    <aside class="side">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="brand"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19" stroke="#D97757" stroke-width="2.4" stroke-linecap="round"/></svg>Personal Hub</div>
+      <nav class="nav" id="nav"></nav>
+      <div class="foot"><span class="dot"></span>9 / 10 来源正常<span class="muted" style="margin-left:auto">17:58</span></div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+
+  <div class="desk hidden" id="desk">
+    <div class="menubar">
+      <b></b><span>Cursor</span><span class="muted">文件</span><span class="muted">编辑</span><span class="muted">视图</span>
+      <div class="r">
+        <span class="status"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19" stroke="#C15F3C" stroke-width="3" stroke-linecap="round"/></svg>3 · 19:00 羽毛球<span class="dot warn" style="width:6px;height:6px"></span></span>
+        <span class="muted">Wi‑Fi</span><span>周二 17:58</span>
+      </div>
+    </div>
+
+    <div class="pop">
+      <div class="tabs"><span class="on">今天</span><span>即将</span><span>全部</span></div>
+      <div class="att list" style="margin-bottom:10px">
+        <div class="li"><span class="dot warn"></span>昨日日报草稿待确认<span class="act">查看</span></div>
+        <div class="li"><span class="dot sky"></span>Claude Code 本周额度 61%<span class="act">详情</span></div>
+      </div>
+      <div class="sect">日程</div>
+      <div class="ev"><div class="tm">19:00 – 20:30</div>羽毛球 · 体育馆 3 号场</div>
+      <div class="sect">任务 · 3 项到期</div>
+      <div class="list">
+        <div class="li"><span class="cb"></span>提交 Q4 迁移方案<span class="r chip clay">逾期 1 天</span></div>
+        <div class="li"><span class="cb"></span>给妈妈打电话<span class="r muted">今天</span></div>
+        <div class="li"><span class="cb"></span>续费域名<span class="r muted">今天</span></div>
+        <div class="li"><span class="cb done"></span><span class="muted" style="text-decoration:line-through">整理 brainstorm 文档</span></div>
+      </div>
+      <div class="input" style="margin-top:10px">＋ 添加任务，例如「明天下午3点 开会」<span class="kbd" style="margin-left:auto">⌃⌥Space</span></div>
+      <div class="kv" style="grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line2);padding-top:10px">
+        <div><div class="l">步数</div><div class="v">6,842</div></div>
+        <div><div class="l">今日支出</div><div class="v">¥128</div></div>
+        <div><div class="l">Token</div><div class="v">18.6M</div></div>
+        <div><div class="l">剩余流量</div><div class="v">182G</div></div>
+      </div>
+      <div class="row" style="margin-top:12px;font-size:12px;color:var(--ink3)">打开 Personal Hub<span style="margin-left:auto">⌘S 同步</span></div>
+    </div>
+    <div class="cap" style="top:40px;right:540px">菜单栏：到期数 · 下一个日程 · 注意点</div>
+
+    <div class="qp" style="left:60px;top:300px">
+      <div class="lbl"><span class="kbd">⌃⌥Space</span> 快速任务<span class="chip" style="margin-left:auto">新增</span><span class="chip">搜索</span><span class="chip">今天</span></div>
+      <div class="q">明天下午3点 和李雷对齐迁移方案 <b>#工作</b></div>
+      <div class="row" style="gap:6px;margin-top:12px">
+        <span class="chip sky">10月21日 周三</span><span class="chip clay">15:00 · 同时在日历建时间块</span><span class="chip olive">清单：工作</span>
+      </div>
+      <div class="ft"><span>↩ 添加</span><span>⌘↩ 添加并打开</span><span>⇥ 切换模式</span><span style="margin-left:auto">Esc 关闭</span></div>
+    </div>
+
+    <div class="qp" style="left:120px;top:560px;width:520px">
+      <div class="lbl"><span class="kbd">⌃⌥M</span> 快速 Memo<span class="chip" style="margin-left:auto">私密</span></div>
+      <div class="q" style="font-size:16px;line-height:1.6;min-height:96px">今天把个人信息中心的方向定下来了：按模块组装，不按领域。<br><b>#日报</b></div>
+      <div class="ft"><span>⌘↩ 发布到 Memos</span><span>⌘⇧↩ 发布并打开</span><span style="margin-left:auto">Esc 保存草稿</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const rnd=(s=>()=>(s=(s*16807)%2147483647)/2147483647)(42);
+const fmt=n=>n.toLocaleString('zh-CN');
+function bars(vals,{w=260,h=60,color='var(--clay)',last=true,labels}={}){
+  const max=Math.max(...vals),bw=w/vals.length;
+  const svg=`<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block">${vals.map((v,i)=>{
+    const bh=Math.max(2,v/max*h);const c=(last&&i===vals.length-1)?color:'#E3DACC';
+    return `<rect x="${i*bw+bw*.18}" y="${h-bh}" width="${bw*.64}" height="${bh}" rx="2" fill="${c}"/>`;
+  }).join('')}</svg>`;
+  return svg+(labels?`<div style="display:flex;font-size:10px;color:var(--ink3);margin-top:3px">${labels.map(l=>`<span style="flex:1;text-align:center">${l}</span>`).join('')}</div>`:'');
+}
+function spark(vals,{w=260,h=46,color='#D97757'}={}){
+  const max=Math.max(...vals),min=Math.min(...vals);
+  const pts=vals.map((v,i)=>`${i/(vals.length-1)*w},${h-4-(v-min)/(max-min||1)*(h-8)}`).join(' ');
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function ring(p,size=64,color='#D97757'){
+  const r=size/2-5,c=2*Math.PI*r;
+  return `<svg width="${size}" height="${size}"><circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="#EEE9DE" stroke-width="6" fill="none"/><circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${color}" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="${c*p} ${c}" transform="rotate(-90 ${size/2} ${size/2})"/></svg>`;
+}
+const pbar=(p,cls='')=>`<div class="bar ${cls}"><i style="width:${Math.min(100,p)}%"></i></div>`;
+function heat(weeks=16){
+  let s='<div style="display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,10px);gap:3px">';
+  const cs=['#EEE9DE','#F2D3C3','#E8A789','#D97757','#C15F3C'];
+  for(let i=0;i<weeks*7;i++){const v=rnd();s+=`<i style="width:10px;height:10px;border-radius:2px;background:${cs[v<.35?0:v<.6?1:v<.8?2:v<.93?3:4]}"></i>`}
+  return s+'</div>';
+}
+const days14=['7','8','9','10','11','12','13','14','15','16','17','18','19','20'];
+
+/* ---------- modules ---------- */
+const M={
+ goals:{t:'主线与阶段目标',src:'personal-review · v3',span:{c:12,d:12},
+  c:()=>`<div class="row" style="gap:14px"><span class="mid">构建可持续的个人系统</span><span class="chip clay">第 3 周期 · 23 / 42 天</span><span class="muted" style="margin-left:auto">5 个目标 · 2 个进展良好</span></div>`,
+  d:()=>`<div class="row" style="gap:14px;margin-bottom:12px"><span class="mid">构建可持续的个人系统</span><span class="chip clay">第 3 周期 · 23 / 42 天</span><span class="muted" style="margin-left:auto">距阶段结案 19 天</span></div>
+  <div class="goals">${[['身体','每周 3 次力量训练','本周 2 / 3',66,'olive'],['事业','上线个人信息中心 v1','进行中',40,''],['财务','月支出低于 ¥5,000','¥4,312 / 5,000',86,'kraft'],['关系','每周联系 2 位老朋友','本周 1 / 2',50,'sky'],['生活','每月读完 1 本书','62%',62,'olive']].map(g=>`<div class="goal"><div class="d">${g[0]}</div><div>${g[1]}</div>${pbar(g[3],g[4])}<div class="d">${g[2]}</div></div>`).join('')}</div>`},
+ tasks:{t:'今日日程与任务',src:'Google · 仅 Mac',span:{c:4,d:7},
+  c:()=>`<div class="ev"><div class="tm">下一个 · 19:00</div>羽毛球</div><div class="row" style="margin-top:10px"><span class="big">3</span><span class="muted">项今天到期 · 1 项逾期</span></div>`,
+  d:()=>`<div class="cols" style="grid-template-columns:1.1fr 1fr"><div class="tl">
+   <div class="h">全天</div><div class="ev clay" style="margin:0"><div class="tm">全天</div>阶段第 23 天</div>
+   <div class="h">10:00</div><div class="ev"><div class="tm">10:00 – 11:00</div>周会 · 腾讯会议</div>
+   <div class="h">14:00</div><div class="ev"><div class="tm">14:00 – 15:30</div>迁移方案评审</div>
+   <div class="h">19:00</div><div class="ev"><div class="tm">19:00 – 20:30</div>羽毛球</div></div>
+   <div><div class="sect" style="margin-top:0">逾期</div><div class="list"><div class="li"><span class="cb"></span>提交 Q4 迁移方案<span class="r chip clay">10/19</span></div></div>
+   <div class="sect">今天</div><div class="list"><div class="li"><span class="cb"></span>给妈妈打电话</div><div class="li"><span class="cb"></span>续费域名<span class="r muted">个人</span></div><div class="li"><span class="cb done"></span><span class="muted" style="text-decoration:line-through">整理 brainstorm 文档</span></div></div>
+   <div class="input" style="margin-top:12px">＋ 添加任务<span class="kbd" style="margin-left:auto">⌃⌥Space</span></div></div></div>`},
+ attention:{t:'需要注意',src:'规则',span:{c:4,d:5},
+  c:()=>`<div class="att list">${att.slice(0,3).map(a=>`<div class="li"><span class="dot ${a[0]}"></span>${a[1]}</div>`).join('')}</div>`,
+  d:()=>`<div class="att list">${att.map(a=>`<div class="li"><span class="dot ${a[0]}"></span><div><div>${a[1]}</div><div class="muted" style="font-size:11px">${a[2]}</div></div><span class="act">${a[3]}</span></div>`).join('')}</div>`},
+ health:{t:'健康',src:'personal-records',span:{c:3,d:6},
+  c:()=>`<div class="row"><div class="big">6,842<small>步</small></div><div style="margin-left:auto">${ring(.86,46,'#788C5D')}</div></div><div class="kv" style="grid-template-columns:1fr 1fr"><div><div class="l">睡眠</div><div class="v">7h12m</div></div><div><div class="l">静息心率</div><div class="v">58</div></div></div>`,
+  d:()=>`<div class="row" style="gap:18px">${ring(.86,72,'#788C5D')}<div><div class="big">6,842<small>/ 8,000 步</small></div><div class="muted">截至 17:40 · 华为手表</div></div></div>
+   <div class="kv"><div><div class="l">睡眠</div><div class="v">7h12m</div></div><div><div class="l">静息心率</div><div class="v">58 bpm</div></div><div><div class="l">血氧</div><div class="v">97%</div></div><div><div class="l">活动热量</div><div class="v">412 kcal</div></div><div><div class="l">运动</div><div class="v">无</div></div><div><div class="l">深睡</div><div class="v">1h46m</div></div></div>
+   <div class="sect">近 14 天步数</div>${bars([9120,7400,10230,5320,8810,12400,3900,7600,8020,9930,6120,11020,8450,6842],{color:'#788C5D',labels:days14})}
+   <div class="sect">近 14 天睡眠（小时）</div>${spark([6.8,7.1,6.2,7.5,6.9,8.1,7.8,6.4,7.0,7.3,6.1,7.9,7.4,7.2],{color:'#6A9BCC'})}`},
+ bills:{t:'账单',src:'personal-records · AutoAccounting',span:{c:3,d:6},
+  c:()=>`<div class="big">¥128.50<small>今日支出</small></div><div class="muted" style="margin-top:6px">本月 ¥4,312 · 预算 86%</div><div style="margin-top:8px">${pbar(86,'kraft')}</div>`,
+  d:()=>`<div class="cols"><div><div class="big">¥128.50<small>今日</small></div><div class="list" style="margin-top:8px">${[['午餐','餐饮','12:14',38],['咖啡','餐饮','15:02',26],['地铁','交通','08:41',6],['京东 · 数据线','购物','16:30',58.5]].map(b=>`<div class="li"><div><div>${b[0]}</div><div class="muted" style="font-size:11px">${b[1]} · ${b[2]}</div></div><span class="r">−${b[3].toFixed(2)}</span></div>`).join('')}</div></div>
+   <div><div class="sect" style="margin-top:0">近 14 天</div>${bars([210,86,132,450,98,301,1200,76,154,220,92,180,66,128.5],{color:'#D4A27F',labels:days14})}
+   <div class="sect">本月分类 · ¥4,312</div>${[['餐饮',1420,33],['购物',1180,27],['居住',900,21],['交通',312,7],['其他',500,12]].map(c=>`<div class="row" style="margin:5px 0"><span style="width:34px">${c[0]}</span><div style="flex:1">${pbar(c[2]*2.5,'kraft')}</div><span class="muted" style="width:52px;text-align:right">¥${fmt(c[1])}</span></div>`).join('')}</div></div>
+   <div class="sect">资产</div><div class="row" style="gap:24px;flex-wrap:wrap"><div><div class="muted" style="font-size:11px">净资产</div><div class="mid">¥286,430</div></div>${[['招商银行','¥182,300'],['支付宝','¥64,210'],['微信','¥3,120'],['基金','¥40,010'],['信用卡','−¥3,210']].map(a=>`<div><div class="muted" style="font-size:11px">${a[0]}</div><div>${a[1]}</div></div>`).join('')}</div>`},
+ crm:{t:'交流',src:'personal-crm · 录音附属',span:{c:3,d:6},
+  c:()=>`<div class="row"><div class="big">4<small>人 · 今日</small></div></div><div class="row" style="margin-top:10px;gap:-4px">${['李','韩','王','陈'].map(n=>`<span class="person" style="margin-right:-6px;border:2px solid #fff">${n}</span>`).join('')}<span class="muted" style="margin-left:14px">2 段录音</span></div>`,
+  d:()=>`<div class="sect" style="margin-top:0">今日</div><div class="list">${[['李','李雷','同事 · 微信','10:20–11:05','讨论 Q4 迁移排期，约定周五前给方案',null],['韩','韩梅梅','同事 · 面对面','14:00–15:30','迁移方案评审：同意分两期，第一期只迁读接口','方案评审 · 01:28:40'],['陈','陈老师','导师 · 电话','12:30','聊到下一阶段要不要转向产品方向','通话录音 · 18:12'],['王','王五','朋友 · 微信','16:40','约周六吃饭',null]].map(p=>`<div class="li" style="align-items:flex-start"><span class="person">${p[0]}</span><div style="flex:1"><div class="row"><b style="font-weight:600">${p[1]}</b><span class="muted" style="font-size:11px">${p[2]}</span><span class="r muted" style="font-size:11px">${p[3]}</span></div><div style="color:var(--ink2);margin-top:2px">${p[4]}</div>${p[5]?`<span class="rec">▶ ${p[5]} · 转录稿</span>`:''}</div></div>`).join('')}</div>
+   <div class="sect">本阶段（第 3 周期）</div><div class="row" style="gap:24px"><div><div class="mid">23</div><div class="muted" style="font-size:11px">联系过的人</div></div><div><div class="mid">87</div><div class="muted" style="font-size:11px">次交流</div></div><div><div class="mid">11</div><div class="muted" style="font-size:11px">段录音</div></div><div style="margin-left:auto"><div class="muted" style="font-size:11px">久未联系</div><div class="row" style="gap:6px;margin-top:4px"><span class="chip">赵六 46 天</span><span class="chip">孙七 38 天</span></div></div></div>`},
+ media:{t:'媒体',src:'Emby · Navidrome · MoviePilot',span:{c:3,d:12},
+  c:()=>`<div class="row" style="gap:10px"><div class="poster" style="width:52px;flex:none"><div class="p" style="width:62%"></div></div><div><div class="muted" style="font-size:11px">继续观看</div><div>沙丘：预言 S1E4</div><div class="muted" style="font-size:11px;margin-top:6px">下载中 2 · 12.4 MB/s</div></div></div>`,
+  d:()=>`<div class="sect" style="margin-top:0">继续观看 · Emby</div><div class="posters">${[['沙丘：预言 S1E4',62],['繁花 E18',35],['奥本海默',80],['漫长的季节 E6',20],['葬送的芙莉莲 E12',55],['三体 E9',10]].map(p=>`<div class="poster"><span>${p[0]}</span><div class="p" style="width:${p[1]}%"></div></div>`).join('')}</div>
+   <div class="cols" style="grid-template-columns:1.2fr 1fr 1fr;margin-top:6px"><div><div class="sect">最近添加</div><div class="list">${['好东西 (2024)','异形：夺命舰','小巷人家 E1–E12'].map(x=>`<div class="li">${x}<span class="r muted" style="font-size:11px">Emby</span></div>`).join('')}</div></div>
+   <div><div class="sect">最近播放 · Navidrome</div><div class="row" style="gap:8px">${[1,2,3,4].map(()=>`<div class="album" style="width:48px"></div>`).join('')}</div></div>
+   <div><div class="sect">下载 · MoviePilot / qBittorrent</div>${[['小巷人家 S01',73],['Interstellar 4K',21]].map(d=>`<div style="margin:6px 0"><div class="row"><span>${d[0]}</span><span class="r muted">${d[1]}%</span></div>${pbar(d[1],'sky')}</div>`).join('')}<div class="muted" style="font-size:11px">↓ 12.4 MB/s · 做种 186 · 分享率 3.2</div></div></div>
+   <div class="row" style="gap:8px;margin-top:14px"><span class="chip">打开 Emby</span><span class="chip">打开 Navidrome</span><span class="chip">打开 MoviePilot</span><span class="chip">PT 站点</span></div>`},
+ token:{t:'Token 用量',src:'usage-monitor · Token Monitor',span:{c:3,d:12},
+  c:()=>`<div class="big">18.6M<small>今日 · ≈ $42.17</small></div><div style="margin-top:10px"><div class="row" style="font-size:11px;color:var(--ink2)"><span>Claude Code · 本周</span><span class="r">61%</span></div>${pbar(61)}</div><div style="margin-top:8px"><div class="row" style="font-size:11px;color:var(--ink2)"><span>Codex · 本周</span><span class="r">35%</span></div>${pbar(35,'sky')}</div>`,
+  d:()=>`<div class="cols" style="grid-template-columns:1fr 1.25fr;gap:28px"><div>
+   <div class="sect" style="margin-top:0">额度</div>${[['Claude Code',[['当前会话（5 小时）',42,'2 小时 18 分后重置'],['本周 · 全部模型',61,'周四 09:00 重置']],''],['Codex',[['5 小时窗口',18,'3 小时 40 分后重置'],['本周',35,'周日 21:00 重置']],'sky'],['Cursor',[['本月用量',54,'11 月 1 日重置']],'kraft']].map(t=>`<div style="margin-bottom:12px"><div style="font-weight:600;margin-bottom:4px">${t[0]}</div>${t[1].map(i=>`<div style="margin:6px 0"><div class="row" style="font-size:12px"><span>${i[0]}</span><span class="r">${i[1]}%</span></div>${pbar(i[1],t[2])}<div class="muted" style="font-size:11px;margin-top:3px">${i[2]}</div></div>`).join('')}</div>`).join('')}</div>
+   <div><div class="row"><div class="big">18.6M<small>tokens 今日</small></div><div style="margin-left:auto;text-align:right"><div class="mid">$42.17</div><div class="muted" style="font-size:11px">估算成本，非实付</div></div></div>
+   <div class="sect">近 14 天</div>${bars([12,9,21,15,7,4,18,22,16,25,14,8,19,18.6],{labels:days14})}
+   <div class="sect">按工具</div>${[['Claude Code',8.2,44],['Codex',5.1,27],['Cursor',3.6,19],['Hermes',1.7,10]].map(x=>`<div class="row" style="margin:5px 0"><span style="width:88px">${x[0]}</span><div style="flex:1">${pbar(x[2]*2)}</div><span class="muted" style="width:44px;text-align:right">${x[1]}M</span></div>`).join('')}
+   <div class="sect">按设备</div><div class="row" style="gap:6px"><span class="chip">MacPro 11.2M</span><span class="chip">MacAir 5.7M</span><span class="chip">NAS 1.7M</span></div></div></div>`},
+ git:{t:'Git',src:'GitHub',span:{c:3,d:6},
+  c:()=>`<div class="big">7<small>次提交 · 3 个仓库</small></div><div style="margin-top:10px">${heat(10)}</div>`,
+  d:()=>`<div class="row"><div class="big">7<small>次提交今日</small></div><span class="muted" style="margin-left:auto">近 30 天 142 次</span></div><div style="margin:12px 0">${heat(20)}</div>
+   <div class="list">${[['personal-review','3','fix(epic): reconcile old intents'],['personal-data-hub','2','docs: brainstorm v0'],['plaud-archive','2','feat: relative audio links']].map(r=>`<div class="li"><div><div>${r[0]}</div><div class="muted" style="font-size:11px">${r[2]}</div></div><span class="r">${r[1]}</span></div>`).join('')}</div>`},
+ network:{t:'网络',src:'ShellCrash',span:{c:3,d:6},
+  c:()=>`<div class="big">182<small>GB 剩余</small></div><div style="margin-top:8px">${pbar(64,'sky')}</div><div class="muted" style="margin-top:6px;font-size:11px">主力机场 · 11 月 30 日到期</div>`,
+  d:()=>`${[['主力机场',317.6,500,'11 月 30 日到期'],['备用机场',22.4,100,'2027 年 3 月到期'],['家宽',null,null,'不限量']].map(s=>`<div style="margin:10px 0"><div class="row"><b style="font-weight:600">${s[0]}</b><span class="r">${s[1]!=null?`剩余 ${(s[2]-s[1]).toFixed(1)} GB / ${s[2]} GB`:''}</span></div>${s[1]!=null?pbar(s[1]/s[2]*100,'sky'):''}<div class="muted" style="font-size:11px;margin-top:3px">${s[3]}</div></div>`).join('')}
+   <div class="kv"><div><div class="l">今日下载</div><div class="v">6.8 GB</div></div><div><div class="l">今日上传</div><div class="v">0.9 GB</div></div><div><div class="l">本月</div><div class="v">142 GB</div></div></div>`},
+ subs:{t:'订阅',src:'手动 + usage-monitor',span:{c:3,d:6},
+  c:()=>`<div class="big">¥1,486<small>/ 月</small></div><div class="muted" style="margin-top:6px">7 天内续费 2 项</div><div class="row" style="gap:6px;margin-top:8px"><span class="chip clay">Claude Max 10/28</span><span class="chip">域名 10/25</span></div>`,
+  d:()=>`<div class="row"><div class="big">¥1,486<small>/ 月合计</small></div><span class="muted" style="margin-left:auto">年付已折算</span></div><div class="list" style="margin-top:8px">${[['Claude Max','$100 / 月','10 月 28 日',true],['ChatGPT Plus','$20 / 月','11 月 3 日'],['Cursor Pro','$20 / 月','11 月 1 日'],['Google One 2TB','¥68 / 月','11 月 12 日'],['主力机场','¥25 / 月','11 月 30 日'],['域名 ×2','¥96 / 年','10 月 25 日',true],['VPS','$6 / 月','11 月 8 日']].map(s=>`<div class="li"><span>${s[0]}</span><span class="muted">${s[1]}</span><span class="r ${s[3]?'chip clay':''}">${s[2]}</span></div>`).join('')}</div>`},
+ sky:{t:'电脑历史',src:'skysight-sync',span:{c:3,d:6},
+  c:()=>`<div class="muted" style="font-size:11px">12:00 – 18:00 · MacPro</div><div style="margin:4px 0 8px;font-weight:600">个人信息中心方案设计</div><div class="muted">在 Cursor 中梳理架构、调研 KiteTasks，并核对 NAS 上的 Hermes 任务…</div>`,
+  d:()=>`<div class="list">${skyItems.slice(0,4).map(s=>`<div class="li" style="align-items:flex-start"><div><div class="muted" style="font-size:11px">${s.time} · ${s.dev}</div><div style="font-weight:600">${s.title}</div><div class="muted">${s.desc}</div></div></div>`).join('')}</div>`},
+ memos:{t:'Memos',src:'memos · ⌃⌥M',span:{c:3,d:6},
+  c:()=>`<div class="input" style="padding:7px 10px">记一条…<span class="kbd" style="margin-left:auto">⌃⌥M</span></div><div style="margin-top:10px;color:var(--ink2);line-height:1.6">今天把方向定下来了：按模块组装，不按领域。<span style="color:var(--sky)">#日报</span></div><div class="muted" style="font-size:11px;margin-top:4px">17:42</div>`,
+  d:()=>`<div class="input">记一条…<span class="kbd" style="margin-left:auto">⌃⌥M</span></div><div class="list" style="margin-top:8px">${memoItems.map(m=>`<div class="li" style="align-items:flex-start"><div><div class="muted" style="font-size:11px">${m[0]}</div><div style="line-height:1.6">${m[1]}</div></div></div>`).join('')}</div>`},
+};
+const att=[['warn','昨日日报草稿待确认','Hermes 21:30 生成 · 9,377 字','查看'],['sky','Claude Code 本周额度已用 61%','周四 09:00 重置','详情'],['warn','提交 Q4 迁移方案 已逾期 1 天','Google Tasks · 工作','处理'],['mute','健康数据 6 小时未更新','最后同步 11:40','检查'],['mute','赵六 46 天未联系','关系 · 老朋友','记一条']];
+const skyItems=[
+ {time:'12:00 – 18:00',dev:'MacPro',title:'个人信息中心方案设计',desc:'在 Cursor 中梳理架构、调研 KiteTasks，并核对 NAS 上的 Hermes 任务与 personal-review 阶段模型。',apps:4},
+ {time:'09:30 – 12:00',dev:'MacPro',title:'Hermes 日报投递故障修复',desc:'定位 Telegram 代理节点超时，切换 selector 后验证 getMe；CRM 读取改为本机 API。',apps:3},
+ {time:'06:00 – 12:00',dev:'MacAir',title:'阅读与资料整理',desc:'浏览 Google Tasks API 文档和若干桌面客户端仓库，记录限制。',apps:2},
+ {time:'18:00 – 24:00',dev:'MacPro',title:'Plaud 归档布局迁移',desc:'迁移旧 transcript.md 布局，修正音频相对链接并补测试。',apps:3,y:1},
+ {time:'12:00 – 18:00',dev:'MacPro',title:'personal-records 部署',desc:'迁移 Health 与账单数据到独立 SQLite，核对审计报告。',apps:4,y:1},
+];
+const memoItems=[['今天 17:42','今天把方向定下来了：按模块组装，不按领域。<span style="color:var(--sky)">#日报</span>'],['今天 12:10','KiteTasks 的中文日期只认「明日」，自己写规则。'],['昨天 22:31','<span style="color:var(--sky)">#阶段目标</span> 上线个人信息中心 v1 —— 进行中']];
+
+/* ---------- pages ---------- */
+const pages={
+ home:{t:'主页',layout:[['goals','c'],['tasks','d'],['attention','d'],['health','c'],['bills','c'],['crm','c'],['token','c'],['network','c'],['sky','c'],['memos','c'],['git','c']]},
+ life:{t:'生活',layout:[['health','d'],['bills','d'],['crm','d'],['media','d']]},
+ usage:{t:'用量',layout:[['token','d'],['git','d'],['network','d'],['subs','d']]},
+ tasks:{t:'任务与日程',layout:[['tasks','d'],['attention','c']]},
+ sky:{t:'电脑历史',custom:'sky'},
+ memos:{t:'Memos',custom:'memos'},
+ review:{t:'复盘与目标',layout:[['goals','d'],['attention','c']]},
+};
+const navDef=[
+ ['home','主页','⌘1'],['life','生活','⌘2'],['usage','用量','⌘3'],['sky','电脑历史','⌘4'],['memos','Memos','⌘5'],
+ '分组:工作台',['tasks','任务与日程','v1'],['review','复盘与目标','v3'],
+ '分组:系统',['sources','来源状态',''],['settings','设置','⌘,'],
+];
+let cur='home',editing=false;
+
+function renderNav(){
+  document.getElementById('nav').innerHTML=navDef.map(n=>{
+    if(typeof n==='string')return `<div class="grp">${n.slice(3)}</div>`;
+    const tag=n[2].startsWith('v')?`<span class="tag">${n[2]}</span>`:`<span class="k">${n[2]}</span>`;
+    return `<button data-p="${n[0]}" class="${n[0]===cur?'on':''}">${n[1]}${tag}</button>`;
+  }).join('');
+  document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{cur=b.dataset.p;editing=false;render()});
+}
+function cardHTML(id,sz,i){
+  const m=M[id];const span=sz==='c'?m.span.c:m.span.d;
+  return `<section class="card s${span}">
+   <div class="edit-ctl"><button data-mv="${i}" data-d="-1">‹</button><button data-mv="${i}" data-d="1">›</button><button data-rm="${i}">×</button></div>
+   <div class="ch"><span class="t">${m.t}</span><span class="src">${m.src}</span>
+   <span class="sz"><button data-sz="${i}" data-v="c" class="${sz==='c'?'on':''}">简</button><button data-sz="${i}" data-v="d" class="${sz==='d'?'on':''}">详</button></span></div>
+   ${m[sz]()}</section>`;
+}
+function header(title,sub,acts=''){return `<div class="ph"><div><div class="sub">${sub}</div><h2>${title}</h2></div><div class="acts">${acts}</div></div>`}
+function render(){
+  renderNav();
+  const p=pages[cur],main=document.getElementById('main');
+  if(!p){main.innerHTML=header(cur==='sources'?'来源状态':'设置','')+`<div class="page"><div class="card s12 muted">本轮草图未展开。</div></div>`;return}
+  if(p.custom==='sky')return renderSky(main);
+  if(p.custom==='memos')return renderMemos(main);
+  const lay=p.layout;
+  const sub=cur==='home'?'2026 年 10 月 20 日 · 周二':'模块化页面 · 可自由组装';
+  const acts=`<span class="muted">更新于 17:58</span><button class="btn ${editing?'on':''}" id="edit">${editing?'完成':'编辑布局'}</button>`;
+  const title=cur==='home'?'下午好，玮康':p.t;
+  const unused=Object.keys(M).filter(k=>!lay.some(l=>l[0]===k));
+  main.innerHTML=header(title,sub,acts)+`<div class="page ${editing?'editing':''}">
+   ${cur==='home'?`<div class="greet" style="margin:-6px 0 16px"><div class="input">今天想记点什么？<span class="kbd" style="margin-left:auto">⌃⌥M</span></div></div>`:''}
+   <div class="grid">${lay.map((l,i)=>cardHTML(l[0],l[1],i)).join('')}
+   <div class="add-card s12">＋ 添加模块<div class="opts">${unused.map(k=>`<button class="chip" data-add="${k}">${M[k].t}</button>`).join('')||'<span class="muted">所有模块都已在此页</span>'}</div></div></div></div>`;
+  main.querySelector('#edit').onclick=()=>{editing=!editing;render()};
+  main.querySelectorAll('[data-sz]').forEach(b=>b.onclick=()=>{lay[+b.dataset.sz][1]=b.dataset.v;render()});
+  main.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const i=+b.dataset.mv,j=i+ +b.dataset.d;if(j<0||j>=lay.length)return;[lay[i],lay[j]]=[lay[j],lay[i]];render()});
+  main.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{lay.splice(+b.dataset.rm,1);render()});
+  main.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{lay.push([b.dataset.add,'c']);render()});
+}
+let skySel=0;
+function renderSky(main){
+  const s=skyItems[skySel];
+  main.innerHTML=header('电脑历史','skysight-sync · MacPro / MacAir 合并','<span class="chip">全部设备</span><span class="chip">6 小时窗口</span>')+`<div class="page"><div class="sky-wrap">
+   <div class="sky-list"><div class="day">今天</div>${skyItems.map((x,i)=>(x.y&&!skyItems[i-1].y?'<div class="day">昨天</div>':'')+`<div class="sky-item ${i===skySel?'on':''}" data-i="${i}"><div class="meta">${x.time} · ${x.dev}</div><div class="tt">${x.title}</div><div class="meta" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${x.desc}</div><div class="apps">${Array.from({length:x.apps},(_,k)=>`<span class="app" style="background:${['#CBCADB','#D4A27F','#6A9BCC','#788C5D'][k]}"></span>`).join('')}</div></div>`).join('')}</div>
+   <div class="sky-detail"><div class="muted">${s.time} · ${s.dev} · 6 小时摘要</div><h3>${s.title}</h3><p>${s.desc}</p>
+    <div class="row" style="gap:6px;margin:12px 0"><span class="chip">Cursor</span><span class="chip">Chrome</span><span class="chip">终端</span><span class="chip">Telegram</span></div>
+    <h4>主要活动</h4><ul><li>读取旧 Hub 归档与四个采集仓库的 README，确认各来源的接口形态。</li><li>通过 SSH 只读核对 NAS 上 Hermes lingjun profile 的定时任务。</li><li>撰写产品与架构 brainstorm 文档，并开始逐项确认需求。</li></ul>
+    <h4>决定</h4><ul><li>平台为 Mac + 安卓；Google 只在 Mac 端接入。</li><li>NAS 上做职责受限的薄后端。</li></ul>
+    <h4>未完成</h4><ul><li>页面布局与模块化展示的细节。</li></ul>
+    <div class="muted" style="margin-top:20px;font-size:11px">原文归档：~/.codex/skysight-sync/archive/macpro/2026-10-20T04.md</div></div></div></div>`;
+  main.querySelectorAll('.sky-item').forEach(e=>e.onclick=()=>{skySel=+e.dataset.i;renderSky(main)});
+}
+function renderMemos(main){
+  main.innerHTML=header('Memos','直接嵌入 Memos 网页 · 快捷键 ⌃⌥M 随时记录','<span class="chip">在浏览器打开</span>')+`<div class="page"><div class="webview">
+   <div class="wv-bar">‹ › ⟳<div class="wv-url">memos.home:5230</div><span>已登录</span></div>
+   <div class="memos"><div class="tags"><b style="color:#333">标签</b><br># 日报<br># 周报<br># 主线<br># 阶段目标<br># 阶段总结<br># 年度总结<br># 想法</div>
+   <div class="feed"><div class="memo" style="color:#999">现在的想法是…</div>${memoItems.map(m=>`<div class="memo"><div class="m">${m[0]}</div>${m[1].replace(/var\(--sky\)/g,'#3B82F6')}</div>`).join('')}
+   <div class="memo"><div class="m">10 月 19 日 21:48</div><span class="tg">#日报</span> 2026-10-19<br>上午修 Plaud 布局迁移，下午部署 personal-records……</div></div></div></div></div>`;
+}
+document.querySelectorAll('#scene button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#scene button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('win').classList.toggle('hidden',b.dataset.s!=='window');
+  document.getElementById('desk').classList.toggle('hidden',b.dataset.s!=='menubar');
+});
+const [hp,hs]=location.hash.slice(1).split(',');
+if(hp)cur=hp;
+render();
+if(hs==='menubar')document.querySelector('#scene [data-s="menubar"]').click();
+</script>
+</body>
+</html>
