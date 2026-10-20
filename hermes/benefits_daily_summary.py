@@ -99,6 +99,17 @@ def describe(platform, row):
         parts.append("本次余额变动 " + fmt(metrics.get("balance", {}).get("delta")) + " 分")
     elif platform == "v2ex":
         parts.append("连续 " + count("streak") + " 天")
+    elif platform == "telegram":
+        bots = metrics.get("bots", {})
+        parts.append("机器人 " + fmt(bots.get("current")) + "/" + fmt(bots.get("max")))
+        pending = [str(x.get("name")) + " " + str(x.get("reason")) for x in items
+                   if x.get("status") not in {"complete", "not_applicable"}]
+        if pending:
+            parts.append("未确认：" + "、".join(pending[:12]))
+        points = [key[len("points_"):] + " " + fmt(m.get("current")) for key, m in metrics.items()
+                  if key.startswith("points_") and m.get("current") is not None]
+        if points:
+            parts.append("积分：" + "、".join(points[:12]))
     elif platform in {"glados", "yingshijufeng", "ole", "rainyun", "wetalk", "workbuddy"}:
         if business.get("activity") == "complete":
             parts.append("活跃请求已完成")

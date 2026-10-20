@@ -61,6 +61,31 @@ REASONS = {
     "cloudflare_browser_signature_banned": "Cloudflare 拦截当前浏览器签名",
     "cloudflare_challenge": "Cloudflare 要求浏览器验证",
     "request_parameters_invalid": "需要有效的客户端请求参数",
+    "not_logged_in": "登录失效，需重新扫码登录",
+    "telegram_app_unavailable": "无法打开 Telegram 网页（代理或网络中断）",
+    "selector_broken": "网页结构变化，需更新适配",
+    "browser_or_network_error": "浏览器或网络异常",
+    "dependency_unavailable_or_incompatible": "运行依赖缺失或版本不符",
+    "configuration_missing": "缺少私有配置",
+    "configuration_invalid": "私有配置格式无效",
+    "account_not_configured": "私有配置中没有该账号",
+    "private_file_invalid": "私有配置权限或大小不符合要求",
+    "journal_invalid": "当日签到记录文件异常",
+    "state_save_failed": "签到记录保存失败",
+}
+# Telegram per-bot reasons; a captcha or join-channel gate needs the user.
+TELEGRAM_BOT_REASONS = {
+    "bot_rejected": "被拒绝（验证题或入群门槛），需手动签到",
+    "bot_not_started": "未开始对话，需先手动点 START",
+    "previous_send_unconfirmed": "已发送但结果未确认，需手动核对",
+    "reply_timeout": "未回复",
+    "reply_unrecognized": "回复无法识别",
+    "button_not_found": "未找到签到按钮",
+    "command_not_visible": "命令发送未确认",
+    "chat_unavailable": "对话无法打开",
+    "input_unconfirmed": "命令输入未确认",
+    "send_control_unavailable": "发送按钮不可用",
+    "not_attempted": "未执行",
 }
 TASK_LABELS = {
     "checkin": "签到",
@@ -137,9 +162,22 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         if reason not in REASONS and reason != "unknown":
             parts.append(REASONS.get(reason, reason))
 
+    details = row.get("details")
+    items = details.get("items", []) if isinstance(details, Mapping) else []
+    bot_issues = []
+    if platform == "telegram" and isinstance(items, list):
+        bot_issues = [
+            str(item.get("name") or item.get("id")) + TELEGRAM_BOT_REASONS.get(
+                str(item.get("reason")), "未确认（" + str(item.get("reason")) + "）")
+            for item in items
+            if isinstance(item, Mapping) and item.get("status") not in {"complete", "not_applicable"}
+        ]
+
     business = row.get("business")
     if (not isinstance(business, Mapping) or not business) and not specific_reason:
         parts.append("缺少业务状态")
+    elif bot_issues and not specific_reason:
+        parts.append("、".join(bot_issues[:12]))
     elif isinstance(business, Mapping) and not specific_reason:
         incomplete = []
         for name, state in business.items():
@@ -153,8 +191,6 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         if incomplete:
             parts.append("、".join(incomplete))
 
-    details = row.get("details")
-    items = details.get("items", []) if isinstance(details, Mapping) else []
     if isinstance(items, list):
         uncredited = [
             str(item["name"]).strip()

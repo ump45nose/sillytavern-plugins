@@ -14,6 +14,8 @@
     "benefits_rainyun.py": "hermes/benefits_rainyun.py",
     "benefits_workbuddy_cn.py": "hermes/benefits_workbuddy_cn.py",
     "benefits_workbuddy_intl.py": "hermes/benefits_workbuddy_intl.py",
+    "benefits_telegram_ai.py": "hermes/benefits_telegram_ai.py",
+    "benefits_telegram_nsfw.py": "hermes/benefits_telegram_nsfw.py",
     "benefits_wetalk.py": "hermes/benefits_wetalk.py",
     "benefits_laowang.py": "hermes/benefits_laowang.py",
     "benefits_native_runner.py": "hermes/benefits_native_runner.py",
