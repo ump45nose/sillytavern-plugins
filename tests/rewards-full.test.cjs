@@ -117,6 +117,15 @@ test("delivery preserves search obstacle details across the final snapshot", asy
   }, {snapshot: async () => ({...ok(), details: {metrics: {}, items: []}})});
   assert.deepEqual(out.details.items, [diagnostic]);
 });
+test("a returned stage failure retains its safe diagnostic in the full report", async () => {
+  const diagnostic = {error_name: "TimeoutError", failure_class: "timeout",
+    reason: "unclassified_failure", source: "activities.cjs", line: 52};
+  const out = await full.execute(manifest(["daily"]), {
+    daily: async () => ({execution: "failed", reason: "daily_browser_or_network_error",
+      business: {daily: "unknown"}, diagnostic}),
+  });
+  assert.deepEqual(out.report.stages.daily.diagnostic, diagnostic);
+});
 test("completed narrow manifest does not claim unrequested capabilities ran", async () => {
   const out = await full.execute(manifest(["daily"]), {
     daily: async () => ok({ daily: "complete" }),

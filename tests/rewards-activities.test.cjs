@@ -42,7 +42,11 @@ function fixture({
   restricted = false,
   credit = true,
   attributed = true,
+  readbackTimeout = false,
+  quizDestination = false,
 } = {}) {
+  const destination = quizDestination ? "https://www.bing.com/search?filters=" + encodeURIComponent(
+    'BTEPOKey:"REWARDSQUIZ_ENUS_fixture" BTROID:"daily_fixture"') : "https://www.bing.com/search?q=fixture";
   const state = {
     contextClosed: false,
     browserClosed: false,
@@ -69,7 +73,7 @@ function fixture({
         {
           title: "Card",
           text: "Card",
-          href: "https://www.bing.com/search?q=fixture",
+          href: destination,
         },
       ],
       filter: () => ({ first: () => link }),
@@ -90,7 +94,7 @@ function fixture({
       userInfo: { isRewardsUser: true },
       flyoutResult: {
         dailySetPromotions: {"10/13/2026": [{offerId: "daily_fixture", title: "Card",
-          destinationUrl: "https://www.bing.com/search?q=fixture", complete: attributed && now === max}]},
+          destinationUrl: destination, complete: attributed && now === max}]},
         userStatus: { isRewardsUser: true },
         userWarnings: restricted
           ? [{ name: "Fraud_UserWarning_BotScore_UX" }]
@@ -110,7 +114,14 @@ function fixture({
     },
     getByRole: (role) => (role === "progressbar" ? bar : control),
     waitForEvent: async () => popup,
-    waitForFunction: async () => {},
+    waitForLoadState: async () => {},
+    waitForFunction: async () => {
+      if (readbackTimeout && state.clicks) {
+        const error = Error("private navigation details");
+        error.name = "TimeoutError";
+        throw error;
+      }
+    },
     waitForTimeout: async () => {},
   };
   const context = {
@@ -166,6 +177,18 @@ test("one click then readback confirms progress and closes popup", async () => {
   assert.equal(f.state.clicks, 1);
   assert.ok(f.state.popupClosed && f.state.browserClosed);
 });
+test("readback failure preserves the observed progress, offer intents and safe diagnostic", async () => {
+  const f = fixture({now: "1", max: "3", credit: false, readbackTimeout: true});
+  const out = await run(f.chromium, {});
+  assert.equal(out.reason, "daily_browser_or_network_error");
+  assert.equal(out.details.metrics.daily.current, 1);
+  assert.equal(out.details.metrics.daily.max, 3);
+  assert.equal(out.details.items[0].id, "daily_fixture");
+  assert.equal(out.cycle, "2026-10-13");
+  assert.equal(out.diagnostic.failure_class, "timeout");
+  assert.ok(!JSON.stringify(out).includes("private navigation details"));
+  assert.equal(f.state.clicks, 1);
+});
 test("unconfirmed daily click keeps intent and cannot be repeated on the same platform day", async () => {
   const f = fixture({now: "0", max: "1", credit: false}), entries = new Map();
   const options = {journalForCycle: date => {
@@ -181,6 +204,28 @@ test("unconfirmed daily click keeps intent and cannot be repeated on the same pl
   assert.equal((await run(f.chromium, {}, options)).business.daily, "complete");
   assert.equal(entries.get("daily_fixture"), "confirmed");
   assert.equal(f.state.clicks, 1);
+});
+test("an attempted quiz resumes at its destination without clicking its dashboard card again", async () => {
+  const quiz = require("../platforms/rewards/daily_quiz.cjs"), original = quiz.finish;
+  const f = fixture({now: "0", max: "1", credit: false, quizDestination: true});
+  const entries = new Map([["daily_fixture", "attempted"]]);
+  let resumed = 0;
+  quiz.finish = async (_page, row, options) => {
+    assert.equal(row.offerId, "daily_fixture");
+    assert.equal(await options.confirmed(), false);
+    f.complete();
+    assert.equal(await options.confirmed(), true);
+    resumed++;
+  };
+  try {
+    const out = await run(f.chromium, {}, {journalForCycle: () => ({
+      has: id => entries.has(id), mark: async (id, state) => entries.set(id, state),
+    })});
+    assert.equal(resumed, 1);
+    assert.equal(f.state.clicks, 0);
+    assert.equal(out.business.daily, "complete");
+    assert.equal(entries.get("daily_fixture"), "confirmed");
+  } finally {quiz.finish = original;}
 });
 test("an aggregate counter increase without this offer's completion cannot confirm the click", async () => {
   const f = fixture({now: "0", max: "1", attributed: false});
