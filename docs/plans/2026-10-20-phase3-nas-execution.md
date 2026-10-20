@@ -37,7 +37,21 @@ Progress (each step is tested and committed separately):
   POST forwarding tested against fake sources; no production records created.
   Existing source credentials reused; no source configuration or restart.
   Boot differences unchanged. Live modules: health, bills, crm/recordings, memos.
-- Steps 4–7: pending.
+- Step 4: deployed `local/hub-api:07f0eef` and
+  `local/usage-monitor-mcp:hub-http-ebd2389`. Existing usage Python source hashes
+  matched the migrated aggregate source before editing. Offline release-wheel build
+  and pip check passed; inherited old wheel merge fixed in the build source.
+  Hub tests: 10 pass. Usage tests: 13 pass. Candidate full app health/HTTP auth and
+  MCP initialize/tools discovery passed; production anonymous MCP init=401.
+  Production HTTP net=200/24 hourly rows, limits=200/8 provider rows; source statuses
+  token=ok/usage=ok. Token day/week/month/year=ok. Net=partial because subscription
+  quotas/expiry are absent from the source; it returns actual observed traffic.
+  Only usage and hub containers were recreated; all other IDs retained. Boot
+  differences unchanged. OAuth/data/event state/old tokens retained.
+  Source release pushed to app-configs branch `codex/hub-api-read-http-20261020`;
+  boot line pushed to nas-cron-jobs branch `codex/hub-api-boot-20261020`.
+  Aggregate main remains dirty and is not overwritten or merged.
+- Steps 5–7: pending.
 
 Pending user decisions are taken at the applicable step: GitHub token, missing source
 credentials, and the Authelia restart window. Defaults for budget/health/cycle apply.

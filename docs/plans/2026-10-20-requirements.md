@@ -244,7 +244,8 @@ NAS 实现记录（按步骤更新）：
 - 第 2 步已上线 health、bills：局域网 `http://192.168.31.201:18190`，独立 hub 栈与 `hub_hub` 网络，镜像 `local/hub-api:4be5e1f`。来源沿用既有 LAN HTTP 和只读令牌。
 - Python 3.12 的 6 项测试通过；真实模块/status 与独立错误端口实例验证通过（health=error 时 bills=ok）。数据目录 `/vol2/1000/Docker/hub/data` 已加入现有 Duplicati 备份列表；尚未执行备份/恢复测试。
 - 第 3 步已上线 crm/录音、memos，镜像 `local/hub-api:946a9af`。Plaud 复用实测可用的 `192.168.31.201:18095`，无需改来源监听或 hub 网络；真实音频 Range 与转录代理通过。8 项假来源测试通过，POST 仅对假来源验证，未创建生产测试数据。
-- 后续步骤尚待完成；Authelia 配置和来源容器尚未改动。
+- 第 4 步已上线 Token/net，hub 镜像 `local/hub-api:07f0eef`；usage-monitor 新增只读 HTTP（`local/usage-monitor-mcp:hub-http-ebd2389`），仅重建该来源，保留原 OAuth/卷/事件。Token 四区间通过；stats 缺少小时 Token、历史工具/设备，相关字段 null。网络实际流量通过，套餐额度/到期无来源数据，`pools=null`，模块 partial。Token 估算成本沿用 USD，与现有 Mac `$` 显示一致。
+- 后续步骤尚待完成；Authelia 配置尚未改动，其余来源容器未重启。
 
 NAS 侧执行计划与 Mac / 安卓共用的接口约定见 [阶段 3 NAS 侧计划](2026-10-20-phase3-nas.md)。电脑历史在本阶段由 Mac 直接读本机归档。
 
