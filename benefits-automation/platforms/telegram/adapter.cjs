@@ -14,6 +14,11 @@ const web = require("./selectors.cjs");
 const CONTEXT = {viewport: {width: 1280, height: 900}};
 const APP_TIMEOUT_MS = 60000;
 const CHAT_TIMEOUT_MS = 30000;
+// The NAS proxy to web.telegram.org drops for a minute or two at a time.
+// Opening the app is read-only, so it is retried within this budget; sends
+// are never retried (the journal guards them).
+const APP_RETRY_MS = 180000;
+const APP_RETRY_PAUSE_MS = 30000;
 
 class NotLoggedIn extends Error {}
 
@@ -48,8 +53,35 @@ async function openApp(page, clock, url = web.BASE_URL) {
   throw Error("telegram_app_unavailable");
 }
 
+async function openAppRetrying(page, clock, url = web.BASE_URL) {
+  const end = clock.now() + APP_RETRY_MS;
+  for (;;) {
+    try {
+      return await openApp(page, clock, url);
+    } catch (error) {
+      if (error instanceof NotLoggedIn || (error && error.message === "selector_broken")) throw error;
+      if (clock.now() + APP_RETRY_PAUSE_MS >= end) throw Error("telegram_app_unavailable");
+      await clock.sleep(page, APP_RETRY_PAUSE_MS);
+    }
+  }
+}
+
+// First capture group of the bot's points pattern in the latest verdict text
+// that has it. Only the number is kept; the reply text is not.
+function readPoints(texts, bot) {
+  if (!bot.points) return null;
+  for (let i = texts.length - 1; i >= 0; i--) {
+    const match = bot.points.regex.exec(web.normalize(texts[i]));
+    if (match && match[1] !== undefined) {
+      const value = Number(match[1].replace(/,/g, ""));
+      if (Number.isFinite(value) && value >= 0) return value;
+    }
+  }
+  return null;
+}
+
 async function openChat(page, bot, clock) {
-  await openApp(page, clock, web.BASE_URL + "#@" + bot.username);
+  await openAppRetrying(page, clock, web.BASE_URL + "#@" + bot.username);
   const end = clock.now() + CHAT_TIMEOUT_MS;
   while (clock.now() < end) {
     const snap = await web.snapshot(page);
@@ -121,7 +153,7 @@ async function send(page, bot, journal, snap) {
   return null;
 }
 
-async function checkBot(page, bot, journal, clock) {
+async function checkBot(page, bot, journal, clock, points = new Map()) {
   const item = (status, reason) => ({
     id: bot.id, name: "@" + bot.username, url: "https://t.me/" + bot.username, status, reason,
   });
@@ -146,9 +178,12 @@ async function checkBot(page, bot, journal, clock) {
     if (index >= 0) {
       seenCommand = true;
       sawReply = sawReply || snap.messages.slice(index + 1).some((message) => !message.out);
-      const verdict = classify(verdictTexts(snap, index, entry, bot), bot);
+      const texts = verdictTexts(snap, index, entry, bot);
+      const verdict = classify(texts, bot);
       if (verdict === "bot_rejected") return item("incomplete", verdict);
       if (verdict) {
+        const value = readPoints(texts, bot);
+        if (value !== null) points.set(bot.id, value);
         journal.markConfirmed(bot.id, verdict);
         return item("complete", verdict);
       }
@@ -169,7 +204,14 @@ async function checkBot(page, bot, journal, clock) {
   return item("unknown", sawReply ? "reply_unrecognized" : "reply_timeout");
 }
 
-function summary(items) {
+function pointMetrics(bots, points) {
+  const metrics = {};
+  for (const bot of bots)
+    if (bot.points) metrics["points_" + bot.id.replace(/-/g, "_")] = metric(bot.points.unit, points.get(bot.id) ?? null);
+  return metrics;
+}
+
+function summary(items, extraMetrics = {}) {
   const counted = items.filter((row) => row.status !== "not_applicable");
   const confirmed = counted.filter((row) => row.status === "complete").length;
   const states = new Set(counted.map((row) => row.status));
@@ -180,7 +222,7 @@ function summary(items) {
     execution: "ok",
     reason: checkin === "complete" || checkin === "not_applicable" ? "all_bots_confirmed" : "bots_incomplete",
     checkin,
-    details: {metrics: {bots: metric("count", confirmed, counted.length)}, items},
+    details: {metrics: {bots: metric("count", confirmed, counted.length), ...extraMetrics}, items},
   };
 }
 
@@ -211,20 +253,21 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
   try {
     return await withProfile(firefox, {profile, proxy, headless: true, contextOptions: CONTEXT},
       async (context, page) => {
-        await openApp(page, clock);
+        await openAppRetrying(page, clock);
         if (statusOnly) {
           const result = summary(journalItems(config, journal));
           return {...result, reason: "authenticated"};
         }
         const items = [];
+        const points = new Map();
         let visited = false;
         for (const bot of config.bots) {
           const pending = bot.enabled && journal.get(bot.id).phase !== "confirmed";
           if (pending && visited) await clock.sleep(page, clock.spacing(config.spacing));
-          items.push(await checkBot(page, bot, journal, clock));
+          items.push(await checkBot(page, bot, journal, clock, points));
           visited = visited || pending;
         }
-        return summary(items);
+        return summary(items, pointMetrics(config.bots, points));
       });
   } catch (error) {
     if (error instanceof NotLoggedIn) return failure("not_logged_in", "blocked");

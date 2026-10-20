@@ -34,6 +34,7 @@ npx playwright install firefox   # 已有共享 --browser-cache 时不需要
 - `command`：单行文本，原样发送一次。
 - `success` / `already` / `failure`：回复中出现的子串（不区分大小写、NFKC 归一）。判断顺序 already → failure → success；`success` 必填。只看本次命令之后的回复，先到的公告或“正在签到，请稍后”不会提前结束等待。“人机验证 / 请先加入频道”这类入群门槛建议写进 `failure`，报告 `bot_rejected`（需要手动加入后再签），而不是等到 `reply_timeout`。`already` 避免只写“已经”：不少机器人的成功回复含“您已经获得 1 积分”。确定命令时先看 Web K 输入 `/` 弹出的命令菜单和机器人简介，不要逐个试发。
 - `button`：可选。回复中带有包含该文字的内联按钮时点击一次；此时只认可点击后新出现或内容改变的消息，以及按钮回调弹出的提示，菜单本身的文字不能确认签到。
+- `points`：可选 `{"pattern": "积分为:?\\s*(\\d+)", "unit": "points"}`。正则只能有一个捕获组（数字），与其他模式一样匹配 NFKC 归一、不区分大小写的回复（全角冒号视为 `:`）；`unit` 为 points / coins / beans，默认 points。确认签到时取最近一条匹配回复的数字，写入 `details.metrics.points_<id>`（`id` 中的 `-` 换成 `_`）的 `current`；没有匹配或当天已由 journal 确认、未打开对话时为 null。只保存数字，不保存回复文本。
 - `reply_timeout_seconds`：5–120，默认 30。`enabled: false` 跳过且报告 `not_applicable`。
 - `spacing_seconds`：两个需要访问的机器人之间的随机间隔，默认 5–20 秒，可按账号覆盖。
 
@@ -63,7 +64,7 @@ python3 platforms/telegram/run.py --runtime-root $R --browser-cache $C --account
 
 ## 执行与恢复
 
-1. 打开 Web K，确认已登录；逐个打开 `web.telegram.org/k/#@<username>`。
+1. 打开 Web K，确认已登录；逐个打开 `web.telegram.org/k/#@<username>`。NAS 代理到 web.telegram.org 偶尔断开一两分钟：打开页面（只读）失败时每 30 秒重试，最多约 180 秒，仍失败返回 `telegram_app_unavailable`；发送命令从不重试，由 journal 保证当天只发一次。
 2. 当日 journal（`state/telegram/<account>/telegram-journal.json`）为 confirmed 的机器人直接报告完成，不打开对话。
 3. 未开始过的机器人（只显示 START）返回 `bot_not_started`，不代按 START；请先在手机上手动开始一次。
 4. 命令写入输入框并核对后，先在 journal 记 sent，再点击发送按钮（不按 Enter，避免选中命令建议）。之后当天只读回：找到本次命令之后的回复并匹配，确认后记 confirmed。
@@ -73,7 +74,11 @@ journal 只保存阶段、消息编号和按钮消息文本的 16 位 hash，不
 
 ## 结果
 
-`business.checkin`：全部启用的机器人确认后为 complete；`details.items` 每个机器人一项（`id`、`@username`、`https://t.me/<username>`、状态、原因），`details.metrics.bots` 为确认数/启用数。原因包括 `checkin_confirmed`、`already_checked_in`、`bot_rejected`、`reply_timeout`、`reply_unrecognized`、`button_not_found`、`command_not_visible`、`previous_send_unconfirmed`、`bot_not_started`、`chat_unavailable`、`input_unconfirmed`、`send_control_unavailable`、`bot_disabled`。整体失败原因：`not_logged_in`、`configuration_missing`、`configuration_invalid`、`account_not_configured`、`private_file_invalid`、`journal_invalid`、`state_save_failed`、`selector_broken`、`telegram_app_unavailable`、`browser_or_network_error`、`dependency_unavailable_or_incompatible`。
+`business.checkin`：全部启用的机器人确认后为 complete；`details.items` 每个机器人一项（`id`、`@username`、`https://t.me/<username>`、状态、原因），`details.metrics.bots` 为确认数/启用数，配置了 `points` 的机器人另有 `points_<id>`。原因包括 `checkin_confirmed`、`already_checked_in`、`bot_rejected`、`reply_timeout`、`reply_unrecognized`、`button_not_found`、`command_not_visible`、`previous_send_unconfirmed`、`bot_not_started`、`chat_unavailable`、`input_unconfirmed`、`send_control_unavailable`、`bot_disabled`。整体失败原因：`not_logged_in`、`configuration_missing`、`configuration_invalid`、`account_not_configured`、`private_file_invalid`、`journal_invalid`、`state_save_failed`、`selector_broken`、`telegram_app_unavailable`、`browser_or_network_error`、`dependency_unavailable_or_incompatible`。
+
+## 生产调度
+
+与其他签到任务相同，由 `nas-cron-jobs` 的 Hermes 无 agent 作业 `benefits-telegram-ai`、`benefits-telegram-nsfw` 经 `benefits_native_runner.py` 调用（`--execute`，不加 `--status`），部署配置中作业键为 `telegram-ai` / `telegram-nsfw`、`platform: telegram`。每次尝试保存 `runs/<run_id>/result.json`、`results/telegram/<account>/latest.json` 和 `delivery/<作业键>.json`；成功不通知，中午的福利异常日报列出未确认的机器人和原因（`bot_rejected` 显示为需人工处理）。时间在台北 01:00 之后：部分机器人的“一天”晚于台北零点切换。
 
 ## 测试
 
