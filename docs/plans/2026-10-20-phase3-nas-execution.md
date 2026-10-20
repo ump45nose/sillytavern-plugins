@@ -65,7 +65,7 @@ Progress (each step is tested and committed separately):
 - Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployed local/hub-api:d12898e. LAN all-module/status=200; subs/attention=ok (0/7 rows), preferences=200/version0, absent layout=404. No production configuration/test records were inserted.
 - Step 7 prepared: OIDC code flow with browser binding and separate provider/client
   S256 PKCE, exact sub allowlist, signed ID-token validation, atomic one-time exchange,
-  auth rate limits/no-store, development-token production guard. 30 tests pass,
+  auth rate limits/no-store, development-token production guard. 31 tests pass,
   including full fake-provider flow, bad claims/signatures, key rotation, replay,
   expiry, concurrent exchange, revocation and all configured secret sentinels.
   Private candidate directory: /vol2/1000/Docker/hub/deployment-candidates/step7-oidc-20261021.
@@ -76,6 +76,11 @@ Progress (each step is tested and committed separately):
   Candidate NPM host uses existing wildcard certificate 2 and LAN 18190, no forward-auth;
   exact hub-home domain does not yet exist (mcphub-home is a different existing host).
   Existing runtime container can retrieve actual issuer discovery over HTTPS 443.
+  Discovery issuer is 443 but advertises same-host HTTPS protocol endpoints on 28443;
+  validation accepts that advertised port while rejecting a different host or plain HTTP.
+  Built candidate image local/hub-api:2dc00a5. Hardened disposable candidate verified
+  real discovery/JWKS, health=200, anonymous status=401, auth/start=302 with Secure
+  binding cookie and no-store headers; candidate container removed afterward.
   ACTIVE Authelia configuration, NPM, hub private env and production image remain
   unchanged at this step. Real browser, LAN/public production-token acceptance pending.
   Stop before activation and obtain the owner-confirmed Authelia restart window.
