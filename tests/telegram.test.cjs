@@ -362,6 +362,119 @@ test("login captures the QR through the shared helper and verifies the session",
   }
 });
 
+// Scripted Web K password card: `onSubmit(value)` returns "accept", "reject" or "ignore".
+function fakePasswordPage(onSubmit, {fields = 1} = {}) {
+  const state = {authenticated: false, password: true, busy: false, error: false, value: "",
+    submits: 0, fills: 0, verdictAfter: 0};
+  const page = {
+    goto: async () => {},
+    waitForTimeout: async () => {},
+    evaluate: async (fn) => {
+      assert.equal(fn, web.readPage);
+      if (state.verdictAfter && --state.verdictAfter === 0) {
+        state.busy = false;
+        const verdict = onSubmit(state.value);
+        if (verdict === "accept") { state.password = false; state.authenticated = true; }
+        if (verdict === "reject") state.error = true;
+      }
+      return {auth: !state.authenticated, authenticated: state.authenticated, qr: false,
+        passwordRequired: state.password, passwordBusy: state.password && state.busy,
+        passwordRejected: state.password && !state.busy && state.error,
+        inputReady: false, startRequired: false, messages: [], answers: []};
+    },
+    locator: (selector) => {
+      assert.equal(selector, web.SELECTORS.passwordInput);
+      const handle = {
+        locator: () => handle,
+        first: () => handle,
+        count: async () => fields,
+        fill: async (value) => { state.fills++; state.value = value; },
+        evaluate: async (fn, length) => {
+          const element = {value: state.value, classList: {remove: () => { state.error = false; }}};
+          return fn(element, length);
+        },
+        press: async (key) => {
+          assert.equal(key, "Enter");
+          state.submits++;
+          if (onSubmit(null) !== "ignore") { state.busy = true; state.verdictAfter = 2; }
+        },
+      };
+      return handle;
+    },
+  };
+  return {state, firefox: {launchPersistentContext: async () => ({pages: () => [page], close: async () => {}})}};
+}
+
+function passwordTerminal(answers) {
+  return {out: [], prompts: 0, write(t) { this.out.push(t); }, question: async () => "",
+    secret: async function() { return answers[this.prompts++] ?? ""; }, takeLine: () => false, close() {}};
+}
+
+async function passwordLogin(fake, terminal) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benefits-telegram-password-"));
+  try {
+    return await telegram.login(fake.firefox, {profile: path.join(root, "browser"),
+      captureFile: path.join(root, "qr.png"), terminal, clock: clock()});
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+}
+
+test("login submits the two-step password once and verifies the session", async () => {
+  const fake = fakePasswordPage((value) => (value === null || value === "right" ? "accept" : "reject"));
+  const terminal = passwordTerminal(["right"]);
+  const out = await passwordLogin(fake, terminal);
+  assert.deepEqual(out, {execution: "ok", reason: "login_verified", checkin: "unknown"});
+  assert.equal(terminal.prompts, 1);
+  assert.equal(fake.state.submits, 1);
+  assert.ok(!terminal.out.some((line) => line.includes("right")));
+});
+
+test("only explicit Telegram rejections count toward password_not_accepted", async () => {
+  const fake = fakePasswordPage((value) => (value === null ? "submit" : "reject"));
+  const terminal = passwordTerminal(["a", "b", "c", "d"]);
+  const out = await passwordLogin(fake, terminal);
+  assert.equal(out.reason, "password_not_accepted");
+  assert.equal(terminal.prompts, 3);
+  assert.equal(fake.state.submits, 3);
+  assert.equal(terminal.out.filter((line) => line.includes("rejected")).length, 2);
+});
+
+test("a submit that never reaches Telegram is not reported as a wrong password", async () => {
+  const fake = fakePasswordPage(() => "ignore");
+  const terminal = passwordTerminal(["right", "right"]);
+  const out = await passwordLogin(fake, terminal);
+  assert.equal(out.reason, "password_submit_unconfirmed");
+  assert.equal(terminal.prompts, 1, "no re-prompt when nothing was submitted");
+});
+
+test("password flow refuses ambiguous fields, short fills and empty input without submitting", async () => {
+  let fake = fakePasswordPage(() => "accept", {fields: 3});
+  assert.equal((await passwordLogin(fake, passwordTerminal(["right"]))).reason, "password_field_ambiguous");
+  assert.equal(fake.state.submits, 0);
+
+  fake = fakePasswordPage(() => "accept");
+  assert.equal((await passwordLogin(fake, passwordTerminal([""]))).reason, "password_not_entered");
+  assert.equal(fake.state.fills, 0);
+
+  fake = fakePasswordPage(() => "accept");
+  const page = (await fake.firefox.launchPersistentContext()).pages()[0];
+  const locate = page.locator;
+  page.locator = (selector) => {
+    const handle = locate(selector);
+    const fill = handle.fill;
+    handle.fill = async (value) => fill(value.slice(0, 2)); // Field truncates the value.
+    return handle;
+  };
+  assert.equal((await passwordLogin(fake, passwordTerminal(["right"]))).reason, "password_input_unconfirmed");
+  assert.equal(fake.state.submits, 0);
+});
+
+test("password selector skips Web K's stealthy decoy inputs", () => {
+  assert.match(web.SELECTORS.passwordInput, /:not\(\.stealthy\)/);
+  assert.match(web.SELECTORS.passwordInput, /:not\(\[aria-hidden="true"\]\)/);
+});
+
 test("classify and summary follow the result contract", () => {
   const b = parseConfig({accounts: {a: {bots: [bot()]}}}, "a").bots[0];
   assert.equal(telegram.classify(["今天 已签到 了"], b), "already_checked_in");

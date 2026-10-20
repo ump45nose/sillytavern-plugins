@@ -7,6 +7,7 @@ const assert = require("node:assert/strict"),
   path = require("node:path");
 const {firefox} = require("../platforms/telegram/node_modules/playwright-firefox");
 const web = require("../platforms/telegram/selectors.cjs");
+const telegram = require("../platforms/telegram/adapter.cjs");
 const FIXTURES = path.join(__dirname, "fixtures", "telegram");
 
 (async () => {
@@ -30,7 +31,14 @@ const FIXTURES = path.join(__dirname, "fixtures", "telegram");
     await load("password.html");
     snap = await web.snapshot(page);
     assert.equal(snap.passwordRequired, true);
-    assert.equal(await page.locator(web.SELECTORS.passwordInput).locator("visible=true").count(), 1);
+    assert.equal(snap.qr, false, "the monkey canvas on the password card is not a QR");
+    const field = page.locator(web.SELECTORS.passwordInput).locator("visible=true");
+    assert.equal(await field.count(), 1);
+    assert.equal(await field.first().getAttribute("name"), "notsearch_password");
+    assert.equal(await telegram.submitPassword(page, "fixture-wrong", telegram.realClock), "rejected");
+    assert.equal((await web.snapshot(page)).passwordRejected, true);
+    assert.equal(await page.locator(".stealthy").evaluateAll((all) => all.every((e) => e.value === "")), true);
+    assert.equal(await telegram.submitPassword(page, "fixture-accepted", telegram.realClock), "submitted");
 
     await load("bot-start.html");
     snap = await web.snapshot(page);

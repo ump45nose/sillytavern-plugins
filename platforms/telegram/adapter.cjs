@@ -240,9 +240,42 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
 // password is read from the terminal without echo and never stored.
 // Long enough for the QR to be relayed to another device and scanned.
 const LOGIN_WAIT_MS = 600000;
+const PASSWORD_ATTEMPTS = 3;
+const PASSWORD_RESULT_MS = 30000;
 
-async function login(firefox, {profile, proxy, captureFile, terminal}) {
-  let attempts = 0;
+// Fill the one real password field, confirm it holds the whole secret, submit,
+// then wait for Telegram's verdict: the card leaves (accepted), the field gets
+// .error (rejected), or neither (the submit never reached Telegram). Only an
+// explicit rejection counts as a wrong password.
+async function submitPassword(page, secret, clock) {
+  const fields = page.locator(web.SELECTORS.passwordInput).locator("visible=true");
+  if ((await fields.count()) !== 1) return "password_field_ambiguous";
+  const input = fields.first();
+  await input.fill(secret, {timeout: 10000});
+  const filled = await input.evaluate((element, length) => {
+    if (element.value.length !== length) return false;
+    element.classList.remove("error"); // A previous verdict must not decide this attempt.
+    return true;
+  }, secret.length);
+  if (!filled) {
+    await input.fill("", {timeout: 10000}).catch(() => {});
+    return "password_input_unconfirmed";
+  }
+  await input.press("Enter", {timeout: 10000});
+  const end = clock.now() + PASSWORD_RESULT_MS;
+  let busy = false;
+  while (clock.now() < end) {
+    await clock.sleep(page, 1000);
+    const snap = await web.snapshot(page);
+    if (snap.authenticated || !snap.passwordRequired) return "submitted";
+    if (snap.passwordBusy) busy = true;
+    else if (snap.passwordRejected) return "rejected";
+  }
+  return busy ? "password_check_timeout" : "password_submit_unconfirmed";
+}
+
+async function login(firefox, {profile, proxy, captureFile, terminal, clock = realClock}) {
+  let rejected = 0;
   const outcome = await terminalLogin(firefox, {profile, proxy, headless: true, create: true,
     contextOptions: CONTEXT}, {
     url: web.BASE_URL,
@@ -259,13 +292,14 @@ async function login(firefox, {profile, proxy, captureFile, terminal}) {
     verify: async (page) => (await web.snapshot(page)).authenticated,
     poll: async (page, io) => {
       if (!(await web.snapshot(page)).passwordRequired) return null;
-      if (attempts >= 3) return {reason: "password_not_accepted"};
-      attempts++;
       const secret = await io.secret("Telegram two-step verification password (not shown):");
-      const input = page.locator(web.SELECTORS.passwordInput).locator("visible=true").first();
-      await input.fill(secret, {timeout: 10000});
-      await input.press("Enter", {timeout: 10000});
-      await page.waitForTimeout(3000);
+      if (!secret) return {reason: "password_not_entered"};
+      const result = await submitPassword(page, secret, clock);
+      if (result === "submitted") return null;
+      if (result !== "rejected") return {reason: result};
+      rejected++;
+      if (rejected >= PASSWORD_ATTEMPTS) return {reason: "password_not_accepted"};
+      io.write("Telegram rejected the password; try again.");
       return null;
     },
   });
@@ -302,4 +336,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = {run, login, classify, summary, realClock};
+module.exports = {run, login, submitPassword, classify, summary, realClock};

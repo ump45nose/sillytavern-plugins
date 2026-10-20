@@ -57,7 +57,7 @@ python3 platforms/telegram/run.py --runtime-root $R --browser-cache $C --account
 python3 platforms/telegram/run.py --runtime-root $R --browser-cache $C --account tg-ai --execute
 ```
 
-`--login` 在终端提示：手机 Telegram → 设置 → 设备 → 连接桌面设备，扫描运行目录中自动刷新的 `telegram-login-qr.png`（0600，路径显示在终端；登录结束后删除）。账号开启两步验证时，终端会要求输入密码，不回显、不写日志或文件。最长等待 600 秒（便于把二维码转发到另一设备扫描）；`--login` 的运行超时自动不低于 900 秒；按 Enter 提前结束。结果 `login_verified` 表示网页已进入聊天列表。提示写到终端，运行日志仍只收 stdout。
+`--login` 在终端提示：手机 Telegram → 设置 → 设备 → 连接桌面设备，扫描运行目录中自动刷新的 `telegram-login-qr.png`（0600，路径显示在终端；登录结束后删除）。账号开启两步验证时，终端会要求输入密码，不回显、不写日志或文件。密码只填入 Web K 真正的密码框（跳过页面自带的隐藏 `.stealthy` 诱饵框），确认填入长度一致后提交，再等待 Telegram 的明确结果：只有网页把密码框标红（Telegram 拒绝）才计为一次错误，连续 3 次返回 `password_not_accepted`；提交后页面毫无反应返回 `password_submit_unconfirmed`，校验超时返回 `password_check_timeout`，填入不完整返回 `password_input_unconfirmed`，空输入返回 `password_not_entered`，这些情况都不会再次提示输入。最长等待 600 秒（便于把二维码转发到另一设备扫描）；`--login` 的运行超时自动不低于 900 秒；按 Enter 提前结束。结果 `login_verified` 表示网页已进入聊天列表。提示写到终端，运行日志仍只收 stdout。
 
 不加 `--execute` 不读配置、不启动浏览器。`--execute --status` 与签到在没有 profile 时直接返回 `not_logged_in`，不启动浏览器；页面显示登录卡片时同样返回 `not_logged_in`，不发送任何消息。两个账号由全局浏览器锁串行执行。
 
