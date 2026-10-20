@@ -12,6 +12,7 @@ import math
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
+from time import monotonic
 import re
 from urllib.parse import urlsplit
 from common.interventions import fingerprint
@@ -23,6 +24,7 @@ from .workflow import Paused
 
 STORE = "https://store.epicgames.com/en-US"
 CHECKOUT = "https://store.epicgames.com/purchase"
+CHECKOUT_WAIT_SECONDS = 150
 PROMOTIONS = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
 ALLOWED = {"store.epicgames.com", "www.epicgames.com", "accounts.epicgames.com"}
 PURCHASE_NAMES = re.compile(
@@ -181,11 +183,12 @@ class BrowserDriver:
 
     async def _goto(self, url, timeout):
         clean_target(url)
+        navigation_seconds = CHECKOUT_WAIT_SECONDS if _same_target(url, CHECKOUT) else 45
         try:
             await self.page.goto(
                 url,
                 wait_until="domcontentloaded",
-                timeout=min(45000, int(timeout * 1000)),
+                timeout=min(navigation_seconds * 1000, int(timeout * 1000)),
             )
         except Exception as error:
             # A navigation timeout may occur after useful DOM arrived. Require
@@ -283,26 +286,41 @@ class BrowserDriver:
     async def observe(self, phase, *, timeout):
         # DOMContentLoaded precedes the store's hydrated purchase controls.
         # Re-probe without navigation or interaction before declaring a layout gap.
-        attempts = 20 if phase in {"checkout", "post_submit"} else 8
+        checkout = phase in {"checkout", "post_submit"}
+        budget = min(timeout, CHECKOUT_WAIT_SECONDS) if checkout else timeout
+        deadline = monotonic() + budget
+        attempts = math.ceil(budget) + 1 if checkout else 8
+        state = None
         for attempt in range(attempts):
-            state = await self._observe_once(phase, timeout=timeout)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                break
+            try:
+                state = await asyncio.wait_for(
+                    self._observe_once(phase, timeout=remaining), timeout=remaining)
+            except TimeoutError:
+                break
             if state is None or state.kind != "unknown":
                 return state
             if attempt == 0 and phase in {"product", "verification"}:
                 try:
                     await self._purchase_controls(self.page).first.wait_for(
-                        state="visible", timeout=min(20000, int(timeout * 1000)))
+                        state="visible", timeout=min(20000,
+                            max(1, int((deadline - monotonic()) * 1000))))
                 except Exception as error:
                     if not _is_playwright_timeout(error):
                         raise
-            if attempt == attempts - 1:
-                # A denied optional script does not negate a working control,
-                # ownership marker or a visible login/challenge. Report resource
-                # denial when the bounded observation cannot establish a state.
-                if self.assets_denied:
-                    raise Paused("store_assets_access_denied")
-                return state
-            await asyncio.sleep(min(1, timeout / attempts))
+            if attempt < attempts - 1:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(1, remaining))
+        # A denied optional script does not negate working controls or a real
+        # obstacle. Keep the rejection when the observation budget is exhausted.
+        if self.assets_denied:
+            raise Paused("store_assets_access_denied")
+        return state or classify({}, phase=phase, target=clean_target(self.page.url),
+                                 evidence_fingerprint=fingerprint("unconfirmed", phase))
 
     async def _observe_once(self, phase, *, timeout):
         observations = []
