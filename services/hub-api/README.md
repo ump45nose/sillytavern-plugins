@@ -136,7 +136,9 @@ comment/author reasons to waiting rows. Closed items and conversations last answ
 by the owner are excluded. Review requests must remain outstanding. Fine-grained
 credentials use the documented Search approximation, not notifications.
 
-Reads run concurrently under the same five-second source deadline. Notifications are
+Reads run concurrently. The measured GitHub API needs about 9.5 seconds for the
+notification-detail pipeline; GitHub alone uses a configurable 15-second deadline
+(`HUB_GITHUB_TIMEOUT_SECONDS`). Other sources retain the five-second default. Notifications are
 bounded to 50, own open PRs to 20, latest reviews/check contexts to 20. Activity totals
 come from contribution collections; commit streaks use up to 40 newest commit days
 per repository across 25 repositories and 365 days. Unknown coverage produces null

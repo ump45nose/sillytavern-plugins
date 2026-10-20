@@ -13,6 +13,7 @@ class Adapter:
     name: str
     ttl: int
     fetch: Callable[[], Awaitable[dict]] | None = None
+    timeout: float | None = None
 
 
 class SourceManager:
@@ -50,7 +51,7 @@ class SourceManager:
             started = time.monotonic()
             error = None
             try:
-                async with asyncio.timeout(self.timeout):
+                async with asyncio.timeout(adapter.timeout or self.timeout):
                     data = await adapter.fetch()
                 self.cache[identifier] = {"data": data, "updated_at": now.isoformat()}
             except httpx.HTTPStatusError as exc:

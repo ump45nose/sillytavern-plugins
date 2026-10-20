@@ -222,4 +222,4 @@ class GitHub:
                 "_partial": partial or viewer["pullRequests"]["pageInfo"]["hasNextPage"] or activity["streak_days"] is None}
 
     def adapter(self):
-        return Adapter("github", "GitHub", 120, self.fetch if self.settings.github_token else None)
+        return Adapter("github", "GitHub", 120, self.fetch if self.settings.github_token else None, self.settings.github_timeout_seconds)

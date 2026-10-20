@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     qbittorrent_password: SecretStr | None = None
 
     github_token: SecretStr | None = None
+    github_timeout_seconds: float = 15
 
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]
