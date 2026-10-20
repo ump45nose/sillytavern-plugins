@@ -49,7 +49,7 @@ EPIC_CONFIG=/absolute/private/epic.json \
   --runtime-root /absolute/private/runtime --execute
 ```
 
-每次一个账号，profile 位于 `state/epic/<account>/browser/`。同级 `browser-identity.json` 保存该账号的 Camoufox 身份，跨次启动复用，并与 profile 一起备份、恢复，保持指纹与 Cookie 对应；已有身份损坏时直接报错。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。登录成功或验证码通过不代表游戏领取成功。
+每次一个账号，profile 位于 `state/epic/<account>/browser/`。同级 `browser-identity.json` 保存该账号的 Camoufox 身份，跨次启动复用，并与 profile 一起备份、恢复，保持指纹与 Cookie 对应；已有身份损坏时直接报错。当前促销为空时 claim 不适用；所有当前免费游戏均经所有权确认才返回 complete。初次读回即已在库时，将该游戏已有的未确认 intent 确认为 confirmed，不创建新的领取记录。登录成功或验证码通过不代表游戏领取成功。
 
 `proxy` 可省略以使用直连。目录读取复用已完成会话检查的商店页，避免重复加载首页；线路和验证码处理均须通过当前浏览器与所有权回查验证。
 
@@ -71,6 +71,6 @@ NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当�
 
 2026-10-09 原 Hermes 入口实跑成功，run ID 为 `78d5a00f-76ab-4b77-a834-67b095fc846d`。当期 Out of Sight 和 TerraScape 两款均确认在库；正式任务记录一款已在库、一款新领、零项未确认。已有付费购物车未被修改。
 
-2026-10-19 现场尚未通过领取验收：用户授权的受控重试在 hCaptcha 返回 `pass=true` 后，支付 `confirm-order` 仍以 `epic.error.captcha.challenge.failed` 拒绝；首个支付拒绝后停止，只读回查两款仍未在库。固定身份和完整 DMIT 出口已多次正常加载商品及结算，但期间仍出现过资源 403。详细证据与未完成项见 [持续排查计划](../../docs/plans/2026-10-19-benefits-followup.md)。
+2026-10-20 正式回执已确认用户手动领取的 Bad Cheese 在库，Agent A 仍未在库；商品与独立零元结算均可加载，但间歇性资源 403 尚未根治。本日经额外授权只对 Agent A 点击一次提交，失败于 hCaptcha SDK 的 `RetryError` 及后续刷新异常，没有发送 confirm-order 或 challenge-order；旧 intent 和本次独立 intent 均保留。2026-10-19 的 `epic.error.captcha.challenge.failed` 支付拒绝尚无成功领取对照，不能称已解决。详细证据与未完成项见 [持续排查计划](../../docs/plans/2026-10-20-benefits-followup.md)。
 
 业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。
