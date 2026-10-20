@@ -48,7 +48,13 @@ async def modules(manager, ids, token_range="day"):
             data = token_module(values["token"]["data"], token_range, manager.now())
         if identifier == "net" and values["usage"]["data"] is not None:
             data = values["usage"]["data"]["net"]
+        partial = False
+        if identifier == "git" and data is not None:
+            partial = data.get("_partial", False)
+            data = {k: v for k, v in data.items() if not k.startswith("_")}
         output[identifier] = envelope(identifier, results, data)
+        if partial and output[identifier]["status"] == "ok":
+            output[identifier]["status"] = "partial"
         if identifier == "net" and values["usage"]["data"] and values["usage"]["data"].get("partial") and output[identifier]["status"] == "ok":
             output[identifier]["status"] = "partial"
     return output

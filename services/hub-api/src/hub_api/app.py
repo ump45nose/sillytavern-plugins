@@ -17,6 +17,7 @@ from .sources.records import Records
 from .sources.personal import Personal
 from .sources.usage import Usage
 from .sources.media import Media
+from .sources.github import GitHub
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
 from .store import Store
@@ -60,7 +61,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
     personal = Personal(client, settings, now)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters()}
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)

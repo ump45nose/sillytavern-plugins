@@ -61,8 +61,7 @@ Progress (each step is tested and committed separately):
   already returns 200, so the same trusted-network access is explicitly retained.
   Its authentication policy was not modified. Source cookie isolation and signed
   reference tampering/expiry are covered by tests.
-- Step 5 GitHub: waiting for the §8-2 credential decision; do not copy the NAS gh
-  credential into the service until the user authorizes reuse or supplies a file.
+- Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Adapter and 14 fake-source tests pass; production verification pending.
 - Steps 6–7: not started, following §10 order. Authelia/NPM unchanged; no public
   endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
 

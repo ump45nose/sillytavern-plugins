@@ -125,3 +125,22 @@ without duplicating them. An unavailable service leaves only its own fields null
 Image references contain a source/item ID and 24-hour expiry signed by a dedicated
 server key. Authenticated proxies accept only these references and fixed source
 routes, never arbitrary URLs, and expose no upstream key or cookie to clients.
+
+## GitHub
+
+The owner authorized reuse of NAS gh's existing classic/OAuth credential, including
+notifications/repo read access. The adapter sends only REST GET and fixed GraphQL
+`query` operations; dismiss/snooze never writes notifications, issues or PRs.
+Unread participating notifications map mention/team mention, review request and
+comment/author reasons to waiting rows. Closed items and conversations last answered
+by the owner are excluded. Review requests must remain outstanding. Fine-grained
+credentials use the documented Search approximation, not notifications.
+
+Reads run concurrently under the same five-second source deadline. Notifications are
+bounded to 50, own open PRs to 20, latest reviews/check contexts to 20. Activity totals
+come from contribution collections; commit streaks use up to 40 newest commit days
+per repository across 25 repositories and 365 days. Unknown coverage produces null
+streak and partial status, rather than an invented count. Paginated notification/PR
+results also produce partial. CI failure, changes requested, conflicts and no review
+are separate blocked conditions. Unknown onset remains null until local observation
+in the attention layer; it is never inferred from an unrelated PR update.

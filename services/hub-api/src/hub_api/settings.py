@@ -42,5 +42,7 @@ class Settings(BaseSettings):
     qbittorrent_user: str | None = None
     qbittorrent_password: SecretStr | None = None
 
+    github_token: SecretStr | None = None
+
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]
