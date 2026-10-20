@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp
 WORKDIR /app
 COPY deploy/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
-COPY src /app/src
+COPY --chown=1000:1001 src /app/src
 ENV PYTHONPATH=/app/src
 USER 1000:1001
 EXPOSE 8080
