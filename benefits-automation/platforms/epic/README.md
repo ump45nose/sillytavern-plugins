@@ -69,4 +69,6 @@ NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当�
 
 2026-10-09 原 Hermes 入口实跑成功，run ID 为 `78d5a00f-76ab-4b77-a834-67b095fc846d`。当期 Out of Sight 和 TerraScape 两款均确认在库；正式任务记录一款已在库、一款新领、零项未确认。已有付费购物车未被修改。
 
+2026-10-19 现场尚未通过领取验收：用户授权的受控重试在 hCaptcha 返回 `pass=true` 后，支付 `confirm-order` 仍以 `epic.error.captcha.challenge.failed` 拒绝；首个支付拒绝后停止，只读回查两款仍未在库。固定身份和完整 DMIT 出口已多次正常加载商品及结算，但期间仍出现过资源 403。详细证据与未完成项见 [持续排查计划](../../docs/plans/2026-10-19-benefits-followup.md)。
+
 业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。

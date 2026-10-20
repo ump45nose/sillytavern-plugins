@@ -1,0 +1,6 @@
+# Mac-only passive media reader; existing database key cache, no key extraction.
+chatlog-keeper[images] @ git+https://github.com/labazhou2024/chatlog-keeper.git@8c22d7982ec071745d374996f48c1a6f8c4bbf0c
+
+pilk==0.2.4
+Pillow==13.0.0
+imageio-ffmpeg==0.6.0

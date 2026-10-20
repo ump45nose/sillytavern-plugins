@@ -1,6 +1,6 @@
 # Code · 聚合开发仓库
 
-`/home/yuwk/code` 就是跨项目开发入口。12 个自有项目通过 Git subtree 纳入普通子目录，统一查看 Git diff、提交和创建 worktree；项目提交仍可拆分回各自原 GitHub 仓库。
+`/home/yuwk/code` 就是跨项目开发入口。各个自有项目通过 Git subtree 纳入普通子目录，统一查看 Git diff、提交和创建 worktree；项目提交仍可拆分回各自原 GitHub 仓库。
 
 项目职责和 LLM 开发约定见 [AGENTS.md](AGENTS.md)，远端与默认分支见 [projects.json](projects.json)。`contrib-agents/`、`OFIQ-Project/`、`face-quality-reference/` 和 `token-monitor-upstream/` 保持独立，未纳入聚合 Git。
 
@@ -50,7 +50,7 @@ python3 scripts/project.py push nas-cron-jobs codex/update-favorites
 需要以原项目目录结构执行发布审核或构建时，导出当前已提交的项目源码：
 
 ```bash
-python3 scripts/project.py checkout personal-data-hub /absolute/source-export/personal-data-hub
+python3 scripts/project.py checkout personal-crm /absolute/source-export/personal-crm
 ```
 
 这会创建独立 Git checkout，并将它的 `origin` 指向原项目远端；不复制依赖、密钥或运行数据，也不更改现有部署来源。按项目文档准备依赖和选择部署源码。MCP CLI 已有 `--source` 参数可显式选取导出的业务目录；私有 NAS target、服务和授权不在本次迁移中改写。

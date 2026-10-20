@@ -1,5 +1,22 @@
 # Epic 与 Rewards 持续异常排查
 
+## 最新现场结论（2026-10-19 22:28）
+
+- 用户已明确同意 HK。Rewards 三个 Bing 域名使用香港 02，微软服务分组仍为 DIRECT。香港 01/02 各六次同侧 HTTPS 对照中，02 全部完成，01 两次连接超时，因此没有再换地区或节点。私有证据：`rewards-hk-transport/results.json`。
+- 正式完整 Rewards `270a10e7-...` 已结束：每日 3/3、桌面搜索 200/200、当前开放桌面 App 周任务 2/2（20/70）、更多活动、APP 签到、APP 活动 4/4 与连续打卡均确认；只有探索任务未确认。后续完整运行在探索阶段主动停止，保留全部 intent。旧运行 `1f9b0fec-...` 已收到 flight / insurance / shopping 三项激活成功回执，没有为诊断重复激活。
+- 探索单项 `b4e5b630-...` 的回查重现 TLS 中断和 Rewards 503；随后 `16e8e03f-...` 用浏览器直接读取同一官方 flyout，当前查询“香港到東京機票”后多次 HTTP 200，仍未取得该任务完成标记。网络异常不是未入账的充分解释；主题映射已修复不能视为积分已获得。共享 Core 的当前节点解析与已测地址一致、TCP 可达，40 秒相关日志采样没有建连错误，未据此修改 DNS。
+- **最终正式完整 Rewards `345e01e9-2b99-46ad-bb6c-76b39555a37b` 于 22:27:55 结束。** `execution_status=ok`、`full_requested_capabilities_partial`；除 extra 外全部已启用能力均为 complete / not_applicable。当前每日 3/3、桌面搜索 200/200、更多活动 130/130、APP 签到 1/1、APP 活动 4/4、桌面周任务当前开放 2/2（20/70）及连续打卡均独立读回。四项探索查询完成后仍为 0/40、`offer_not_credited`，保留 intent；没有再次激活或将旧记录清空。正式 delivery 由原启动器写入。随后只读 `35fcb9ed-...` 确认当前 Bing 首页及搜索表单目标都是 `www.bing.com`，没有把共享连接里出现 cn.bing.com 推断为搜索主文档跳转。
+- Epic 本轮前一受控运行 `aa6126a1-...` 又在订单前出现资源 403；之后两次限定 CF cookie 刷新进入结算。`6cc8b0f3-...` 的轻量模型实际挑战为 `/checkcaptcha` HTTP 400、`pass=false`，没有发送支付确认；正式模型配置没有替换。不能声称 403 已永久消失，也不能把这一模型对照称为实际领取成功。
+- **已取得此前缺失的支付拒绝码。** `ecf0f71f-...` 使用同一稳定身份与 DMIT，通过正常页面拖动题取得 `/checkcaptcha` HTTP 200、`pass=true`；随后唯一一笔 `/v2/purchase/confirm-order` 为 HTTP 400、`epic.error.captcha.challenge.failed`，未返回订单编号。按授权在首个支付拒绝停止，没有尝试第二款的新订单。只读正式回查 `28d80de7-...` 确认两款仍未在库，旧 journal 保留。私有证据：`payment-investigation/ecf0f71f-.../investigation-summary.json`。
+- 支付端拒绝已与验证码题目超时、答案未通过及 CF 资源拒绝区分；具体拒绝策略尚无后台证据，不推断为账号封禁、地区错误或节点 IP 唯一原因。标准 Chromium 只读对照 `b6dc7c07-...` 使用独立 Core 固定同一 DMIT，等待并尝试正常 CF 交互后仍为主文档安全检查，未进入结算；没有将其部署替换现有浏览器。支付确认与 quick-purchase 均在网络边界禁止，临时 Core 已退出。
+- 22:09 设施检查无计划内停止容器；仅既有 tailscale 缺项、两个未登记和三个忽略对象。没有操作这些对象。
+
+### 本轮交付与剩余验收
+
+- 业务修复提交 `3345516`：香港繁体日任务/APP 标签、四项稳定 offer ID 主题映射、每题原题传递和模型/挑战预算。此前 123 项 Epic 回归、真实 SDK 模型桥冒烟、Rewards 相关 40 + 19 项通过；本轮后续只有诊断及文档，没有重复添加功能或回归用例。
+- Rewards 原有周卡未确认及香港日卡解析问题已现场通过；完整业务仍有探索 0/40 未解决。Epic 两款仍未领取，CF 偶发资源拒绝的稳定性及支付端 `epic.error.captcha.challenge.failed` 仍未解决。
+- 受控授权要求首个支付拒绝后停止，已遵守。后续可以继续只读检查验证交接与正常浏览器兼容性；本轮没有继续发送第二笔支付确认。账号、地区、正式模型、旧订单 journal 和其他选择器保留。
+
 ## HK 地区确认后继续执行（2026-10-19 21:09）
 
 - 用户明确答复“那就按 hk 来吧”。Rewards 保持既有 `region=HK`，三个 Bing 域名重新指向已经验证的香港 02；微软服务分组继续 DIRECT，其他选择器及 Epic → DMIT 保持。源/运行配置仅替换三条规则，Core 原生校验、实时规则及选择器前后比对通过；私有记录为 `rewards-hk-confirmed-130920/applied.json`。
