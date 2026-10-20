@@ -61,13 +61,13 @@ Progress (each step is tested and committed separately):
   already returns 200, so the same trusted-network access is explicitly retained.
   Its authentication policy was not modified. Source cookie isolation and signed
   reference tampering/expiry are covered by tests.
-- Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Adapter and 14 fake-source tests pass; production verification pending.
+- Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Deployed local/hub-api:2b48ca1; 14 fake-source tests pass. Live GitHub source=ok, git=partial (bounded coverage), waiting=13, blocked=23. Actual fetch 7.5s; only GitHub uses configurable 15s, all other sources retain 5s. Media remains ok.
 - Steps 6–7: not started, following §10 order. Authelia/NPM unchanged; no public
   endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
-Production image is 46d53dd (later documentation commits do not change code).
+Production image is 2b48ca1 (later documentation commits do not change code).
 Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
 Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
 It is clean, with source changes committed and subtree release branches pushed;
@@ -79,6 +79,5 @@ or stopped planned containers. Dockge browser cards remain unverified; both Comp
 contexts were validated. Duplicati backup/restore and production source writes were
 not triggered merely for testing.
 
-Pending user decisions are taken at the applicable step: GitHub token, missing source
-credentials, and the Authelia restart window. Defaults for budget/health/cycle apply.
+Pending user decision: Authelia restart window. GitHub reuse was explicitly approved; source credentials were available. Defaults for budget/health/cycle apply.
 No Authelia or source service has been changed or restarted.
