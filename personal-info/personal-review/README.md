@@ -4,7 +4,7 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 
 ## 数据输入
 
-- CRM：直接通过独立 HTTP API 分页读取互动计数；日报 Agent 使用 list_interactions/get_interaction/get_person，不复制聊天库。
+- CRM：直接通过独立 HTTP API 分页读取互动计数；`reviewctl crm read --date YYYY-MM-DD` 读取正文并按消息时间限定窗口、解析联系人，只输出给日报 Agent，不写入复盘数据库。无需 CRM MCP/OAuth。
 - 健康与账单：直接使用 Personal Records API。
 - 邮件：现有邮件应用的原生 MCP，保留主题筛选和只读行为；失败明确报错，不生成零邮件快照。
 - Skysight：读取独立同步归档的发布清单和对象，每台设备分别采用完整 6h 摘要或 10min 摘要；来源未同步时明确报告。NAS 通过固定只读命令访问私有归档，不改变原始文件权限。
@@ -19,3 +19,5 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 `weekly prepare`、`stage prepare-close`、`projections pending`、`attachment pending`、`annual prepare` 保留既有业务。日报投递成功后由独立回执任务提交 checkpoint；投影失败不回退已确认账本。旧 CRM 日快照输入及旧 raw/derived 保留任务已退役。
 
 部署与实际验证记录见聚合仓库 `docs/plans/2026-10-19-hub-retirement.md`。
+
+更新日报接入时，同步部署 `deploy/skill/personal-review/SKILL.md` 到 Lingjun profile 的 `skills/lifestyle/personal-review/SKILL.md`，并更新现有日报任务的 prompt；静态源码链接更新不会自动替换 profile 中的 skill。保留任务 ID、schedule、投递 topic、执行历史和暂停状态。`config validate`、`doctor` 不能替代来源实读或实际投递验证。

@@ -14,13 +14,23 @@
 ## 验收
 
 1. 实际 Hermes 身份、同一代理路径完成 Telegram getMe/getChat 只读协议验证，并核对网关恢复。
-2. 日报实际使用的 CRM 工具可发现并读取当日互动及正文；不依赖旧 Hub、无浏览器交互。
+2. 日报通过 CRM 现有本机 HTTP API 读取互动与正文；分页、联系人解析与时间窗口由程序完成，不依赖 MCP/OAuth，不新增聊天镜像。
 3. config validate 与隔离状态的 daily prepare 成功，证据与缺失项符合真实来源。保留生产冻结材料及 pending checkpoint。
 4. 只做与缺陷相称的定向验证，记录源码/部署差异、备份与未验证的真实发送。
 
 ## 进度
 
 - [x] 读取昨日迁移计划、部署规范和调度/执行/网关日志。
-- [ ] 定位并恢复投递连接。
+- [x] 定位并恢复投递连接。
 - [ ] 修复迁移后的 CRM 实际接入与 skill 部署遗漏。
 - [ ] 验证、部署、提交检查点并报告。
+
+## 修复与接入决定
+
+- 经三个已有节点对 Telegram 的定向连接测试，原手动美国节点超时，日本节点对该目标失败，新加坡 Vless 节点成功。只将“社交通信”和“国际服务”两个 selector 切到该节点；其他组、规则、核心配置不改，未重启网关。原 selector 备份在 `/home/yuwk/.local/state/incident-diagnostics/2026-10-20-hermes-daily/proxy-selection-before.json`；Mihomo 原有 selector cache 已更新。
+- 实际 Hermes 身份经同一代理调用 Telegram getMe/getChat 均 HTTP 200、ok=true；原网关自动重连，11:23:03 确认 getUpdates 正常。Google Calendar/Tasks 只读输入成功（2 条已完成任务），邮件四账户输入成功（10 条筛选结果）。这些探测不写生产输入文件、不发送消息。
+- 旧 CRM MCP 上游 refresh 返回 invalid_grant。用户指出本地已有 API；应删除日报对该 MCP 的依赖，不要求用户重授权。保持其他 Hermes MCP 配置，不修改其 OAuth 状态。
+- 健康/账单本来直接读本机 Records API。Skysight 当前为本机 SFTP 发布归档，没有独立 HTTP 容器/服务；源码 README 亦声明不增加 HTTP 服务，继续直接读取归档，不新增转发层。
+- 新增 `reviewctl crm read --date` 只读命令，复用既有 API 和只读 token：完整读取列表分页、联系人与正文，按 CRM 北京时间消息格式裁切跨日/跨截止点内容，保留多行消息。原接口直接提供完整正文，无需 MCP 的分段工具；CLI 不初始化状态库、不复制聊天正文到复盘数据库。读取失败返回错误，不假装零条。
+- 日报 prompt 与 canonical/live skill 同步改用上述命令；保留原 Skysight 和近期已确认日报的有效交互说明。初次仅更新 skill 的版本已由本轮最终 API 指引替代。
+- 私有 skill 备份、隔离 SQLite 与诊断材料在 profile `cron/migration-backups/daily-repair-20261020/`。隔离窗口实读 2026-10-19 得到 Skysight 22、健康/账单/CRM/Git 各一份证据；昨日邮件/Google 输入未生成如实记录缺失，未改动生产冻结材料或 pending checkpoint。
