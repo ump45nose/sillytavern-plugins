@@ -21,6 +21,10 @@ class Store:
                     name TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at TEXT NOT NULL,
                     document TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS login_pending (
+                    id_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL, expires REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS login_pending_expiry ON login_pending(expires);
                 CREATE TABLE IF NOT EXISTS attention_state (
                     id TEXT PRIMARY KEY, since TEXT NOT NULL, dismissed INTEGER NOT NULL DEFAULT 0,
                     snooze_until TEXT
@@ -102,3 +106,35 @@ class Store:
             if until is None:
                 return db.execute('UPDATE attention_state SET dismissed=1,snooze_until=NULL WHERE id=?',(identifier,)).rowcount > 0
             return db.execute('UPDATE attention_state SET dismissed=0,snooze_until=? WHERE id=?',(until,identifier)).rowcount > 0
+
+    def save_login(self, kind, identifier, payload, expires, now):
+        import json
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('DELETE FROM login_pending WHERE expires<=?',(now,))
+            if db.execute('SELECT count(*) FROM login_pending').fetchone()[0]>=1000:
+                return False
+            db.execute('INSERT INTO login_pending VALUES (?,?,?,?)',(self.digest(identifier),kind,json.dumps(payload),expires))
+        return True
+
+    def consume_login(self, kind, identifier, now):
+        import json
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT payload,expires FROM login_pending WHERE id_hash=? AND kind=?',(self.digest(identifier),kind)).fetchone()
+            db.execute('DELETE FROM login_pending WHERE id_hash=? OR expires<=?',(self.digest(identifier),now))
+        return json.loads(row['payload']) if row and row['expires']>now else None
+
+    def exchange_device(self, code, challenge, now, timestamp):
+        import hmac
+        import json
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute("SELECT payload,expires FROM login_pending WHERE id_hash=? AND kind='exchange'",(self.digest(code),)).fetchone()
+            db.execute('DELETE FROM login_pending WHERE id_hash=? OR expires<=?',(self.digest(code),timestamp))
+            if not row or row['expires']<=timestamp: return None
+            payload=json.loads(row['payload'])
+            if not hmac.compare_digest(payload['challenge'],challenge): return None
+            token=secrets.token_urlsafe(32);identifier=str(uuid4())
+            db.execute('INSERT INTO devices VALUES (?,?,?,?,?)',(identifier,payload['device_name'],self.digest(token),now,now))
+        return {'device_id':identifier,'token':token}

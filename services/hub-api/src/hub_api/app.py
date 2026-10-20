@@ -20,6 +20,7 @@ from .sources.media import Media
 from .sources.github import GitHub
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
+from .auth import register as auth_routes
 from .store import Store
 from .configuration import register as configuration_routes, preferences, subscriptions
 from .attention import register as attention_routes
@@ -30,6 +31,8 @@ ZONE = ZoneInfo("Asia/Shanghai")
 def create_app(settings=None, adapters=None, now=None, transport=None):
     settings = settings or Settings()
     now = now or (lambda: datetime.now(ZONE))
+    if settings.oidc_issuer and settings.dev_token:
+        raise ValueError('OIDC and development authentication must not be enabled together')
     store = Store(settings.database)
     async def discard_cookies(request):
         # Bearer sources can share a LAN IP across ports; never forward one source's cookies.
@@ -134,6 +137,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         from fastapi.responses import Response
         return Response(status_code=204)
 
+    auth_routes(app, settings, store, client, now)
     configuration_routes(app, store, manager, authenticated, now)
     attention_routes(app, manager, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)

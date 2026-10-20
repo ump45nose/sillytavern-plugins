@@ -1,0 +1,18 @@
+{
+  "domain_names": ["hub-home.172906573.xyz"],
+  "forward_scheme": "http",
+  "forward_host": "192.168.31.201",
+  "forward_port": 18190,
+  "certificate_id": 2,
+  "ssl_forced": true,
+  "caching_enabled": false,
+  "block_exploits": true,
+  "allow_websocket_upgrade": false,
+  "http2_support": true,
+  "hsts_enabled": true,
+  "hsts_subdomains": false,
+  "access_list_id": 0,
+  "advanced_config": "access_log off;\nerror_log /dev/null crit;\n",
+  "locations": [],
+  "meta": {"letsencrypt_agree": false, "dns_challenge": false}
+}

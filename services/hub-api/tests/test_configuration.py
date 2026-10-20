@@ -20,6 +20,8 @@ def test_documents_conflict_limits_defaults_and_concurrent_writers(settings):
         assert client.get('/api/v1/layout',headers=h).status_code==404
         default=client.get('/api/v1/preferences',headers=h).json()
         assert default['version']==0 and default['document']['step_goal']==8600
+        conflict=client.put('/api/v1/preferences',headers={**h,'If-Match':'99'},json={'document':{}})
+        assert conflict.status_code==409 and conflict.json()['current']==default
         value={'pages':[{'title':'测试','custom':{'future':True}}]}
         first=client.put('/api/v1/layout',headers={**h,'If-Match':'0'},json={'document':value})
         assert first.status_code==200 and first.json()['document']==value

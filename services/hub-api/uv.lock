@@ -283,6 +283,7 @@ dependencies = [
     { name = "authlib" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "joserfc" },
     { name = "pydantic-settings" },
     { name = "uvicorn" },
 ]
@@ -298,6 +299,7 @@ requires-dist = [
     { name = "authlib", specifier = ">=1.5,<2" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "joserfc", specifier = ">=1.6,<2" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
 ]

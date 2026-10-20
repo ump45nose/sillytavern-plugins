@@ -182,3 +182,38 @@ immediately. Both GitHub rows and attention rows respect the same state. An obse
 end removes handling state, allowing a new episode to notify again; incomplete or
 failed source reads do not establish that an absent condition has ended. Token windows
 with a known reset time get distinct IDs for the new quota period.
+
+## Device login and production activation
+
+Configure issuer, confidential client secret, public URL and `HUB_ALLOWED_SUBJECTS`
+(exact verified Authelia `sub` strings). Production startup rejects coexistence with
+`HUB_DEV_TOKEN`. Redirects are restricted to the documented loopback path with an
+explicit valid port, or `personalhub://auth`. Browser login has random provider state,
+nonce, a Secure/HttpOnly/SameSite=Lax browser-binding cookie, and a separate
+server-to-provider S256 verifier. Pending state expires in ten minutes. The returned
+client exchange code expires in 60 seconds and is consumed atomically with device
+creation; even a wrong verifier consumes it. Database identifiers/codes/device tokens
+are hashed. Provider access/ID tokens are validated in memory and never stored.
+
+ID tokens require RS256 signature, issuer, audience, timestamps, nonce and an allowed
+subject. Discovery/JWKS cache for five minutes and must remain on the configured HTTPS
+issuer origin; an unknown signing key triggers one refresh. All `/auth/*` responses
+are no-store/no-referrer; requests are limited to 30 per minute per observed peer,
+with at most 1,024 rate counters and 1,000 unexpired login records. Forwarded client
+addresses are not implicitly trusted. The private single-owner deployment can share
+the NPM peer counter. Devices can be revoked immediately through the existing API.
+
+Authelia and NPM example files are templates, not automatic deployment scripts. The
+NAS candidate is privately prepared outside Git and validated with the running
+Authelia image against read-only configuration/secret mounts. Applying it requires
+the owner-confirmed restart window. Recheck the original configuration hash before
+merging; preserve external changes. NPM uses existing wildcard certificate 2, LAN
+port 18190 and no forward-auth. Disable access logging and request error logging for
+this host because authorization callbacks contain one-time credentials.
+
+At activation, merge only OIDC keys into the current private hub env and remove the
+development token, register only the new `personal-hub` Authelia client, and restart
+Authelia in the confirmed window. Then update only hub-api and create the single new
+NPM host. Browser login/loopback/token/revocation plus authenticated LAN/public module
+and status requests are still required; fake-provider tests do not establish real
+browser acceptance.

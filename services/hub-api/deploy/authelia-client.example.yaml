@@ -1,0 +1,15 @@
+# Merge this client into identity_providers.oidc.clients after confirming the restart window.
+# Generate a new secret for this client; store only its PBKDF2 digest here.
+client_id: personal-hub
+client_name: Personal Hub
+client_secret: '<PBKDF2-SHA512 digest>'
+public: false
+authorization_policy: two_factor
+redirect_uris: ['https://hub-home.172906573.xyz/auth/callback']
+scopes: [openid, profile]
+grant_types: [authorization_code]
+response_types: [code]
+require_pkce: true
+pkce_challenge_method: S256
+token_endpoint_auth_method: client_secret_basic
+id_token_signed_response_alg: RS256

@@ -86,3 +86,21 @@ async def test_timeout_isolated_and_same_source_deduplicated():
     assert [r["status"] for r in results] == ["error", "ok", "ok"]
     assert len(calls) == 1
     assert manager.status("slow")["last_error"]["type"] == "timeout"
+
+
+def test_all_configured_secrets_absent_from_errors_responses_and_logs(settings,caplog):
+    from typing import get_args
+    for name,field in Settings.model_fields.items():
+        if SecretStr in get_args(field.annotation):setattr(settings,name,SecretStr('SENTINEL-'+name))
+    values=settings.secrets()
+    async def success():return {'untrusted_content':values}
+    async def failure():
+        response=httpx.Response(502,text=' '.join(values),request=httpx.Request('GET','http://fake/'+values[0]))
+        response.raise_for_status()
+    app=create_app(settings,adapters=[Adapter('records_health','health',60,success),Adapter('records_bills','bills',60,failure)])
+    with TestClient(app) as client:
+        headers={'Authorization':'Bearer '+settings.dev_token.get_secret_value()}
+        response=client.get('/api/v1/modules?ids=health,bills',headers=headers)
+        status=client.get('/api/v1/status',headers=headers)
+    assert response.json()['modules']['bills']['status']=='error'
+    assert all(value not in response.text+status.text+caplog.text for value in values)

@@ -63,8 +63,22 @@ Progress (each step is tested and committed separately):
   reference tampering/expiry are covered by tests.
 - Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Deployed local/hub-api:2b48ca1; 14 fake-source tests pass. Live GitHub source=ok, git=partial (bounded coverage), waiting=13, blocked=23. Actual fetch 7.5s; only GitHub uses configurable 15s, all other sources retain 5s. Media remains ok.
 - Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployed local/hub-api:d12898e. LAN all-module/status=200; subs/attention=ok (0/7 rows), preferences=200/version0, absent layout=404. No production configuration/test records were inserted.
-- Step 7: not started, following §10 order. Authelia/NPM unchanged; no public
-  endpoint or OIDC login acceptance claimed. Local LAN dev credential remains active.
+- Step 7 prepared: OIDC code flow with browser binding and separate provider/client
+  S256 PKCE, exact sub allowlist, signed ID-token validation, atomic one-time exchange,
+  auth rate limits/no-store, development-token production guard. 30 tests pass,
+  including full fake-provider flow, bad claims/signatures, key rotation, replay,
+  expiry, concurrent exchange, revocation and all configured secret sentinels.
+  Private candidate directory: /vol2/1000/Docker/hub/deployment-candidates/step7-oidc-20261021.
+  Candidate adds only personal-hub to seven existing OIDC clients, validated using
+  the running Authelia image against read-only mounts, without restarting/changing
+  the active service. Exact allowed sub is copied privately from Authelia's existing
+  global openid identifier for yuwk; the new client secret is generated privately.
+  Candidate NPM host uses existing wildcard certificate 2 and LAN 18190, no forward-auth;
+  exact hub-home domain does not yet exist (mcphub-home is a different existing host).
+  Existing runtime container can retrieve actual issuer discovery over HTTPS 443.
+  ACTIVE Authelia configuration, NPM, hub private env and production image remain
+  unchanged at this step. Real browser, LAN/public production-token acceptance pending.
+  Stop before activation and obtain the owner-confirmed Authelia restart window.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
@@ -81,4 +95,4 @@ contexts were validated. Duplicati backup/restore and production source writes w
 not triggered merely for testing.
 
 Pending user decision: Authelia restart window. GitHub reuse was explicitly approved; source credentials were available. Defaults for budget/health/cycle apply.
-No Authelia or source service has been changed or restarted.
+Authelia is unchanged; only the explicitly announced usage-monitor source restart occurred in step 4.

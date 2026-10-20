@@ -37,7 +37,9 @@ idna==3.20
     #   anyio
     #   httpx
 joserfc==1.7.7
-    # via authlib
+    # via
+    #   authlib
+    #   hub-api
 opentelemetry-api==1.45.1
     # via fastapi
 pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'

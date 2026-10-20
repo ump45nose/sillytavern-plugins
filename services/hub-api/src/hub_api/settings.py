@@ -45,5 +45,11 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     github_timeout_seconds: float = 15
 
+    public_url: str = "https://hub-home.172906573.xyz"
+    oidc_issuer: str | None = None
+    oidc_client_id: str = "personal-hub"
+    oidc_client_secret: SecretStr | None = None
+    allowed_subjects: list[str] = []
+
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]

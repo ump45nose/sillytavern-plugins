@@ -78,6 +78,8 @@ def register(app, store, manager, authenticated, now):
         previous=preferences(store) if name=='preferences' else None
         success,row=store.put_document(name,document,int(if_match),now().isoformat())
         if not success:
+            if name=='preferences' and row is None:
+                row={'version':0,'updated_at':None,'document':previous}
             return app.router.default_response_class({'error':{'code':'conflict','message':'conflict'},'current':row},status_code=409)
         if name=='preferences' and previous['cycle_start']!=document['cycle_start']:
             await manager.invalidate('crm','plaud')
