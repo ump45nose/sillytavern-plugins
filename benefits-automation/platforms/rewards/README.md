@@ -26,7 +26,7 @@ npx patchright install chromium
 
 请用账号实际地区；不根据示例改变地区。凭据文件不进 Git。
 
-NAS 的微软服务分组选中 DIRECT。2026-10-19 用户确认 Rewards 使用 HK 地区后，`www.bing.com`、`rewards.bing.com`、`edgeservices.bing.com` 三个显式特例使用已验证的香港 02 线路；其余微软服务继续遵循原分组。规则由仓库外 ShellCrash 管理，私有地区配置保持 HK，Cookie、token 和任务 journal 继续复用。每日活动及 APP 快照兼容当前香港页面的繁体标签。
+NAS 的微软服务分组选中 DIRECT。2026-10-19 用户确认 Rewards 使用 HK 地区，`www.bing.com`、`rewards.bing.com`、`edgeservices.bing.com` 使用三个显式线路特例。2026-10-20 香港 02 当前路径反复 TLS 失败，已在 HTTPS 及真实账号浏览器验证后，将这三个特例切至既有香港 01；其余微软服务继续遵循原分组。规则由仓库外 ShellCrash 管理，私有地区配置保持 HK，Cookie、token 和任务 journal 继续复用。每日活动及 APP 快照兼容当前香港页面的繁体标签。
 
 ```sh
 REWARDS_ROOT=/absolute/project/platforms/rewards \
@@ -46,6 +46,8 @@ python3 platforms/rewards/run.py --runtime-root /absolute/private/runtime \
 - `claim`：明确有待收积分时提交一次；无待收积分不适用。
 - `app_daily` / `app_promotions`：通过已有浏览器登录进行 OAuth，token 存在私有账号目录；随后一次性 HTTP 客户端执行 APP 任务，不保留后台浏览器。APP 签到优先用当前页面进度确认，不能把 1000 分连续签到奖励误认作每日签到。
 - `daily_streaks`：在日常阶段完成后核对必应、每日活动、APP 三项连续打卡的当日完成标记、计数及连续天数。必应仍为 0/1 时，独立进行一次真实搜索并读回，即使桌面搜索积分额度已满；未激活的 Edge、视觉搜索不在本阶段的执行范围。
+
+每日测验支持当前 Bing `.btom_card` 答题页及答案页的 Next 控件，只点击绑定当前 offer 的官方可见选项；每个题目与选项分别记录 intent，读回该 offer 完成后即停止。已有卡片 intent 的测验可从当前官方目标页继续未提交的选项，无需重点击卡片。登录、验证码、未知题目身份和未出现的活动控件仍保持未完成。每日阶段的失败结果保留已观察到的进度、任务清单与脱敏诊断，完整报告不丢弃阶段返回的诊断。
 
 桌面 App 周卡按数值读取进度，不依赖任务标签的页面语言。已完成卡片兼容 React Flight 的独立记录、嵌套节点和共享勾选图标引用；仍须逐天的明确完成标记与周积分共同确认，加载占位内容和缺失引用不能作为完成。已提交但未确认的周任务只做读回，不重放请求。
 

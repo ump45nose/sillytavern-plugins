@@ -107,6 +107,7 @@ function validateOutput(out) {
     business: Object.fromEntries(entries),
     ...(out.details ? {details: validateDetails(out.details)} : {}),
     ...(out.cycle ? {cycle: out.cycle} : {}),
+    ...(out.diagnostic ? {diagnostic: out.diagnostic} : {}),
   };
 }
 function overall(out) {

@@ -6,6 +6,7 @@ const interaction = require("./interaction.cjs");
 const path = require("node:path");
 const { publish } = require("../../common/result.cjs");
 const {metric} = require("../../common/details.cjs");
+const quiz = require("./daily_quiz.cjs");
 const LABEL = /^(Daily activit(?:y|ies)|Daily Set|每日活动|每日活動|每日設定)$/i;
 const DASHBOARD = "https://rewards.bing.com/dashboard";
 const DAILY_SELECTOR = '[role="progressbar"][aria-label="Daily Set" i],'+
@@ -82,6 +83,7 @@ function outcome(complete, reason, observed = null, items = [], cycle) {
 }
 async function run(chromium, storageState, options = {}, deps = common) {
   const pacing = options.pacing || interaction.create(options.interaction);
+  let lastProgress = null, lastItems = [], lastCycle;
   try {
     return await deps.withBrowser(
       chromium,
@@ -94,6 +96,7 @@ async function run(chromium, storageState, options = {}, deps = common) {
         });
         await deps.guard(page);
         let after = await progress(page);
+        lastProgress = after;
         if (!after) return outcome(false, "daily_progress_unavailable");
         const raw = common.assertAccountAvailable(
           await deps.readFlyout(context),
@@ -101,17 +104,21 @@ async function run(chromium, storageState, options = {}, deps = common) {
         );
         const visible = await cards(page);
         const current = require("./daily_cycle.cjs").inventory(raw, visible);
+        lastCycle = current.date;
         const journal = options.journalForCycle?.(current.date);
         for (const row of current.rows)
           if (row.complete) await journal?.mark(row.offerId, "confirmed");
         const items = current.rows.map(row => ({id: row.offerId, name: row.title,
           status: row.complete ? "complete" : "incomplete", reason: "fresh_readback"}));
         items.push(require("./daily_cycle.cjs").item(current.date));
+        lastItems = items;
         if (after.current >= after.max)
           return outcome(true, "daily_already_complete", after, items, current.date);
         for (const row of current.rows) {
           const card = visible.find(card => require("./daily_cycle.cjs").matches(row, card));
-          if (row.complete || journal?.has(row.offerId)) continue;
+          if (row.complete) continue;
+          const resumeQuiz = journal?.has(row.offerId) && quiz.destination(card.href, row.offerId);
+          if (journal?.has(row.offerId) && !resumeQuiz) continue;
           if (!allowedCard(card.href)) continue;
           await deps.guard(page);
           const currentPanel = await section(page);
@@ -121,25 +128,39 @@ async function run(chromium, storageState, options = {}, deps = common) {
             .first();
           if (/已完成|Completed/i.test(await link.innerText())) continue;
           let popup;
-          const popupPromise = page
+          const popupPromise = resumeQuiz ? Promise.resolve(null) : page
             .waitForEvent("popup", { timeout: 15000 })
             .catch(() => null);
           try {
-            // Once per visible card. A timeout does not trigger another click.
-            await deps.guard(page);
-            await pacing.pause(page, "action");
-            await deps.guard(page);
-            await journal?.mark(row.offerId, "attempted");
-            trace.emit("journal.intent", {capability: "daily", offer_ref: trace.reference(row.offerId), state: "attempted"});
-            await trace.span("activity.click", {offer_ref: trace.reference(card.href)}, () =>
-              link.click({ timeout: 15000, delay: 120 }));
-            popup = await popupPromise;
+            if (resumeQuiz) {
+              // Reopen the current task's destination to continue unanswered quiz
+              // steps; do not click its already-attempted dashboard card again.
+              popup = await context.newPage();
+              await popup.goto(card.href, {waitUntil: "domcontentloaded", timeout: 45000});
+            } else {
+              // Once per visible card. A timeout does not trigger another click.
+              await deps.guard(page);
+              await pacing.pause(page, "action");
+              await deps.guard(page);
+              await journal?.mark(row.offerId, "attempted");
+              trace.emit("journal.intent", {capability: "daily", offer_ref: trace.reference(row.offerId), state: "attempted"});
+              await trace.span("activity.click", {offer_ref: trace.reference(card.href)}, () =>
+                link.click({ timeout: 15000, delay: 120 }));
+              popup = await popupPromise;
+            }
             if (popup) {
               await popup
                 .waitForLoadState("domcontentloaded", { timeout: 30000 })
                 .catch(() => {});
               await deps.guard(popup);
               await pacing.review(popup, 10000);
+              if (quiz.destination(card.href, row.offerId))
+                await quiz.finish(popup, row, {journal, guard: deps.guard, pacing,
+                  confirmed: async () => {
+                    const raw = common.assertAccountAvailable(await deps.readFlyout(context), options.region);
+                    return Object.values(raw.flyoutResult.dailySetPromotions)
+                      .flat().some(x => x.offerId === row.offerId && x.complete === true);
+                  }});
             }
             for (let i = 0; i < 10; i++) {
               await page.goto(DASHBOARD, {
@@ -148,6 +169,7 @@ async function run(chromium, storageState, options = {}, deps = common) {
               });
               await deps.guard(page);
               after = await progress(page);
+              lastProgress = after;
               if (!after) return outcome(false, "daily_progress_unavailable", null, items, current.date);
               const fresh = require("./daily_cycle.cjs").inventory(
                 await deps.readFlyout(context), await cards(page));
@@ -175,12 +197,13 @@ async function run(chromium, storageState, options = {}, deps = common) {
   } catch (error) {
     trace.failure("activity.click", error);
     common.recordObstacle(error, { capability: "daily", phase: "daily_cards" });
-    return outcome(
+    return {...outcome(
       false,
       error.message === "human_required"
         ? "human_required"
         : error.details?.code || "daily_browser_or_network_error",
-    );
+      lastProgress, lastItems, lastCycle,
+    ), diagnostic: trace.errorFields(error)};
   }
 }
 
