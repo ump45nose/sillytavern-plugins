@@ -47,6 +47,17 @@ PRS = "query HubOverviewPRs {viewer{" + OVERVIEW[OVERVIEW.index("  pullRequests(
 
 
 
+async def parallel(*calls):
+    tasks = [asyncio.create_task(c) for c in calls]
+    try:
+        return await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
 class GitHub:
     def __init__(self, client, settings, now):
         self.client, self.settings, self.now = client, settings, now
@@ -117,7 +128,7 @@ class GitHub:
             owner, repo, number = match.groups()
             key = "n" + str(len(selected))
             selected.append((key, reasons[row["reason"]], row["updated_at"]))
-            blocks.append(key + ":repository(owner:" + json.dumps(owner) + ",name:" + json.dumps(repo) + "){issueOrPullRequest(number:" + number + "){ ... on Issue {" + DETAIL + "} ... on PullRequest {" + DETAIL + "} }}")
+            blocks.append(key + ":repository(owner:" + json.dumps(owner) + ",name:" + json.dumps(repo) + "){issueOrPullRequest(number:" + number + "){ " + DETAIL + " }}")
         if not blocks:
             return [], bool(response.links.get("next"))
         data = await self.query("query HubWaiting {" + " ".join(blocks) + "}")
@@ -134,7 +145,7 @@ class GitHub:
         # Fine-grained credentials do not support notifications. Explicit approximation.
         kinds = [("review", "review-requested:"), ("mention", "mentions:"), ("reply", "involves:")]
         query = "query HubSearch($q:String!) { search(query:$q,type:ISSUE,first:100) { pageInfo {hasNextPage} nodes { " + DETAIL + " } } }"
-        searches = await asyncio.gather(*(self.query(query, {"q": "is:open " + term + login}) for _, term in kinds))
+        searches = await parallel(*(self.query(query, {"q": "is:open " + term + login}) for _, term in kinds))
         for (kind, _), result in zip(kinds, searches):
             data = result["search"]
             partial |= data["pageInfo"]["hasNextPage"]
@@ -201,10 +212,10 @@ class GitHub:
                 totals = await self.query(TOTALS, variables)
                 rows, partial = await self.search_waiting(totals["viewer"]["login"])
             else:
-                totals, notices = await asyncio.gather(self.query(TOTALS, variables), self.notifications())
+                totals, notices = await parallel(self.query(TOTALS, variables), self.notifications())
                 rows, partial = await self.classic_waiting(notices, totals["viewer"]["login"])
             return totals["viewer"], rows, partial
-        (totals, waiting, partial), year, prs = await asyncio.gather(waiting(), self.query(YEAR, variables), self.query(PRS))
+        (totals, waiting, partial), year, prs = await parallel(waiting(), self.query(YEAR, variables), self.query(PRS))
         viewer = {**totals, **year["viewer"], **prs["viewer"]}
         activity = self.activity(viewer)
         return {"waiting": waiting, "blocked": self.blocked(viewer), "activity": activity,

@@ -34,6 +34,7 @@ def test_git_normalization_read_only_and_last_comment(settings):
             return httpx.Response(200,json=[{'reason':'mention','subject':{'type':'Issue','url':'https://api.github.com/repos/o/r/issues/1'},'updated_at':(NOW-timedelta(days=2)).isoformat()}])
         body=json.loads(request.content)
         assert body['query'].startswith('query ')
+        assert '... on Issue {... on Issue' not in body['query']
         if 'HubOverview' in body['query']: return httpx.Response(200,json={'data':{'viewer':viewer()}})
         return httpx.Response(200,json={'data':{'n0':{'issueOrPullRequest':issue()}}})
     with TestClient(create_app(settings,now=lambda:NOW,transport=httpx.MockTransport(handle))) as client:
