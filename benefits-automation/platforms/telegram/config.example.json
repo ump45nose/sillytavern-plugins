@@ -8,8 +8,8 @@
           "username": "ExampleCheckinBot",
           "command": "/checkin",
           "success": ["签到成功"],
-          "already": ["已签到", "already checked in"],
-          "failure": ["签到失败"],
+          "already": ["已签到", "已经签到", "already checked in"],
+          "failure": ["签到失败", "人机验证", "请先加入以下频道"],
           "reply_timeout_seconds": 30
         }
       ]

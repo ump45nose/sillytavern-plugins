@@ -32,7 +32,7 @@ npx playwright install firefox   # 已有共享 --browser-cache 时不需要
 
 - `username`：机器人用户名，不带 `@`；必须以 `bot` 结尾，避免把命令误发给真人。每账号最多 20 个机器人，`id` 为结果和 journal 使用的短代号。
 - `command`：单行文本，原样发送一次。
-- `success` / `already` / `failure`：回复中出现的子串（不区分大小写、NFKC 归一）。判断顺序 already → failure → success；`success` 必填。
+- `success` / `already` / `failure`：回复中出现的子串（不区分大小写、NFKC 归一）。判断顺序 already → failure → success；`success` 必填。只看本次命令之后的回复，先到的公告或“正在签到，请稍后”不会提前结束等待。“人机验证 / 请先加入频道”这类入群门槛建议写进 `failure`，报告 `bot_rejected`（需要手动加入后再签），而不是等到 `reply_timeout`。`already` 避免只写“已经”：不少机器人的成功回复含“您已经获得 1 积分”。确定命令时先看 Web K 输入 `/` 弹出的命令菜单和机器人简介，不要逐个试发。
 - `button`：可选。回复中带有包含该文字的内联按钮时点击一次；此时只认可点击后新出现或内容改变的消息，以及按钮回调弹出的提示，菜单本身的文字不能确认签到。
 - `reply_timeout_seconds`：5–120，默认 30。`enabled: false` 跳过且报告 `not_applicable`。
 - `spacing_seconds`：两个需要访问的机器人之间的随机间隔，默认 5–20 秒，可按账号覆盖。
