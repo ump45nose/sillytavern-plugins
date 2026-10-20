@@ -215,7 +215,7 @@ archive/v0/          旧实现，只读参考
 
 - Google OAuth（桌面客户端 + PKCE + loopback），令牌存 Keychain；OAuth 同意屏幕发布为正式状态，避免刷新令牌 7 天失效。
 - Tasks：清单与任务增删改查、子任务、勾选完成、改期、跨清单搜索。
-- Calendar：当日与近期事件，`syncToken` 增量同步（打开时立即刷新 + 每 5 分钟）。
+- Calendar：读取全部日历（含共享 / 订阅），当日与近期事件；日程增删改并同步回 Google；`syncToken` 增量同步（打开时立即刷新 + 每 5 分钟）。
 - 日程与任务模块、弹出面板接入真实数据；菜单栏到期数与下一个日程倒计时。
 - 快捷任务浮窗：中文自然语言日期（明天下午 3 点、下周五、月底、后天）、`#清单`、可选建日历时间块。
 - 离线变更队列；本地到期提醒通知。
@@ -224,9 +224,11 @@ archive/v0/          旧实现，只读参考
 
 实现记录：
 - 首版只支持一个 Google 账号（§13-2）；换账号会清空本地缓存和队列。
-- `calendar.events.owned` 只能读取自己拥有的日历，订阅日历（节假日等）读事件会 403，因此只同步 `accessRole == owner` 且已勾选的日历。
+- 授权范围：`tasks`、`calendar.events`、`calendar.calendarlist.readonly`（`calendar.events` 属于敏感范围，同意屏幕需一并登记）。同步所有已勾选、角色为 owner / writer / reader 的日历（含共享与订阅）；仍持有旧授权（`calendar.events.owned`）时，非自有日历读事件返回 404，跳过并提示重新授权。
+- 日程增删改、改全天、跨日历移动都走离线队列。可编辑条件：日历角色为 owner / writer，且事件没有组织者、组织者是自己或该日历，或允许来宾修改；其他人发来的邀请与订阅日历只读。重复日程的修改和删除只作用于当次。
+- 断开连接只删除本机凭据，不撤销 Google 授权：v0 采集器共用同一个 OAuth 客户端，撤销会连带让它失效。
 - 首次全量同步用 `timeMin`（昨天起）+ `singleEvents`，Google 会同时返回 `nextSyncToken`，之后走增量；令牌过期（410）自动全量重来。
-- 验证手段：`scripts/test.sh`（内存假 Google 服务）；调试版 `PersonalHub --qa-render DIR [--qa-now 2026-10-20T17:58]` 离屏渲染主要界面为 PNG，不弹窗口、不抢焦点；安装版 `PersonalHub --agenda-smoke` 用真实账号在临时清单上走一遍离线队列、时间块和增量同步，结束后删除，只输出通过 / 失败。
+- 验证手段：`scripts/test.sh`（内存假 Google 服务）；调试版 `PersonalHub --qa-render DIR [--qa-now 2026-10-20T17:58]` 离屏渲染主要界面为 PNG，不弹窗口、不抢焦点；安装版 `PersonalHub --agenda-smoke` 用真实账号在临时清单和一个临时日程上走一遍离线队列、日程新建 / 修改 / 改全天 / 删除和增量同步，结束后删除，只输出通过 / 失败。
 
 ### 阶段 3：薄后端与数据模块（v2）
 

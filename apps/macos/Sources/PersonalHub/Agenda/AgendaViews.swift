@@ -25,6 +25,8 @@ struct EventBlock: View {
     var event: AgendaEvent
     var caption: String
     var compact = false
+    @Environment(AppState.self) private var state
+    @ViewState private var editing = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -44,8 +46,157 @@ struct EventBlock: View {
         .background(RoundedRectangle(cornerRadius: 9).fill(event.tone.tint))
         .clipShape(RoundedRectangle(cornerRadius: 9))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if let link = event.link.flatMap(URL.init(string:)) { NSWorkspace.shared.open(link) } }
-        .help(event.link == nil ? "" : "双击在 Google 日历中打开")
+        .onTapGesture { editing = true }
+        .contextMenu {
+            Button(event.editable ? "编辑…" : "查看详情…") { editing = true }
+            if let link = event.link.flatMap(URL.init(string:)) {
+                Button("在 Google 日历中打开") { NSWorkspace.shared.open(link) }
+            }
+            if event.editable {
+                Divider()
+                Button(event.recurring ? "删除这一次" : "删除", role: .destructive) { state.agenda.deleteEvent(event) }
+            }
+        }
+        .popover(isPresented: $editing, arrowEdge: .trailing) {
+            EventEditor(mode: .edit(event)) { editing = false }.environment(state)
+        }
+    }
+}
+
+/// Create, edit or (for read-only calendars) inspect an event.
+struct EventEditor: View {
+    enum Mode {
+        case edit(AgendaEvent)
+        case create(Date)
+    }
+
+    var mode: Mode
+    var done: () -> Void
+    @Environment(AppState.self) private var state
+    @ViewState private var title = ""
+    @ViewState private var location = ""
+    @ViewState private var notes = ""
+    @ViewState private var allDay = false
+    @ViewState private var start = Date()
+    @ViewState private var end = Date()
+    @ViewState private var calendarID = ""
+    @ViewState private var confirmDelete = false
+    @ViewState private var loaded = false
+    @FocusState private var focused: Bool
+
+    private var event: AgendaEvent? { if case .edit(let e) = mode { e } else { nil } }
+    private var editable: Bool { event?.editable ?? true }
+
+    var body: some View {
+        let agenda = state.agenda
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label11(event == nil ? "新建日程" : editable ? "编辑日程" : "日程详情 · 只读")
+                Spacer()
+                if let name = event?.calendarTitle, !editable { Chip(text: name) }
+            }
+            Group {
+                TextField("标题", text: $title)
+                    .textFieldStyle(.plain).font(Typo.serif(17)).focused($focused)
+                    .padding(.bottom, 6)
+                    .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
+                Toggle("全天", isOn: $allDay).toggleStyle(.switch).controlSize(.small).font(Typo.sans(12.5))
+                HStack(spacing: 6) {
+                    DatePicker("", selection: $start, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                        .labelsHidden().datePickerStyle(.field)
+                    Text("至").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    DatePicker("", selection: $end, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                        .labelsHidden().datePickerStyle(.field)
+                }
+                .onChange(of: start) { old, new in
+                    // Moving the start keeps the duration, like Google Calendar.
+                    if loaded { end = end.addingTimeInterval(new.timeIntervalSince(old)) }
+                }
+                TextField("地点", text: $location).textFieldStyle(.plain).font(Typo.sans(12.5))
+                TextField("备注", text: $notes, axis: .vertical).textFieldStyle(.plain).font(Typo.sans(12.5)).lineLimit(2...5)
+            }
+            .disabled(!editable)
+            if editable, agenda.writableCalendars.count > 1 {
+                Picker("日历", selection: $calendarID) {
+                    ForEach(agenda.writableCalendars) { Text($0.title).tag($0.id) }
+                }
+                .font(Typo.sans(12.5))
+            }
+            if event?.recurring == true, editable {
+                Text("重复日程：修改和删除只影响这一次").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+            }
+            if !valid, editable {
+                Text("结束时间要晚于开始时间").font(Typo.sans(11)).foregroundStyle(Tone.rose.color)
+            }
+            HStack {
+                if event != nil, editable {
+                    Button(event?.recurring == true ? "删除这一次" : "删除", role: .destructive) { confirmDelete = true }
+                }
+                Spacer()
+                if editable {
+                    Button("取消", action: done).keyboardShortcut(.cancelAction)
+                    Button(event == nil ? "添加" : "保存", action: save).keyboardShortcut(.defaultAction)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || !valid)
+                } else {
+                    Button("关闭", action: done).keyboardShortcut(.defaultAction)
+                }
+            }
+            .font(Typo.sans(12.5))
+        }
+        .padding(16)
+        .frame(width: 380)
+        .background(Palette.card)
+        .alert("删除「\(title)」？", isPresented: $confirmDelete) {
+            Button("删除", role: .destructive) {
+                if let event { agenda.deleteEvent(event) }
+                done()
+            }
+            Button("取消", role: .cancel) {}
+        }
+        .onAppear(perform: load)
+    }
+
+    private var valid: Bool { allDay ? Calendar.hub.startOfDay(for: end) >= Calendar.hub.startOfDay(for: start) : end > start }
+
+    private func load() {
+        let cal = Calendar.hub
+        switch mode {
+        case .edit(let e):
+            title = e.title
+            location = e.location ?? ""
+            notes = e.notes ?? ""
+            allDay = e.allDay
+            start = e.start
+            // All-day ends are exclusive in Google; the editor shows the last day.
+            end = e.allDay ? cal.date(byAdding: .day, value: -1, to: e.end) ?? e.end : e.end
+            calendarID = e.calendarID
+        case .create(let at):
+            start = at
+            end = at.addingTimeInterval(3600)
+            calendarID = state.agenda.writableCalendar?.id ?? ""
+        }
+        DispatchQueue.main.async {
+            loaded = true
+            focused = editable
+        }
+    }
+
+    private func save() {
+        let cal = Calendar.hub
+        let trimmed = { (s: String) -> String? in
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        let s = allDay ? cal.startOfDay(for: start) : start
+        let e = allDay ? cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: end))! : end
+        let draft = EventDraft(title: title.trimmingCharacters(in: .whitespaces), start: s, end: e, allDay: allDay,
+                               location: trimmed(location), notes: trimmed(notes))
+        if let event {
+            state.agenda.updateEvent(event, draft: draft, calendarID: calendarID.isEmpty ? event.calendarID : calendarID)
+        } else if !calendarID.isEmpty {
+            state.agenda.createEvent(draft, calendarID: calendarID)
+        }
+        done()
     }
 }
 
@@ -54,6 +205,8 @@ struct DayTimeline: View {
     var events: [AgendaEvent]
     var now: Date
     var height: CGFloat = 440
+    /// Double-clicking empty space proposes a new event at that half hour.
+    var onCreate: ((Date) -> Void)?
     private let top: CGFloat = 12
 
     var body: some View {
@@ -71,6 +224,12 @@ struct DayTimeline: View {
         GeometryReader { geo in
             let width = geo.size.width - 46 - 12
             ZStack(alignment: .topLeading) {
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture(count: 2) { p in
+                        guard let onCreate else { return }
+                        let hour = max(h0, min(h1 - 0.5, h0 + Double((p.y - top) / pph)))
+                        onCreate(today.addingTimeInterval((hour * 2).rounded(.down) / 2 * 3600))
+                    }
                 ForEach(ticks, id: \.self) { h in
                     HStack(spacing: 8) {
                         Text(abs(Double(h) - nowHour) < 0.6 ? "" : String(format: "%02d:00", h))
@@ -499,6 +658,12 @@ struct SyncNotice: View {
                 notice("同步失败：\(reason)", tone: .rose, symbol: "exclamationmark.triangle")
             default:
                 EmptyView()
+            }
+            if agenda.mode == .google, agenda.needsReauthorization, agenda.connect != .authorizing {
+                Button { agenda.connectGoogle() } label: {
+                    notice("重新授权一次，即可读取共享日历并编辑日程", tone: .sky, symbol: "key")
+                }
+                .buttonStyle(.plain)
             }
             if let failure = agenda.failures.last {
                 HStack(spacing: 6) {

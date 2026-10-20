@@ -26,7 +26,16 @@ public struct AgendaEvent: Sendable, Identifiable, Hashable {
     public var colorID: String?
     /// Position of the calendar in the calendar list, for a stable fallback colour.
     public var calendarIndex: Int
+    public var calendarTitle: String
     public var link: String?
+    public var notes: String?
+    public var recurring: Bool
+    /// On a calendar we can write to, and not a locked invitation.
+    public var editable: Bool
+
+    public var draft: EventDraft {
+        EventDraft(title: title, start: start, end: end, allDay: allDay, location: location, notes: notes)
+    }
 }
 
 public struct AgendaView: Sendable {
@@ -113,9 +122,13 @@ public enum Agenda {
         v.undated = sorted(v.undated)
 
         let calendarIndex = Dictionary(store.calendars.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let events = store.events.filter { !$0.cancelled }.map {
-            AgendaEvent(id: $0.id, calendarID: $0.calendarID, title: $0.title, location: $0.location, start: $0.start, end: $0.end,
-                        allDay: $0.allDay, colorID: $0.colorID, calendarIndex: calendarIndex[$0.calendarID] ?? 0, link: $0.link)
+        let calendars = Dictionary(store.calendars.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let events = store.events.filter { !$0.cancelled }.map { e in
+            let cal = calendars[e.calendarID]
+            return AgendaEvent(id: e.id, calendarID: e.calendarID, title: e.title, location: e.location, start: e.start, end: e.end,
+                               allDay: e.allDay, colorID: e.colorID, calendarIndex: calendarIndex[e.calendarID] ?? 0,
+                               calendarTitle: cal?.title ?? "", link: e.link, notes: e.notes, recurring: e.recurring,
+                               editable: (cal?.writable ?? false) && e.organizerAllowsEdits)
         }.sorted { $0.start < $1.start }
         let todays = events.filter { $0.start < tomorrow && $0.end > today }
         v.events = todays.filter { !$0.allDay }

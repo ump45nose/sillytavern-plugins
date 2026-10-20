@@ -138,6 +138,7 @@ struct AgendaModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
     @ViewState private var listFilter: String?
+    @ViewState private var newEventAt: Date?
 
     var body: some View {
         if size == .compact { compact } else { detail }
@@ -171,9 +172,22 @@ struct AgendaModule: View {
             VStack(alignment: .leading, spacing: 10) {
                 Flow(spacing: 6) {
                     Chip(text: "全天 · 阶段第 \(d.cycle.day) 天", tone: .clay)
-                    ForEach(v.allDay) { Chip(text: $0.title, tone: $0.tone) }
+                    ForEach(v.allDay) { e in
+                        EventChip(event: e)
+                    }
+                    if state.agenda.writableCalendar != nil {
+                        Button { newEventAt = Self.nextSlot(after: state.agenda.now) } label: { Chip(text: "日程", systemImage: "plus") }
+                            .buttonStyle(.plain)
+                            .help("新建日程；也可以双击时间轴空白处")
+                    }
                 }
-                DayTimeline(events: v.events, now: state.agenda.now)
+                DayTimeline(events: v.events, now: state.agenda.now,
+                            onCreate: state.agenda.writableCalendar == nil ? nil : { newEventAt = $0 })
+                    .popover(isPresented: Binding(get: { newEventAt != nil }, set: { if !$0 { newEventAt = nil } }), arrowEdge: .trailing) {
+                        if let at = newEventAt {
+                            EventEditor(mode: .create(at)) { newEventAt = nil }.environment(state)
+                        }
+                    }
             }
             .frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 0) {
@@ -197,6 +211,30 @@ struct AgendaModule: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+}
+
+extension AgendaModule {
+    /// The next full hour, for new events.
+    static func nextSlot(after now: Date) -> Date {
+        let cal = Calendar.hub
+        let hour = cal.dateInterval(of: .hour, for: now)?.start ?? now
+        return cal.date(byAdding: .hour, value: 1, to: hour) ?? now
+    }
+}
+
+/// An all-day event as a chip that opens the editor.
+struct EventChip: View {
+    var event: AgendaEvent
+    @Environment(AppState.self) private var state
+    @ViewState private var editing = false
+
+    var body: some View {
+        Button { editing = true } label: { Chip(text: event.title, tone: event.tone) }
+            .buttonStyle(.plain)
+            .popover(isPresented: $editing, arrowEdge: .bottom) {
+                EventEditor(mode: .edit(event)) { editing = false }.environment(state)
+            }
     }
 }
 

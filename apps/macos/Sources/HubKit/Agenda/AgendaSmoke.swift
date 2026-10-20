@@ -41,7 +41,9 @@ public enum AgendaSmoke {
         await sync.syncNow()
         var s = await sync.snapshot
         let primary = s.calendars.first(where: \.primary)
-        check("initial pull", await sync.status == .idle, "lists \(s.lists.count), tasks \(s.tasks.count), events \(s.events.count)")
+        let status = await sync.status
+        check("initial pull", status == .idle,
+              "lists \(s.lists.count), tasks \(s.tasks.count), events \(s.events.count)\(status == .idle ? "" : ", status \(status)")")
         check("sync token after timeMin pull", primary.map { s.calendarSyncTokens[$0.id] != nil } ?? false)
 
         let stamp = Int(Date().timeIntervalSince1970)
@@ -77,21 +79,45 @@ public enum AgendaSmoke {
         }
 
         if let primary {
-            let event = AgendaStore.localID()
+            let title = "Personal Hub 冒烟测试 \(stamp)"
             let start = tomorrow.addingTimeInterval(23 * 3600)
-            await sync.perform(.createEvent(id: event, calendarID: primary.id, title: "Personal Hub 冒烟测试 \(stamp)",
-                                            start: start, end: start.addingTimeInterval(1800), notes: "会自动删除"))
+            let local = AgendaStore.localID()
+            await sync.perform(.createEvent(id: local, calendarID: primary.id,
+                                            draft: EventDraft(title: title, start: start, end: start.addingTimeInterval(1800), notes: "会自动删除")))
             await sync.syncNow()
             s = await sync.snapshot
-            let created = s.events.first { $0.title == "Personal Hub 冒烟测试 \(stamp)" }
-            check("time block created", created != nil && !AgendaStore.isLocal(created!.id))
+            let created = s.events.first { $0.title == title }
+            check("event created", created.map { !AgendaStore.isLocal($0.id) } ?? false)
             if let created {
-                try? await direct.deleteEvent(calendarID: primary.id, id: created.id)
+                func server() async -> EventRecord? {
+                    try? await direct.events(calendarID: primary.id, syncToken: nil, timeMin: tomorrow).events.first { $0.id == created.id }
+                }
+                let moved = start.addingTimeInterval(-3600)
+                await sync.perform(.updateEvent(id: created.id, calendarID: primary.id,
+                                                draft: EventDraft(title: title + "（改）", start: moved, end: moved.addingTimeInterval(2700), location: "测试地点")))
+                await sync.syncNow()
+                let edited = await server()
+                var clean = await sync.snapshot.failures.isEmpty
+                check("event edited", edited?.title == title + "（改）" && edited?.start == moved && edited?.location == "测试地点" && clean)
+
+                await sync.perform(.updateEvent(id: created.id, calendarID: primary.id,
+                                                draft: EventDraft(title: title + "（改）", start: tomorrow,
+                                                                  end: calendar.date(byAdding: .day, value: 1, to: tomorrow)!, allDay: true)))
+                await sync.syncNow()
+                let allDay = await server()
+                clean = await sync.snapshot.failures.isEmpty
+                check("event switched to all-day", allDay?.allDay == true && allDay?.location == nil && clean)
+
+                await sync.perform(.deleteEvent(id: created.id, calendarID: primary.id))
                 await sync.syncNow()
                 s = await sync.snapshot
-                check("incremental sync removes deleted event", !s.events.contains { $0.id == created.id } && s.calendarSyncTokens[primary.id] != nil)
+                let remaining = await server()
+                check("event deleted", remaining == nil && !s.events.contains { $0.id == created.id } && s.failures.isEmpty)
+                check("calendar sync token kept", s.calendarSyncTokens[primary.id] != nil)
             }
         }
+        let others = s.calendars.filter { !$0.primary }.count
+        check("shared calendars readable", true, "\(s.calendars.count) calendars, \(others) not primary, \(s.events.count) events cached")
 
         if let serverList {
             await sync.perform(.deleteList(id: serverList.id))

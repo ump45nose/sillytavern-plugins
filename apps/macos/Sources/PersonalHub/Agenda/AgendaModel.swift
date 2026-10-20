@@ -19,8 +19,11 @@ final class AgendaModel {
     private(set) var now = Date()
     var connect: Connect = .idle
     var account: String? { mode == .google ? store.account : nil }
+    /// Connected with an older grant (owned calendars only, no editing of shared ones).
+    private(set) var needsReauthorization = false
 
     @ObservationIgnored private var sync: AgendaSync
+    @ObservationIgnored private var real: AgendaSync?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var tokens: AccessTokenCache?
     @ObservationIgnored private var credential: StoredCredential?
@@ -104,14 +107,17 @@ final class AgendaModel {
         authorizing?.cancel()
     }
 
+    /// Forgets the credential locally. The grant is not revoked: v0 signs in with the same OAuth
+    /// client, and revoking would cut off its collectors too.
     func disconnectGoogle() {
-        let refresh = credential?.refreshToken, sync = self.sync, transport = self.transport
+        let sync = self.sync
         credential = nil
         tokens = nil
+        real = nil
+        needsReauthorization = false
         Reminders.shared.clear()
         Task {
             await sync.disconnect()
-            if let refresh { await GoogleAccount.revoke(refresh, transport: transport) }
             _ = try? await Task.detached { try CredentialStore.delete() }.value
         }
         attach(AgendaSync(seed: AgendaSample.store(now: clock())), mode: .demo)
@@ -124,10 +130,14 @@ final class AgendaModel {
         let cache = AccessTokenCache(client: client, transport: transport) { refresh }
         tokens = cache
         let api = GoogleAPI(transport: transport) { force in try await cache.get(forceRefresh: force) }
-        let real = AgendaSync(file: Self.cacheFile)
-        await real.connect(api: api, account: credential.account)
-        attach(real, mode: .google)
-        await real.requestSync()
+        let granted = Set((credential.scope ?? "").split(separator: " ").map(String.init))
+        needsReauthorization = !granted.isSuperset(of: OAuth.scopes)
+        // Reconnecting reuses the engine so its cache and queue carry over.
+        let engine = real ?? AgendaSync(file: Self.cacheFile)
+        real = engine
+        await engine.connect(api: api, account: credential.account)
+        if sync !== engine { attach(engine, mode: .google) }
+        await engine.requestSync()
     }
 
     private func attach(_ next: AgendaSync, mode: Mode) {
@@ -228,7 +238,23 @@ final class AgendaModel {
     var defaultList: TaskListRecord? { store.lists.first }
 
     var writableCalendar: CalendarRecord? {
-        store.calendars.first { $0.primary && ["owner", "writer"].contains($0.accessRole) }
+        store.calendars.first { $0.primary && $0.writable } ?? writableCalendars.first
+    }
+
+    var writableCalendars: [CalendarRecord] { store.calendars.filter(\.writable) }
+
+    func createEvent(_ draft: EventDraft, calendarID: String) {
+        perform(.createEvent(id: AgendaStore.localID(), calendarID: calendarID, draft: draft))
+    }
+
+    /// Edits in place, then moves when the calendar changed.
+    func updateEvent(_ e: AgendaEvent, draft: EventDraft, calendarID: String) {
+        if draft != e.draft { perform(.updateEvent(id: e.id, calendarID: e.calendarID, draft: draft)) }
+        if calendarID != e.calendarID { perform(.moveEvent(id: e.id, calendarID: e.calendarID, to: calendarID)) }
+    }
+
+    func deleteEvent(_ e: AgendaEvent) {
+        perform(.deleteEvent(id: e.id, calendarID: e.calendarID))
     }
 
     /// Adds a quick-entry task; a timed entry can also block out an hour on the primary calendar.
@@ -248,8 +274,7 @@ final class AgendaModel {
         let notes = entry.hasTime && !blocking ? entry.due.map { "时间 " + Agenda.clock($0, calendar: calendar) } : nil
         perform(.createTask(id: AgendaStore.localID(), listID: listID, title: entry.title, notes: notes, due: due, parent: nil))
         if blocking, let start = entry.due, let cal = writableCalendar {
-            perform(.createEvent(id: AgendaStore.localID(), calendarID: cal.id, title: entry.title,
-                                 start: start, end: start.addingTimeInterval(3600), notes: nil))
+            createEvent(EventDraft(title: entry.title, start: start, end: start.addingTimeInterval(3600)), calendarID: cal.id)
         }
         return true
     }

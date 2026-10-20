@@ -72,6 +72,8 @@ public struct CalendarRecord: Codable, Sendable, Identifiable, Hashable {
         self.selected = selected
     }
 
+    public var writable: Bool { accessRole == "owner" || accessRole == "writer" }
+
     init(api: [String: Any]) {
         self.init(id: api["id"] as? String ?? "",
                   title: api["summaryOverride"] as? String ?? api["summary"] as? String ?? "",
@@ -86,26 +88,36 @@ public struct EventRecord: Codable, Sendable, Identifiable, Hashable {
     public var calendarID: String
     public var title: String
     public var location: String?
+    public var notes: String?
     public var start: Date
+    /// Exclusive; for all-day events the midnight after the last day.
     public var end: Date
     public var allDay: Bool
     public var cancelled: Bool
     public var link: String?
     /// Google event colour 1–11, mapped to the app palette by the UI.
     public var colorID: String?
+    /// An instance of a recurring series; edits apply to this occurrence only.
+    public var recurring: Bool
+    /// False for invitations organised by someone else that don't let guests modify them.
+    public var organizerAllowsEdits: Bool
 
-    public init(id: String, calendarID: String, title: String, location: String? = nil, start: Date, end: Date,
-                allDay: Bool = false, cancelled: Bool = false, link: String? = nil, colorID: String? = nil) {
+    public init(id: String, calendarID: String, title: String, location: String? = nil, notes: String? = nil, start: Date, end: Date,
+                allDay: Bool = false, cancelled: Bool = false, link: String? = nil, colorID: String? = nil,
+                recurring: Bool = false, organizerAllowsEdits: Bool = true) {
         self.id = id
         self.calendarID = calendarID
         self.title = title
         self.location = location
+        self.notes = notes
         self.start = start
         self.end = end
         self.allDay = allDay
         self.cancelled = cancelled
         self.link = link
         self.colorID = colorID
+        self.recurring = recurring
+        self.organizerAllowsEdits = organizerAllowsEdits
     }
 
     /// Cancelled instances in incremental syncs carry only `id` and `status`.
@@ -116,10 +128,48 @@ public struct EventRecord: Codable, Sendable, Identifiable, Hashable {
         let allDay = s["date"] != nil
         let start = GoogleDate.parse(s, calendar: calendar), end = GoogleDate.parse(e, calendar: calendar)
         guard cancelled || start != nil else { return nil }
+        let organizer = api["organizer"] as? [String: Any]
+        let editable = organizer == nil || organizer?["self"] as? Bool == true || organizer?["email"] as? String == calendarID
+            || api["guestsCanModify"] as? Bool == true
         self.init(id: id, calendarID: calendarID, title: api["summary"] as? String ?? "（无标题）",
                   location: (api["location"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                  notes: (api["description"] as? String).flatMap { $0.isEmpty ? nil : $0 },
                   start: start ?? .distantPast, end: end ?? start ?? .distantPast, allDay: allDay,
-                  cancelled: cancelled, link: api["htmlLink"] as? String, colorID: api["colorId"] as? String)
+                  cancelled: cancelled, link: api["htmlLink"] as? String, colorID: api["colorId"] as? String,
+                  recurring: api["recurringEventId"] != nil, organizerAllowsEdits: editable)
+    }
+
+    public var draft: EventDraft {
+        EventDraft(title: title, start: start, end: end, allDay: allDay, location: location, notes: notes)
+    }
+}
+
+/// The editable part of an event, used for both creation and full updates.
+public struct EventDraft: Codable, Equatable, Sendable {
+    public var title: String
+    public var start: Date
+    /// Exclusive; for all-day events the midnight after the last day.
+    public var end: Date
+    public var allDay: Bool
+    public var location: String?
+    public var notes: String?
+
+    public init(title: String, start: Date, end: Date, allDay: Bool = false, location: String? = nil, notes: String? = nil) {
+        self.title = title
+        self.start = start
+        self.end = end
+        self.allDay = allDay
+        self.location = location
+        self.notes = notes
+    }
+
+    /// Request body; empty strings clear location and description on PATCH.
+    func body(calendar: Calendar) -> [String: Any] {
+        func time(_ d: Date) -> [String: Any] {
+            allDay ? ["date": GoogleDate.dayString(d, calendar: calendar), "dateTime": NSNull(), "timeZone": NSNull()]
+                : ["dateTime": GoogleDate.string(d), "timeZone": calendar.timeZone.identifier, "date": NSNull()]
+        }
+        return ["summary": title, "start": time(start), "end": time(end), "location": location ?? "", "description": notes ?? ""]
     }
 }
 

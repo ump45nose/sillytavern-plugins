@@ -10,7 +10,10 @@ public enum Change: Codable, Equatable, Sendable {
     case createList(id: String, title: String)
     case renameList(id: String, title: String)
     case deleteList(id: String)
-    case createEvent(id: String, calendarID: String, title: String, start: Date, end: Date, notes: String?)
+    case createEvent(id: String, calendarID: String, draft: EventDraft)
+    case updateEvent(id: String, calendarID: String, draft: EventDraft)
+    case deleteEvent(id: String, calendarID: String)
+    case moveEvent(id: String, calendarID: String, to: String)
 }
 
 public struct PendingChange: Codable, Equatable, Sendable, Identifiable {
@@ -86,9 +89,22 @@ public struct AgendaStore: Codable, Equatable, Sendable {
         case let .deleteList(id):
             lists.removeAll { $0.id == id }
             tasks.removeAll { $0.listID == id }
-        case let .createEvent(id, calendarID, title, start, end, _):
+        case let .createEvent(id, calendarID, d):
             events.removeAll { $0.id == id }
-            events.append(EventRecord(id: id, calendarID: calendarID, title: title, start: start, end: end))
+            events.append(EventRecord(id: id, calendarID: calendarID, title: d.title, location: d.location, notes: d.notes,
+                                      start: d.start, end: d.end, allDay: d.allDay))
+        case let .updateEvent(id, _, d):
+            guard let i = events.firstIndex(where: { $0.id == id }) else { return }
+            events[i].title = d.title
+            events[i].location = d.location
+            events[i].notes = d.notes
+            events[i].start = d.start
+            events[i].end = d.end
+            events[i].allDay = d.allDay
+        case let .deleteEvent(id, _):
+            events.removeAll { $0.id == id }
+        case let .moveEvent(id, _, to):
+            if let i = events.firstIndex(where: { $0.id == id }) { events[i].calendarID = to }
         }
     }
 
@@ -105,6 +121,9 @@ public struct AgendaStore: Codable, Equatable, Sendable {
             return
         case let .deleteList(id) where Self.isLocal(id):
             pending.removeAll { $0.change.touches(list: id) }
+            return
+        case let .deleteEvent(id, _) where Self.isLocal(id):
+            pending.removeAll { $0.change.touches(event: id) }
             return
         default:
             pending.append(PendingChange(change: change, queuedAt: date))
@@ -129,6 +148,7 @@ public struct AgendaStore: Codable, Equatable, Sendable {
     mutating func remap(event old: String, to record: EventRecord) {
         events.removeAll { $0.id == old || $0.id == record.id }
         events.append(record)
+        for i in pending.indices { pending[i].change = pending[i].change.replacing(event: old, with: record.id) }
     }
 
     // MARK: Merging pulled data
@@ -157,8 +177,11 @@ public struct AgendaStore: Codable, Equatable, Sendable {
             if let to { tasksPulledAt[to] = nil }
         case .createList, .renameList, .deleteList:
             tasksPulledAt = [:]
-        case let .createEvent(_, calendarID, _, _, _, _):
-            calendarSyncTokens[calendarID] = nil
+        case let .createEvent(_, c, _), let .updateEvent(_, c, _), let .deleteEvent(_, c):
+            calendarSyncTokens[c] = nil
+        case let .moveEvent(_, c, to):
+            calendarSyncTokens[c] = nil
+            calendarSyncTokens[to] = nil
         }
     }
 
@@ -190,7 +213,10 @@ extension Change {
         case let .createList(_, title): "新建清单「\(title)」"
         case .renameList: "重命名清单"
         case .deleteList: "删除清单"
-        case let .createEvent(_, _, title, _, _, _): "新建日程「\(title)」"
+        case let .createEvent(_, _, d): "新建日程「\(d.title)」"
+        case let .updateEvent(_, _, d): "修改日程「\(d.title)」"
+        case .deleteEvent: "删除日程"
+        case .moveEvent: "移动日程"
         }
     }
 
@@ -208,7 +234,24 @@ extension Change {
         case let .createTask(_, l, _, _, _, _), let .updateTask(_, l, _), let .deleteTask(_, l): l == id
         case let .moveTask(_, l, to, _): l == id || to == id
         case let .createList(l, _), let .renameList(l, _), let .deleteList(l): l == id
-        case .createEvent: false
+        default: false
+        }
+    }
+
+    func touches(event id: String) -> Bool {
+        switch self {
+        case let .createEvent(e, _, _), let .updateEvent(e, _, _), let .deleteEvent(e, _), let .moveEvent(e, _, _): e == id
+        default: false
+        }
+    }
+
+    func replacing(event old: String, with new: String) -> Change {
+        let r = { (s: String) in s == old ? new : s }
+        switch self {
+        case let .updateEvent(e, c, d): return .updateEvent(id: r(e), calendarID: c, draft: d)
+        case let .deleteEvent(e, c): return .deleteEvent(id: r(e), calendarID: c)
+        case let .moveEvent(e, c, to): return .moveEvent(id: r(e), calendarID: c, to: to)
+        default: return self
         }
     }
 
@@ -234,7 +277,7 @@ extension Change {
         case let .createList(l, title): return .createList(id: r(l), title: title)
         case let .renameList(l, title): return .renameList(id: r(l), title: title)
         case let .deleteList(l): return .deleteList(id: r(l))
-        case .createEvent: return self
+        default: return self
         }
     }
 }

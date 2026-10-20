@@ -36,7 +36,7 @@ public struct StoredCredential: Codable, Sendable, Equatable {
 public enum OAuth {
     public static let scopes = [
         "https://www.googleapis.com/auth/tasks",
-        "https://www.googleapis.com/auth/calendar.events.owned",
+        "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
     ]
 
@@ -91,12 +91,6 @@ public enum OAuth {
     public static func refreshRequest(client: OAuthClient, refreshToken: String) -> URLRequest {
         form(["client_id": client.clientID, "client_secret": client.clientSecret ?? "",
               "refresh_token": refreshToken, "grant_type": "refresh_token"])
-    }
-
-    public static func revokeRequest(token: String) -> URLRequest {
-        var r = form(["token": token])
-        r.url = URL(string: "https://oauth2.googleapis.com/revoke")
-        return r
     }
 
     private static func form(_ values: [String: String]) -> URLRequest {

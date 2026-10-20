@@ -10,7 +10,7 @@ enum GoogleAccount {
             switch self {
             case .missingConfig: "应用里没有 Google OAuth 客户端配置。请重新构建安装。"
             case .noRefreshToken: "Google 没有返回长期授权，请重试。"
-            case .missingScopes: "授权时没有勾选全部权限（任务、日历），请重试并全部允许。"
+            case .missingScopes: "授权时没有勾选全部权限（任务、日历日程），请重试并全部允许。"
             case .wrongAccount(let got): "登录的账号\(got.map { "（\($0)）" } ?? "")不是配置里指定的账号。"
             }
         }
@@ -43,21 +43,14 @@ enum GoogleAccount {
                                           transport: transport)
         guard let refresh = token.refreshToken else { throw Failure.noRefreshToken }
         let granted = Set((token.scope ?? "").split(separator: " ").map(String.init))
-        guard granted.isSuperset(of: OAuth.scopes) else {
-            await revoke(refresh, transport: transport)
-            throw Failure.missingScopes
-        }
+        // Never revoke here: the grant is shared with v0, which uses the same OAuth client.
+        guard granted.isSuperset(of: OAuth.scopes) else { throw Failure.missingScopes }
         let api = GoogleAPI(transport: transport) { _ in token.accessToken }
         let primary = try await api.calendars().first(where: \.primary)?.id
         if let expected = client.expectedAccount, primary?.lowercased() != expected.lowercased() {
-            await revoke(refresh, transport: transport)
             throw Failure.wrongAccount(primary)
         }
         return StoredCredential(refreshToken: refresh, account: primary, scope: token.scope)
-    }
-
-    static func revoke(_ token: String, transport: HTTPTransport) async {
-        _ = try? await transport.send(OAuth.revokeRequest(token: token))
     }
 
     private final class Box: @unchecked Sendable {

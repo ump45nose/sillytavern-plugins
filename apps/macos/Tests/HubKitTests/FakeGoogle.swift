@@ -13,6 +13,8 @@ final class FakeGoogle: HTTPTransport, @unchecked Sendable {
     /// Events changed after this revision are returned for a sync token of that revision.
     var eventRevisions: [String: Int] = [:]
     var expiredTokens = false
+    /// Simulates a grant with only calendar.events.owned: other calendars answer 404, as Google does.
+    var ownedOnlyScope = false
     var failNext: [String: Int] = [:]
     private(set) var log: [String] = []
     private var counter = 0
@@ -34,10 +36,14 @@ final class FakeGoogle: HTTPTransport, @unchecked Sendable {
         }
     }
 
-    func addEvent(_ id: String, _ title: String, start: String, end: String, cal: String = "me@example.com") {
+    func addEvent(_ id: String, _ title: String, start: String, end: String, cal: String = "me@example.com",
+                  organizer: String? = nil, recurring: Bool = false) {
         locked {
             revision += 1
-            events[cal, default: []].append(["id": id, "summary": title, "status": "confirmed", "start": ["dateTime": start], "end": ["dateTime": end]])
+            var e: [String: Any] = ["id": id, "summary": title, "status": "confirmed", "start": ["dateTime": start], "end": ["dateTime": end]]
+            if let organizer { e["organizer"] = ["email": organizer] }
+            if recurring { e["recurringEventId"] = "series-" + id }
+            events[cal, default: []].append(e)
             eventRevisions[id] = revision
         }
     }
@@ -48,6 +54,10 @@ final class FakeGoogle: HTTPTransport, @unchecked Sendable {
             if let i = events[cal]?.firstIndex(where: { $0["id"] as? String == id }) { events[cal]![i]["status"] = "cancelled" }
             eventRevisions[id] = revision
         }
+    }
+
+    func event(_ id: String, cal: String = "me@example.com") -> [String: Any]? {
+        locked { events[cal]?.first { $0["id"] as? String == id } }
     }
 
     func task(_ list: String, titled title: String) -> [String: Any]? {
@@ -134,18 +144,51 @@ final class FakeGoogle: HTTPTransport, @unchecked Sendable {
             return respond(200, tasks[list]![i])
         }
         if p == ["calendar", "v3", "users", "me", "calendarList"] { return respond(200, ["items": calendars]) }
-        // /calendar/v3/calendars/{id}/events
-        if p.starts(with: ["calendar", "v3", "calendars"]), p.count == 5 {
+        // /calendar/v3/calendars/{id}/events[/{event}[/move]]
+        if p.starts(with: ["calendar", "v3", "calendars"]), p.count >= 5, p[4] == "events" {
             let cal = p[3]
-            if calendars.first(where: { $0["id"] as? String == cal })?["accessRole"] as? String != "owner" { return respond(403, [:]) }
-            if m == "POST" {
-                var e = body
+            let role = calendars.first(where: { $0["id"] as? String == cal })?["accessRole"] as? String
+            if role == nil || (ownedOnlyScope && role != "owner") { return respond(404, [:]) }
+            let writable = role == "owner" || role == "writer"
+            if m != "GET", !writable { return respond(403, [:]) }
+            func touch(_ id: String) { revision += 1; eventRevisions[id] = revision }
+            if p.count == 5, m == "POST" {
+                var e = body.filter { !($0.value is NSNull) }
                 e["id"] = nextID("E")
                 e["status"] = "confirmed"
-                revision += 1
-                eventRevisions[e["id"] as! String] = revision
+                touch(e["id"] as! String)
                 events[cal, default: []].append(e)
                 return respond(200, e)
+            }
+            if p.count >= 6 {
+                let id = p[5]
+                guard let i = events[cal]?.firstIndex(where: { $0["id"] as? String == id }) else { return respond(404, [:]) }
+                if events[cal]![i]["status"] as? String == "cancelled" { return respond(m == "DELETE" ? 410 : 404, [:]) }
+                if p.count == 7, p[6] == "move", let dest = q["destination"] {
+                    var e = events[cal]![i]
+                    events[cal]![i]["status"] = "cancelled"
+                    e["organizer"] = ["email": dest]
+                    events[dest, default: []].append(e)
+                    touch(id)
+                    return respond(200, e)
+                }
+                if m == "DELETE" {
+                    events[cal]![i]["status"] = "cancelled"
+                    touch(id)
+                    return respond(204, nil)
+                }
+                for (k, v) in body {
+                    if var nested = v as? [String: Any] {
+                        var merged = events[cal]![i][k] as? [String: Any] ?? [:]
+                        for (nk, nv) in nested { merged[nk] = nv is NSNull ? nil : nv }
+                        nested = merged
+                        events[cal]![i][k] = nested
+                    } else {
+                        events[cal]![i][k] = v is NSNull ? nil : v
+                    }
+                }
+                touch(id)
+                return respond(200, events[cal]![i])
             }
             if let token = q["syncToken"] {
                 if expiredTokens { return respond(410, [:]) }

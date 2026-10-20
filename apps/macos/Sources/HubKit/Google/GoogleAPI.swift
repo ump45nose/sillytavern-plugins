@@ -148,20 +148,27 @@ public struct GoogleAPI: Sendable {
         return EventPage(events: items.compactMap { EventRecord(api: $0, calendarID: calendarID, calendar: calendar) }, nextSyncToken: nil)
     }
 
-    public func insertEvent(calendarID: String, title: String, start: Date, end: Date, notes: String?) async throws -> EventRecord {
-        var body: [String: Any] = [
-            "summary": title,
-            "start": ["dateTime": GoogleDate.string(start), "timeZone": calendar.timeZone.identifier],
-            "end": ["dateTime": GoogleDate.string(end), "timeZone": calendar.timeZone.identifier],
-        ]
-        if let notes { body["description"] = notes }
-        let d = try await json(Self.calendarBase + "/calendars/\(path(calendarID))/events", method: "POST", body: body)
-        guard let event = EventRecord(api: d, calendarID: calendarID, calendar: calendar) else { throw GoogleAPIError.invalidResponse }
-        return event
+    public func insertEvent(calendarID: String, draft: EventDraft) async throws -> EventRecord {
+        try event(calendarID, try await json(Self.calendarBase + "/calendars/\(path(calendarID))/events", method: "POST", body: draft.body(calendar: calendar)))
+    }
+
+    public func patchEvent(calendarID: String, id: String, draft: EventDraft) async throws -> EventRecord {
+        try event(calendarID, try await json(Self.calendarBase + "/calendars/\(path(calendarID))/events/\(path(id))", method: "PATCH",
+                                             body: draft.body(calendar: calendar)))
     }
 
     public func deleteEvent(calendarID: String, id: String) async throws {
         _ = try await json(Self.calendarBase + "/calendars/\(path(calendarID))/events/\(path(id))", method: "DELETE")
+    }
+
+    public func moveEvent(calendarID: String, id: String, destination: String) async throws -> EventRecord {
+        try event(destination, try await json(Self.calendarBase + "/calendars/\(path(calendarID))/events/\(path(id))/move",
+                                              method: "POST", query: ["destination": destination]))
+    }
+
+    private func event(_ calendarID: String, _ d: [String: Any]) throws -> EventRecord {
+        guard let e = EventRecord(api: d, calendarID: calendarID, calendar: calendar) else { throw GoogleAPIError.invalidResponse }
+        return e
     }
 
     // MARK: Transport

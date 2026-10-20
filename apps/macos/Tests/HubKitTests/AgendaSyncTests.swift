@@ -40,10 +40,27 @@ private func seeded() -> FakeGoogle {
     #expect(s.lastSync == fixedNow)
 }
 
-@Test func subscribedCalendarsAreSkipped() async {
+private let holiday = "zh.china#holiday@group.v.calendar.google.com"
+
+@Test func subscribedCalendarsAreReadOnly() async {
+    let g = seeded()
+    g.locked { g.calendars.append(["id": holiday, "summary": "节假日", "selected": true, "accessRole": "reader"]) }
+    g.addEvent("h1", "重阳节", start: "2026-10-21T00:00:00Z", end: "2026-10-21T01:00:00Z", cal: holiday)
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    #expect(await sync.status == .idle)
+    let v = Agenda.build(await sync.snapshot, now: fixedNow)
+    let h = v.upcomingEvents.first { $0.id == "h1" }
+    #expect(h?.calendarTitle == "节假日")
+    #expect(h?.editable == false)
+    #expect(v.upcomingEvents.first { $0.id == "e2" }?.editable == true)
+}
+
+@Test func olderOwnedOnlyGrantSkipsOtherCalendars() async {
     let g = seeded()
     g.locked {
-        g.calendars.append(["id": "zh.china#holiday@group.v.calendar.google.com", "summary": "节假日", "selected": true, "accessRole": "reader"])
+        g.calendars.append(["id": holiday, "summary": "节假日", "selected": true, "accessRole": "reader"])
+        g.ownedOnlyScope = true
     }
     let sync = await makeSync(g)
     await sync.syncNow()
@@ -51,6 +68,99 @@ private func seeded() -> FakeGoogle {
     let s = await sync.snapshot
     #expect(s.calendars.map(\.id) == ["me@example.com"])
     #expect(s.events.count == 2)
+    let before = g.locked { g.log.count }
+    await sync.syncNow()
+    #expect(!g.locked { g.log[before...] }.contains { $0.contains("holiday") })
+}
+
+@Test func eventsCanBeEditedDeletedAndMoved() async {
+    let g = seeded()
+    g.locked { g.calendars.append(["id": "team", "summary": "团队", "selected": true, "accessRole": "writer"]) }
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    let start = GoogleDate.rfc3339("2026-10-20T03:00:00Z")!
+    await sync.perform(.updateEvent(id: "e1", calendarID: "me@example.com",
+                                    draft: EventDraft(title: "周会（改）", start: start, end: start.addingTimeInterval(1800), location: "3F")))
+    await sync.perform(.moveEvent(id: "e1", calendarID: "me@example.com", to: "team"))
+    await sync.perform(.deleteEvent(id: "e2", calendarID: "me@example.com"))
+    await sync.syncNow()
+    let s = await sync.snapshot
+    #expect(s.pending.isEmpty && s.failures.isEmpty)
+    let moved = g.event("e1", cal: "team")
+    #expect(moved?["summary"] as? String == "周会（改）")
+    #expect((moved?["start"] as? [String: Any])?["dateTime"] as? String == "2026-10-20T03:00:00Z")
+    #expect(moved?["location"] as? String == "3F")
+    #expect(g.event("e1")?["status"] as? String == "cancelled")
+    #expect(g.event("e2")?["status"] as? String == "cancelled")
+    #expect(s.events.map(\.id) == ["e1"])
+    #expect(s.events.first?.calendarID == "team")
+}
+
+@Test func switchingToAllDayClearsTheTime() async {
+    let g = seeded()
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    var cal = Calendar.hub
+    cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    let day = cal.date(from: DateComponents(year: 2026, month: 10, day: 22))!
+    await sync.perform(.updateEvent(id: "e2", calendarID: "me@example.com",
+                                    draft: EventDraft(title: "羽毛球", start: day, end: cal.date(byAdding: .day, value: 1, to: day)!, allDay: true)))
+    await sync.syncNow()
+    let start = g.event("e2")?["start"] as? [String: Any]
+    #expect(start?["date"] as? String == "2026-10-22")
+    #expect(start?["dateTime"] == nil)
+    let e = await sync.snapshot.events.first { $0.id == "e2" }
+    #expect(e?.allDay == true)
+}
+
+@Test func offlineEventEditsCollapseOrUploadInOrder() async {
+    let g = seeded()
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    g.locked { g.offline = true }
+    let start = GoogleDate.rfc3339("2026-10-22T02:00:00Z")!
+    let gone = AgendaStore.localID(), kept = AgendaStore.localID()
+    await sync.perform(.createEvent(id: gone, calendarID: "me@example.com", draft: EventDraft(title: "临时", start: start, end: start.addingTimeInterval(600))))
+    await sync.perform(.updateEvent(id: gone, calendarID: "me@example.com", draft: EventDraft(title: "临时2", start: start, end: start.addingTimeInterval(600))))
+    await sync.perform(.deleteEvent(id: gone, calendarID: "me@example.com"))
+    #expect(await sync.snapshot.pending.isEmpty)
+    await sync.perform(.createEvent(id: kept, calendarID: "me@example.com", draft: EventDraft(title: "评审", start: start, end: start.addingTimeInterval(3600))))
+    await sync.perform(.updateEvent(id: kept, calendarID: "me@example.com",
+                                    draft: EventDraft(title: "评审（改）", start: start, end: start.addingTimeInterval(3600), notes: "带电脑")))
+    await sync.syncNow()
+    #expect(await sync.snapshot.events.contains { $0.title == "评审（改）" })
+    g.locked { g.offline = false }
+    await sync.syncNow()
+    let s = await sync.snapshot
+    #expect(s.pending.isEmpty && s.failures.isEmpty)
+    let server = g.locked { g.events["me@example.com"]!.filter { $0["status"] as? String != "cancelled" } }
+    #expect(server.count == 3)
+    #expect(server.contains { $0["summary"] as? String == "评审（改）" && $0["description"] as? String == "带电脑" })
+    #expect(!s.events.contains { AgendaStore.isLocal($0.id) })
+}
+
+@Test func deletingAnEventAlreadyDeletedElsewhereSucceeds() async {
+    let g = seeded()
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    g.cancelEvent("e1")
+    await sync.perform(.deleteEvent(id: "e1", calendarID: "me@example.com"))
+    await sync.syncNow()
+    let s = await sync.snapshot
+    #expect(s.pending.isEmpty && s.failures.isEmpty)
+    #expect(!s.events.contains { $0.id == "e1" })
+}
+
+@Test func invitationsFromOthersAreReadOnly() async {
+    let g = seeded()
+    g.addEvent("inv", "客户会议", start: "2026-10-20T06:00:00Z", end: "2026-10-20T07:00:00Z", organizer: "boss@example.com")
+    g.addEvent("rec", "站会", start: "2026-10-20T01:00:00Z", end: "2026-10-20T01:15:00Z", recurring: true)
+    let sync = await makeSync(g)
+    await sync.syncNow()
+    let v = Agenda.build(await sync.snapshot, now: fixedNow)
+    #expect(v.events.first { $0.id == "inv" }?.editable == false)
+    #expect(v.events.first { $0.id == "rec" }?.editable == true)
+    #expect(v.events.first { $0.id == "rec" }?.recurring == true)
 }
 
 @Test func offlineChangesUploadInOrderWhenBackOnline() async {
@@ -199,7 +309,8 @@ private func seeded() -> FakeGoogle {
     await sync.syncNow()
     await sync.perform(.moveTask(id: "t3", listID: "life", toList: "work", parent: nil))
     let start = GoogleDate.rfc3339("2026-10-21T07:00:00Z")!
-    await sync.perform(.createEvent(id: AgendaStore.localID(), calendarID: "me@example.com", title: "对齐方案", start: start, end: start.addingTimeInterval(3600), notes: nil))
+    await sync.perform(.createEvent(id: AgendaStore.localID(), calendarID: "me@example.com",
+                                    draft: EventDraft(title: "对齐方案", start: start, end: start.addingTimeInterval(3600))))
     await sync.syncNow()
     let s = await sync.snapshot
     #expect(s.tasks.first { $0.id == "t3" }?.listID == "work")

@@ -19,6 +19,7 @@ public actor AgendaSync {
     private var running: Task<Void, Never>?
     private var again = false
     private var observer: (@Sendable (AgendaStore, Status) -> Void)?
+    private var forbidden: Set<String> = []
     public private(set) var status: Status = .idle
 
     /// Events are kept from one day back to this many days ahead.
@@ -48,6 +49,7 @@ public actor AgendaSync {
 
     public func connect(api: GoogleAPI?, account: String?) {
         self.api = api
+        forbidden = []
         if store.account != account {
             // A different account must never see the previous account's cache or queue.
             store = AgendaStore(account: account)
@@ -132,7 +134,7 @@ public actor AgendaSync {
                 store.pending.removeAll { $0.id == next.id }
             } catch let error as GoogleAPIError where error.isTransient {
                 throw error
-            } catch let error as GoogleAPIError where error == .notFound && next.change.isDelete {
+            } catch let error as GoogleAPIError where (error == .notFound || error == .gone) && next.change.isDelete {
                 store.pending.removeAll { $0.id == next.id }
             } catch {
                 store.pending.removeAll { $0.id == next.id }
@@ -170,9 +172,18 @@ public actor AgendaSync {
             try await api.renameList(id: id, title: title)
         case let .deleteList(id):
             try await api.deleteList(id: id)
-        case let .createEvent(id, calendarID, title, start, end, notes):
-            let created = try await api.insertEvent(calendarID: calendarID, title: title, start: start, end: end, notes: notes)
+        case let .createEvent(id, calendarID, draft):
+            let created = try await api.insertEvent(calendarID: calendarID, draft: draft)
+            guard store.events.contains(where: { $0.id == id }) else { return .deleteEvent(id: created.id, calendarID: calendarID) }
             store.remap(event: id, to: created)
+        case let .updateEvent(id, calendarID, draft):
+            let updated = try await api.patchEvent(calendarID: calendarID, id: id, draft: draft)
+            if let i = store.events.firstIndex(where: { $0.id == id }) { store.events[i] = updated }
+        case let .deleteEvent(id, calendarID):
+            try await api.deleteEvent(calendarID: calendarID, id: id)
+        case let .moveEvent(id, calendarID, to):
+            let moved = try await api.moveEvent(calendarID: calendarID, id: id, destination: to)
+            if let i = store.events.firstIndex(where: { $0.id == id }) { store.events[i] = moved }
         }
         return nil
     }
@@ -196,9 +207,11 @@ public actor AgendaSync {
             store.tasksPulledAt[list.id] = since
         }
 
-        // calendar.events.owned can only read calendars the account owns; subscribed ones return 403.
-        let calendars = try await api.calendars().filter { $0.selected && $0.accessRole == "owner" }
-        store.calendars = calendars
+        // freeBusyReader calendars expose no event details. Calendars refused with 403 or 404 (an older
+        // grant limited to owned calendars gets 404) are skipped until the next connect.
+        let calendars = try await api.calendars().filter {
+            $0.selected && ["owner", "writer", "reader"].contains($0.accessRole) && !forbidden.contains($0.id)
+        }
         let calendarIDs = Set(calendars.map(\.id))
         store.events.removeAll { !calendarIDs.contains($0.calendarID) }
         store.calendarSyncTokens = store.calendarSyncTokens.filter { calendarIDs.contains($0.key) }
@@ -213,10 +226,17 @@ public actor AgendaSync {
             } catch GoogleAPIError.gone {
                 full = true
                 page = try await api.events(calendarID: cal.id, syncToken: nil, timeMin: windowStart)
+            } catch GoogleAPIError.http(403), GoogleAPIError.notFound {
+                forbidden.insert(cal.id)
+                continue
             }
             store.mergeEvents(calendar: cal.id, records: page.events, full: full)
             store.calendarSyncTokens[cal.id] = page.nextSyncToken
         }
+        store.calendars = calendars.filter { !forbidden.contains($0.id) }
+        let readable = Set(store.calendars.map(\.id))
+        store.events.removeAll { !readable.contains($0.calendarID) }
+        store.calendarSyncTokens = store.calendarSyncTokens.filter { readable.contains($0.key) }
         store.pruneEvents(keepingFrom: windowStart, to: windowEnd)
         store.reapplyPending()
     }
@@ -256,7 +276,7 @@ public actor AgendaSync {
 extension Change {
     var isDelete: Bool {
         switch self {
-        case .deleteTask, .deleteList: true
+        case .deleteTask, .deleteList, .deleteEvent: true
         default: false
         }
     }

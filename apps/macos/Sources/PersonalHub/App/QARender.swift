@@ -51,6 +51,14 @@ enum QARender {
         if let task = state.agenda.view.today.first {
             await shot("editor", width: 360, TaskEditor(task: task, mode: .edit) {})
         }
+        if let event = state.agenda.view.events.last {
+            await shot("event-edit", width: 380, EventEditor(mode: .edit(event)) {})
+            var readOnly = event
+            readOnly.editable = false
+            readOnly.calendarTitle = "节假日"
+            await shot("event-readonly", width: 380, EventEditor(mode: .edit(readOnly)) {})
+        }
+        await shot("event-create", width: 380, EventEditor(mode: .create(AgendaModule.nextSlot(after: state.agenda.now))) {})
         await shot("settings-account", width: 520, height: 380, SettingsView(tab: 2))
     }
 }

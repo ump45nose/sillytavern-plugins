@@ -165,7 +165,7 @@ private struct AccountSettings: View {
             Button("断开", role: .destructive) { agenda.disconnectGoogle() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("会撤销本机的授权并清空本地缓存；尚未同步的 \(agenda.pendingCount) 项改动会丢失。Google 上的数据不受影响。")
+            Text("会删除本机保存的授权并清空本地缓存；尚未同步的 \(agenda.pendingCount) 项改动会丢失。Google 上的数据不受影响。")
         }
     }
 
@@ -173,6 +173,7 @@ private struct AccountSettings: View {
         let agenda = state.agenda
         switch (agenda.mode, agenda.connect) {
         case (_, .authorizing): return "请在浏览器里完成授权…"
+        case (.google, _) where agenda.needsReauthorization: return (agenda.account ?? "已连接") + " · 需重新授权以编辑日程和读取共享日历"
         case (.google, _): return agenda.account ?? "已连接"
         default: return "在浏览器中登录授权，令牌由凭据助手保存在钥匙串"
         }
@@ -187,7 +188,9 @@ private struct AccountSettings: View {
             }
         } else if agenda.mode == .google {
             HStack(spacing: 8) {
-                if agenda.status == .needsReconnect { Button("重新连接") { agenda.connectGoogle() } }
+                if agenda.status == .needsReconnect || agenda.needsReauthorization {
+                    Button(agenda.needsReauthorization ? "重新授权" : "重新连接") { agenda.connectGoogle() }.keyboardShortcut(.defaultAction)
+                }
                 Button("断开…") { confirmDisconnect = true }
             }
         } else {
