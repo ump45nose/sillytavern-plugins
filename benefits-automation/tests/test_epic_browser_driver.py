@@ -251,6 +251,60 @@ class DriverTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(await driver.observe("checkout", timeout=30))
         self.assertEqual(driver._observe_once.await_count, 13)
 
+    async def test_checkout_controls_can_arrive_after_two_minutes_without_renavigation(self):
+        clock = [0.0]
+        page = SimpleNamespace(url="https://store.epicgames.com/purchase", goto=AsyncMock())
+        driver = BrowserDriver(None, page, None)
+        async def observe(*args, **kwargs):
+            return None if clock[0] >= 120 else SimpleNamespace(kind="unknown")
+        async def sleep(seconds):
+            clock[0] += seconds
+        driver._observe_once = AsyncMock(side_effect=observe)
+        with patch("platforms.epic.browser_driver.monotonic", side_effect=lambda: clock[0]), \
+             patch("platforms.epic.browser_driver.asyncio.sleep", side_effect=sleep):
+            self.assertIsNone(await driver.observe("checkout", timeout=300))
+        self.assertEqual(clock[0], 120)
+        page.goto.assert_not_awaited()
+
+    async def test_checkout_wait_uses_the_remaining_task_budget_and_exposes_asset_denial(self):
+        for timeout, denied in [(12, False), (300, True)]:
+            clock = [0.0]
+            driver = BrowserDriver(None, SimpleNamespace(url="https://store.epicgames.com/purchase"), None)
+            driver.assets_denied = denied
+            driver._observe_once = AsyncMock(return_value=SimpleNamespace(kind="unknown"))
+            async def sleep(seconds):
+                clock[0] += seconds
+            with patch("platforms.epic.browser_driver.monotonic", side_effect=lambda: clock[0]), \
+                 patch("platforms.epic.browser_driver.asyncio.sleep", side_effect=sleep):
+                if denied:
+                    with self.assertRaises(Paused) as raised:
+                        await driver.observe("checkout", timeout=timeout)
+                    self.assertEqual(raised.exception.reason, "store_assets_access_denied")
+                else:
+                    self.assertEqual((await driver.observe("checkout", timeout=timeout)).kind, "unknown")
+            self.assertEqual(clock[0], min(timeout, 150))
+
+    async def test_checkout_navigation_allows_slow_redirects_within_the_task_budget(self):
+        page = SimpleNamespace(url="https://store.epicgames.com/purchase", goto=AsyncMock())
+        driver = BrowserDriver(None, page, None)
+        await driver._goto(page.url + "?offers=fixture", timeout=300)
+        self.assertEqual(page.goto.await_args.kwargs["timeout"], 150000)
+        await driver._goto(page.url, timeout=12)
+        self.assertEqual(page.goto.await_args.kwargs["timeout"], 12000)
+        await driver._goto("https://store.epicgames.com/free-games", timeout=300)
+        self.assertEqual(page.goto.await_args.kwargs["timeout"], 45000)
+
+    async def test_long_checkout_window_returns_login_and_captcha_immediately(self):
+        for kind in ("login", "captcha", "terms"):
+            driver = BrowserDriver(None, None, None)
+            obstacle = SimpleNamespace(kind=kind)
+            driver.assets_denied = True
+            driver._observe_once = AsyncMock(return_value=obstacle)
+            with patch("platforms.epic.browser_driver.asyncio.sleep", new=AsyncMock()) as sleep:
+                self.assertIs(await driver.observe("checkout", timeout=300), obstacle)
+            driver._observe_once.assert_awaited_once()
+            sleep.assert_not_awaited()
+
     async def test_visibility_without_deprecated_timeout(self):
         d = BrowserDriver(None, None, None)
         self.assertTrue(await d._visible(Controls()))
