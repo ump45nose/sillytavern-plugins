@@ -30,6 +30,7 @@ REASONS = {
     "full_task_cycle_changed": "平台任务已重置，需核查新一轮",
     "human_required": "需要人工验证",
     "launcher_failed": "启动失败",
+    "network_error": "网络连接失败（重试后仍未恢复）",
     "deadline_exceeded": "执行超时",
     "configuration_or_io_error": "配置或结果保存失败",
     "lock_busy": "已有任务执行中",
