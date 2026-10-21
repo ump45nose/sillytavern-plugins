@@ -70,6 +70,20 @@ enum HubCLI {
         } catch let e as HubError {
             line(false, "status", describe(e))
         } catch { line(false, "status", "\(type(of: error))") }
+
+        do {
+            if let remote = try await api.layout() {
+                let local = LayoutStore.appSupport().load()
+                line(true, "layout", "version \(remote.version) · " + (remote.document.map {
+                    "pages \($0.pages.count) · custom \($0.pages.filter { !LayoutDocument.isBuiltin($0.id) }.count)"
+                        + " · default \($0 == .default ? "yes" : "no") · same as this Mac \($0 == local ? "yes" : "no")"
+                } ?? "unreadable document"))
+            } else {
+                line(true, "layout", "none stored yet")
+            }
+        } catch let e as HubError {
+            line(false, "layout", describe(e))
+        } catch { line(false, "layout", "\(type(of: error))") }
         let h = d.health?.data
         line(d.health?.status.hasData ?? false, "health", "\(status(d.health)) · days \(h?.days?.count ?? 0) · steps \(h?.steps == nil ? "null" : "set") · stages \(h?.sleepStages?.count ?? 0)")
         let b = d.bills?.data

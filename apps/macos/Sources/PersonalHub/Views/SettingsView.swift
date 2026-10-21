@@ -56,6 +56,7 @@ private struct GeneralSettings: View {
     @Environment(AppState.self) private var state
     @ViewState private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @ViewState private var loginError: String?
+    @ViewState private var confirmReset = false
 
     var body: some View {
         @Bindable var state = state
@@ -75,9 +76,15 @@ private struct GeneralSettings: View {
             SettingRow(title: "Memos 地址", note: "Memos 页面直接嵌入此地址") {
                 TextField("http://nas:5230", text: $state.memosURL).textFieldStyle(.roundedBorder).frame(width: 240)
             }
-            SettingRow(title: "布局", note: "页面布局保存在本机，阶段 3 起在设备间同步") {
-                Button("恢复默认") { state.resetLayout() }
+            SettingRow(title: "布局", note: state.hub.mode == .hub ? "页面与模块布局经 hub 在设备间同步" : "连接 hub 后在设备间同步") {
+                Button("全部恢复默认…") { confirmReset = true }
             }
+        }
+        .alert("恢复默认布局？", isPresented: $confirmReset) {
+            Button("恢复", role: .destructive) { state.resetLayout() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("所有页面回到默认模块，自定义页面会被删除。")
         }
     }
 }

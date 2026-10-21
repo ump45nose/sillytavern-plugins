@@ -158,6 +158,29 @@ public struct HubAPI: Sendable {
         try decode(StageResult.self, try await send(request(path, method: "POST", body: body)))
     }
 
+    // MARK: Layout (§5.5)
+
+    /// nil when no device has stored a layout yet.
+    public func layout() async throws -> RemoteLayout? {
+        let (data, response) = try await exchange(request("/api/v1/layout"))
+        if response.statusCode == 404 { return nil }
+        return try decode(RemoteLayout.self, try check(data, response))
+    }
+
+    /// Optimistic write: `version` is the one last read (0 for the first write).
+    public func putLayout(_ document: LayoutDocument, version: Int) async throws -> LayoutWrite {
+        let encoded = try JSONEncoder().encode(document)
+        guard let object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { throw HubError.invalidResponse }
+        var r = try request("/api/v1/layout", method: "PUT", body: ["document": object])
+        r.setValue(String(version), forHTTPHeaderField: "If-Match")
+        let (data, response) = try await exchange(r)
+        if response.statusCode == 409 {
+            struct Conflict: Decodable { var current: RemoteLayout? }
+            return .conflict(try decode(Conflict.self, data).current)
+        }
+        return .saved(try decode(RemoteLayout.self, try check(data, response)).version)
+    }
+
     // MARK: Plumbing
 
     private func path(_ s: String) -> String {
@@ -186,8 +209,15 @@ public struct HubAPI: Sendable {
     }
 
     private func send(_ request: URLRequest) async throws -> Data {
-        let data: Data, response: HTTPURLResponse
-        do { (data, response) = try await transport.send(request) } catch let e as HubError { throw e } catch { throw HubError.offline }
+        let (data, response) = try await exchange(request)
+        return try check(data, response)
+    }
+
+    private func exchange(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        do { return try await transport.send(request) } catch let e as HubError { throw e } catch { throw HubError.offline }
+    }
+
+    private func check(_ data: Data, _ response: HTTPURLResponse) throws -> Data {
         switch response.statusCode {
         case 200..<300: return data
         case 401, 403: throw HubError.unauthorized

@@ -107,6 +107,65 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
         change(&pages[i])
     }
 
+    // MARK: Pages
+
+    /// ⌘1–⌘9 address pages by position.
+    public static let maxPages = 9
+    public static let maxTitle = 12
+    public static let maxSubtitle = 40
+
+    /// Built-in pages can be renamed and reordered but not removed; custom pages are plain grids.
+    public static func isBuiltin(_ id: String) -> Bool { LayoutDocument.default.page(id) != nil }
+
+    public var canAddPage: Bool { pages.count < Self.maxPages }
+
+    /// Appends an empty grid page and returns its id, or nil when the page limit is reached.
+    @discardableResult
+    public mutating func addPage(title: String = "新页面", id: String? = nil) -> String? {
+        guard canAddPage else { return nil }
+        var identifier = id ?? "page-" + UUID().uuidString.prefix(8).lowercased()
+        while page(identifier) != nil { identifier += "x" }
+        pages.append(Page(id: identifier, title: Self.clean(title, Self.maxTitle) ?? "新页面"))
+        return identifier
+    }
+
+    /// An empty title keeps the current one; an empty subtitle clears it.
+    public mutating func renamePage(_ id: String, title: String, subtitle: String) {
+        update(id) { page in
+            if let t = Self.clean(title, Self.maxTitle) { page.title = t }
+            page.subtitle = Self.clean(subtitle, Self.maxSubtitle) ?? ""
+        }
+    }
+
+    public mutating func movePage(_ id: String, to index: Int) {
+        guard let from = pages.firstIndex(where: { $0.id == id }) else { return }
+        let page = pages.remove(at: from)
+        pages.insert(page, at: min(max(index, 0), pages.count))
+    }
+
+    public mutating func movePage(_ id: String, by offset: Int) {
+        guard let from = pages.firstIndex(where: { $0.id == id }), pages.indices.contains(from + offset) else { return }
+        pages.swapAt(from, from + offset)
+    }
+
+    @discardableResult
+    public mutating func removePage(_ id: String) -> Bool {
+        guard !Self.isBuiltin(id), let i = pages.firstIndex(where: { $0.id == id }) else { return false }
+        pages.remove(at: i)
+        return true
+    }
+
+    /// Restores a built-in page's modules (keeping its name and position); custom pages are emptied.
+    public mutating func resetPage(_ id: String) {
+        let items = LayoutDocument.default.page(id)?.items ?? []
+        update(id) { $0.items = items }
+    }
+
+    private static func clean(_ text: String, _ limit: Int) -> String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        return t.isEmpty ? nil : String(t.prefix(limit))
+    }
+
     public static let `default` = LayoutDocument(pages: [
         Page(id: "home", title: "主页", items: [
             LayoutItem(.brief, .detail), LayoutItem(.agenda, .detail), LayoutItem(.goals, .detail),

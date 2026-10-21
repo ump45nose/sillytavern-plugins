@@ -44,6 +44,51 @@ import Testing
     #expect(page.items[3].size == .compact)
 }
 
+@Test func customPagesCanBeAddedRenamedMovedAndRemoved() throws {
+    var doc = LayoutDocument.default
+    let added = doc.addPage(title: "  阅读  ")
+    let id = try #require(added)
+    #expect(doc.pages.last?.id == id && doc.pages.last?.title == "阅读" && doc.pages.last?.items == [])
+
+    doc.renamePage(id, title: "", subtitle: "  书和播客  ")
+    #expect(doc.page(id)?.title == "阅读" && doc.page(id)?.subtitle == "书和播客")
+    doc.renamePage(id, title: "一个远远超过十二个字的页面名称啊", subtitle: "")
+    #expect(doc.page(id)?.title.count == LayoutDocument.maxTitle && doc.page(id)?.subtitle == "")
+
+    doc.movePage(id, to: 0)
+    #expect(doc.pages.first?.id == id)
+    doc.movePage(id, by: -1)
+    #expect(doc.pages.first?.id == id)
+    doc.movePage(id, by: 1)
+    #expect(doc.pages.map(\.id).prefix(2) == ["home", id])
+
+    let removedHome = doc.removePage("home")
+    let removedCustom = doc.removePage(id)
+    #expect(!removedHome, "built-in pages stay")
+    #expect(removedCustom)
+    #expect(doc == .default)
+}
+
+@Test func pageLimitMatchesTheCommandDigits() {
+    var doc = LayoutDocument.default
+    while doc.addPage() != nil {}
+    #expect(doc.pages.count == LayoutDocument.maxPages)
+    #expect(Set(doc.pages.map(\.id)).count == doc.pages.count)
+}
+
+@Test func resettingAPageKeepsItsNameAndPlace() {
+    var doc = LayoutDocument.default
+    doc.renamePage("usage", title: "开销", subtitle: "")
+    doc.movePage("usage", to: 0)
+    doc.update("usage") { $0.remove(at: 0) }
+    doc.resetPage("usage")
+    #expect(doc.pages[0].title == "开销" && doc.pages[0].items == LayoutDocument.default.page("usage")!.items)
+    let id = doc.addPage()!
+    doc.update(id) { $0.add(.token) }
+    doc.resetPage(id)
+    #expect(doc.page(id)?.items == [])
+}
+
 @Test func storeRoundTripsAndSetsCorruptFilesAside() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }

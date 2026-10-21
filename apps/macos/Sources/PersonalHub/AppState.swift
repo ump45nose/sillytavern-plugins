@@ -12,7 +12,7 @@ final class AppState {
     let hub = HubModel()
     let review: ReviewDesk
 
-    var layout: LayoutDocument { didSet { persistLayout() } }
+    var layout: LayoutDocument { didSet { layoutChanged() } }
     var currentPage = "home"
     var editing = false
     var tokenRange: TokenRange = .week
@@ -27,17 +27,31 @@ final class AppState {
     var showQuickTask: () -> Void = {}
     var showQuickMemo: () -> Void = {}
     var openReviewWindow: () -> Void = {}
+    /// The View menu's ⌘1–⌘9 items follow the page order.
+    var pagesChanged: () -> Void = {}
 
-    private let store = LayoutStore.appSupport()
+    /// Offscreen QA renders edit pages; they must not touch the real layout or its sync state.
+    static let isQA = CommandLine.arguments.contains("--qa-render")
+    private let store = isQA
+        ? LayoutStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("PersonalHub-qa-\(ProcessInfo.processInfo.processIdentifier)/layout.json"))
+        : LayoutStore.appSupport()
+    @ObservationIgnored private var layoutSync: LayoutSyncState
+    @ObservationIgnored private var adopting = false
+    @ObservationIgnored private var layoutRound = false
+    @ObservationIgnored private var layoutAgain = false
+    @ObservationIgnored private var layoutPush: Task<Void, Never>?
 
     private enum Keys {
         static let memosURL = "memosURL"
+        static let layoutSync = "layoutSync"
     }
 
     private init() {
         review = ReviewDesk(hub: hub)
         layout = store.load()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
+        layoutSync = UserDefaults.standard.data(forKey: Keys.layoutSync).flatMap { try? JSONDecoder().decode(LayoutSyncState.self, from: $0) } ?? LayoutSyncState()
+        if !Self.isQA { hub.onRefresh = { [weak self] in self?.syncLayout() } }
     }
 
     var page: Page { layout.page(currentPage) ?? layout.pages[0] }
@@ -78,8 +92,48 @@ final class AppState {
         withAnimation(Motion.spring) { layout.update(currentPage, change) }
     }
 
+    /// Built-in pages get their default modules back; a custom page is emptied.
+    func resetPage() {
+        withAnimation(Motion.spring) { layout.resetPage(currentPage) }
+    }
+
+    /// Every page back to the default set, custom pages included.
     func resetLayout() {
         withAnimation(Motion.spring) { layout = .default }
+    }
+
+    // MARK: Pages
+
+    /// Creates an empty page, opens it and enters layout editing so modules can be added.
+    @discardableResult
+    func newPage() -> String? {
+        var id: String?
+        withAnimation(Motion.spring) { id = layout.addPage() }
+        guard let id else { return nil }
+        go(id)
+        withAnimation(Motion.spring) { editing = true }
+        return id
+    }
+
+    func renamePage(_ id: String, title: String, subtitle: String) {
+        layout.renamePage(id, title: title, subtitle: subtitle)
+    }
+
+    func movePage(_ id: String, to index: Int) {
+        withAnimation(Motion.spring) { layout.movePage(id, to: index) }
+    }
+
+    func movePage(_ id: String, by offset: Int) {
+        withAnimation(Motion.spring) { layout.movePage(id, by: offset) }
+    }
+
+    func deletePage(_ id: String) {
+        guard let i = layout.pages.firstIndex(where: { $0.id == id }), !LayoutDocument.isBuiltin(id) else { return }
+        if currentPage == id {
+            editing = false
+            currentPage = layout.pages[i > 0 ? i - 1 : min(1, layout.pages.count - 1)].id
+        }
+        withAnimation(Motion.spring) { _ = layout.removePage(id) }
     }
 
     func sync() {
@@ -150,8 +204,54 @@ final class AppState {
 
     var cycle: Cycle? { goals?.cycle.map(StageTone.cycle) }
 
-    private func persistLayout() {
+    // MARK: Layout persistence and hub sync
+
+    private func layoutChanged() {
         do { try store.save(layout) } catch { NSLog("Personal Hub: layout save failed: \(error.localizedDescription)") }
+        if layout.page(currentPage) == nil, let first = layout.pages.first { currentPage = first.id }
+        pagesChanged()
+        guard !adopting, !Self.isQA else { return }
+        layoutSync.dirty = true
+        saveLayoutSync()
+        layoutPush?.cancel()
+        layoutPush = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            syncLayout()
+        }
+    }
+
+    /// One exchange with hub-api's layout store; overlapping calls fold into one more round.
+    func syncLayout() {
+        guard let api = hub.liveAPI else { return }
+        if layoutRound { layoutAgain = true; return }
+        layoutRound = true
+        let local = layout, state = layoutSync
+        Task {
+            do {
+                var outcome = try await LayoutSync.run(api: api, local: local, state: state)
+                if layout != local {
+                    outcome.state.dirty = true
+                } else if let doc = outcome.adopt {
+                    adopting = true
+                    withAnimation(Motion.spring) { layout = doc }
+                    adopting = false
+                }
+                layoutSync = outcome.state
+                saveLayoutSync()
+            } catch {
+                NSLog("Personal Hub: layout sync skipped (\(type(of: error)))")
+            }
+            layoutRound = false
+            if layoutAgain {
+                layoutAgain = false
+                syncLayout()
+            }
+        }
+    }
+
+    private func saveLayoutSync() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(layoutSync), forKey: Keys.layoutSync)
     }
 }
 

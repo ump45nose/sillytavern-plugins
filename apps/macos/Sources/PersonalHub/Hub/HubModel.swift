@@ -93,7 +93,14 @@ final class HubModel {
         guard mode == .hub else { return }
         let sync = self.sync
         Task { await sync.refresh() }
+        onRefresh?()
     }
+
+    /// Runs alongside every hub refresh (poll, network return, sign-in); the layout sync hangs off it.
+    @ObservationIgnored var onRefresh: (() -> Void)?
+
+    /// The signed-in API, or nil in demo mode.
+    var liveAPI: HubAPI? { api }
 
     private func loadSky() {
         Task {
@@ -123,6 +130,7 @@ final class HubModel {
             await engine.connect(api: api)
             await engine.refresh()
         }
+        onRefresh?()
     }
 
     /// Browser sign-in through Authelia (hub-api §4.3).

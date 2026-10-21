@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.openMainWindow = { [weak self] page in self?.showMainWindow(page: page) }
         state.openSettings = { [weak self] in self?.showSettings() }
         state.openReviewWindow = { [weak self] in self?.showReview() }
+        state.pagesChanged = { [weak self] in
+            guard let self, let view = NSApp.mainMenu?.item(withTitle: "视图")?.submenu else { return }
+            MainMenu.fillPages(view, state: self.state, target: self)
+        }
         state.showQuickTask = { [weak self] in self?.toggleQuickPanel(.task) }
         state.showQuickMemo = { [weak self] in self?.toggleQuickPanel(.memo) }
 
@@ -257,11 +261,7 @@ enum MainMenu {
         main.addItem(submenu(edit, "编辑"))
 
         let view = NSMenu(title: "视图")
-        for (i, e) in NavEntry.all.enumerated() {
-            let it = item(e.title, #selector(AppDelegate.goPage(_:)), "\(i + 1)", target)
-            it.representedObject = e.id
-            view.addItem(it)
-        }
+        fillPages(view, state: AppState.shared, target: target)
         view.addItem(.separator())
         view.addItem(item("编辑布局", #selector(AppDelegate.toggleEditing), "e", target))
         view.addItem(item("刷新", #selector(AppDelegate.refresh), "r", target))
@@ -275,10 +275,26 @@ enum MainMenu {
         window.addItem(withTitle: "关闭", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         window.addItem(.separator())
         window.addItem(item("主窗口", #selector(AppDelegate.showMainWindowAction), "0", target))
-        window.addItem(item("复盘", #selector(AppDelegate.showReviewAction), "6", target))
+        let review = item("复盘", #selector(AppDelegate.showReviewAction), "r", target)
+        review.keyEquivalentModifierMask = [.command, .shift]
+        window.addItem(review)
         main.addItem(submenu(window, "窗口"))
         NSApp.windowsMenu = window
         return main
+    }
+
+    private static let pageTag = 7_001
+
+    /// Page items (⌘1–⌘9 by position) lead the View menu and are replaced whenever the pages change.
+    @MainActor
+    static func fillPages(_ menu: NSMenu, state: AppState, target: AnyObject) {
+        for old in menu.items where old.tag == pageTag { menu.removeItem(old) }
+        for (i, page) in state.layout.pages.enumerated() {
+            let it = item(page.title, #selector(AppDelegate.goPage(_:)), NavEntry.shortcut(i) == nil ? "" : "\(i + 1)", target)
+            it.representedObject = page.id
+            it.tag = pageTag
+            menu.insertItem(it, at: i)
+        }
     }
 
     @MainActor

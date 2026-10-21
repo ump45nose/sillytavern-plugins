@@ -1,19 +1,20 @@
 import HubKit
 import SwiftUI
 
-struct NavEntry: Identifiable {
-    var id: String
-    var title: String
-    var symbol: String
-    var shortcut: String
+/// Sidebar icon and ⌘-number for a page; the order comes from the layout.
+enum NavEntry {
+    static func symbol(_ page: Page) -> String {
+        switch page.id {
+        case "home": "house"
+        case "life": "heart"
+        case "usage": "chart.bar"
+        case "sky": "desktopcomputer"
+        case "memos": "note.text"
+        default: "square.grid.2x2"
+        }
+    }
 
-    static let all = [
-        NavEntry(id: "home", title: "主页", symbol: "house", shortcut: "⌘1"),
-        NavEntry(id: "life", title: "生活", symbol: "heart", shortcut: "⌘2"),
-        NavEntry(id: "usage", title: "用量", symbol: "chart.bar", shortcut: "⌘3"),
-        NavEntry(id: "sky", title: "电脑历史", symbol: "desktopcomputer", shortcut: "⌘4"),
-        NavEntry(id: "memos", title: "Memos", symbol: "note.text", shortcut: "⌘5"),
-    ]
+    static func shortcut(_ index: Int) -> String? { index < LayoutDocument.maxPages ? "⌘\(index + 1)" : nil }
 }
 
 struct MainView: View {
@@ -42,6 +43,9 @@ struct MainView: View {
 private struct Sidebar: View {
     @Environment(AppState.self) private var state
     @Namespace private var ns
+    @ViewState private var renaming: String?
+    @ViewState private var confirmDelete: Page?
+    @ViewState private var dropTarget: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -55,43 +59,35 @@ private struct Sidebar: View {
             .padding(.leading, 18).padding(.top, 46).padding(.bottom, 22)
 
             VStack(spacing: 2) {
-                ForEach(NavEntry.all) { e in
-                    let on = state.currentPage == e.id
-                    Button { state.go(e.id) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: e.symbol).font(.system(size: 13)).frame(width: 18)
-                                .foregroundStyle(on ? Tone.clay.color : Palette.ink2)
-                            Text(e.title).font(Typo.sans(13, on ? .semibold : .regular))
-                            Spacer()
-                            Kbd(e.shortcut)
-                        }
-                        .foregroundStyle(on ? Palette.ink : Palette.ink2)
-                        .padding(.horizontal, 10).frame(height: 34)
-                        .background {
-                            if on {
-                                RoundedRectangle(cornerRadius: 10).fill(Palette.card)
-                                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
-                                    .matchedGeometryEffect(id: "nav", in: ns)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                let pages = state.layout.pages
+                ForEach(Array(pages.enumerated()), id: \.1.id) { i, page in
+                    row(page, index: i, count: pages.count)
                 }
             }
             .padding(.horizontal, 10)
             .animation(Motion.spring, value: state.currentPage)
+            .animation(Motion.spring, value: state.layout.pages.map(\.id))
 
             Text("自定义").font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.leading, 22).padding(.top, 22).padding(.bottom, 8)
-            HStack(spacing: 10) {
-                Image(systemName: "plus").font(.system(size: 12)).frame(width: 18)
-                Text("新建页面").font(Typo.sans(13))
+            Button {
+                if let id = state.newPage() { renaming = id }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "plus").font(.system(size: 12)).frame(width: 18)
+                    Text("新建页面").font(Typo.sans(13))
+                    Spacer()
+                }
+                .foregroundStyle(Palette.ink3)
+                .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(Palette.ink3)
-            .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .buttonStyle(.plain)
+            .disabled(!state.layout.canAddPage)
+            .opacity(state.layout.canAddPage ? 1 : 0.5)
             .padding(.horizontal, 10)
-            .help("自定义页面将在后续版本支持")
+            .help(state.layout.canAddPage ? "新建一个空页面，再从「添加模块」放入模块" : "最多 \(LayoutDocument.maxPages) 个页面")
+            Text("拖动或右键调整顺序、重命名").font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).padding(.leading, 22).padding(.top, 6)
 
             Spacer()
             SourceHealth().padding(.horizontal, 12)
@@ -107,6 +103,109 @@ private struct Sidebar: View {
             .contentShape(Rectangle())
             .onTapGesture { state.openSettings() }
         }
+        .alert("删除页面「\(confirmDelete?.title ?? "")」？", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("删除", role: .destructive) {
+                if let page = confirmDelete { state.deletePage(page.id) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只删除这个页面的布局，模块和数据不受影响。")
+        }
+    }
+
+    private func row(_ page: Page, index: Int, count: Int) -> some View {
+        let on = state.currentPage == page.id
+        return Button { state.go(page.id) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: NavEntry.symbol(page)).font(.system(size: 13)).frame(width: 18)
+                    .foregroundStyle(on ? Tone.clay.color : Palette.ink2)
+                Text(page.title).font(Typo.sans(13, on ? .semibold : .regular)).lineLimit(1)
+                Spacer()
+                if let key = NavEntry.shortcut(index) { Kbd(key) }
+            }
+            .foregroundStyle(on ? Palette.ink : Palette.ink2)
+            .padding(.horizontal, 10).frame(height: 34)
+            .background {
+                if on {
+                    RoundedRectangle(cornerRadius: 10).fill(Palette.card)
+                        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                        .matchedGeometryEffect(id: "nav", in: ns)
+                }
+            }
+            .overlay {
+                if dropTarget == page.id {
+                    RoundedRectangle(cornerRadius: 10).strokeBorder(Tone.clay.color.opacity(0.6), lineWidth: 1.5)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .draggable(page.id) {
+            Text(page.title).font(Typo.sans(13, .semibold)).padding(.horizontal, 12).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
+        }
+        .dropDestination(for: String.self) { ids, _ in
+            guard let id = ids.first, id != page.id, state.layout.page(id) != nil else { return false }
+            state.movePage(id, to: index)
+            return true
+        } isTargeted: { over in
+            if over { dropTarget = page.id } else if dropTarget == page.id { dropTarget = nil }
+        }
+        .contextMenu {
+            Button("重命名…") { renaming = page.id }
+            Button("上移") { state.movePage(page.id, by: -1) }.disabled(index == 0)
+            Button("下移") { state.movePage(page.id, by: 1) }.disabled(index == count - 1)
+            if !LayoutDocument.isBuiltin(page.id) {
+                Divider()
+                Button("删除页面…", role: .destructive) { confirmDelete = page }
+            }
+        }
+        .popover(isPresented: Binding(get: { renaming == page.id }, set: { if !$0 { renaming = nil } }), arrowEdge: .trailing) {
+            PageNameField(page: page) { title, subtitle in
+                if let title { state.renamePage(page.id, title: title, subtitle: subtitle) }
+                renaming = nil
+            }
+        }
+    }
+}
+
+/// Title and optional subtitle of a page; the subtitle shows under the page heading.
+struct PageNameField: View {
+    var page: Page
+    var done: (String?, String) -> Void
+    @ViewState private var title = ""
+    @ViewState private var subtitle = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label11("页面名称")
+            TextField("名称", text: $title).textFieldStyle(.roundedBorder).focused($focused).frame(width: 240)
+                .onSubmit(submit)
+            Label11("说明（可选）").padding(.top, 2)
+            TextField("显示在页面标题下", text: $subtitle).textFieldStyle(.roundedBorder).frame(width: 240)
+                .onSubmit(submit)
+            HStack {
+                Text("\(title.trimmingCharacters(in: .whitespaces).count) / \(LayoutDocument.maxTitle)")
+                    .font(Typo.sans(11)).foregroundStyle(title.count > LayoutDocument.maxTitle ? Tone.rose.color : Palette.ink4)
+                Spacer()
+                Button("取消") { done(nil, "") }.keyboardShortcut(.cancelAction)
+                Button("好", action: submit).keyboardShortcut(.defaultAction)
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(14)
+        .onAppear {
+            title = page.title
+            subtitle = page.subtitle
+            DispatchQueue.main.async { focused = true }
+        }
+    }
+
+    private func submit() {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        done(t, subtitle)
     }
 }
 
@@ -235,6 +334,7 @@ struct PageView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if page.id != "home" { PageHeader(page: page) }
+                        if page.items.isEmpty, !state.editing { EmptyPage() }
                         ModuleGrid {
                             ForEach(Array(page.items.enumerated()), id: \.1.module) { i, item in
                                 ModuleCard(item: item, index: i, count: page.items.count, highlighted: pulse == item.module)
@@ -266,6 +366,7 @@ struct PageView: View {
 private struct PageHeader: View {
     var page: Page
     @Environment(AppState.self) private var state
+    @ViewState private var renaming = false
 
     var body: some View {
         let modules: [ModuleID] = switch page.kind {
@@ -276,13 +377,52 @@ private struct PageHeader: View {
         let stamp = HubFormat.stamp(modules.compactMap(state.updatedAt).max())
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(page.title).font(Typo.serif(34)).tracking(-0.6)
-                Text(page.subtitle).font(Typo.sans(13)).foregroundStyle(Palette.ink2)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(page.title).font(Typo.serif(34)).tracking(-0.6)
+                    if state.editing {
+                        Button { renaming = true } label: {
+                            Image(systemName: "pencil").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink3)
+                                .frame(width: 26, height: 26).background(Circle().fill(Palette.card))
+                                .overlay(Circle().strokeBorder(Palette.line))
+                        }
+                        .buttonStyle(.plain)
+                        .help("重命名页面")
+                        .popover(isPresented: $renaming, arrowEdge: .bottom) {
+                            PageNameField(page: page) { title, subtitle in
+                                if let title { state.renamePage(page.id, title: title, subtitle: subtitle) }
+                                renaming = false
+                            }
+                        }
+                    }
+                }
+                if !page.subtitle.isEmpty {
+                    Text(page.subtitle).font(Typo.sans(13)).foregroundStyle(Palette.ink2)
+                }
             }
             Spacer()
             Text(([page.kind == .grid ? "\(page.items.count) 个模块" : nil, stamp.map { "更新于 " + $0 }].compactMap { $0 }).joined(separator: " · "))
                 .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
         }
+    }
+}
+
+private struct EmptyPage: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "square.dashed").font(.system(size: 28, weight: .light)).foregroundStyle(Palette.ink4)
+            Text("这个页面还没有模块").font(Typo.serif(19))
+            Text("同一个模块可以同时放在多个页面，简略版和详细版各取所需。").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3)
+            Button { withAnimation(Motion.spring) { state.editing = true } } label: {
+                Text("添加模块").font(Typo.sans(12.5, .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).frame(height: 30)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(Palette.ink))
+            }
+            .buttonStyle(.plain).padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 56)
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
     }
 }
 
@@ -296,12 +436,14 @@ private struct AddModuleTile: View {
                 Text("添加模块").font(Typo.sans(13, .semibold))
                 Text("每个模块都有简略版和详细版，可放在任意页面").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 Spacer()
-                Button("恢复默认布局") { state.resetLayout() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                if LayoutDocument.isBuiltin(page.id) {
+                    Button("恢复本页默认") { state.resetPage() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                }
             }
             if page.unusedModules.isEmpty {
                 Text("所有模块都已在此页").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             } else {
-                HStack(spacing: 8) {
+                Flow(spacing: 8) {
                     ForEach(page.unusedModules, id: \.self) { m in
                         Button { state.editPage { $0.add(m) } } label: {
                             HStack(spacing: 6) {

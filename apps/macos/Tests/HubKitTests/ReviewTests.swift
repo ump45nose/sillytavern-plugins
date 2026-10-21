@@ -6,14 +6,14 @@ import Testing
 final class ScriptedHub: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private let reply: @Sendable (URLRequest) -> (Int, String)
-    private(set) var requests: [(method: String, path: String, body: [String: Any]?)] = []
+    private(set) var requests: [(method: String, path: String, body: [String: Any]?, ifMatch: String?)] = []
 
     init(_ reply: @escaping @Sendable (URLRequest) -> (Int, String)) { self.reply = reply }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         lock.lock()
-        requests.append((request.httpMethod ?? "GET", request.url!.path, body))
+        requests.append((request.httpMethod ?? "GET", request.url!.path, body, request.value(forHTTPHeaderField: "If-Match")))
         lock.unlock()
         let (code, text) = reply(request)
         return (Data(text.utf8), HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: nil, headerFields: nil)!)

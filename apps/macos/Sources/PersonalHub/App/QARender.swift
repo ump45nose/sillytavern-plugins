@@ -52,6 +52,20 @@ enum QARender {
             state.go(String(page))
             await shot("page-\(page)", width: 1320, height: 1500, MainView().background(Palette.bg))
         }
+        if let id = state.newPage() {
+            await shot("page-custom-edit", width: 1320, height: 900, MainView().background(Palette.bg))
+            state.editing = false
+            await shot("page-custom-empty", width: 1320, height: 900, MainView().background(Palette.bg))
+            state.layout.update(id) { $0.add(.memos, size: .detail); $0.add(.subs); $0.add(.net) }
+            state.renamePage(id, title: "随手记", subtitle: "Memos、订阅与网络")
+            state.movePage(id, to: 1)
+            await shot("page-custom", width: 1320, height: 900, MainView().background(Palette.bg))
+            if let page = state.layout.page(id) {
+                await shot("page-name", width: 280, PageNameField(page: page) { _, _ in }.background(Palette.card))
+            }
+            state.deletePage(id)
+            state.go("home")
+        }
         await shot("popover", width: 380, PopoverView())
         await shot("quick-add", width: 640, QuickTaskView(close: {}, resize: {}, openMain: {}, initialText: "明天下午3点 和李雷对齐方案 #工作"))
         await shot("quick-newlist", width: 640, QuickTaskView(close: {}, resize: {}, openMain: {}, initialText: "月底 交房租 #家务"))
