@@ -167,9 +167,11 @@ class WeeklyReviewService:
     def _has_substantive_content(content: str) -> bool:
         """拒绝把整张空模板发布为周报。"""
 
+        placeholders = {line.strip().lstrip('- ').strip()
+                        for line in WeeklyReviewService.blank_template('').splitlines()[1:]}
         for line in content.splitlines()[1:]:
             text = line.strip().lstrip("- ").strip()
-            if not text:
+            if not text or text in placeholders:
                 continue
             if "：" in text:
                 _, value = text.split("：", 1)
