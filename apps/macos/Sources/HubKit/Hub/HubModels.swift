@@ -4,7 +4,7 @@ import Foundation
 // to be null is optional; a missing measurement must never be shown as zero.
 
 public enum HubModule: String, Codable, CaseIterable, Sendable {
-    case health, bills, crm, media, token, git, net, subs, memos, attention
+    case health, bills, crm, media, token, git, net, subs, memos, attention, goals
 }
 
 public enum HubStatus: String, Codable, Sendable {
@@ -292,6 +292,7 @@ public struct HubData: Codable, Equatable, Sendable {
     public var subs: HubEnvelope<SubsData>?
     public var memos: HubEnvelope<MemosData>?
     public var attention: HubEnvelope<AttentionData>?
+    public var goals: HubEnvelope<GoalsData>?
     /// Token per range; the batch call only returns the day range.
     public var token: [TokenRange: HubEnvelope<TokenData>] = [:]
     public var sources: [HubSourceStatus] = []
@@ -311,6 +312,7 @@ public struct HubData: Codable, Equatable, Sendable {
         case .subs: subs?.status
         case .memos: memos?.status
         case .attention: attention?.status
+        case .goals: goals?.status
         }
     }
 
@@ -326,6 +328,7 @@ public struct HubData: Codable, Equatable, Sendable {
         case .subs: subs?.updatedAt
         case .memos: memos?.updatedAt
         case .attention: attention?.updatedAt
+        case .goals: goals?.updatedAt
         }
     }
 }
@@ -357,6 +360,7 @@ struct HubBatch: Decodable {
         data.subs = one(.subs, SubsData.self)
         data.memos = one(.memos, MemosData.self)
         data.attention = one(.attention, AttentionData.self)
+        data.goals = one(.goals, GoalsData.self)
         if let day = one(.token, TokenData.self) { data.token[.day] = day }
     }
 }

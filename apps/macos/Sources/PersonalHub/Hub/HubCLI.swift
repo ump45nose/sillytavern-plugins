@@ -120,7 +120,52 @@ enum HubCLI {
 
         let sky = SkyArchive.load()
         print("INFO sky — \(sky.count) local windows · \(Set(sky.map(\.device)).count) devices · latest \(sky.first.map { HubJSON.format($0.end) } ?? "none")")
+        failures += await reviewSmoke(api, goals: d.goals)
         return failures == 0 ? 0 : 1
+    }
+
+    /// Reads only, plus a preview of the blank template that personal-review must reject: nothing is written.
+    private static func reviewSmoke(_ api: HubAPI, goals: HubEnvelope<GoalsData>?) async -> Int {
+        var failures = 0
+        func line(_ ok: Bool, _ name: String, _ detail: String) {
+            if !ok { failures += 1 }
+            print("\(ok ? "PASS" : "FAIL") \(name) — \(detail)")
+        }
+        func fail(_ error: Error) -> String { (error as? HubError).map(describe) ?? "\(type(of: error))" }
+        guard let goals else {
+            print("SKIP goals — hub has no goals module yet")
+            return 0
+        }
+        let g = goals.data
+        line(goals.status.hasData, "goals", "\(goals.status.rawValue) · mainline \(g?.mainline == nil ? "null" : "set") · cycle \(g?.cycle.map { "day \($0.day ?? 0)/\($0.total ?? 0) \($0.status)" } ?? "null") · goals \(g?.goals?.count ?? 0) · daily \(g?.reviews?.daily?.status.rawValue ?? "null") · weekly \(g?.reviews?.weekly?.status.rawValue ?? "null") · close \(g?.close?.status.rawValue ?? "null")")
+        var open: ReviewSummary?
+        for kind in ReviewKind.allCases {
+            do {
+                let items = try await api.reviewSessions(kind: kind)
+                let counts = Dictionary(grouping: items, by: \.status).map { "\($0.key.rawValue) \($0.value.count)" }.sorted().joined(separator: " · ")
+                line(true, "review.\(kind.rawValue)", "\(items.count) sessions" + (counts.isEmpty ? "" : " · " + counts))
+                if open == nil { open = items.first { $0.status == .open } }
+            } catch { line(false, "review.\(kind.rawValue)", fail(error)) }
+        }
+        guard let target = open ?? g?.reviews?.daily else {
+            print("SKIP review.detail — no session")
+            return failures
+        }
+        do {
+            let s = try await api.reviewSession(id: target.id)
+            line(s.material != nil, "review.detail", "\(s.kind.rawValue) \(s.status.rawValue) · sections \(s.material?.sections.count ?? 0) · delivered \(s.delivered == nil ? "null" : "set") · rules \(s.rules?.fields.count ?? 0) fields")
+            guard s.status == .open, let template = s.material?.template else {
+                print("SKIP review.preview — session not open")
+                return failures
+            }
+            do {
+                _ = try await api.previewReview(id: s.id, content: ReviewForm(template: template).content())
+                line(false, "review.preview", "blank template accepted")
+            } catch HubError.rejected(_, let field) {
+                line(true, "review.preview", "blank template rejected · field \(field ?? "none")")
+            } catch { line(false, "review.preview", fail(error)) }
+        } catch { line(false, "review.detail", fail(error)) }
+        return failures
     }
 
     private static func describe(_ e: HubError) -> String {
@@ -129,6 +174,8 @@ enum HubCLI {
         case .offline: "offline"
         case .http(let code): "HTTP \(code)"
         case .invalidResponse: "invalid response"
+        case .rejected(_, let field): "rejected · field \(field ?? "none")"
+        case .expired: "expired"
         }
     }
 }

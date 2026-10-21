@@ -8,10 +8,9 @@ import SwiftUI
 final class AppState {
     static let shared = AppState()
 
-    /// Design sample, still the source for cycle and goals until personal-review is wired up.
-    let snapshot = Sample.snapshot
     let agenda = AgendaModel()
     let hub = HubModel()
+    let review: ReviewDesk
 
     var layout: LayoutDocument { didSet { persistLayout() } }
     var currentPage = "home"
@@ -27,6 +26,7 @@ final class AppState {
     var openSettings: () -> Void = {}
     var showQuickTask: () -> Void = {}
     var showQuickMemo: () -> Void = {}
+    var openReviewWindow: () -> Void = {}
 
     private let store = LayoutStore.appSupport()
 
@@ -35,6 +35,7 @@ final class AppState {
     }
 
     private init() {
+        review = ReviewDesk(hub: hub)
         layout = store.load()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
     }
@@ -94,7 +95,7 @@ final class AppState {
         switch module {
         case .agenda: return agenda.lastSync
         case .sky: return hub.sky.map { $0.segments.last?.end ?? $0.end }.max().map { min($0, HubFormat.current()) }
-        case .brief, .goals, .attention: return nil
+        case .brief, .attention: return nil
         default: return HubModule(rawValue: module.rawValue).flatMap { hub.data.updatedAt($0) }
         }
     }
@@ -133,8 +134,21 @@ final class AppState {
     }
 
     func open(_ entry: AttentionEntry) {
+        if entry.id.hasPrefix("review:") { return openReview(.session(String(entry.id.dropFirst("review:".count)))) }
+        if entry.id.hasPrefix("stage:close:") { return openReview(.stage) }
         if let url = entry.url { NSWorkspace.shared.open(url) } else if let m = entry.target { openMainWindow(nil); focus(m) }
     }
+
+    func openReview(_ target: ReviewTarget) {
+        review.open(target)
+        openReviewWindow()
+    }
+
+    // MARK: Goals
+
+    var goals: GoalsData? { hub.data.goals?.data }
+
+    var cycle: Cycle? { goals?.cycle.map(StageTone.cycle) }
 
     private func persistLayout() {
         do { try store.save(layout) } catch { NSLog("Personal Hub: layout save failed: \(error.localizedDescription)") }

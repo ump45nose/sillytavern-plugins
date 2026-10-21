@@ -79,6 +79,13 @@ final class HubModel {
         let windows = await Task.detached { SkyArchive.load() }.value
         if !windows.isEmpty { sky = windows; skyLive = true }
     }
+
+    /// QA: the sample cycle on its last day, so the close form renders.
+    func previewClose() {
+        guard var g = data.goals?.data else { return }
+        g.close = .init(status: .preclose, cycleId: g.cycle?.id, template: g.cycle.map { ReviewSample.closeTemplate($0.id) })
+        data.goals?.data = g
+    }
     #endif
 
     func refresh() {
@@ -274,6 +281,12 @@ final class HubModel {
             case .hub(let e): e.message
             }
         }
+    }
+
+    /// Reads fall back to the sample in demo mode; writes refuse with `.demo`.
+    func review<T>(demo: () throws -> T, live: (HubAPI) async throws -> T) async throws -> T {
+        guard let api else { return try demo() }
+        return try await live(api)
     }
 
     func postMemo(_ content: String, visibility: String = "PRIVATE") async throws {

@@ -7,11 +7,18 @@ public enum HubError: Error, Equatable, Sendable {
     case offline
     case http(Int)
     case invalidResponse
+    /// A source rule refused the content (422); `message` is the source's own wording.
+    case rejected(String, field: String?)
+    /// The review session's window has closed (409 `expired`).
+    case expired
 
     public var message: String {
         switch self {
         case .unauthorized: "hub 登录已失效"
         case .offline: "连不上 hub"
+        case .rejected(let message, _): message
+        case .expired: "这次复盘已经过期，不能再确认"
+        case .http(502): "来源写入失败，可以稍后重试"
         case .http(409): "有冲突，未保存"
         case .http(503): "hub 未配置这个来源"
         case .http(let code): "hub 返回 \(code)"
@@ -107,6 +114,50 @@ public struct HubAPI: Sendable {
         String(decoding: try await get("/api/v1/recordings/\(path(id))/transcript"), as: UTF8.self)
     }
 
+    // MARK: Review & stage (phase 5)
+
+    public func reviewSessions(kind: ReviewKind, limit: Int = 14) async throws -> [ReviewSummary] {
+        try decode(ReviewPage.self, try await get("/api/v1/review/sessions", query: ["kind": kind.rawValue, "limit": String(limit)])).items
+    }
+
+    public func reviewSession(id: String) async throws -> ReviewSession {
+        try decode(ReviewSession.self, try await get("/api/v1/review/sessions/\(path(id))"))
+    }
+
+    /// The final text personal-review would store (health and finance filled in), or `.rejected`.
+    public func previewReview(id: String, content: String) async throws -> String {
+        let data = try await send(request("/api/v1/review/sessions/\(path(id))/preview", method: "POST", body: ["content": content]))
+        return try decode(ReviewPreview.self, data).content
+    }
+
+    public func finalizeReview(id: String, content: String) async throws -> ReviewFinalized {
+        let data = try await send(request("/api/v1/review/sessions/\(path(id))/finalize", method: "POST", body: ["content": content]))
+        return try decode(ReviewFinalized.self, data)
+    }
+
+    public func commentGoal(id: String, text: String, dryRun: Bool) async throws -> StageResult {
+        try await stage("/api/v1/stage/goals/\(path(id))/comments", ["text": text, "dry_run": dryRun])
+    }
+
+    public func closeCycle(id: String, text: String, outcomes: [String: String], dryRun: Bool) async throws -> StageResult {
+        try await stage("/api/v1/stage/cycles/\(path(id))/close", ["text": text, "outcomes": outcomes, "dry_run": dryRun])
+    }
+
+    public func createCycle() async throws -> StageResult {
+        try await stage("/api/v1/stage/cycles", [:])
+    }
+
+    public func addGoal(cycle id: String, _ draft: GoalDraft, dryRun: Bool) async throws -> StageResult {
+        try await stage("/api/v1/stage/cycles/\(path(id))/goals", [
+            "domain": draft.domain, "goal": draft.goal, "progress": draft.progress, "deadline": draft.deadline,
+            "success_criteria": draft.successCriteria, "stop_signal": draft.stopSignal, "dry_run": dryRun,
+        ])
+    }
+
+    private func stage(_ path: String, _ body: [String: Any]) async throws -> StageResult {
+        try decode(StageResult.self, try await send(request(path, method: "POST", body: body)))
+    }
+
     // MARK: Plumbing
 
     private func path(_ s: String) -> String {
@@ -140,8 +191,19 @@ public struct HubAPI: Sendable {
         switch response.statusCode {
         case 200..<300: return data
         case 401, 403: throw HubError.unauthorized
+        case 409 where Self.problem(data)?.code == "expired": throw HubError.expired
+        case 422: throw HubError.rejected(Self.problem(data)?.message ?? "内容没有通过校验", field: Self.problem(data)?.field)
         default: throw HubError.http(response.statusCode)
         }
+    }
+
+    private struct Problem: Decodable {
+        struct Body: Decodable { var code: String?; var message: String?; var field: String? }
+        var error: Body
+    }
+
+    private static func problem(_ data: Data) -> Problem.Body? {
+        try? HubJSON.decoder.decode(Problem.self, from: data).error
     }
 
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {

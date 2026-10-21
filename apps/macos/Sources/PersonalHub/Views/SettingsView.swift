@@ -365,7 +365,7 @@ private struct AboutSettings: View {
         VStack(spacing: 12) {
             LogoMark(animated: true).frame(width: 88, height: 88)
             Text("Personal Hub").font(Typo.serif(24))
-            Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · 阶段 3 · 个人数据接入")
+            Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · 阶段 5 · 主线与复盘")
                 .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             Text("汇聚，然后看清方向").font(Typo.serif(14)).foregroundStyle(Palette.ink2)
         }

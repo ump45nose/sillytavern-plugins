@@ -76,6 +76,27 @@ enum QARender {
             await shot("token-\(range.rawValue)", width: 1240, ModuleCard(item: LayoutItem(.token, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         }
         state.tokenRange = .week
+
+        for size in [ModuleSize.compact, .detail] {
+            await shot("goals-\(size.rawValue)", width: size == .compact ? 340 : 640, ModuleCard(item: LayoutItem(.goals, size), index: 0, count: 1).padding(20).background(Palette.bg))
+        }
+        let review = state.review
+        for target in [ReviewTarget.latest(.daily), .latest(.weekly), .stage] {
+            review.open(target)
+            await review.reload()
+            if case .session(let id) = review.selection { await review.load(id) }
+            let name = switch target { case .latest(let k): "review-\(k.rawValue)"; default: "review-stage" }
+            await shot(name, width: 1180, height: 780, ReviewView())
+        }
+        if let finalized = review.lists[.daily]?.first(where: { $0.status == .finalized }) {
+            review.open(.session(finalized.id))
+            await review.load(finalized.id)
+            await shot("review-daily-done", width: 1180, height: 780, ReviewView())
+        }
+        if CommandLine.arguments.contains("--qa-cache") { return }
+        state.hub.previewClose()
+        review.open(.stage)
+        await shot("review-stage-close", width: 1180, height: 1500, ReviewView())
     }
 }
 

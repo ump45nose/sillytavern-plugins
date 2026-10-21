@@ -92,7 +92,12 @@ public enum HubSample {
                      .init(id: "m3", createdAt: at(22, 31, -1), content: "上线个人信息中心 v1 —— 进行中 #阶段目标", tags: ["阶段目标"])],
             tags: [.init(name: "日报", count: 31), .init(name: "周报", count: 6), .init(name: "主线", count: 4), .init(name: "阶段目标", count: 9), .init(name: "想法", count: 18)]))
 
+        let goals = ReviewSample.goals(now: now, calendar: calendar)
+        out.goals = env("goals", goals)
+        let daily = goals.reviews?.daily
         out.attention = env("attention", AttentionData(items: [
+            .init(id: "review:\(daily?.id ?? "")", rule: "review_pending", severity: "warn", title: "昨天的日报待确认",
+                  subtitle: "6 小时后过期", target: .init(module: "goals")),
             .init(id: "token-limit:claude:week", rule: "token_limit", severity: "warn", title: "Claude Code 本周额度 61%", subtitle: "周四 09:00 重置", target: .init(module: "token")),
             .init(id: "pr-blocked:2790", rule: "pr_blocked", severity: "warn", title: "PR #2790 等待 review 9 天", subtitle: "modelcontextprotocol/servers", target: .init(module: "git")),
             .init(id: "stale-contact", rule: "stale_contact", severity: "info", title: "赵六 46 天未联系", subtitle: "老朋友", target: .init(module: "crm")),

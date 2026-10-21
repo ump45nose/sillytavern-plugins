@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let popover = NSPopover()
     private var mainWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var reviewWindow: NSWindow?
     private var taskPanel: QuickPanel?
     private var memoPanel: QuickPanel?
     private var titleObserver: Any?
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.mainMenu = MainMenu.build(target: self)
         state.openMainWindow = { [weak self] page in self?.showMainWindow(page: page) }
         state.openSettings = { [weak self] in self?.showSettings() }
+        state.openReviewWindow = { [weak self] in self?.showReview() }
         state.showQuickTask = { [weak self] in self?.toggleQuickPanel(.task) }
         state.showQuickMemo = { [weak self] in self?.toggleQuickPanel(.memo) }
 
@@ -130,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             case "task": toggleQuickPanel(.task)
             case "memo": toggleQuickPanel(.memo)
             case "settings": showSettings()
+            case "review": state.openReview(.latest(.daily))
             case "edit": toggleEditing()
             default: break
             }
@@ -154,10 +157,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
+    @objc func showReviewAction() { state.openReview(.latest(.daily)) }
+
+    func showReview() {
+        popover.performClose(nil)
+        if reviewWindow == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 780),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                             backing: .buffered, defer: false)
+            w.titlebarAppearsTransparent = true
+            w.titleVisibility = .hidden
+            w.isReleasedWhenClosed = false
+            w.title = "复盘"
+            w.backgroundColor = NSColor(Palette.bg)
+            w.contentView = NSHostingView(rootView: ReviewView().environment(state))
+            w.minSize = NSSize(width: 1040, height: 680)
+            w.setFrameAutosaveName("PersonalHubReview")
+            if !w.setFrameUsingName("PersonalHubReview") { w.center() }
+            w.delegate = self
+            reviewWindow = w
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        reviewWindow?.makeKeyAndOrderFront(nil)
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
         DispatchQueue.main.async {
-            let others = [self.mainWindow, self.settingsWindow].compactMap { $0 }.filter { $0 !== w && $0.isVisible }
+            let others = [self.mainWindow, self.settingsWindow, self.reviewWindow].compactMap { $0 }.filter { $0 !== w && $0.isVisible }
             if others.isEmpty { NSApp.setActivationPolicy(.accessory) }
         }
     }
@@ -247,6 +275,7 @@ enum MainMenu {
         window.addItem(withTitle: "关闭", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         window.addItem(.separator())
         window.addItem(item("主窗口", #selector(AppDelegate.showMainWindowAction), "0", target))
+        window.addItem(item("复盘", #selector(AppDelegate.showReviewAction), "6", target))
         main.addItem(submenu(window, "窗口"))
         NSApp.windowsMenu = window
         return main

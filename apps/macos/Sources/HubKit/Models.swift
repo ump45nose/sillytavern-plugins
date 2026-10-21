@@ -34,6 +34,14 @@ public struct Cycle: Sendable {
     public var index: Int, day: Int, total: Int
     public var start: String, end: String
     public var remaining: Int { total - day }
+
+    public init(index: Int, day: Int, total: Int, start: String, end: String) {
+        self.index = index
+        self.day = day
+        self.total = total
+        self.start = start
+        self.end = end
+    }
 }
 
 public struct Goal: Sendable, Identifiable {

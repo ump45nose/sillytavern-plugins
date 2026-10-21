@@ -8,7 +8,6 @@ struct BriefModule: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let d = state.snapshot
         if size == .compact {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -25,14 +24,15 @@ struct BriefModule: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         Label11(Self.dateLine(state.agenda.now))
-                        Chip(text: "第 \(d.cycle.index) 阶段 · 第 \(d.cycle.day) 天", tone: .clay)
+                        if let c = state.cycle { Chip(text: "第 \(c.index) 阶段 · 第 \(c.day) 天", tone: .clay) }
                     }
                     Text(Self.greeting(state.agenda.now)).font(Typo.serif(44)).tracking(-0.8)
                     Text(summary)
                         .font(Typo.serif(18.5)).foregroundStyle(Palette.ink2).lineSpacing(6)
                         .tint(Palette.clayDeep)
                         .environment(\.openURL, OpenURLAction { url in
-                            if let m = ModuleID(rawValue: url.host() ?? "") { state.focus(m) }
+                            if url.host() == "review", let id = url.pathComponents.dropFirst().first { state.openReview(.session(id)) }
+                            else if let m = ModuleID(rawValue: url.host() ?? "") { state.focus(m) }
                             return .handled
                         })
                         .fixedSize(horizontal: false, vertical: true)
@@ -98,7 +98,16 @@ struct BriefModule: View {
             s += link("\(w) 条回复", .git)
             s += AttributedString("在等你。")
         }
-        let remote = state.attention.filter { !$0.id.hasPrefix("task:") }.count
+        if let daily = state.goals?.reviews?.daily, daily.status == .open {
+            let day = ReviewText.title(daily).components(separatedBy: " · ").first ?? ""
+            s += AttributedString((day == "今天" || day == "昨天" ? day + "的" : "") + "")
+            var a = AttributedString("日报")
+            a.link = URL(string: "hub://review/" + (daily.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? daily.id))
+            a.underlineStyle = .single
+            s += a
+            s += AttributedString("还在等你确认。")
+        }
+        let remote = state.attention.filter { !$0.id.hasPrefix("task:") && !$0.id.hasPrefix("review:") }.count
         if remote > 0 {
             s += AttributedString("另外有 ")
             s += link("\(remote) 件事", .attention)
@@ -202,7 +211,7 @@ struct AgendaModule: View {
     }
 
     private var detail: some View {
-        let v = state.agenda.view, d = state.snapshot
+        let v = state.agenda.view
         let keep = { (t: AgendaTask) in listFilter == nil || t.listID == listFilter }
         let groups: [(String, [AgendaTask])] = [
             ("逾期", v.overdue.filter(keep)), ("今天 · \(v.today.filter(keep).count)", v.today.filter(keep)),
@@ -211,7 +220,7 @@ struct AgendaModule: View {
         return HStack(alignment: .top, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
                 Flow(spacing: 6) {
-                    Chip(text: "全天 · 阶段第 \(d.cycle.day) 天", tone: .clay)
+                    if let c = state.cycle { Chip(text: "全天 · 阶段第 \(c.day) 天", tone: .clay) }
                     ForEach(v.allDay) { e in
                         EventChip(event: e)
                     }
@@ -335,59 +344,126 @@ struct GoalsModule: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let d = state.snapshot
-        if size == .compact {
-            VStack(alignment: .leading, spacing: 0) {
-                Label11("总主线")
-                Mainline(text: d.mainline, size: 17).padding(.top, 3)
-                CycleTicks(cycle: d.cycle, height: 12, spacing: 2).padding(.top, 12)
-                HStack {
-                    Text("第 \(d.cycle.day) / \(d.cycle.total) 天")
-                    Spacer()
-                    Text("剩 \(d.cycle.remaining) 天")
-                }
-                .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 4)
-                Spacer(minLength: 6)
-                HStack(spacing: 6) {
-                    Dot(color: Tone.clay.color, pulse: true)
-                    Text("昨日日报待确认").font(Typo.sans(11.5, .medium)).foregroundStyle(Tone.clay.color)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(Capsule().fill(Tone.clay.tint))
-            }
+        if state.hub.mode == .hub, state.hub.data.goals == nil {
+            ModuleEmpty(symbol: "puzzlepiece.extension", text: "等 hub 接入 personal-review")
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                Label11("总主线")
-                Mainline(text: d.mainline, size: 24).padding(.top, 4)
-                CycleTicks(cycle: d.cycle, height: 22, spacing: 3).padding(.top, 14)
-                HStack {
-                    Text("\(d.cycle.start) 开始")
-                    Spacer()
-                    Text("今天 · 第 \(d.cycle.day) 天").fontWeight(.semibold).foregroundStyle(Palette.clayDeep)
-                    Spacer()
-                    Text("\(d.cycle.end) 结案")
-                }
-                .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 6)
-                SectionTitle("第 \(d.cycle.index) 阶段目标 · \(d.goals.count) / 5")
-                ForEach(Array(d.goals.enumerated()), id: \.1.id) { i, g in
-                    HStack(spacing: 12) {
-                        Text(g.domain).font(Typo.sans(11.5, .medium)).foregroundStyle(g.tone.color)
-                            .frame(width: 46, height: 22).background(Capsule().fill(g.tone.tint))
-                        Text(g.title).font(Typo.sans(13)).lineLimit(1)
-                        Spacer(minLength: 8)
-                        Track(value: g.progress, color: g.tone.color, height: 5, delay: Double(i) * 80).frame(width: 84)
-                        Text(g.value).font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).monospacedDigit().frame(width: 64, alignment: .trailing)
-                    }
-                    .padding(.vertical, 7)
-                }
-                HStack(spacing: 8) {
-                    ReviewTile(title: "昨日日报", sub: "草稿 · 待确认", hot: true)
-                    ReviewTile(title: "本周周报", sub: "周日 21:50")
-                    ReviewTile(title: "阶段结案", sub: "11/10 预备材料")
-                }
-                .padding(.top, 14)
+            HubGate(envelope: state.hub.data.goals, unconfigured: "personal-review 尚未接入") { d in
+                if size == .compact { compact(d) } else { detail(d) }
             }
         }
+    }
+
+    private func compact(_ d: GoalsData) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label11(d.mainline?.domain ?? "总主线")
+            Mainline(text: d.mainline?.direction ?? "—", size: 17).padding(.top, 3)
+            if let c = state.cycle {
+                CycleTicks(cycle: c, height: 12, spacing: 2).padding(.top, 12)
+                HStack {
+                    Text("第 \(c.day) / \(c.total) 天")
+                    Spacer()
+                    Text("剩 \(c.remaining) 天")
+                }
+                .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 4)
+            }
+            Spacer(minLength: 6)
+            let pill = Self.pill(d)
+            Button { state.openReview(pill.target) } label: {
+                HStack(spacing: 6) {
+                    Dot(color: pill.tone.color, pulse: pill.hot)
+                    Text(pill.text).font(Typo.sans(11.5, .medium)).foregroundStyle(pill.tone.color)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Capsule().fill(pill.tone.tint))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func detail(_ d: GoalsData) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label11(d.mainline?.domain ?? "总主线")
+            Mainline(text: d.mainline?.direction ?? "—", size: 24).padding(.top, 4)
+            if let c = state.cycle {
+                CycleTicks(cycle: c, height: 22, spacing: 3).padding(.top, 14)
+                HStack {
+                    Text("\(c.start) 开始")
+                    Spacer()
+                    Text("今天 · 第 \(c.day) 天").fontWeight(.semibold).foregroundStyle(Palette.clayDeep)
+                    Spacer()
+                    Text("\(c.end) 结案")
+                }
+                .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 6)
+                SectionTitle("第 \(c.index) 阶段目标 · \(d.goals?.count ?? 0) / \(Stage.maxGoals)")
+            } else {
+                SectionTitle("阶段目标")
+            }
+            ForEach(Array((d.goals ?? []).enumerated()), id: \.1.id) { i, g in
+                HStack(spacing: 12) {
+                    Text(g.domain).font(Typo.sans(11.5, .medium)).foregroundStyle(StageTone.of(g.domain).color)
+                        .frame(width: 46, height: 22).background(Capsule().fill(StageTone.of(g.domain).tint))
+                    Text(g.goal).font(Typo.sans(13)).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(g.progress ?? "").font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).lineLimit(1).frame(maxWidth: 200, alignment: .trailing)
+                }
+                .padding(.vertical, 7)
+                .rise(i)
+            }
+            if (d.goals ?? []).isEmpty {
+                Text(d.cycle == nil ? "上一阶段已结案，还没有开始新阶段" : "这个阶段还没有目标").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
+            }
+            HStack(spacing: 8) {
+                tile(Self.dailyTile(d.reviews), .latest(.daily))
+                tile(Self.weeklyTile(d.reviews), .latest(.weekly))
+                tile(Self.closeTile(d), .stage)
+            }
+            .padding(.top, 14)
+        }
+    }
+
+    private func tile(_ t: (title: String, sub: String, hot: Bool), _ target: ReviewTarget) -> some View {
+        Button { state.openReview(target) } label: { ReviewTile(title: t.title, sub: t.sub, hot: t.hot) }.buttonStyle(.plain)
+    }
+
+    static func dailyTile(_ r: GoalsData.Reviews?) -> (title: String, sub: String, hot: Bool) {
+        guard let s = r?.daily else { return ("日报", r?.nextDailyAt.map { "\(HubFormat.clock($0)) 生成" } ?? "还没有日报", false) }
+        let title = ReviewText.title(s).components(separatedBy: " · ").first.map { $0 == "今天" || $0 == "昨天" ? $0 + "的日报" : "日报" } ?? "日报"
+        switch s.status {
+        case .open: return (title, "待确认 · " + (ReviewText.remaining(s.expiresAt, short: true) ?? ""), true)
+        case .finalized: return (title, r?.nextDailyAt.map { "已归档 · 下篇 \(HubFormat.clock($0))" } ?? "已归档", false)
+        case .expired: return (title, "已过期", false)
+        }
+    }
+
+    static func weeklyTile(_ r: GoalsData.Reviews?) -> (title: String, sub: String, hot: Bool) {
+        let next = r?.nextWeeklyAt.map { "\(ReviewText.md($0)) 生成" }
+        guard let s = r?.weekly else { return ("周报", next ?? "还没有周报", false) }
+        switch s.status {
+        case .open: return ("本周周报", "待确认 · " + (ReviewText.remaining(s.expiresAt, short: true) ?? ""), true)
+        case .finalized: return ("周报", r?.nextWeeklyAt.map { "已归档 · 下篇 " + ReviewText.md($0) } ?? "已归档", false)
+        case .expired: return ("周报", next ?? "已过期", false)
+        }
+    }
+
+    static func closeTile(_ d: GoalsData) -> (title: String, sub: String, hot: Bool) {
+        switch d.close?.status {
+        case .preclose: return ("阶段结案", d.cycle.map { "待结案 · \(ReviewText.md($0.endsAt)) 截止" } ?? "待结案", true)
+        case .awaitingClose: return ("阶段结案", "已过结案日，待结案", true)
+        case .closed: return ("阶段结案", "已结案 · 开始新阶段", false)
+        default: return ("阶段结案", d.cycle?.precloseAt.map { "\(ReviewText.md($0)) 起可结案" } ?? "—", false)
+        }
+    }
+
+    /// The one thing worth flagging on the compact card.
+    static func pill(_ d: GoalsData) -> (text: String, tone: Tone, hot: Bool, target: ReviewTarget) {
+        if let s = d.reviews?.daily, s.status == .open {
+            let day = ReviewText.title(s).components(separatedBy: " · ").first ?? ""
+            return ((day == "今天" || day == "昨天" ? day : "") + "日报待确认", .clay, true, .session(s.id))
+        }
+        if let s = d.reviews?.weekly, s.status == .open { return ("周报待确认", .clay, true, .session(s.id)) }
+        if d.close?.status == .preclose || d.close?.status == .awaitingClose { return ("阶段待结案", .rose, true, .stage) }
+        if d.reviews?.daily?.status == .finalized { return ("日报已归档", .olive, false, .latest(.daily)) }
+        return ("查看复盘", .steel, false, .stage)
     }
 }
 
@@ -456,6 +532,8 @@ struct AttentionEntry: Identifiable, Equatable {
         case "pr_blocked", "source_down": .rose
         case "subs_renew": .ochre
         case "stale_contact": .plum
+        case "review_pending": .clay
+        case "stage_close": .rose
         default: severity == "warn" ? .clay : .steel
         }
     }
