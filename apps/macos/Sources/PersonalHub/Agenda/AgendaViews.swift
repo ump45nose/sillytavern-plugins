@@ -718,7 +718,6 @@ struct DuePickerPanel: View {
     @ViewState private var month = Date()
 
     private static let times = [(9, 0), (10, 0), (11, 0), (14, 0), (15, 0), (16, 0), (18, 0), (20, 0)]
-    private static let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
 
     var body: some View {
         let cal = Calendar.hub, today = cal.startOfDay(for: now)
@@ -735,7 +734,7 @@ struct DuePickerPanel: View {
                     choice(name, on: cal.isDate(day, inSameDayAs: d)) { day = d; month = d }
                 }
             }
-            calendar(today: today)
+            MonthCalendar(day: $day, month: $month, today: today)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Label11("时间")
@@ -770,7 +769,7 @@ struct DuePickerPanel: View {
 
     private var summary: String {
         let cal = Calendar.hub
-        let date = "\(cal.component(.month, from: day))月\(cal.component(.day, from: day))日 周" + Self.weekdays[(cal.component(.weekday, from: day) + 5) % 7]
+        let date = "\(cal.component(.month, from: day))月\(cal.component(.day, from: day))日 周" + MonthCalendar.weekdays[(cal.component(.weekday, from: day) + 5) % 7]
         return date + (time.map { String(format: " · %02d:%02d", $0.hour ?? 0, $0.minute ?? 0) } ?? " · 全天")
     }
 
@@ -786,13 +785,27 @@ struct DuePickerPanel: View {
         .buttonStyle(.plain)
     }
 
-    private func calendar(today: Date) -> some View {
+    private func nextMonday(_ today: Date) -> Date {
+        let cal = Calendar.hub, weekday = cal.component(.weekday, from: today)
+        return cal.date(byAdding: .day, value: (9 - weekday) % 7 == 0 ? 7 : (9 - weekday) % 7, to: today)!
+    }
+}
+
+/// Monday-first month grid; days before `today` are disabled.
+struct MonthCalendar: View {
+    @Binding var day: Date
+    @Binding var month: Date
+    var today: Date
+
+    static let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
+
+    var body: some View {
         let cal = Calendar.hub
         let first = cal.date(from: cal.dateComponents([.year, .month], from: month))!
         let lead = (cal.component(.weekday, from: first) + 5) % 7
         let count = cal.range(of: .day, in: .month, for: first)!.count
         let cells: [Date?] = Array(repeating: nil, count: lead) + (0..<count).map { cal.date(byAdding: .day, value: $0, to: first) }
-        return VStack(spacing: 6) {
+        VStack(spacing: 6) {
             HStack {
                 Text(verbatim: "\(cal.component(.year, from: first)) 年 \(cal.component(.month, from: first)) 月")
                     .font(Typo.sans(14, .semibold)).foregroundStyle(Palette.ink)
@@ -812,17 +825,17 @@ struct DuePickerPanel: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                 ForEach(Self.weekdays, id: \.self) { Text($0).font(Typo.sans(11)).foregroundStyle(Palette.ink3).frame(height: 20) }
                 ForEach(cells.indices, id: \.self) { i in
-                    if let d = cells[i] { dayCell(d, today: today) } else { Color.clear.frame(height: 36) }
+                    if let d = cells[i] { cell(d) } else { Color.clear.frame(height: 36) }
                 }
             }
         }
     }
 
-    private func dayCell(_ d: Date, today: Date) -> some View {
+    private func cell(_ d: Date) -> some View {
         let cal = Calendar.hub
         let selected = cal.isDate(d, inSameDayAs: day), isToday = cal.isDate(d, inSameDayAs: today), past = d < today
         return Button { day = d } label: {
-            Text("\(cal.component(.day, from: d))").font(Typo.sans(13.5, selected || isToday ? .semibold : .regular)).monospacedDigit()
+            Text(verbatim: "\(cal.component(.day, from: d))").font(Typo.sans(13.5, selected || isToday ? .semibold : .regular)).monospacedDigit()
                 .foregroundStyle(selected ? Color.white : past ? Palette.ink4 : isToday ? Tone.clay.color : Palette.ink)
                 .frame(maxWidth: .infinity).frame(height: 36)
                 .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Palette.ink : Color.clear))
@@ -830,11 +843,6 @@ struct DuePickerPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain).disabled(past)
-    }
-
-    private func nextMonday(_ today: Date) -> Date {
-        let cal = Calendar.hub, weekday = cal.component(.weekday, from: today)
-        return cal.date(byAdding: .day, value: (9 - weekday) % 7 == 0 ? 7 : (9 - weekday) % 7, to: today)!
     }
 }
 

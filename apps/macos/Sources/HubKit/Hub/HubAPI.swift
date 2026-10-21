@@ -181,6 +181,26 @@ public struct HubAPI: Sendable {
         return .saved(try decode(RemoteLayout.self, try check(data, response)).version)
     }
 
+    // MARK: Network plans
+
+    /// nil while hub-api has no plan endpoint yet (404).
+    public func netPlans() async throws -> [NetPlan]? {
+        let (data, response) = try await exchange(request("/api/v1/net/plans"))
+        if response.statusCode == 404 { return nil }
+        return try decode(NetPlans.self, try check(data, response)).items
+    }
+
+    public func putNetPlans(_ items: [NetPlan]) async throws -> [NetPlan] {
+        let body: [String: Any] = ["items": items.map { p -> [String: Any] in
+            var item: [String: Any] = ["id": p.id, "name": p.name, "total_bytes": p.totalBytes, "reset_day": p.resetDay]
+            item["expires_on"] = p.expiresOn ?? NSNull()
+            return item
+        }]
+        return try decode(NetPlans.self, try await send(request("/api/v1/net/plans", method: "PUT", body: body))).items
+    }
+
+    private struct NetPlans: Decodable { var items: [NetPlan] }
+
     // MARK: Plumbing
 
     private func path(_ s: String) -> String {

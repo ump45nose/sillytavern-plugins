@@ -555,18 +555,29 @@ struct NetModule: View {
         }
     }
 
+    @ViewState private var editing = false
+
     private struct PoolView {
-        var name: String, used: Double, total: Double, daysLeft: Int?, expires: String?
-        var remaining: Double { max(0, total - used) }
-        var pct: Double { total > 0 ? min(100, used / total * 100) : 0 }
+        var name: String, used: Double?, total: Double, daysLeft: Int?, expires: String?, periodEnd: String?
+        var remaining: Double? { used.map { max(0, total - $0) } }
+        var pct: Double { total > 0 ? min(100, (used ?? 0) / total * 100) : 0 }
     }
 
     private func pools(_ n: NetData) -> [PoolView] {
         (n.pools ?? []).compactMap { p in
-            guard let used = p.usedBytes, let total = p.totalBytes, total > 0 else { return nil }
+            guard let total = p.totalBytes, total > 0 else { return nil }
             let left = HubFormat.day(p.expiresOn).flatMap { d in Calendar.hub.dateComponents([.day], from: Calendar.hub.startOfDay(for: HubFormat.current()), to: d).day }
-            return PoolView(name: p.name, used: used / 1_073_741_824, total: total / 1_073_741_824, daysLeft: left, expires: p.expiresOn)
+            return PoolView(name: p.name, used: p.usedBytes.map { $0 / 1_073_741_824 }, total: total / 1_073_741_824,
+                            daysLeft: left, expires: p.expiresOn, periodEnd: p.periodEnd)
         }
+    }
+
+    private var editButton: some View {
+        Button { editing = true } label: {
+            Label("设置套餐", systemImage: "slider.horizontal.3").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $editing, arrowEdge: .bottom) { NetPlanEditor { editing = false }.environment(state) }
     }
 
     private func usageTone(_ pct: Double) -> Tone { pct >= 90 ? .rose : pct >= 75 ? .ochre : .sage }
@@ -578,14 +589,14 @@ struct NetModule: View {
                     ArcGauge(value: p.pct, color: usageTone(p.pct).color)
                     VStack(spacing: 0) {
                         HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            CountUp(value: p.used).font(Typo.serif(24))
+                            if let used = p.used { CountUp(value: used).font(Typo.serif(24)) } else { Text("—").font(Typo.serif(24)) }
                             Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
                         }
                         Text("已用").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3)
                     }
                 }
                 Spacer(minLength: 4)
-                Text("\(p.name) · 剩 \(HubFormat.gb(p.remaining * 1_073_741_824, 0)) GB\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
+                Text("\(p.name)\(p.remaining.map { " · 剩 \(HubFormat.gb($0 * 1_073_741_824, 0)) GB" } ?? "")\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -599,7 +610,11 @@ struct NetModule: View {
                 Text("今日 \(HubFormat.gb(n.today.map { ($0.downBytes ?? 0) + ($0.upBytes ?? 0) })) GB · ↓ \(HubFormat.gb(n.today?.downBytes)) ↑ \(HubFormat.gb(n.today?.upBytes))")
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 4)
                 Spacer(minLength: 6)
-                Text("套餐总量未接入").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                HStack {
+                    Text("未设置套餐总量").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                    Spacer()
+                    editButton
+                }
             }
         }
     }
@@ -608,8 +623,11 @@ struct NetModule: View {
         let hourly = n.hourly ?? []
         return VStack(alignment: .leading, spacing: 10) {
             let ps = pools(n)
-            if ps.isEmpty {
-                Text("套餐总量与已用暂未接入，先显示本机统计的实际流量").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            HStack {
+                Text(ps.isEmpty ? "还没设置套餐总量，先显示路由器统计的实际流量" : "套餐由你在这里设置，已用来自路由器计数")
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                Spacer()
+                editButton
             }
             ForEach(Array(ps.enumerated()), id: \.1.name) { i, p in
                 VStack(alignment: .leading, spacing: 8) {
@@ -617,15 +635,15 @@ struct NetModule: View {
                         Text(p.name).font(Typo.sans(13, .semibold))
                         Spacer()
                         Text("已用").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-                        CountUp(value: p.used, decimals: 1).font(Typo.serif(18))
+                        if let used = p.used { CountUp(value: used, decimals: 1).font(Typo.serif(18)) } else { Text("—").font(Typo.serif(18)) }
                         Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
                     }
                     Track(value: p.pct, color: usageTone(p.pct).color, delay: Double(i) * 100)
                     HStack {
-                        Text("剩 \(String(format: "%.1f", p.remaining)) GB")
-                        if let e = p.expires { Text("· \(e) 到期") }
+                        if let r = p.remaining { Text("剩 \(String(format: "%.1f", r)) GB") } else { Text("这个重置日的已用量 hub 还算不出") }
+                        if let e = p.expires { Text("· \(e) 到期") } else if let end = p.periodEnd { Text("· \(end) 重置") }
                         Spacer()
-                        if let d = p.daysLeft, d > 0 { Text("日均可用 \(String(format: "%.1f", p.remaining / Double(d))) GB") }
+                        if let d = p.daysLeft, d > 0, let r = p.remaining { Text("日均可用 \(String(format: "%.1f", r / Double(d))) GB") }
                     }
                     .font(Typo.sans(11)).foregroundStyle(Palette.ink3)
                 }
@@ -643,6 +661,169 @@ struct NetModule: View {
                 let hours = hourly.map { Calendar.hub.component(.hour, from: $0.hour) }
                 Bars(values: hourly.map { $0.bytes.map { $0 / 1_073_741_824 } }, height: 48, color: Tone.sage.color, highlight: Set(hourly.indices),
                      labels: hours.indices.map { hours[$0] % 3 == 0 || $0 == hours.count - 1 ? "\(hours[$0])" : "" })
+            }
+        }
+    }
+}
+
+/// Traffic plans entered by hand and stored on hub-api.
+struct NetPlanEditor: View {
+    var close: () -> Void
+    /// QA: start editing these instead of loading from hub.
+    var seed: [NetPlan]? = nil
+    @Environment(AppState.self) private var state
+    @ViewState private var plans: [NetPlan] = []
+    @ViewState private var phase = Phase.loading
+    @ViewState private var error: String?
+    @ViewState private var saving = false
+
+    enum Phase: Equatable { case loading, unsupported, demo, ready }
+
+    private static let gb = 1_073_741_824.0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("流量套餐").font(Typo.serif(20))
+            switch phase {
+            case .loading:
+                ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 80)
+            case .unsupported:
+                note("hub 还没提供套餐接口（已列入 hub v2 任务），上线后在这里设置。")
+            case .demo:
+                note("示例模式不会保存，连接 hub 后可以设置。")
+            case .ready:
+                ForEach($plans) { $plan in row($plan) }
+                if plans.count < 5 {
+                    Button { plans.append(NetPlan(name: plans.isEmpty ? "主套餐" : "套餐 \(plans.count + 1)", totalBytes: 200 * Self.gb)) } label: {
+                        Label("添加套餐", systemImage: "plus").font(Typo.sans(12.5))
+                    }
+                    .buttonStyle(.hubSecondary)
+                }
+                Text("已用按路由器计数统计；多个套餐共用同一个计数。").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+            }
+            if let error { Text(error).font(Typo.sans(12)).foregroundStyle(Tone.rose.color) }
+            HStack {
+                Button("取消", action: close).buttonStyle(.hubSecondary)
+                Spacer()
+                if phase == .ready {
+                    Button(saving ? "保存中…" : "保存", action: save).buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction)
+                        .disabled(saving || plans.contains { $0.name.trimmingCharacters(in: .whitespaces).isEmpty || $0.totalBytes <= 0 })
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+        .background(Palette.card)
+        .task { await load() }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(3)
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
+    }
+
+    private func row(_ plan: Binding<NetPlan>) -> some View {
+        let total = Binding(get: { plan.wrappedValue.totalBytes / Self.gb }, set: { plan.wrappedValue.totalBytes = max(0, $0) * Self.gb })
+        let expires = Binding(get: { HubFormat.day(plan.wrappedValue.expiresOn) },
+                              set: { plan.wrappedValue.expiresOn = $0.map { ReviewText.dayKey($0) } })
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                TextField("名称", text: plan.name).textFieldStyle(.plain).font(Typo.sans(13, .semibold))
+                Button { plans.removeAll { $0.id == plan.wrappedValue.id } } label: {
+                    Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(Palette.ink3)
+                }
+                .buttonStyle(.plain).help("删除这个套餐")
+            }
+            HStack(spacing: 14) {
+                field("总量") {
+                    TextField("", value: total, format: .number.precision(.fractionLength(0...1))).textFieldStyle(.plain)
+                        .font(Typo.sans(13)).monospacedDigit().frame(width: 60)
+                    Text("GB").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                }
+                field("每月") {
+                    ForEach([-1, 1], id: \.self) { step in
+                        let next = plan.wrappedValue.resetDay + step
+                        Button { plan.wrappedValue.resetDay = next } label: {
+                            Image(systemName: step < 0 ? "minus" : "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.ink2)
+                                .frame(width: 20, height: 22).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).disabled(!(1...28).contains(next))
+                        if step < 0 { Text(verbatim: "\(plan.wrappedValue.resetDay) 日重置").font(Typo.sans(12.5)).monospacedDigit().frame(minWidth: 58) }
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                Text("到期").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                ExpiryButton(date: expires)
+                if expires.wrappedValue != nil {
+                    Button("不设到期") { expires.wrappedValue = nil }.buttonStyle(.plain).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                }
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.line2))
+    }
+
+    private func field(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+            content()
+        }
+        .padding(.horizontal, 10).frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.line))
+    }
+
+    private func load() async {
+        if let seed { plans = seed; phase = .ready; return }
+        guard state.hub.mode == .hub else { phase = .demo; return }
+        do {
+            if let items = try await state.hub.netPlans() { plans = items; phase = .ready } else { phase = .unsupported }
+        } catch {
+            self.error = error.localizedDescription
+            phase = .unsupported
+        }
+    }
+
+    private func save() {
+        saving = true
+        error = nil
+        Task {
+            defer { saving = false }
+            do {
+                plans = try await state.hub.saveNetPlans(plans.map { var p = $0; p.name = p.name.trimmingCharacters(in: .whitespaces); return p })
+                close()
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+private struct ExpiryButton: View {
+    @Binding var date: Date?
+    @ViewState private var open = false
+    @ViewState private var day = Date()
+    @ViewState private var month = Date()
+
+    var body: some View {
+        Button { open = true } label: {
+            Chip(text: date.map { ReviewText.dayKey($0) } ?? "长期有效 · 设置到期日", tone: date == nil ? nil : .sky, systemImage: "calendar")
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(spacing: 14) {
+                MonthCalendar(day: $day, month: $month, today: Calendar.hub.startOfDay(for: HubFormat.current()))
+                HStack {
+                    Button("取消") { open = false }.buttonStyle(.hubSecondary)
+                    Spacer()
+                    Button("确定") { date = day; open = false }.buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(18).frame(width: 340).background(Palette.card)
+            .onAppear {
+                day = date ?? Calendar.hub.date(byAdding: .month, value: 1, to: HubFormat.current())!
+                month = day
             }
         }
     }

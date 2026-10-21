@@ -90,6 +90,11 @@ enum QARender {
         await shot("settings-account", width: 560, height: 440, SettingsView(tab: 2))
         await shot("settings-data", width: 560, height: 440, SettingsView(tab: 3))
         await shot("quick-memo", width: 600, QuickMemoView(close: {}))
+        await shot("net-plans", width: 400, NetPlanEditor(close: {}, seed: [
+            NetPlan(id: "a", name: "主力机场", totalBytes: 500 * 1_073_741_824, resetDay: 1, expiresOn: "2026-12-01"),
+            NetPlan(id: "b", name: "备用", totalBytes: 100 * 1_073_741_824, resetDay: 15),
+        ]))
+        await shot("net-detail", width: 640, ModuleCard(item: LayoutItem(.net, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
         await shot("due-picker", width: 372, DuePickerPanel(picked: .constant(PickedDue(day: state.agenda.now, time: DateComponents(hour: 15, minute: 0))), now: state.agenda.now) {})
         for range in TokenRange.allCases {

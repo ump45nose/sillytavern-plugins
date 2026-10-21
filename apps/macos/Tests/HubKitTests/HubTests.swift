@@ -8,6 +8,8 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
     var offline = false
     var statusCode = 200
     var breakModule: String?
+    /// Whether this hub has shipped `/api/v1/net/plans`.
+    var plans = false
     private(set) var paths: [String] = []
     private(set) var authorizations: [String?] = []
     private(set) var bodies: [[String: Any]] = []
@@ -19,7 +21,7 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (offline, code, broken) = locked { (self.offline, statusCode, breakModule) }
+        let (offline, code, broken, plans) = locked { (self.offline, statusCode, breakModule, self.plans) }
         if offline { throw URLError(.notConnectedToInternet) }
         let url = request.url!
         let path = url.path + (url.query.map { "?" + $0 } ?? "")
@@ -39,6 +41,9 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
             body = Self.token(range)
         case "/api/v1/status": body = Self.status
         case "/api/v1/memos": body = #"{"id": "abc", "created_at": "2026-10-20T18:00:00.123456+08:00"}"#
+        case "/api/v1/net/plans" where plans:
+            body = request.httpMethod == "PUT" ? String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+                : #"{"items": [{"id": "main", "name": "主套餐", "total_bytes": 214748364800, "reset_day": 1, "expires_on": null}]}"#
         default: return (Data(), HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!)
         }
         return (Data(body.utf8), response)
@@ -159,6 +164,22 @@ private func makeSync(_ hub: FakeHub, file: URL? = nil) async -> HubSync {
     let body = hub.locked { hub.bodies.last }
     #expect(body?["content"] as? String == "记一条 #想法")
     #expect(body?["visibility"] as? String == "PRIVATE")
+}
+
+@Test func netPlansAreOptionalUntilHubShipsThem() async throws {
+    let hub = FakeHub()
+    let api = HubAPI(transport: hub, credential: credential)
+    #expect(try await api.netPlans() == nil)
+
+    hub.locked { hub.plans = true }
+    let plans = try #require(try await api.netPlans())
+    #expect(plans == [NetPlan(id: "main", name: "主套餐", totalBytes: 200 * 1_073_741_824)])
+
+    let saved = try await api.putNetPlans([NetPlan(id: "a", name: "机场", totalBytes: 500, resetDay: 15, expiresOn: "2026-12-31")])
+    #expect(saved.first?.resetDay == 15 && saved.first?.expiresOn == "2026-12-31")
+    let item = (hub.locked { hub.bodies.last }?["items"] as? [[String: Any]])?.first
+    #expect(item?["total_bytes"] as? Double == 500)
+    #expect(item?["reset_day"] as? Int == 15)
 }
 
 @Test func pythonTimestampsParse() {

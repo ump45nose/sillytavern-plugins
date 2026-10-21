@@ -297,6 +297,23 @@ final class HubModel {
         return try await live(api)
     }
 
+    /// nil while hub-api has no plan endpoint.
+    func netPlans() async throws -> [NetPlan]? {
+        guard let api else { throw WriteError.demo }
+        do { return try await api.netPlans() } catch let e as HubError { throw WriteError.hub(e) }
+    }
+
+    func saveNetPlans(_ plans: [NetPlan]) async throws -> [NetPlan] {
+        guard let api else { throw WriteError.demo }
+        do {
+            let saved = try await api.putNetPlans(plans)
+            refresh()
+            return saved
+        } catch let e as HubError {
+            throw WriteError.hub(e)
+        }
+    }
+
     func postMemo(_ content: String, visibility: String = "PRIVATE") async throws {
         guard let api else { throw WriteError.demo }
         do {
