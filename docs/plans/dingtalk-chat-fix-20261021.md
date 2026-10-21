@@ -33,3 +33,5 @@
 - 宿主启动检查返回 1：missing=[]、stopped_planned=[]，active_unplanned 为 ai-resource-center、oauth-disclosure；本次未新增容器，未修改他人启动计划。源码描述已同步至日常范围，没有发布历史包装包或更换原生 App。
 - 已请求用户在原生连接执行 Refresh 并新开会话确认本人发送工具；当前环境没有连接刷新 API。实际插件目录同步和真实发送仍待验收，不能宣称私聊修复完成。
 - 用户随后确认“已刷新，新会话能看到本人发送工具”。目录同步验收按用户反馈通过；本故障会话的工具列表仍旧，未将它当作新会话的实测结果。真实发送尚未执行，已提出具体的“小虾米”收件人及测试文本，等待用户确认实际投递。
+- 用户明确确认发送后，于 2026-10-21 12:45:40 经同一公网 MCPHub 的北向 OAuth 调用 `dingtalk-chat-send_personal_message`，向“小虾米”发送约定测试文本一次，取得 openTaskId；`dingtalk-im-query_message_send_status` 返回 `SUCCESS` 和 openMessageId，再用 `list_messages_by_ids` 回读，确认 `sendType=user`、发送人为当前账号、正文及消息/会话标识一致。用户确认新会话工具发现，本轮实测公网 MCP 业务发送与回读；未通过客户端操作或本地 dws 发送。
+- 本人文本私聊验收通过；群发送、附件和其他消息类型不在此次实测范围。完整请求和结果保存在仓库外 `personal-test-*.json`，不将个人标识或消息记录提交到源码。日常清单保持 245 项。

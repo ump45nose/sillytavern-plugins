@@ -63,7 +63,9 @@ dws 的本地 HTML/Markdown 转换、文件下载落盘、组合命令和 Stream
 
 本次实际用户插件为 [原生钉钉连接](https://chatgpt.com/plugins/plugin_asdk_app_6ac287394cdc819192509b34e64e6557)，其 App ID 为 `asdk_app_6ac287394cdc819192509b34e64e6557`。上述早期插件包与 `.app.json` 引用历史包装 App，不能用上传包装包替代刷新这个原生连接，也不新建身份。
 
-工具目录更新后，在原生连接详情执行 Refresh，确认出现本人发送入口，然后新开会话测试。故障会话原先只有旧的 411 个工具，缺 chat/im；2026-10-21 用户刷新后确认新会话已能看到本人发送工具，目录同步按用户反馈验收通过。真实发送仍待测试，不能将工具出现等同于发送成功。官方流程见 [连接与测试](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt/)。
+工具目录更新后，在原生连接详情执行 Refresh，确认出现本人发送入口，然后新开会话测试。故障会话原先只有旧的 411 个工具，缺 chat/im；2026-10-21 用户刷新后确认新会话已能看到本人发送工具，目录同步按用户反馈验收通过。官方流程见 [连接与测试](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt/)。
+
+用户明确确认测试消息后，已通过既有公网 MCP 调用 `send_personal_message` 向“小虾米”投递一次文本私聊，发送状态返回 `SUCCESS`；按消息 ID 回读确认发送类型为 `user`、发送人为当前账号，正文及消息/会话标识一致。本次本人文本私聊实测通过，没有通过客户端或本地 dws 发送；群消息、附件及其他消息类型未在本轮测试。
 
 ## NAS Tunnel 接入
 
