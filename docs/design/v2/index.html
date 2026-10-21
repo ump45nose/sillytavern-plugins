@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Personal Hub · v2 设计稿（待审阅）</title>
+<style>
+  :root {
+    --canvas:#E7E2D6; --bg:#F4F1EA; --side:#ECE8DE; --card:#FFFDF8; --sunk:#F6F3EC;
+    --line:#E6E0D3; --line2:#EFEAE0; --ink:#1F1E1B; --ink2:#5E5D59; --ink3:#93918A; --ink4:#B9B6AD;
+    --clay:#D97757; --clayT:#F7E4DA; --olive:#7D8F5E; --oliveT:#E7EBDD; --sky:#6A9BCC; --skyT:#E2EBF4;
+    --plum:#9C7BA0; --plumT:#EFE6EF; --rose:#C97B84; --roseT:#F5E3E5; --steel:#5F7A99; --steelT:#E3E9F0;
+    --ochre:#C9A23F; --ochreT:#F5ECD3; --kraft:#C99A6E; --sage:#7FA394;
+    --serif:"New York","Songti SC",Georgia,serif; --sans:-apple-system,"PingFang SC",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); font-family:var(--sans); color:var(--ink); font-size:13px; }
+  .doc { max-width:1240px; margin:0 auto; padding:40px 32px 80px; }
+  h1 { font-family:var(--serif); font-weight:400; font-size:34px; margin:0 0 6px; }
+  .lead { color:var(--ink2); margin:0 0 26px; }
+  nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:34px; }
+  nav a { text-decoration:none; color:var(--ink2); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:999px; }
+  section { margin-bottom:56px; }
+  .sh { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+  .sh h2 { font-family:var(--serif); font-weight:400; font-size:24px; margin:0; }
+  .tag { font-size:11px; color:var(--clay); background:var(--clayT); padding:2px 8px; border-radius:999px; }
+  .note { color:var(--ink3); font-size:12px; margin:0 0 16px; line-height:1.6; }
+  .win { background:var(--bg); border-radius:14px; box-shadow:0 20px 50px rgba(60,40,10,.14); overflow:hidden; border:1px solid var(--line); }
+  .wbar { height:34px; display:flex; align-items:center; gap:7px; padding:0 14px; background:var(--side); border-bottom:1px solid var(--line); }
+  .wbar i { width:11px; height:11px; border-radius:50%; background:#E6DFD2; display:inline-block; }
+  .wbar span { margin-left:10px; color:var(--ink3); font-size:11.5px; }
+  .grid { display:grid; gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; }
+  .ch { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+  .ico { width:26px; height:26px; border-radius:8px; display:grid; place-items:center; font-size:13px; }
+  .ct { font-weight:600; }
+  .meta { color:var(--ink3); font-size:11px; }
+  .hero { font-family:var(--serif); font-size:36px; letter-spacing:-.5px; }
+  .unit { color:var(--ink3); font-size:12px; margin-left:4px; }
+  .l11 { color:var(--ink3); font-size:11px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:3px 10px; border-radius:999px; background:var(--sunk); border:1px solid var(--line2); color:var(--ink2); }
+  .chip.on { background:var(--skyT); color:var(--sky); border-color:transparent; font-weight:500; }
+  .chip.clay { background:var(--clayT); color:var(--clay); border-color:transparent; }
+  .chip.rose { background:var(--roseT); color:var(--rose); border-color:transparent; }
+  .chip.olive { background:var(--oliveT); color:var(--olive); border-color:transparent; }
+  .seg { display:inline-flex; gap:2px; padding:3px; background:var(--sunk); border-radius:10px; }
+  .seg b { font-weight:400; color:var(--ink3); padding:4px 13px; border-radius:7px; cursor:pointer; font-size:12.5px; }
+  .seg b.on { background:var(--card); color:var(--ink); font-weight:600; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+  .st { display:flex; align-items:center; gap:8px; color:var(--ink3); font-size:11px; letter-spacing:.5px; margin:16px 0 8px; }
+  .st::after { content:""; flex:1; height:1px; background:var(--line2); }
+  .row { display:flex; align-items:center; gap:10px; }
+  .sp { flex:1; }
+  .bar { height:6px; border-radius:6px; background:#EEE8DC; overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:6px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; background:var(--ink); color:#fff; font-weight:600; font-size:12.5px; padding:7px 14px; border-radius:8px; }
+  .btn.sec { background:var(--sunk); color:var(--ink); font-weight:400; border:1px solid var(--line); }
+  .kbd { font-size:10.5px; color:var(--ink3); border:1px solid var(--line); background:var(--card); border-radius:5px; padding:1px 6px; }
+  .md h3 { font-family:var(--serif); font-weight:400; font-size:19px; margin:4px 0 10px; }
+  .md h4 { font-size:12.5px; margin:16px 0 6px; color:var(--ink2); }
+  .md p { margin:0 0 8px; line-height:1.75; color:var(--ink2); }
+  .md .who { font-weight:600; color:var(--ink); margin-right:6px; }
+  .md blockquote { margin:8px 0; padding:6px 12px; border-left:2px solid var(--line); color:var(--ink2); background:var(--sunk); border-radius:0 8px 8px 0; }
+  .side { background:var(--side); }
+  .list .it { padding:11px 12px; border-radius:12px; }
+  .list .it.on { background:var(--card); box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  .list .tt { font-weight:600; margin:3px 0; }
+  .heat { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,11px); grid-auto-columns:11px; justify-content:start; gap:3px; }
+  .heat i { width:11px; height:11px; border-radius:2px; display:block; }
+  .heat.big { grid-template-rows:repeat(7,16px); grid-auto-columns:16px; gap:4px; }
+  .heat.big i { width:16px; height:16px; border-radius:3px; }
+  .btn, .chip { white-space:nowrap; }
+  .flowc { display:flex; flex-wrap:wrap; gap:6px; }
+  .pend { border:1.5px dashed var(--clay); background:#FFF8F3; }
+  .ai { background:var(--plumT); color:var(--plum); font-size:10.5px; padding:1px 7px; border-radius:999px; margin-left:6px; }
+  .field { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; color:var(--ink); line-height:1.6; }
+  .field.ai-f { border-color:rgba(156,123,160,.55); background:#FDFAFD; }
+  code { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; background:var(--sunk); padding:1px 5px; border-radius:4px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>v2 设计稿 · 待审阅</h1>
+  <p class="lead">对应 <code>docs/plans/2026-10-21-v2-proposals.md</code>。示例数据为虚构，仅表达布局与交互。</p>
+  <nav>
+    <a href="#plaud">1 · Plaud 录音</a><a href="#token">2 · Token</a><a href="#memos">3 · Memos 原生页</a>
+    <a href="#review">4 · 复盘页与尺寸</a><a href="#agent">5 · 本地 agent</a><a href="#daily">6 · 日报起草</a>
+  </nav>
+
+  <!-- 1 Plaud -->
+  <section id="plaud">
+    <div class="sh"><h2>Plaud 录音</h2><span class="tag">新模块</span></div>
+    <p class="note">简略卡放在主页 / 生活页；详细卡与独立页同结构：左列表、右转录稿，音频是转录稿顶部的附件条。</p>
+    <div class="grid" style="grid-template-columns:300px 1fr;align-items:start">
+      <div class="card" style="height:192px;display:flex;flex-direction:column">
+        <div class="ch"><div class="ico" style="background:var(--roseT);color:var(--rose)">◉</div><span class="ct">录音</span><span class="meta">19:15</span></div>
+        <div class="l11">今天 14:20 · 52 分钟 · 李雷、韩梅梅</div>
+        <div style="font-weight:600;margin-top:4px">迁移方案评审</div>
+        <div style="color:var(--ink2);font-size:12px;margin-top:4px;line-height:1.5">确定先迁健康与账单；交流数据等 CRM 接口稳定后再迁，周五前给出回滚预案。</div>
+        <div class="sp"></div>
+        <div class="row"><span class="chip rose">▶ 今天 2 段 · 1:46:52</span></div>
+      </div>
+      <div class="win">
+        <div class="wbar"><i></i><i></i><i></i><span>录音 · Plaud</span></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;min-height:470px">
+          <div class="side list" style="padding:12px">
+            <div class="l11" style="padding:4px 8px 6px">今天 · 10 月 21 日</div>
+            <div class="it on"><div class="l11">14:20 · 52 分钟</div><div class="tt">迁移方案评审</div><div class="l11">李雷、韩梅梅</div></div>
+            <div class="it"><div class="l11">10:05 · 54 分钟</div><div class="tt">周会</div><div class="l11">项目组 6 人</div></div>
+            <div class="l11" style="padding:14px 8px 6px">昨天 · 10 月 20 日</div>
+            <div class="it"><div class="l11">20:30 · 18 分钟</div><div class="tt">和妈妈通话</div><div class="l11">妈妈</div></div>
+            <div class="it"><div class="l11">15:10 · 33 分钟</div><div class="tt">面试复盘</div><div class="l11">陈老师</div></div>
+          </div>
+          <div style="padding:20px 26px" class="md">
+            <div class="l11">今天 14:20 – 15:12 · 李雷、韩梅梅</div>
+            <h3>迁移方案评审</h3>
+            <div class="row" style="background:var(--roseT);border-radius:10px;padding:8px 10px;margin-bottom:14px">
+              <span style="width:26px;height:26px;border-radius:50%;background:var(--rose);color:#fff;display:grid;place-items:center;font-size:10px">▶</span>
+              <div class="bar" style="flex:1;min-width:80px;height:4px;background:#EBCBD0"><i style="width:34%;background:var(--rose)"></i></div>
+              <span class="l11" style="color:var(--rose);white-space:nowrap">17:40 / 52:10</span>
+              <span class="chip rose" style="padding:2px 8px">1.5×</span>
+              <span class="l11" style="white-space:nowrap">m4a · 48 MB</span>
+            </div>
+            <h4>摘要</h4>
+            <p>确定先迁健康与账单两个数据源；交流数据等 CRM 接口稳定后再迁。周五前给出回滚预案，下周一灰度。</p>
+            <h4>逐字稿</h4>
+            <p><span class="who" style="color:var(--steel)">李雷</span>健康这块的 SQLite 已经独立出来了，审计报告也核对过，我觉得可以先切。</p>
+            <p><span class="who" style="color:var(--clay)">我</span>那账单一起切，AutoAccounting 的导入口径没变。交流先别动。</p>
+            <blockquote>决定：健康、账单本周切换；交流延后。</blockquote>
+            <p><span class="who" style="color:var(--plum)">韩梅梅</span>回滚预案我来写，周五前发群里。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 Token -->
+  <section id="token">
+    <div class="sh"><h2>Token 用量</h2><span class="tag">重做 · 对齐 Token Monitor</span></div>
+    <p class="note">上半区固定「全部时间」，切换热力图 / 趋势；下半区按日 / 周 / 月看额度、工具、模型、设备、会话。</p>
+    <div class="card" style="padding:20px 22px">
+      <div class="ch"><div class="ico" style="background:var(--clayT);color:var(--clay)">⬡</div><span class="ct">Token 用量</span><span class="meta">Token Monitor · 19:15</span></div>
+      <div class="row" style="align-items:flex-end;gap:28px">
+        <div><div class="l11">全部时间 · 9/16 起 36 天</div><span class="hero">41.6</span><span class="unit">B tokens</span></div>
+        <div><div class="l11">估算成本</div><div style="font-family:var(--serif);font-size:20px">$12,480</div></div>
+        <div><div class="l11">日均</div><div style="font-family:var(--serif);font-size:20px">1.16B</div></div>
+        <div><div class="l11">最高一天</div><div style="font-family:var(--serif);font-size:20px">10/19 · 3.2B</div></div>
+        <div class="sp"></div>
+        <div class="seg" id="tkMode"><b class="on" data-v="heat">热力图</b><b data-v="trend">趋势</b></div>
+      </div>
+      <div id="tkHeat" style="margin-top:16px"><div class="heat big" id="heat"></div>
+        <div class="row l11" style="margin-top:8px;width:916px"><span style="width:180px">1 月</span><span style="width:180px">3 月</span><span style="width:180px">5 月</span><span style="width:180px">7 月</span><span>9 月 · 数据起点 9/16</span></div>
+        <div class="row l11" style="margin-top:4px"><span>空格为 Token Monitor 接入前；跨年后按年份翻页</span><span class="sp"></span><span>少</span>
+          <span style="display:inline-flex;gap:3px"><i style="width:10px;height:10px;background:#EFEAE0;border-radius:2px"></i><i style="width:10px;height:10px;background:#F4DDD0;border-radius:2px"></i><i style="width:10px;height:10px;background:#EDBBA3;border-radius:2px"></i><i style="width:10px;height:10px;background:#E3977A;border-radius:2px"></i><i style="width:10px;height:10px;background:#D97757;border-radius:2px"></i><i style="width:10px;height:10px;background:#B35A3D;border-radius:2px"></i></span><span>多</span></div>
+      </div>
+      <div id="tkTrend" class="hidden" style="margin-top:16px">
+        <svg viewBox="0 0 1000 150" width="100%" height="150" preserveAspectRatio="none">
+          <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#D97757" stop-opacity=".25"/><stop offset="1" stop-color="#D97757" stop-opacity="0"/></linearGradient></defs>
+          <path id="area" fill="url(#g)"/><path id="line" fill="none" stroke="#D97757" stroke-width="2"/><path id="avg" fill="none" stroke="#5E5D59" stroke-width="1.4" stroke-dasharray="4 4"/>
+        </svg>
+        <div class="row l11"><span>9/16</span><span class="sp"></span><span>— 每日　- - 7 日均线</span><span class="sp"></span><span>今天</span></div>
+      </div>
+
+      <div class="row" style="margin-top:22px"><div class="seg" id="tkRange"><b>日</b><b class="on">周</b><b>月</b></div><span class="l11" style="margin-left:10px">近 7 天 · 10/15 – 10/21 · 8.18B · 较上周 ↑129%</span></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:14px">
+        <div><div class="st">额度 · 实时</div>
+          <div style="background:var(--sunk);border-radius:12px;padding:12px 14px">
+            <div class="row"><b>Codex</b><span class="sp"></span><span class="chip">Pro</span></div>
+            <div class="row" style="margin-top:8px"><span>周额度</span><span class="sp"></span><span style="font-family:var(--serif)">86% 已用</span></div>
+            <div class="bar" style="margin-top:6px;height:8px"><i style="width:86%;background:var(--steel)"></i></div><div class="l11" style="margin-top:4px">10/27 重置 · 5 天后</div>
+            <div class="row" style="margin-top:12px"><b>Cursor</b><span class="sp"></span><span class="chip">Enterprise</span></div>
+            <div class="row" style="margin-top:8px"><span>Grok Bot</span><span class="sp"></span><span style="font-family:var(--serif)">42% 已用</span></div>
+            <div class="bar" style="margin-top:6px;height:8px"><i style="width:42%;background:var(--ink4)"></i></div>
+          </div>
+        </div>
+        <div><div class="st">工具</div><div id="tools"></div><div class="st">设备</div><div id="devices"></div></div>
+        <div><div class="st">模型</div><div id="models"></div></div>
+      </div>
+      <div class="st">会话 · 用量最高</div>
+      <div id="sessions"></div>
+    </div>
+  </section>
+
+  <!-- 3 Memos -->
+  <section id="memos">
+    <div class="sh"><h2>Memos 原生页</h2><span class="tag">第一步：只读时间线 + 发布</span></div>
+    <p class="note">替换现在内嵌的网页。左栏发布、标签、活跃格；主区卡片流。编辑 / 删除第一步先跳 Memos，第二步再做卡片内操作。</p>
+    <div class="win">
+      <div class="wbar"><i></i><i></i><i></i><span>Personal Hub / Memos</span></div>
+      <div style="display:grid;grid-template-columns:300px 1fr;min-height:460px">
+        <div class="side" style="padding:16px">
+          <div class="field" style="min-height:84px;color:var(--ink3)">现在的想法是…</div>
+          <div class="row" style="margin-top:8px"><span class="chip">私密</span><span class="sp"></span><span class="btn" style="padding:5px 12px">发布 ⌘↩</span></div>
+          <div class="st">标签</div>
+          <div class="flowc"><span class="chip on">全部 · 214</span><span class="chip">#日报 · 38</span><span class="chip">#周报 · 6</span><span class="chip">#想法 · 52</span><span class="chip">#读书 · 17</span><span class="chip">#工作 · 61</span></div>
+          <div class="st">近 12 周</div>
+          <div class="heat" id="memoHeat"></div>
+        </div>
+        <div style="padding:18px 24px">
+          <div class="row" style="margin-bottom:12px"><div class="field" style="flex:1;color:var(--ink3)">⌕ 搜索 Memo…</div></div>
+          <div class="card" style="margin-bottom:10px"><div class="row l11"><span>今天 21:33</span><span class="chip" style="padding:1px 8px">私密</span><span class="sp"></span><span>⋯</span></div>
+            <p style="line-height:1.75;margin:8px 0">一句话总结今天：还在疯狂加班，但迁移方案终于定了。<br>情绪：疲惫、期待</p><span class="chip olive">#日报</span> <span class="chip olive">#2026-10-21</span></div>
+          <div class="card" style="margin-bottom:10px"><div class="row l11"><span>今天 15:02</span><span class="chip" style="padding:1px 8px">公开</span><span class="sp"></span><span>⋯</span></div>
+            <p style="line-height:1.75;margin:8px 0">菜单栏面板做成模块化以后，「今天」页应该只放今天能处理的东西，其他的进「生活」「工作」。</p><span class="chip olive">#想法</span></div>
+          <div class="card"><div class="row l11"><span>昨天 23:10</span><span class="sp"></span><span>⋯</span></div>
+            <p style="line-height:1.75;margin:8px 0">《置身事内》第 3 章：地方政府的土地财政……</p>
+            <div class="row"><span style="width:64px;height:64px;border-radius:8px;background:var(--kraft);opacity:.5"></span><span style="width:64px;height:64px;border-radius:8px;background:var(--sage);opacity:.5"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 Review page -->
+  <section id="review">
+    <div class="sh"><h2>复盘页 · 模块尺寸</h2><span class="tag">复盘进主窗口</span></div>
+    <p class="note">复盘成为侧栏内置页（⌘6），结构与电脑历史页一致；确认按钮常驻右上角。右侧示意详细卡片的宽度（已上线）与三档高度（建议）。</p>
+    <div class="grid" style="grid-template-columns:1fr 280px;align-items:start">
+      <div class="win">
+        <div class="wbar"><i></i><i></i><i></i><span>Personal Hub / 复盘</span></div>
+        <div style="display:grid;grid-template-columns:150px 230px 1fr;min-height:420px">
+          <div class="side" style="padding:14px 10px;font-size:12.5px;line-height:2.2;color:var(--ink2)">主页<br>生活<br>用量<br>电脑历史<br>Memos<br><b style="background:var(--card);display:block;border-radius:8px;padding:0 8px;color:var(--ink)">复盘　<span class="kbd">⌘6</span></b></div>
+          <div style="border-right:1px solid var(--line);padding:14px" class="list">
+            <div class="it"><div class="tt">本阶段</div><div class="l11">第 38 / 42 天</div></div>
+            <div class="st">日报</div>
+            <div class="it on"><div class="row"><span class="tt">今天 · 10 月 21 日</span><span class="sp"></span><span class="chip clay">待确认</span></div></div>
+            <div class="it"><div class="row"><span>10 月 20 日</span><span class="sp"></span><span class="chip olive">已归档</span></div></div>
+            <div class="st">周报</div>
+            <div class="it"><div class="row"><span>第 42 周</span><span class="sp"></span><span class="chip clay">待确认</span></div></div>
+          </div>
+          <div style="padding:18px 22px">
+            <div class="row"><span style="font-family:var(--serif);font-size:22px;white-space:nowrap">今天 · 日报</span><span class="chip clay">待确认</span><span class="sp"></span><span class="l11">还有 1 项待填写</span><span class="btn">预览并确认 <span style="opacity:.6;font-weight:400">⌘↩</span></span></div>
+            <div class="st">一句话总结今天</div><div class="field">迁移方案终于定了，先切健康和账单。</div>
+            <div class="st">情绪</div><div class="flowc"><span class="chip clay">疲惫</span><span class="chip clay">期待</span><span class="chip">平静</span><span class="chip">焦虑</span></div>
+            <div class="st">明天唯一重点</div><div class="field" style="color:var(--ink3)">明天只做好一件事</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="ch"><span class="ct">编辑布局时</span><span class="sp"></span>
+            <span class="kbd">⇥⇤</span><span class="l11">6/12</span><span class="kbd">⇤⇥</span></div>
+          <div class="l11" style="line-height:1.7">详细卡片可在 4–12 列间调宽（已上线）。高度三档：</div>
+          <div class="row" style="margin-top:10px"><div class="seg"><b class="on">自动</b><b>中</b><b>高</b></div></div>
+          <div class="l11" style="margin-top:8px;line-height:1.7">「中」约 360pt、「高」约 560pt，内容超出在卡片内滚动。自由拖拽不建议。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 Agent -->
+  <section id="agent">
+    <div class="sh"><h2>本地 agent 接入</h2><span class="tag">一个 MCP 服务，四家通用</span></div>
+    <p class="note">左：⌘K 里的「问 AI」；中：agent 提出的写入进入待确认队列；右：设置里的「连接 agent」。</p>
+    <div class="grid" style="grid-template-columns:1.2fr 1fr 1fr;align-items:start">
+      <div class="card">
+        <div class="field" style="display:flex;gap:8px;align-items:center"><span style="color:var(--clay)">✦</span><span>把明天下午的评审挪到周五，并提醒我准备回滚预案</span></div>
+        <div class="row" style="margin-top:8px"><span class="chip on">问 AI · Codex</span><span class="chip">搜索</span><span class="sp"></span><span class="l11">经 personal-hub MCP</span></div>
+        <div style="margin-top:12px;color:var(--ink2);line-height:1.75">已找到「迁移方案评审」明天 14:00。准备了两项改动，等你确认：</div>
+        <div class="l11" style="margin-top:8px;line-height:1.8">· 读取 agenda.events（明天）<br>· 读取 tasks.search「回滚」</div>
+      </div>
+      <div class="card pend">
+        <div class="row"><b>待确认 · 2 项</b><span class="sp"></span><span class="l11">来自 Codex · 19:20</span></div>
+        <div style="margin-top:10px;padding:10px;background:var(--card);border-radius:10px;border:1px solid var(--line)">
+          <div class="l11">改日程</div><div style="margin-top:2px">迁移方案评审　<s style="color:var(--ink3)">明天 14:00</s> → 周五 14:00</div></div>
+        <div style="margin-top:8px;padding:10px;background:var(--card);border-radius:10px;border:1px solid var(--line)">
+          <div class="l11">新任务 · 清单「工作」</div><div style="margin-top:2px">准备回滚预案 · 周四</div></div>
+        <div class="row" style="margin-top:12px"><span class="btn sec">全部拒绝</span><span class="sp"></span><span class="btn">确认 2 项</span></div>
+      </div>
+      <div class="card">
+        <div class="ct">连接 agent</div>
+        <div class="l11" style="margin:4px 0 10px">本机 MCP：Personal Hub.app --mcp（stdio）</div>
+        <div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><b>Codex</b><span class="chip olive">已连接</span><span class="sp"></span><span class="l11">config.toml</span></div>
+        <div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><b>Claude Code</b><span class="chip">未连接</span><span class="sp"></span><span class="btn sec" style="padding:3px 10px">复制命令</span></div>
+        <div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><b>pi</b><span class="chip">未连接</span><span class="sp"></span><span class="btn sec" style="padding:3px 10px">复制配置</span></div>
+        <div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><b>Antigravity</b><span class="chip">未检测到</span></div>
+        <div class="st">写入权限</div>
+        <div class="l11" style="line-height:1.8">任务 / 日程 / Memo 草稿 / 复盘草稿：需确认<br>复盘终稿、阶段结案：不开放</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 Daily -->
+  <section id="daily">
+    <div class="sh"><h2>日报起草</h2><span class="tag">只产生草稿</span></div>
+    <p class="note">日报编辑区新增「AI 起草」：本机 agent（方案 A）或请灵珺（方案 B）。返回的字段标「AI 建议」，你改完再预览并确认；确认链路不变。</p>
+    <div class="win">
+      <div class="wbar"><i></i><i></i><i></i><span>复盘 · 今天 · 日报</span></div>
+      <div style="display:grid;grid-template-columns:1fr 460px;gap:20px;padding:20px 24px;min-height:400px">
+        <div>
+          <div class="row"><span class="l11">灵珺发来的</span><span class="sp"></span><div class="seg"><b class="on">灵珺</b><b>材料</b></div></div>
+          <div class="md" style="margin-top:12px"><h4>今天的材料</h4><p>上午在 Personal Hub 里把模块接上了 hub-api，下午写了复盘入口的方案。和陈老师聊到下一阶段的方向。</p>
+            <h4>想问你的</h4><p>如果 App 里确认变成习惯，Telegram 还需要保留到什么程度？</p></div>
+        </div>
+        <div>
+          <div class="row" style="margin-bottom:12px"><span class="btn sec">✦ AI 起草 ▾</span><span class="l11">本机 Codex · 用了材料、电脑历史、交流摘要</span><span class="sp"></span><span class="btn">预览并确认</span></div>
+          <div class="row"><b>一句话总结今天</b><span class="ai">AI 建议</span><span class="sp"></span><span class="l11">18 / 45</span></div>
+          <div class="field ai-f" style="margin:6px 0 12px">模块接上真实数据，复盘入口有了方案。</div>
+          <div class="row"><b>情绪</b><span class="ai">AI 建议</span></div>
+          <div class="flowc" style="margin:6px 0 12px"><span class="chip clay">满足</span><span class="chip clay">期待</span><span class="chip">疲惫</span><span class="chip">平静</span></div>
+          <div class="row"><b>未解</b><span class="ai">AI 建议</span></div>
+          <div class="field ai-f" style="margin:6px 0 12px">[ ] Telegram 确认保留到什么程度</div>
+          <div class="row"><b>明天唯一重点</b></div>
+          <div class="field" style="margin:6px 0 0;color:var(--ink3)">明天只做好一件事（AI 不代填）</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  const heat = ["#EFEAE0","#F4DDD0","#EDBBA3","#E3977A","#D97757","#B35A3D"];
+  let seed = 7; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+  const days = 36, vals = Array.from({length: days}, (_, i) => Math.round((0.3 + rnd() * 0.7) * (0.4 + i / days) * 5));
+  const h = document.getElementById("heat");
+  const pad = 7 * 46 - days - 3; for (let i = 0; i < pad; i++) { const c = document.createElement("i"); c.style.background = "#F6F3EC"; h.appendChild(c); }
+  vals.forEach((v, i) => { const c = document.createElement("i"); c.style.background = heat[Math.min(5, v)]; c.title = "第 " + (i + 1) + " 天"; h.appendChild(c); });
+  const mh = document.getElementById("memoHeat");
+  for (let i = 0; i < 84; i++) { const c = document.createElement("i"); const v = rnd(); c.style.background = ["#EEE9DE","#DCE3CC","#B9C79E","#93A872","#6F8550"][v < .4 ? 0 : v < .65 ? 1 : v < .82 ? 2 : v < .94 ? 3 : 4]; mh.appendChild(c); }
+  const pts = vals.map((v, i) => [i / (days - 1) * 1000, 140 - v / 5 * 120]);
+  const path = p => p.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ");
+  document.getElementById("line").setAttribute("d", path(pts));
+  document.getElementById("area").setAttribute("d", path(pts) + " L1000 150 L0 150 Z");
+  const avg = pts.map((q, i) => { const s = pts.slice(Math.max(0, i - 6), i + 1); return [q[0], s.reduce((a, b) => a + b[1], 0) / s.length]; });
+  document.getElementById("avg").setAttribute("d", path(avg));
+  document.querySelectorAll(".seg").forEach(seg => seg.addEventListener("click", e => {
+    if (e.target.tagName !== "B") return;
+    seg.querySelectorAll("b").forEach(b => b.classList.toggle("on", b === e.target));
+    if (seg.id === "tkMode") { const t = e.target.dataset.v === "trend";
+      document.getElementById("tkHeat").classList.toggle("hidden", t); document.getElementById("tkTrend").classList.toggle("hidden", !t); }
+  }));
+  const rows = (id, items, color) => document.getElementById(id).innerHTML = items.map(([n, v, c]) =>
+    `<div class="row" style="padding:5px 0"><span style="width:120px">${n}</span><div class="bar" style="flex:1"><i style="width:${v}%;background:${c || color}"></i></div><span class="l11" style="width:52px;text-align:right">${(v / 12).toFixed(2)}B</span></div>`).join("");
+  rows("tools", [["Codex", 92, "#5F7A99"], ["Cursor", 54, "#B9B6AD"], ["pi", 31, "#9C7BA0"], ["Claude Code", 18, "#D97757"], ["Antigravity", 9, "#6A9BCC"]]);
+  rows("devices", [["MacBook Pro", 88], ["MacBook Air", 40]], "#5E5D59");
+  rows("models", [["gpt-6.1-sol", 96, "#5F7A99"], ["gpt-6-astra", 70, "#7FA394"], ["claude-opus-5-5", 44, "#D97757"], ["gemini-3.8-flash", 26, "#6A9BCC"], ["glm-5.3", 14, "#C9A23F"], ["其他 6 个", 10, "#B9B6AD"]]);
+  document.getElementById("sessions").innerHTML = [
+    ["Personal Hub 托盘模块化", "Codex · gpt-6.1-sol", "1.42B", "$412"], ["Aide PRE 回滚排查", "Cursor · claude-opus-5-5", "0.96B", "$288"],
+    ["skysight 同步格式修订", "pi · gpt-6-astra", "0.51B", "$96"], ["hub-api 布局接口", "Codex · gpt-6.1-sol", "0.38B", "$110"]]
+    .map(([t, m, v, c], i) => `<div class="row" style="padding:9px 0;${i ? "border-top:1px solid #EFEAE0" : ""}"><b style="font-weight:500;flex:1">${t}</b><span class="l11" style="width:220px">${m}</span><span style="font-family:var(--serif);width:70px;text-align:right">${v}</span><span class="l11" style="width:60px;text-align:right">${c}</span></div>`).join("");
+</script>
+</body>
+</html>
