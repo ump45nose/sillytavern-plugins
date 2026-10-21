@@ -13,7 +13,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Segmented(options: [(0, "通用"), (1, "快捷键"), (2, "账户"), (3, "数据"), (4, "关于")], selection: $tab)
+            Segmented(options: [(0, "通用"), (1, "快捷键"), (2, "账户"), (3, "数据"), (4, "AI"), (5, "关于")], selection: $tab)
                 .padding(.top, 18)
             Group {
                 switch tab {
@@ -21,13 +21,14 @@ struct SettingsView: View {
                 case 1: ShortcutSettings()
                 case 2: AccountSettings()
                 case 3: DataSettings()
+                case 4: AISettings()
                 default: AboutSettings()
                 }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 560, height: 440)
+        .frame(width: 560, height: 520)
         .background(Palette.bg)
         .preferredColorScheme(.light)
         .tint(Tone.clay.color)
@@ -260,6 +261,90 @@ private struct AccountSettings: View {
         default: break
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+private struct AISettings: View {
+    @Environment(AppState.self) private var state
+    @ViewState private var registered: [AIAgent: Bool] = [:]
+    @ViewState private var copied: String?
+
+    var body: some View {
+        @Bindable var state = state
+        VStack(alignment: .leading, spacing: 0) {
+            SettingRow(title: "默认 agent", note: "⌘K 里「问 AI」用它回答，数据通过本机 MCP 读取") {
+                Picker("", selection: $state.aiAgent) {
+                    ForEach(AIAgent.allCases) { a in Text(a.title + (a.executable == nil ? "（未安装）" : "")).tag(a) }
+                }
+                .labelsHidden().frame(width: 180)
+            }
+            SectionTitle("连接 agent").padding(.top, 4)
+            ForEach(AIAgent.allCases) { agentRow($0) }
+            SettingRow(title: "其他 MCP 客户端", note: "stdio 服务：PersonalHub --mcp") {
+                copyButton("拷贝 JSON", AIEnvironment.mcpJSON)
+            }
+            SettingRow(title: "写入确认", note: "agent 只能提议；\(state.aiPending.items.count) 项待确认。审计日志只记工具名和时间") {
+                Button("显示审计日志") {
+                    NSWorkspace.shared.activateFileViewerSelecting([HubMCP.audit.file])
+                }
+                .buttonStyle(.hubSecondary)
+                .disabled(!FileManager.default.fileExists(atPath: HubMCP.audit.file.path))
+            }
+        }
+        .task { registered = await Self.detect() }
+    }
+
+    private func agentRow(_ agent: AIAgent) -> some View {
+        let installed = agent.executable != nil
+        let note: String = if !installed {
+            "没找到 \(agent.command)"
+        } else if agent.mountsPerRun {
+            registered[agent] == true ? "问 AI 自动挂载；自己的会话里也已注册" : "问 AI 自动挂载；想在它自己的会话里用，再注册一次"
+        } else {
+            registered[agent] == true ? "已注册，可以问 AI" : "需要先在终端注册一次才能问 AI"
+        }
+        return SettingRow(title: agent.title, note: note) {
+            if installed { copyButton("拷贝注册命令", agent.registerCommand(server: AIEnvironment.server)) }
+        }
+    }
+
+    private func copyButton(_ title: String, _ text: String) -> some View {
+        Button(copied == text ? "已拷贝" : title) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = text
+        }
+        .buttonStyle(.hubSecondary)
+        .help(text)
+    }
+
+    /// Read-only: looks for the server name in each agent's own config; never writes them.
+    nonisolated static func detect() async -> [AIAgent: Bool] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        func mentions(_ path: String) -> Bool {
+            (try? String(contentsOf: home.appendingPathComponent(path), encoding: .utf8))?.contains(HubMCP.serverName) ?? false
+        }
+        var out: [AIAgent: Bool] = [
+            .codex: mentions(".codex/config.toml"),
+            .claude: mentions(".claude.json"),
+            .pi: mentions(".pi/agent/mcp.json"),
+        ]
+        if let agy = AIAgent.antigravity.executable {
+            let p = Process()
+            p.executableURL = agy
+            p.arguments = ["mcp", "list"]
+            p.environment = AIEnvironment.environment()
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError = FileHandle.nullDevice
+            p.standardInput = FileHandle.nullDevice
+            if (try? p.run()) != nil {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                p.waitUntilExit()
+                out[.antigravity] = String(decoding: data, as: UTF8.self).contains(HubMCP.serverName)
+            }
+        }
+        return out
     }
 }
 

@@ -279,6 +279,22 @@ final class AgendaModel {
         return true
     }
 
+    /// A task confirmed from an agent's proposal; an unknown list name creates that list.
+    @discardableResult
+    func addTask(title: String, notes: String?, due: Date?, listName: String?) -> Bool {
+        let listID: String
+        if let listName {
+            listID = list(named: listName)?.id ?? createList(listName)
+        } else if let first = defaultList {
+            listID = first.id
+        } else {
+            return false
+        }
+        perform(.createTask(id: AgendaStore.localID(), listID: listID, title: title, notes: notes,
+                            due: due.map { GoogleDate.dayString($0, calendar: calendar) }, parent: nil))
+        return true
+    }
+
     func search(_ query: String) -> [AgendaTask] {
         Agenda.search(store, query: query, calendar: calendar)
     }

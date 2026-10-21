@@ -181,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             w.titlebarAppearsTransparent = true
             w.title = "设置"
@@ -243,6 +243,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     @objc func refresh() { state.sync() }
 
+    @objc func togglePalette() {
+        let open = !state.paletteOpen || NSApp.keyWindow !== mainWindow
+        showMainWindow(page: nil)
+        withAnimation(Motion.fast) { state.paletteOpen = open }
+    }
+
     @objc func quickTaskAction() { toggleQuickPanel(.task) }
 
     @objc func quickMemoAction() { toggleQuickPanel(.memo) }
@@ -276,6 +282,7 @@ enum MainMenu {
         let view = NSMenu(title: "视图")
         fillPages(view, state: AppState.shared, target: target)
         view.addItem(.separator())
+        view.addItem(item("搜索 / 问 AI", #selector(AppDelegate.togglePalette), "k", target))
         view.addItem(item("编辑布局", #selector(AppDelegate.toggleEditing), "e", target))
         view.addItem(item("刷新", #selector(AppDelegate.refresh), "r", target))
         view.addItem(.separator())

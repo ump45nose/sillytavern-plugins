@@ -11,6 +11,12 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-iconset"), i + 1 < Com
     }
 }
 
+// `PersonalHub --mcp`: stdio MCP server for local agents. Stdout carries only JSON-RPC.
+if CommandLine.arguments.contains("--mcp") {
+    Task.detached { exit(await HubMCP.run()) }
+    dispatchMain()
+}
+
 // Thin overlay scrollbars even when System Settings says "always show" or a mouse is attached;
 // the argument domain outranks the global one and is never written to disk.
 var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)

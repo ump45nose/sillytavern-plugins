@@ -20,6 +20,7 @@ enum NavEntry {
 
 struct MainView: View {
     @Environment(AppState.self) private var state
+    var palette = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -34,6 +35,17 @@ struct MainView: View {
                     .transition(.opacity)
             }
             .background(Palette.bg)
+        }
+        .overlay {
+            if state.paletteOpen {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.12).contentShape(Rectangle())
+                        .onTapGesture { withAnimation(Motion.fast) { state.paletteOpen = false } }
+                    CommandPalette(query: palette).padding(.top, 96)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                }
+                .transition(.opacity)
+            }
         }
         .frame(minWidth: 1100, minHeight: 720)
         .ignoresSafeArea()
@@ -263,22 +275,32 @@ private struct SourceHealth: View {
 
 private struct Toolbar: View {
     @Environment(AppState.self) private var state
+    @ViewState private var showPending = false
 
     var body: some View {
         HStack(spacing: 10) {
             (Text("Personal Hub / ").foregroundColor(Palette.ink3) + Text(state.page.title).fontWeight(.semibold).foregroundColor(Palette.ink))
                 .font(Typo.sans(12))
             Spacer()
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(.system(size: 12))
-                Text("搜索任务、交流、Memo…").font(Typo.sans(12.5))
-                Spacer()
-                Kbd("⌘K")
+            Button { withAnimation(Motion.fast) { state.paletteOpen = true } } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: state.aiRun.running ? "sparkles" : "magnifyingglass").font(.system(size: 12))
+                        .foregroundStyle(state.aiRun.running ? Tone.clay.color : Palette.ink3)
+                    Text(state.aiRun.running ? "\(state.aiRun.agent.title) 正在回答…" : "搜索，或问 AI…").font(Typo.sans(12.5))
+                    Spacer()
+                    Kbd("⌘K")
+                }
+                .foregroundStyle(Palette.ink3)
+                .padding(.horizontal, 12).frame(width: 300, height: 30)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.line))
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(Palette.ink3)
-            .padding(.horizontal, 12).frame(width: 300, height: 30)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.line))
+            .buttonStyle(.plain)
+            if !state.aiPending.items.isEmpty {
+                ToolButton(symbol: "sparkles", title: "待确认 \(state.aiPending.items.count)", prominent: true) { showPending.toggle() }
+                    .popover(isPresented: $showPending, arrowEdge: .bottom) { AIPendingList().environment(state) }
+            }
             ToolButton(symbol: "arrow.triangle.2.circlepath", title: state.lastSync, spinning: state.syncingAny) { state.sync() }
             if state.page.kind == .grid {
                 ToolButton(symbol: "square.grid.2x2", title: state.editing ? "完成" : "编辑布局", prominent: state.editing) {

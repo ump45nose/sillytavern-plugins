@@ -13,6 +13,12 @@ final class AppState {
     let hub = HubModel()
     let review: ReviewDesk
     let memos: MemosStore
+    let aiPending = AIPendingModel(store: AppState.isQA
+        ? AIPendingStore(dir: FileManager.default.temporaryDirectory.appendingPathComponent("PersonalHub-qa-\(ProcessInfo.processInfo.processIdentifier)/pending-ai"))
+        : HubMCP.pending)
+    let aiRun = AgentRun()
+    var aiAgent: AIAgent { didSet { UserDefaults.standard.set(aiAgent.rawValue, forKey: Keys.aiAgent) } }
+    var paletteOpen = false
 
     var layout: LayoutDocument { didSet { layoutChanged() } }
     var currentPage = "home"
@@ -48,6 +54,7 @@ final class AppState {
         static let memosURL = "memosURL"
         static let layoutSync = "layoutSync"
         static let userName = "userName"
+        static let aiAgent = "aiAgent"
     }
 
     /// Square-cropped copy of the picked avatar, kept next to the layout.
@@ -93,6 +100,7 @@ final class AppState {
         layout = store.load().withBuiltins()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
         userName = UserDefaults.standard.string(forKey: Keys.userName) ?? "玮康"
+        aiAgent = UserDefaults.standard.string(forKey: Keys.aiAgent).flatMap(AIAgent.init(rawValue:)) ?? .codex
         avatar = Self.isQA ? nil : NSImage(contentsOf: Self.avatarURL)
         layoutSync = UserDefaults.standard.data(forKey: Keys.layoutSync).flatMap { try? JSONDecoder().decode(LayoutSyncState.self, from: $0) } ?? LayoutSyncState()
         if !Self.isQA { hub.onRefresh = { [weak self] in self?.syncLayout() } }

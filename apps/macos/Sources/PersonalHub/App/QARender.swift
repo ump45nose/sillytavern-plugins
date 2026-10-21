@@ -87,8 +87,25 @@ enum QARender {
             await shot("event-readonly", width: 380, EventEditor(mode: .edit(readOnly)) {})
         }
         await shot("event-create", width: 380, EventEditor(mode: .create(AgendaModule.nextSlot(after: state.agenda.now))) {})
-        await shot("settings-account", width: 560, height: 440, SettingsView(tab: 2))
-        await shot("settings-data", width: 560, height: 440, SettingsView(tab: 3))
+        await shot("settings-account", width: 560, height: 520, SettingsView(tab: 2))
+        await shot("settings-data", width: 560, height: 520, SettingsView(tab: 3))
+        await shot("settings-ai", width: 560, height: 520, SettingsView(tab: 4))
+        state.go("home")
+        state.paletteOpen = true
+        await shot("palette-empty", width: 1320, height: 860, MainView().background(Palette.bg))
+        await shot("palette-search", width: 1320, height: 860, MainView(palette: "周会").background(Palette.bg))
+        let clock = state.agenda.now
+        state.aiRun.preview("明天下午 3 点和 Lin 对一下方案，帮我加到日程", output: QASample.aiAnswer, agent: .codex, seconds: 14)
+        state.aiPending.seed([
+            AIPendingChange(createdAt: Date(), agent: "codex-mcp-client", kind: .event(
+                title: "和 Lin 对齐方案", start: clock.addingTimeInterval(86_400), end: clock.addingTimeInterval(90_000), location: "线上", notes: nil)),
+            AIPendingChange(createdAt: Date(), agent: "codex-mcp-client", kind: .task(
+                title: "准备方案对齐的材料", due: GoogleDate.dayString(clock, calendar: .hub), time: nil, notes: nil, list: nil)),
+        ])
+        await shot("palette-answer", width: 1320, height: 860, MainView(palette: state.aiRun.prompt).background(Palette.bg))
+        state.paletteOpen = false
+        state.aiRun.reset()
+        await shot("ai-pending", width: 460, AIPendingList())
         await shot("quick-memo", width: 600, QuickMemoView(close: {}))
         await shot("net-plans", width: 400, NetPlanEditor(close: {}, seed: [
             NetPlan(id: "a", name: "主力机场", totalBytes: 500 * 1_073_741_824, resetDay: 1, expiresOn: "2026-12-01"),
@@ -144,6 +161,14 @@ enum QARender {
 }
 
 enum QASample {
+    static let aiAnswer = """
+    明天下午 3 点前后你的日程是空的，**15:00–16:00** 可以放这次对齐。
+
+    - 已提议新建日程「和 Lin 对齐方案」，线上
+    - 顺手加了一个今天的任务：准备方案对齐的材料
+
+    两项都在下面，**确认后**才会写入 Google 日历和任务。
+    """
     static let markdown = """
     # 第 42 周 · 周报
     ## 本周完成
