@@ -32,3 +32,15 @@
 - 已通过通知/作业相关 42 项检查与 Telegram 原有 26 项检查。正在验证 Rewards 当前真实活动与自然更新的正式回执，不恢复已删除的 Rewards 专属测试。
 - 真实完整验证 `67bc4094-24a9-4ef0-a98f-9b5b6fdd377f` 用时 190 秒，返回 `full_requested_capabilities_complete`。简单活动从 0/1→1/1，该 offer 独立完成、余额 76278→76288（+10）；未执行测验、投票或探索，所有其他启用能力完成或不适用。正式入口复核还会验证已确认上报不再重发，以及移除正式输出中已停用的探索明细。
 - 为仅合入本次变更，从当前 main 建本次分支 `codex/benefits-alert-recurrence-20261021`，旧分支中的独立 Epic 文档提交仍由原分支保留。用户已明确授权本次合并与清理，其他任务的两处容器启动修改在集成前后校验摘要。
+
+## 完成与验收
+
+- 实现已以 `a39cd7b` 快进合入 main；未合入旧分支的独立 Epic 文档。两处他人容器启动文件的集成前后 SHA-256 一致，主线暂存区保持空。
+- 经正式部署工具只安装异常报告和结果摘要两个源码文件，部署内容与主线逐字节一致；任务仍读取原主线源码与原私有账号状态。调度、凭据、代理、地区、登录身份与历史结果未改动；私有配置只禁用 xhgsgk、移除 extra 能力，已有备份且文件身份/权限保留。
+- 正式 Telegram `c7205ffa-ca48-4374-b980-27a3de85723a` 为 `all_bots_confirmed`、6/6。xhgsgk 为 `not_applicable/bot_disabled`；当天 journal 的 SHA-256 与修复前一致，没有重发命令。
+- 正式 Rewards `4e711cca-2ebc-488d-91f2-d73bfcb2af8a` 用时 161 秒，返回 `full_requested_capabilities_complete`。简单活动 1/1、余额 76288→76288；验证运行的每日上报 POST 为 1 次，正式复核为 0 次。测验/投票明细为范围排除，探索阶段及其未完成明细、每日活动连续打卡不再进入正式任务要求。
+- WorkBuddy 保留原 `activity=complete/reward=unknown/balance=complete` 回执，没有再次调用活跃请求或伪造奖励确认；部署后的异常报告已不提示该预期状态。
+- 正式 Hermes 身份只读生成异常日报，结果为空；未发送通知、未手写 delivery。私有验收记录保存在原 runtime 的 `diagnostics/2026-10-21/alert-recurrence/verification.json`。
+- 68 个不同检查通过（作业/报告 10、通知 32、Telegram 26），8 个受影响 JS 文件语法检查通过；Rewards 真实验证与测试结果分开记录，没有恢复其已删除的专属回归。
+- 启动巡检 `missing=[]`、`stopped_planned=[]`，另报 `ai-resource-center`、`oauth-disclosure` 未登记，因此该设施检查返回 1。这两个容器及其登记不属于本次变更，未操作；不能将此检查描述为完全通过。
+- 收尾只删除本次已合入分支和复用工作区；旧分支保留其独立 Epic 历史提交，其他工作区和修改不受影响。
