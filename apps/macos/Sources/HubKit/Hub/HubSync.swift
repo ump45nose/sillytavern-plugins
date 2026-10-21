@@ -41,7 +41,8 @@ public actor HubSync {
     }
 
     public func connect(api: HubAPI?) {
-        if let old = self.api?.credential.baseURL, old != api?.credential.baseURL {
+        // A new device token may be another hub; a new address with the same token is the same hub.
+        if let old = self.api?.credential.token, old != api?.credential.token {
             data = HubData()
             save()
         }
@@ -72,12 +73,12 @@ public actor HubSync {
         set(.syncing)
         do {
             async let batch = api.modules()
-            async let sources = api.status()
             async let week = try? api.token(range: .week)
             async let month = try? api.token(range: .month)
             async let year = try? api.token(range: .year)
             var next = try await batch
-            next.sources = (try? await sources) ?? data.sources
+            // hub-api reports sources it has not read since start as stale, so ask after the batch.
+            next.sources = (try? await api.status()) ?? data.sources
             for (range, envelope) in [(TokenRange.week, await week), (.month, await month), (.year, await year)] {
                 next.token[range] = envelope ?? data.token[range]
             }

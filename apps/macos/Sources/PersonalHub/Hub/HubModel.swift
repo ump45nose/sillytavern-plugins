@@ -149,6 +149,47 @@ final class HubModel {
 
     func cancelSignIn() { signingIn?.cancel() }
 
+    private static let baseKey = "hubBaseURL"
+
+    /// Address for sign-in and the one shown in settings; the LAN address works too once signed in.
+    var preferredBase: URL {
+        get { UserDefaults.standard.string(forKey: Self.baseKey).flatMap(URL.init(string:)) ?? baseURL ?? Self.defaultBase }
+        set { UserDefaults.standard.set(newValue.absoluteString, forKey: Self.baseKey) }
+    }
+
+    static func parseBase(_ text: String) -> URL? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: t), let scheme = url.scheme, ["http", "https"].contains(scheme), url.host() != nil,
+              url.path().isEmpty || url.path() == "/" else { return nil }
+        return url
+    }
+
+    /// Points the stored device token at another address of the same hub, after checking it answers.
+    func changeBase(_ url: URL) async -> String? {
+        guard mode == .hub, let current = api?.credential else {
+            preferredBase = url
+            return nil
+        }
+        guard url != current.baseURL else { return nil }
+        var next = current
+        next.baseURL = url
+        do {
+            _ = try await HubAPI(transport: transport, credential: next).status()
+        } catch let e as HubError {
+            return e == .unauthorized ? "这个地址不认当前设备令牌，可能不是同一个 hub。" : e.message
+        } catch {
+            return "这个地址连不上。"
+        }
+        do {
+            try await Task.detached { try CredentialStore.update { $0.hub = next } }.value
+        } catch {
+            return (error as? CredentialStore.Failure)?.errorDescription ?? "保存失败。"
+        }
+        preferredBase = url
+        activate(next)
+        return nil
+    }
+
     /// Deletes the local device token. Revoking it on the server is done from another device or hub-api.
     func disconnect() {
         Task { _ = try? await Task.detached { try CredentialStore.update { $0.hub = nil } }.value }

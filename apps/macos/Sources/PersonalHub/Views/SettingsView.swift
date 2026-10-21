@@ -215,20 +215,30 @@ private struct AccountSettings: View {
 
 private struct DataSettings: View {
     @Environment(AppState.self) private var state
-    @ViewState private var address = HubModel.defaultBase.absoluteString
+    @ViewState private var address = ""
+    @ViewState private var addressError: String?
+    @ViewState private var applying = false
     @ViewState private var confirmDisconnect = false
+
+    private var parsed: URL? { HubModel.parseBase(address) }
+    private var current: URL { state.hub.baseURL ?? state.hub.preferredBase }
 
     var body: some View {
         let hub = state.hub
         VStack(alignment: .leading, spacing: 0) {
-            SettingRow(title: "hub 地址", note: connectionNote) {
-                if hub.mode == .hub {
-                    Text(hub.baseURL?.absoluteString ?? "").font(Typo.mono(12)).foregroundStyle(Palette.ink2)
-                } else {
-                    TextField("https://hub-home…:28443", text: $address).textFieldStyle(.roundedBorder).frame(width: 220)
+            SettingRow(title: "hub 地址", note: addressError ?? connectionNote) {
+                HStack(spacing: 8) {
+                    TextField("https://hub-home…:28443", text: $address)
+                        .textFieldStyle(.roundedBorder).frame(width: 270)
+                        .onSubmit(applyAddress)
+                    if let parsed, parsed != current {
+                        Button(applying ? "检查中…" : (hub.mode == .hub ? "切换" : "保存"), action: applyAddress).disabled(applying)
+                    } else if parsed == nil, !address.isEmpty {
+                        Text("地址无效").font(Typo.sans(11)).foregroundStyle(Tone.rose.color)
+                    }
                 }
             }
-            SettingRow(title: "设备登录", note: hub.mode == .hub ? "令牌保存在钥匙串，断开只删除本机令牌" : "通过 Authelia 在浏览器里登录") { control }
+            SettingRow(title: "设备登录", note: hub.mode == .hub ? "令牌保存在钥匙串，断开只删除本机令牌" : signInNote) { control }
             if case .failed(let message) = hub.signIn {
                 Text(message).font(Typo.sans(11.5)).foregroundStyle(Tone.rose.color).padding(.top, 8)
             }
@@ -249,6 +259,9 @@ private struct DataSettings: View {
                     .textSelection(.enabled)
             }
         }
+        .onAppear { address = current.absoluteString }
+        .onChange(of: state.hub.baseURL) { _, url in if let url { address = url.absoluteString } }
+        .onChange(of: address) { _, _ in addressError = nil }
         .alert("断开 hub？", isPresented: $confirmDisconnect) {
             Button("断开", role: .destructive) { state.hub.disconnect() }
             Button("取消", role: .cancel) {}
@@ -257,9 +270,27 @@ private struct DataSettings: View {
         }
     }
 
+    private var signInBase: URL? {
+        let url = parsed ?? current
+        return url.scheme == "https" ? url : nil
+    }
+
+    private var signInNote: String {
+        signInBase == nil ? "登录要用 https 公网地址；登录后可以切换到局域网地址" : "通过 Authelia 在浏览器里登录"
+    }
+
+    private func applyAddress() {
+        guard let url = parsed, url != current else { return }
+        applying = true
+        Task {
+            addressError = await state.hub.changeBase(url)
+            applying = false
+        }
+    }
+
     private var connectionNote: String {
         let hub = state.hub
-        guard hub.mode == .hub else { return "默认是 NAS hub-api 的公网入口，登录需要走这个地址" }
+        guard hub.mode == .hub else { return "公网入口或局域网 http://NAS:18190，同一个设备令牌都能用" }
         switch hub.status {
         case .syncing: return "同步中…"
         case .offline: return "离线 · 显示缓存"
@@ -279,16 +310,19 @@ private struct DataSettings: View {
         } else if hub.mode == .hub {
             HStack(spacing: 8) {
                 if hub.status == .needsSignIn {
-                    Button("重新登录") { hub.signIn(base: hub.baseURL.flatMap { $0.scheme == "https" ? $0 : nil } ?? HubModel.defaultBase) }.keyboardShortcut(.defaultAction)
+                    Button("重新登录") { hub.signIn(base: signInBase ?? HubModel.defaultBase) }.keyboardShortcut(.defaultAction)
                 }
                 Button(hub.status == .syncing ? "同步中…" : "立即同步") { hub.refresh() }.disabled(hub.status == .syncing)
                 Button("断开…") { confirmDisconnect = true }
             }
         } else {
             Button("登录") {
-                if let url = URL(string: address.trimmingCharacters(in: .whitespaces)), url.scheme?.hasPrefix("http") == true { hub.signIn(base: url) }
+                guard let base = signInBase else { return }
+                hub.preferredBase = base
+                hub.signIn(base: base)
             }
             .keyboardShortcut(.defaultAction)
+            .disabled(signInBase == nil)
         }
     }
 
