@@ -30,8 +30,8 @@ A successful exhaustive summary establishes a zero-spend day; missing measuremen
 are never filled with zero. The source has no assets API, so asset fields remain null.
 
 `records_health` and `records_bills` have separate 60-second caches and status entries,
-so one API failure does not remove the other module. All other not-yet-integrated
-sources explicitly report `unconfigured`.
+so one API failure does not remove the other module. Sources with missing credentials
+explicitly report `unconfigured`.
 
 ## NAS
 
@@ -217,9 +217,8 @@ this host because authorization callbacks contain one-time credentials.
 At activation, merge only OIDC keys into the current private hub env and remove the
 development token, register only the new `personal-hub` Authelia client, and restart
 Authelia in the confirmed window. Then update only hub-api and create the single new
-NPM host. Browser login/loopback/token/revocation plus authenticated LAN/public module
-and status requests are still required; fake-provider tests do not establish real
-browser acceptance.
+NPM host. Verify browser login/loopback/token/revocation and authenticated LAN/public
+module and status requests; fake-provider tests do not establish real browser acceptance.
 
 
 For the final interactive browser check, run `python3 scripts/device-login-smoke.py`
@@ -228,4 +227,7 @@ port, exchanges the one-time code, requests public module/status data, revokes t
 temporary device and checks 401. All credentials stay in memory. Only statuses/counts
 are printed; source business data is not changed. The repository is private; use the
 existing checkout or authenticated GitHub CLI to retrieve this script. A successful
-run ends with `success: true`; a real run is still required after deployment.
+run ends with `success: true`. The deployed service passed this real Chrome flow on
+2026-10-21 at 10:16 +08:00 on the owner's MacBook Pro: public modules/status=200,
+13 sources, and the revoked temporary device=401. Running image is
+`local/hub-api:4c7d8a7`; net/git remain partial for the source coverage described above.

@@ -83,13 +83,16 @@ Progress (each step is tested and committed separately):
   A runtime log scan found none of the configured secrets. Existing source container
   IDs retained; only hub-api was recreated. Other tasks may create their own temporary
   containers and are not modified by this work.
-  **Pending acceptance:** real human browser login, loopback and token exchange. Both
-  Mac remote connectors are offline, and the known Mac SSH endpoint is unavailable.
-  Added scripts/device-login-smoke.py: run on the user's browser-equipped computer,
-  complete Authelia login/consent, then it verifies real exchange/API reads/revocation.
-  It prints statuses/counts only, keeps tokens in memory and removes the temporary device.
-  31 backend tests pass; the helper's CLI/syntax are checked, its interactive execution
-  remains pending. Do not mark phase 3 fully accepted until this succeeds.
+  Real human browser acceptance completed on 2026-10-21 at 10:16 +08:00 on the
+  owner's MacBook Pro, through Desktop Commander after the device came online.
+  scripts/device-login-smoke.py opened Chrome; the owner completed Authelia login,
+  two-factor authentication and personal-hub consent. The browser returned to the
+  random 127.0.0.1 loopback listener; actual PKCE token exchange succeeded.
+  Public modules/status both returned 200, with 13 source entries. The temporary
+  device was revoked through the API; the next authenticated request returned 401.
+  Helper exit code 0 and success=true. Tokens stayed in memory; output contained only
+  statuses/counts, and no source business records were written. 31 backend tests pass.
+  NAS phase-3 API acceptance is complete; Mac application integration is separate.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
@@ -100,19 +103,38 @@ It is clean, with source changes committed and subtree release branches pushed;
 main has unrelated boot edits. Do not merge/overwrite that dirty main.
 Private deployment rollback files are `/vol2/1000/Docker/hub/deployment-backups/`;
 restore only this task's changed fields and preserve live business/OAuth data.
-Boot check still has only ai-resource-center/oauth-disclosure unplanned, no missing
-or stopped planned containers. The final check also sees another task's temporary
-favsync-eh-verify-20261021 container as unplanned; it is not modified here. Dockge browser cards remain unverified; both Compose
-contexts were validated. Duplicati backup/restore and production source writes were
+Boot check at 2026-10-21 10:13 +08:00 has only ai-resource-center/oauth-disclosure
+unplanned, no missing or stopped planned containers. Another task's earlier temporary
+favsync-eh-verify-20261021 container is no longer present. Dockge browser cards remain
+unverified; both Compose contexts were validated. Duplicati backup/restore and production source writes were
 not triggered merely for testing.
 
-Authelia restart was explicitly approved and applied. GitHub reuse was approved; source credentials were available. Defaults for budget/health/cycle apply. Pending human browser acceptance only. Usage-monitor was the sole source restart (step 4); Authelia was restarted for the new client in step 7.
+Authelia restart was explicitly approved and applied. GitHub reuse was approved; source credentials were available. Defaults for budget/health/cycle apply. Real browser/loopback/token/revocation acceptance passed at 10:16 +08:00. Usage-monitor was the sole source restart (step 4); Authelia was restarted for the new client in step 7.
 
 Final deployment checks (2026-10-21): hub-api 4c7d8a7 healthy, UID/GID 1000:1001,
 readonly root, cap_drop ALL and no-new-privileges retained. Public health=200; the
 removed development token=401. Nginx configuration test passed, wildcard certificate
 2 remains unchanged. Source credentials and seven previous Authelia clients compare
 unchanged; only the new personal-hub callback uses public 28443. No business writes.
-The temporary NAS acceptance device was revoked. Real human browser acceptance is
-still pending via the provided script; do not substitute the internal test device
-for a successful OIDC browser/token exchange.
+Both the earlier NAS test device and the real browser acceptance device were revoked.
+Real browser acceptance used an actual OIDC login, not an internally issued credential.
+
+Real desktop acceptance (2026-10-21 10:16 +08:00):
+
+| Module | Status | Row counts |
+| --- | --- | --- |
+| health | ok | days=14 |
+| bills | ok | today_items=0, days=14, month_categories=1 |
+| crm | ok | today=2, stale=5 |
+| media | ok | continue_watching=8, latest=8, recent_albums=6, downloads=6, services=4 |
+| token | ok | tools=3, devices=4, limits=8 |
+| net | partial | hourly=24; upstream quota/expiry facts absent |
+| git | partial | waiting=18, blocked=22; bounded source coverage |
+| memos | ok | recent=20, tags=14 |
+| subs | ok | items=0 |
+| attention | ok | items=9 |
+
+No runtime configuration, source credential or image change was needed for this
+acceptance. Running image remains local/hub-api:4c7d8a7. Aggregate source integration
+into main remains deferred because the main worktree has others' uncommitted boot
+changes; the isolated source checkpoints and subtree release branches are pushed.

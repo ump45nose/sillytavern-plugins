@@ -248,7 +248,7 @@ NAS 实现记录（按步骤更新）：
 - 第 5 步媒体已上线（`local/hub-api:46d53dd`），四来源均 ok，列表 8/8/6/6；真实签名封面代理通过。hub-api 加入原 `media_net` 访问 MoviePilot API `moviepilot:3001`，来源服务未改。qBittorrent 沿用 qbit_manage 已有的可信内网免登录访问。12 项 hub 测试通过。
 - 第 5 步 GitHub 已上线（`local/hub-api:2b48ca1`），按用户授权复用 NAS gh 的经典/OAuth 令牌，仅 GET REST 和固定 GraphQL query；来源 ok，git partial（分页/贡献覆盖限制），实测待回复 13、阻塞条目 23。完整读取约 7.5–9.5 秒，GitHub 独立 15 秒超时；其他来源仍默认 5 秒。14 项测试通过。
 - 第 6 步订阅、偏好、布局与需要注意已上线（`local/hub-api:d12898e`）。19 项测试通过，覆盖并发版本冲突、配置读取竞争和七条规则；真实 LAN 订阅/需要注意 ok、偏好 version0、未创建的布局 404，未写入生产测试配置。
-- 第 7 步经用户确认重启时间后已上线 OIDC 和公网 API（镜像 `local/hub-api:4c7d8a7`）：`https://hub-home.172906573.xyz:28443`，NPM 规则 42 复用证书 2、不挂 forward-auth；删除生产开发令牌，仅增加 Authelia personal-hub 客户端，其他身份、配置与来源凭据未变。公网 443 实测不是 NAS 证书，沿用现有 NPM 28443，不改 DNS/Tunnel/路由器。31 项测试通过；LAN/公网 modules/status 200、临时设备吊销后 401，日志未发现配置秘密值。实际 auth/start 和 Authelia 注册校验通过；Mac 远程通道离线，真实浏览器/回环/兑换验收仍需用随附脚本完成，不将此项记为通过。
+- 第 7 步经用户确认重启时间后已上线 OIDC 和公网 API（镜像 `local/hub-api:4c7d8a7`）：`https://hub-home.172906573.xyz:28443`，NPM 规则 42 复用证书 2、不挂 forward-auth；删除生产开发令牌，仅增加 Authelia personal-hub 客户端，其他身份、配置与来源凭据未变。公网 443 实测不是 NAS 证书，沿用现有 NPM 28443，不改 DNS/Tunnel/路由器。31 项测试通过；LAN/公网 modules/status 200、临时设备吊销后 401，日志未发现配置秘密值。2026-10-21 10:16 +08:00 在 MacBook Pro 完成真实 Chrome 登录、双重验证与授权，回环回调及 PKCE 兑换成功；真实设备请求公网 modules/status 均 200（13 个来源），临时设备吊销后 401，脚本 success=true、退出码 0。NAS API 验收完成；net/git 因已记录的来源覆盖缺口保持 partial。来源侧 worktree 与发布分支已推送，聚合 main 仍有他人未提交的启动脚本修改，尚未集成。
 
 NAS 侧执行计划与 Mac / 安卓共用的接口约定见 [阶段 3 NAS 侧计划](2026-10-20-phase3-nas.md)。电脑历史在本阶段由 Mac 直接读本机归档。
 
