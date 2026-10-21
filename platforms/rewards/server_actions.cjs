@@ -164,6 +164,15 @@ async function submit(
     ]),
   });
 }
+async function reportActivity(page, parser, actionId, offer, timezoneOffset) {
+  return request(page, "/earn", {method: "POST", headers: {
+    Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
+    "Next-Action": actionId,
+    "Next-Router-State-Tree": parser.routerStateTree("earn"),
+  }, body: JSON.stringify([offer.hash, offer.activityType || 11,
+    {offerid: offer.offerId, isPromotional: offer.isPromotional ? true : "$undefined",
+      timezoneOffset}])});
+}
 module.exports = {
   safePath,
   request,
@@ -171,4 +180,5 @@ module.exports = {
   discover,
   validateSubmission,
   submit,
+  reportActivity,
 };

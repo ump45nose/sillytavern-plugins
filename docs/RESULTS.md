@@ -31,7 +31,7 @@ current 表示本次调用最近可核实的值；before/after 分别是执行�
 
 平台从自己的页面/API 中提取事实，公共库只验证有界结构：
 
-- Rewards：daily、desktop_search、edge_search、app_daily 进度；balance 前后值与差；explore 和 more_promotions 的可读资格进度；锁定数量、任务名称与未确认原因。连续打卡补充 bing_streak、daily_set_streak、app_streak 的当日计数及对应 `_days` 连续天数。桌面 App 周任务补充 `desktop_app_weekly` 周积分、`desktop_app_weekly_tasks` 总任务数及 `desktop_app_available` 当前已开放活动数；该能力完成不代表整周 70 分已全部获得。`platform_task_cycle` 明细标明平台当前任务日期，不能用 business_date 替代它判断任务重置。移动搜索仅当前清单可读时提供。后续失败可保留已确认阶段事实。
+- Rewards：daily、desktop_search、edge_search、app_daily 进度；balance 前后值与差；explore 和 more_promotions 的可读资格进度；锁定数量、任务名称与未确认原因。daily 仅统计范围内的简单活动，测验/投票明细为 `not_applicable`、原因 `interactive_activity_excluded`，不表示平台整组每日任务完成；正式停用的 extra 不计入业务完成要求。连续打卡只保留 bing_streak、app_streak 的当日计数及对应 `_days` 连续天数，移除依赖停做项目的每日活动连续打卡。桌面 App 周任务补充 `desktop_app_weekly` 周积分、`desktop_app_weekly_tasks` 总任务数及 `desktop_app_available` 当前已开放活动数；该能力完成不代表整周 70 分已全部获得。`platform_task_cycle` 明细标明平台当前任务日期，不能用 business_date 替代它判断任务重置。移动搜索仅当前清单可读时提供。后续失败可保留已确认阶段事实。
 - Epic：当前促销、本次新领、已在库、未确认数量和每个商品的 ID、名称、商店链接、结论。清单失败时数量为 null；完整空清单才为 0。尚未处理的商品也属于未确认。
 - Laowang：reward、streak、total_days 从签到页读取，汇总无需另读状态文件。
 - Aliyun：balance 前后值与差、pending_points，各社区分别报告签到和奖励状态。

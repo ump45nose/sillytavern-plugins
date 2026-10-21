@@ -5,7 +5,7 @@ const common = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
 const { parseProgress, progress, cards } = require("./activities.cjs");
 const {metric, number} = require("../../common/details.cjs");
-function details(raw, daily, app) {
+function details(raw, daily, app, includeExplore = true) {
   const {quota, quotas} = require("./search.cjs");
   const flyout = raw.flyoutResult, metrics = {}, items = [];
   const put = (key, q) => { metrics[key] = metric("points", q.earned, q.max); };
@@ -19,6 +19,7 @@ function details(raw, daily, app) {
   let locked = 0, omitted = 0;
   for (const [key, rows] of [["explore", flyout.exploreOnBingPromotions],
       ["more_promotions", flyout.morePromotions]]) {
+    if (key === "explore" && !includeExplore) continue;
     if (!Array.isArray(rows) || rows.length > 300) { put(key, quota(null)); continue; }
     const pointRows = rows.filter(x => number(x?.pointProgressMax) > 0);
     const currentRows = key === "more_promotions" ? applicable(pointRows) : pointRows;
@@ -80,7 +81,7 @@ function summarize(raw, daily, region = null) {
   if (!counters || typeof counters !== "object")
     throw Error("counter_inventory_unavailable");
   return {
-    daily: daily ? counter(daily.current, daily.max) : "unknown",
+    daily: daily?.max === 0 ? "not_applicable" : daily ? counter(daily.current, daily.max) : "unknown",
     desktop_search: group(counters.PCSearch ?? counters.pcSearch),
     mobile_search: group(counters.MobileSearch ?? counters.mobileSearch),
     explore: group(flyout.exploreOnBingPromotions, {
@@ -102,9 +103,12 @@ async function run(chromium, state, options = {}, deps = common) {
           timeout: 45000,
         });
         await deps.guard(page);
-        const daily = await progress(page);
+        if (!await progress(page)) throw Error("daily_progress_unavailable");
         const raw = await deps.readFlyout(context);
+        const current = require("./daily_cycle.cjs").inventory(raw, await cards(page)), cycle = current.date;
+        const daily = require("./daily_cycle.cjs").summary(current.rows);
         const business = summarize(raw, daily, options.region);
+        if (options.includeExplore === false) delete business.explore;
         const app = await page.evaluate(() => {
           const rows = [...document.querySelectorAll('[role="progressbar"]')]
             .filter(x => /^(Mobile App|移动应用|行動裝置應用程式)$/i.test(x.getAttribute('aria-label') || ''));
@@ -112,15 +116,13 @@ async function run(chromium, state, options = {}, deps = common) {
             max: rows[0].getAttribute('aria-valuemax')} : null;
         });
         business.app_daily = app ? counter(app.current, app.max) : "unknown";
-        const current = require("./daily_cycle.cjs").inventory(raw, await cards(page)), cycle = current.date;
         const streaks = require("./streaks.cjs").summary(
           require("./parser_loader.cjs").loadParser().snapshotPage(await deps.boundedHtml(page)).streaks);
-        const observed = details(raw, daily, app);
+        const observed = details(raw, daily, app, options.includeExplore !== false);
         return { execution: "ok", reason: "fresh_readonly_snapshot", cycle,
           business: {...business, ...streaks.business},
           details: {metrics: {...observed.metrics, ...streaks.details.metrics},
-            items: [...observed.items, ...current.rows.map(row => ({id: row.offerId, name: row.title,
-              status: row.complete ? "complete" : "incomplete", reason: "fresh_readback"})),
+            items: [...observed.items, ...daily.items,
               ...streaks.details.items, require("./daily_cycle.cjs").item(cycle)]} };
       },
     );

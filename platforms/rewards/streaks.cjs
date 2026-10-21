@@ -2,8 +2,8 @@
 const common = require("./browser_common.cjs");
 const {loadParser} = require("./parser_loader.cjs");
 const {metric} = require("../../common/details.cjs");
-const PARTNERS = {bing: "bing_streak", dailyset: "daily_set_streak", bingapp: "app_streak"};
-const LABELS = {bing: "必应连续打卡", dailyset: "每日活动连续打卡", bingapp: "APP连续打卡"};
+const PARTNERS = {bing: "bing_streak", bingapp: "app_streak"};
+const LABELS = {bing: "必应连续打卡", bingapp: "APP连续打卡"};
 function measure(row) {
   if (!row || row.activitiesTotal <= 0)
     return {status: "unknown", earned: null, max: null};
