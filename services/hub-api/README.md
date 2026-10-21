@@ -236,5 +236,6 @@ are printed; source business data is not changed. The repository is private; use
 existing checkout or authenticated GitHub CLI to retrieve this script. A successful
 run ends with `success: true`. The deployed service passed this real Chrome flow on
 2026-10-21 at 10:16 +08:00 on the owner's MacBook Pro: public modules/status=200,
-13 sources, and the revoked temporary device=401. Running image is
-`local/hub-api:4c7d8a7`; net/git remain partial for the source coverage described above.
+13 sources, and the revoked temporary device=401. Current running image is
+`local/hub-api:3d69313`, including the verified attention copy fix; net/git remain
+partial for the source coverage described above.

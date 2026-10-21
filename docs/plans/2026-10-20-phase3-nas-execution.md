@@ -67,7 +67,7 @@ Progress (each step is tested and committed separately):
   on 2026-10-21. Added only personal-hub to the existing seven OIDC clients; all other
   Authelia configuration, identities, secrets and source credentials compare unchanged.
   Removed HUB_DEV_TOKEN and activated production OIDC with exact verified sub allowlist.
-  Current running image 4c7d8a7; the default and configured public URL both use 28443.
+  Step-7 activation image 4c7d8a7; the default and configured public URL both use 28443.
   NPM created only proxy host 42, certificate 2, LAN 18190, no forward-auth, access logs
   disabled and request error logs suppressed. Other NPM hosts compare unchanged.
   Public base is **https://hub-home.172906573.xyz:28443**. Actual public 443 does not
@@ -96,7 +96,7 @@ Progress (each step is tested and committed separately):
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
-Production image is 4c7d8a7 (later documentation commits do not change code).
+Production image is 3d69313 (attention copy fix; later documentation commits do not change code).
 Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
 Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
 It is clean, with source changes committed and subtree release branches pushed;
@@ -135,11 +135,11 @@ Real desktop acceptance (2026-10-21 10:16 +08:00):
 | attention | ok | items=9 |
 
 No runtime configuration, source credential or image change was needed for this
-acceptance. Running image remains local/hub-api:4c7d8a7. Aggregate source integration
+acceptance. Browser acceptance used local/hub-api:4c7d8a7. Aggregate source integration
 into main remains deferred because the main worktree has others' uncommitted boot
 changes; the isolated source checkpoints and subtree release branches are pushed.
 
-Attention copy correction (2026-10-21, in progress):
+Attention copy correction (2026-10-21 10:40 +08:00, deployed):
 
 - Scope: readable provider names without duplicated window prefixes; readable reset,
   renewal and expiry subtitles in Asia/Shanghai. Preserve machine timestamps, IDs,
@@ -153,3 +153,19 @@ Attention copy correction (2026-10-21, in progress):
   and raw date subtitles before the change. All 45 backend tests now pass, including
   title boundaries, same-day/tomorrow/later/year-boundary reset times, missing/invalid
   timestamps, unchanged source timestamps/IDs and dismissal through the existing ID.
+
+- Release: local/hub-api:3d69313 is healthy. Before deployment, the actual API showed
+  one duplicated lowercase Cursor title and three raw ISO reset subtitles. Afterward,
+  both LAN and TLS-verified public token/attention/subs requests returned 200; all three
+  token reminders have readable titles/reset subtitles, including
+  `Cursor Models 额度已用 100%`. Existing reminder IDs match the pre-release IDs,
+  while token window reset fields remain timezone-aware ISO timestamps.
+- The temporary verification device was revoked; the next public request returned 401.
+  Only hub-api was recreated. The private credential file and subscription document
+  hashes are unchanged, with zero configured subscriptions. No source business writes
+  or source/Authelia/NPM restarts. Container hardening remains 1000:1001, readonly root,
+  cap_drop ALL and no-new-privileges. Boot check: missing=[], stopped_planned=[],
+  existing unplanned=[ai-resource-center, oauth-disclosure].
+- Private rollback checkpoint:
+  `/vol2/1000/Docker/hub/deployment-backups/attention-copy-20261021`.
+  Restore only this release's image tag if needed; preserve live data and credentials.
