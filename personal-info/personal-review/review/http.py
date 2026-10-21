@@ -24,12 +24,17 @@ def validation_error(error):
     message = str(error)
     if '已经过期' in message:
         return APIError(409, 'expired', message)
+    if '尚未结案' in message or '同一目标已有不同内容' in message:
+        return APIError(409, 'conflict', message)
     field = next((field for prefix, field in [
         ('一句话总结', '一句话总结今天'), ('日报必须包含一句话总结', '一句话总结今天'),
         ('瞬间', '瞬间'), ('日报未解', '未解'), ('阶段评论', 'text'),
         ('阶段总结原文', 'text'), ('必须为每个阶段目标', 'outcomes'),
         ('未知主线领域', 'domain'),
+        ('活跃阶段目标', 'goals'),
     ] if message.startswith(prefix)), None)
+    if message.startswith('阶段目标字段不能为空'):
+        field=next((k for k in ('goal','progress','deadline','success_criteria','stop_signal') if repr(k) in message),None)
     return APIError(422, 'validation', message, field)
 
 
@@ -40,6 +45,23 @@ class ReviewAPI:
         self.daily = DailyReviewService(state, config.policy, memos, config.flags.tasks)
         self.weekly = WeeklyReviewService(state, config.policy, memos, config.flags.tasks)
         self.stages = StageService(state, config.policy, memos, config.flags.tasks)
+        self.notifier = None
+
+    @staticmethod
+    def check(body, required, optional=None):
+        optional=optional or {}
+        if set(body)-set(required)-set(optional): raise APIError(422,'validation','请求包含未知字段')
+        for name,kind in required.items():
+            if name not in body or not isinstance(body[name],kind): raise APIError(422,'validation','字段类型无效',name)
+        for name,kind in optional.items():
+            if name in body and not isinstance(body[name],kind): raise APIError(422,'validation','字段类型无效',name)
+
+    def finalize(self, identifier, content):
+        with self.state.operation():
+            row=self.session(identifier);already=row['status']=='finalized'
+            result=(self.daily if row['kind']=='daily' else self.weekly).finalize(identifier,content,confirmation_source='app')
+        if not already and self.notifier: self.notifier(row['kind'],identifier.split(':',1)[1])
+        return {'status':'finalized','memo_name':result['memo_name'],'already':already}
 
     def iso(self, value):
         return datetime.fromisoformat(value).astimezone(self.config.timezone).isoformat() if value else None
@@ -182,6 +204,34 @@ class ReviewAPI:
         if len(parts)==4 and parts[:2]==['v1','reviews'] and method=='POST' and parts[3]=='preview':
             if set(body)!={'content'} or not isinstance(body['content'],str): raise APIError(422,'validation','正文必须是字符串','content')
             return self.preview(parts[2],body['content'])
+        if len(parts)==4 and parts[:2]==['v1','reviews'] and method=='POST' and parts[3]=='finalize':
+            self.check(body,{'content':str})
+            return self.finalize(parts[2],body['content'])
+        if method=='POST' and parts==['v1','stage','cycles']:
+            self.check(body,{}, {'starts_at':(str,type(None)),'dry_run':bool})
+            try: start=datetime.fromisoformat(body['starts_at']) if body.get('starts_at') else self.now()
+            except ValueError: raise APIError(422,'validation','起始时间无效','starts_at') from None
+            if start.tzinfo is None: raise APIError(422,'validation','起始时间必须包含时区','starts_at')
+            dry=body.get('dry_run',False)
+            result=self.stages.create_cycle(start.astimezone(self.config.timezone),dry_run=dry)
+            return {'status':'dry-run' if dry else 'created','cycle_id':result}
+        if method=='POST' and len(parts)==5 and parts[:3]==['v1','stage','goals'] and parts[4]=='comments':
+            self.check(body,{'text':str},{'dry_run':bool})
+            return self.stages.comment_goal(parts[3],body['text'],body.get('dry_run',False))
+        if method=='POST' and len(parts)==5 and parts[:3]==['v1','stage','cycles']:
+            if parts[4]=='goals':
+                fields={'domain':str,'goal':str,'progress':str,'deadline':str,'success_criteria':str,'stop_signal':str}
+                self.check(body,fields,{'dry_run':bool})
+                return self.stages.create_published_goal(parts[3],body['domain'],{k:body[k] for k in fields if k!='domain'},body.get('dry_run',False))
+            if parts[4]=='close':
+                self.check(body,{'text':str,'outcomes':dict},{'dry_run':bool})
+                if any(not isinstance(k,str) or not isinstance(v,str) for k,v in body['outcomes'].items()):
+                    raise APIError(422,'validation','目标结果必须是字符串','outcomes')
+                with self.state.operation():
+                    already=self.state.get_idempotent('stage-close',parts[3]) is not None
+                    result=self.stages.close_cycle(parts[3],body['text'],body['outcomes'],body.get('dry_run',False),confirmation_source='app')
+                if not already and not body.get('dry_run',False) and self.notifier: self.notifier('stage',parts[3])
+                return {key:value for key,value in result.items() if key!='confirmed_from'}
         raise APIError(404,'not_found','接口不存在')
 
 

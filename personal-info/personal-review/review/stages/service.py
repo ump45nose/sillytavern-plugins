@@ -8,7 +8,7 @@ import re
 import uuid
 
 from review.ledger import MemosClient
-from review.state import StateRepository
+from review.state import StateRepository, serialized
 
 
 class StageService:
@@ -28,7 +28,8 @@ class StageService:
         self.memos = memos
         self.enable_tasks = enable_tasks
 
-    def create_cycle(self, starts_at: datetime) -> str:
+    @serialized
+    def create_cycle(self, starts_at: datetime, dry_run: bool = False) -> str | None:
         """在没有活跃或待结案周期时创建新的 42 天周期。"""
 
         with self.state.connect() as connection:
@@ -37,6 +38,8 @@ class StageService:
             ).fetchone()
             if blocked:
                 raise ValueError(f"周期 {blocked['id']} 尚未结案")
+            if dry_run:
+                return None
             cycle_id = f"{starts_at.year}-S{uuid.uuid4().hex[:4].upper()}"
             connection.execute(
                 "INSERT INTO stage_cycles(id,starts_at,ends_at,status) VALUES(?,?,?,'active')",
@@ -82,7 +85,8 @@ class StageService:
             )
         return {"status": action, "memo_name": memo_name, "domain": domain}
 
-    def add_goal(self, cycle_id: str, domain: str, payload: dict) -> str:
+    @serialized
+    def add_goal(self, cycle_id: str, domain: str, payload: dict, dry_run: bool = False) -> str | None:
         """创建目标运行索引；权威正文仍必须由 Memos 保存。"""
 
         if domain not in self.policy["stages"]["domains"]:
@@ -92,14 +96,16 @@ class StageService:
             raise ValueError(f"阶段目标缺少字段：{sorted(missing)}")
         self._require_nonempty(payload, required, "阶段目标")
         with self.state.connect() as connection:
-            cycle = connection.execute("SELECT status FROM stage_cycles WHERE id=?", (cycle_id,)).fetchone()
-            if not cycle or cycle["status"] != "active":
+            cycle = connection.execute("SELECT status,ends_at FROM stage_cycles WHERE id=?", (cycle_id,)).fetchone()
+            if not cycle or cycle["status"] != "active" or datetime.fromisoformat(cycle['ends_at'])<=datetime.now().astimezone():
                 raise ValueError("阶段周期不存在或已冻结")
             count = connection.execute(
                 "SELECT COUNT(*) FROM stage_goals WHERE cycle_id=? AND status='active'", (cycle_id,)
             ).fetchone()[0]
             if count >= int(self.policy["stages"]["max_active_goals"]):
                 raise ValueError("活跃阶段目标不能超过五个")
+            if dry_run:
+                return None
             goal_id = f"{cycle_id}-{uuid.uuid4().hex[:6]}"
             connection.execute(
                 "INSERT INTO stage_goals(id,cycle_id,domain,status,payload_json) VALUES(?,?,?,'active',?)",
@@ -107,6 +113,7 @@ class StageService:
             )
         return goal_id
 
+    @serialized
     def publish_goal(self, goal_id: str, dry_run: bool = False) -> dict:
         """把已确认目标发布为置顶 Memo，并关联所属主线。"""
 
@@ -162,6 +169,27 @@ class StageService:
                 },
             )
         return {"status": "published", "memo_name": memo_name, "goal_id": goal_id}
+
+    @serialized
+    def create_published_goal(self, cycle_id: str, domain: str, payload: dict, dry_run: bool = False) -> dict:
+        """One service operation: retain unfinished indexes and deduplicate retries."""
+        with self.state.connect() as connection:
+            rows = connection.execute('SELECT * FROM stage_goals WHERE cycle_id=? AND domain=?', (cycle_id,domain)).fetchall()
+            cycle = connection.execute('SELECT * FROM stage_cycles WHERE id=?',(cycle_id,)).fetchone()
+            mainline = connection.execute('SELECT memo_name FROM mainlines WHERE domain=?',
+                                         (self.policy['stages']['mainline_domain'],)).fetchone()
+        if not mainline: raise ValueError('必须先发布所属领域主线')
+        existing = next((row for row in rows if json.loads(row['payload_json']).get('goal')==payload.get('goal')),None)
+        if existing and json.loads(existing['payload_json'])!=payload:
+            raise ValueError('同一目标已有不同内容，请先处理原目标')
+        if dry_run:
+            if not existing: self.add_goal(cycle_id,domain,payload,dry_run=True)
+            return {'status':'dry-run','goal_id':None,'memo_name':None,
+                'content':self._goal_content(existing['id'] if existing else '预览',cycle_id,domain,cycle['starts_at'],cycle['ends_at'],payload)}
+        if existing and existing['memo_name']:
+            return {'status':'published','goal_id':existing['id'],'memo_name':existing['memo_name']}
+        identifier = existing['id'] if existing else self.add_goal(cycle_id,domain,payload)
+        return self.publish_goal(identifier)
 
     def reconcile(self, dry_run: bool = True) -> dict:
         """从固定格式 Memos 校验并重建本地阶段索引，不修改远端账本。"""
@@ -223,6 +251,7 @@ class StageService:
                 )
         return result
 
+    @serialized
     def comment_goal(self, goal_id: str, user_text: str, dry_run: bool = False) -> dict:
         """把用户确认的阶段进度或决定日志作为目标评论写入。"""
 
@@ -307,9 +336,12 @@ class StageService:
                 "这套模板哪个字段我在敷衍，删掉：\n"
                 "主线的可观察指标动了吗：")
 
-    def close_cycle(self, cycle_id: str, user_text: str, outcomes: dict[str, str], dry_run: bool = False) -> dict:
+    @serialized
+    def close_cycle(self, cycle_id: str, user_text: str, outcomes: dict[str, str], dry_run: bool = False, confirmation_source: str = 'telegram') -> dict:
         """照抄用户阶段总结并强制每个目标进入终态。"""
 
+        previous = self.state.get_idempotent('stage-close',cycle_id)
+        if previous: return previous
         allowed = set(self.policy["stages"]["allowed_terminal_states"])
         if not user_text.strip():
             raise ValueError("阶段总结原文不能为空")
@@ -330,9 +362,6 @@ class StageService:
             return {"status": "dry-run", "content": content}
         if self.memos is None:
             raise RuntimeError("未配置 Memos，不能结案")
-        previous = self.state.get_idempotent("stage-close", cycle_id)
-        if previous:
-            return previous
         published = self.state.get_idempotent("stage-close-publish", cycle_id)
         if published:
             memo_name = str(published["memo_name"])
@@ -362,7 +391,7 @@ class StageService:
             connection.execute(
                 "UPDATE stage_cycles SET status='closed',summary_memo=? WHERE id=?", (memo_name, cycle_id)
             )
-        result = {"status": "closed", "memo_name": memo_name}
+        result = {"status": "closed", "memo_name": memo_name, "confirmed_from":confirmation_source}
         self.state.put_idempotent("stage-close", cycle_id, result)
         self.state.enqueue_projection("user_md", f"stage-close:{cycle_id}", result)
         self.state.enqueue_projection("mem0", f"stage-close:{cycle_id}", {"content": content, **result})
