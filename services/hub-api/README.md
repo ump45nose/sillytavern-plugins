@@ -175,6 +175,13 @@ continuous failure after 30 minutes or data age over six hours. Status/attention
 never refresh sources in the background. A client batch refreshes requested modules
 before attention is calculated. No notifications or background polling is added here.
 
+Attention titles use provider display names and omit a repeated provider prefix in
+window labels: `Cursor Models 额度已用 100%`. Subtitles are display text: reset times
+use Asia/Shanghai (`20:00 重置`, `明天 00:30 重置`), later dates include month/day and
+cross-year dates include the year. Renewal/expiry subtitles include the event label.
+Absent reset times remain null. Source timestamps, attention IDs and handling state
+retain their original formats and meanings.
+
 Handling state stores IDs, first onset, dismissed flag and snooze deadline only. Known
 GitHub onset is preserved; unknown conflict onset begins at local observation. All
 GitHub conditions are observed even before the age threshold so a card can be handled

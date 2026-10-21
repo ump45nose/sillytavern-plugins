@@ -138,3 +138,18 @@ No runtime configuration, source credential or image change was needed for this
 acceptance. Running image remains local/hub-api:4c7d8a7. Aggregate source integration
 into main remains deferred because the main worktree has others' uncommitted boot
 changes; the isolated source checkpoints and subtree release branches are pushed.
+
+Attention copy correction (2026-10-21, in progress):
+
+- Scope: readable provider names without duplicated window prefixes; readable reset,
+  renewal and expiry subtitles in Asia/Shanghai. Preserve machine timestamps, IDs,
+  deduplication/dismiss/snooze state and existing net/git source behavior.
+- Subscription configuration remains untouched; an empty list is valid.
+- Acceptance: reproduce the original title/ISO subtitle problem in regression tests,
+  cover local-day/year boundaries and missing time, then run backend tests and verify
+  the deployed authenticated token/attention API. Update only hub-api through the formal
+  hub stack, preserve credentials/data and record the released image/checks here.
+- Code verification: regression tests reproduced the duplicate lowercase Cursor title
+  and raw date subtitles before the change. All 45 backend tests now pass, including
+  title boundaries, same-day/tomorrow/later/year-boundary reset times, missing/invalid
+  timestamps, unchanged source timestamps/IDs and dismissal through the existing ID.

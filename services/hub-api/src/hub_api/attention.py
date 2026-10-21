@@ -1,9 +1,38 @@
 from datetime import date, datetime, timedelta
+import re
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request
 
 from .configuration import json_body, preferences, subscriptions
 from .modules.crm import assemble as crm_module
+
+
+TOOL_NAMES = {'antigravity':'Antigravity','claude':'Claude','codex':'Codex',
+              'copilot':'Copilot','cursor':'Cursor','grok':'Grok','zai':'Z.ai'}
+
+
+def limit_label(provider, window):
+    name=TOOL_NAMES.get(provider.lower(),provider)
+    label=(window or '').strip()
+    if re.match(re.escape(name)+r'(?=\W|$)',label,re.IGNORECASE):
+        return name+label[len(name):]
+    return (name+' '+label).strip()
+
+
+def day_label(day, today):
+    if day==today: return '今天'
+    if day==today+timedelta(days=1): return '明天'
+    return (f'{day.year}年' if day.year!=today.year else '')+f'{day.month}月{day.day}日'
+
+
+def reset_subtitle(value, now):
+    reset=instant(value)
+    if reset is None: return None
+    reset=reset.astimezone(ZoneInfo('Asia/Shanghai'))
+    today=now.astimezone(reset.tzinfo).date()
+    prefix='' if reset.date()==today else day_label(reset.date(),today)+' '
+    return prefix+reset.strftime('%H:%M')+' 重置'
 
 
 def instant(value):
@@ -39,7 +68,7 @@ def calculate(manager):
                 if key not in limits or w['percent']>limits[key][1]['percent']: limits[key]=(tool,w)
         for key,(tool,w) in limits.items():
             if w['percent']>=p['token_limit_percent']:
-                add(key,'token_limit',f"{tool['tool']} {w['label']}额度已用 {w['percent']:g}%",'token',subtitle=w.get('resets_at'))
+                add(key,'token_limit',f"{limit_label(tool['tool'],w['label'])} 额度已用 {w['percent']:g}%",'token',subtitle=reset_subtitle(w.get('resets_at'),now))
     usage=cached('usage')
     if usage and usage['net'].get('pools') is not None:
         scopes.add('traffic-low')
@@ -48,7 +77,8 @@ def calculate(manager):
             low=total is not None and total>0 and used is not None and (total-used)/total*100<p['traffic_remaining_percent']
             expires=pool.get('expires_on');days=(date.fromisoformat(expires)-now.date()).days if expires else None
             if low or (days is not None and days<=p['traffic_expiry_days']):
-                add('traffic-low:'+pool['id'],'traffic_low',pool['name']+' 流量不足或临近到期','net',subtitle=expires)
+                add('traffic-low:'+pool['id'],'traffic_low',pool['name']+' 流量不足或临近到期','net',
+                    subtitle=day_label(date.fromisoformat(expires),now.date())+' 到期' if expires else None)
     git=cached('github')
     if git is not None:
         if not git.get('_partial'): scopes.update(('git-waiting','pr-blocked'))
@@ -61,7 +91,8 @@ def calculate(manager):
     scopes.add('subs-renew')
     for item in subscriptions(store):
         if item['next_renewal'] and 0<=(date.fromisoformat(item['next_renewal'])-now.date()).days<=p['subs_renew_days']:
-            add('subs-renew:'+item['id'],'subs_renew',item['name']+' 即将续费','subs',subtitle=item['next_renewal'],severity='info')
+            add('subs-renew:'+item['id'],'subs_renew',item['name']+' 即将续费','subs',
+                subtitle=day_label(date.fromisoformat(item['next_renewal']),now.date())+' 续费',severity='info')
     crm=cached('crm')
     if crm is not None:
         scopes.add('stale-contact')
