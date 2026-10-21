@@ -10,6 +10,7 @@ enum NavEntry {
         case "usage": "chart.bar"
         case "sky": "desktopcomputer"
         case "memos": "note.text"
+        case "review": "text.book.closed"
         default: "square.grid.2x2"
         }
     }
@@ -329,6 +330,8 @@ struct PageView: View {
         case .memos:
             VStack(alignment: .leading, spacing: 18) { PageHeader(page: page); MemosPage() }
                 .padding(.horizontal, 28).padding(.bottom, 24)
+        case .review:
+            ReviewView()
         case .grid:
             ScrollViewReader { proxy in
                 HubScroll {
@@ -373,6 +376,7 @@ private struct PageHeader: View {
         case .grid: page.items.map(\.module)
         case .sky: [.sky]
         case .memos: [.memos]
+        case .review: [.goals]
         }
         let stamp = HubFormat.stamp(modules.compactMap(state.updatedAt).max())
         HStack(alignment: .bottom) {

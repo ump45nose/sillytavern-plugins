@@ -29,7 +29,7 @@ struct DailyEditor: View {
                 note: issues.isEmpty ? "健康和财务确认时自动填入" : "还有 \(issues.count) 项待填写或修正", run: commit))
                 .padding(.bottom, 16)
             HStack(alignment: .top, spacing: 20) {
-                MaterialPanel(session: session).frame(maxWidth: .infinity)
+                MaterialPanel(session: session).frame(minWidth: 220, maxWidth: .infinity)
                 Group {
                     switch session.status {
                     case .finalized: FinalView(session: session, done: done)
@@ -37,7 +37,7 @@ struct DailyEditor: View {
                     case .open: fields
                     }
                 }
-                .frame(width: 460)
+                .frame(minWidth: 360, idealWidth: 460, maxWidth: 480)
             }
         }
         .padding(.horizontal, 28).padding(.top, 30).padding(.bottom, 20)
@@ -172,7 +172,7 @@ struct WeeklyEditor: View {
                 note: text == template ? "先在模板上填写" : nil, run: commit))
                 .padding(.bottom, 16)
             HStack(alignment: .top, spacing: 20) {
-                MaterialPanel(session: session).frame(maxWidth: .infinity)
+                MaterialPanel(session: session).frame(minWidth: 220, maxWidth: .infinity)
                 Group {
                     if session.status == .finalized {
                         FinalView(session: session, done: done)
@@ -182,7 +182,7 @@ struct WeeklyEditor: View {
                         editor
                     }
                 }
-                .frame(width: 520)
+                .frame(minWidth: 380, idealWidth: 520, maxWidth: 560)
             }
         }
         .padding(.horizontal, 28).padding(.top, 30).padding(.bottom, 20)

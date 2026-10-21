@@ -106,23 +106,35 @@ enum QARender {
         for size in [ModuleSize.compact, .detail] {
             await shot("goals-\(size.rawValue)", width: size == .compact ? 340 : 640, ModuleCard(item: LayoutItem(.goals, size), index: 0, count: 1).padding(20).background(Palette.bg))
         }
+        state.go("home")
+        if let goals = state.page.items.firstIndex(where: { $0.module == .goals }) {
+            let before = state.layout
+            state.editPage { $0.setHeight(.medium, at: goals) }
+            state.editing = true
+            await shot("page-heights", width: 1320, height: 1100, MainView().background(Palette.bg))
+            state.editing = false
+            state.layout = before
+        }
+
         let review = state.review
+        state.go("review")
         for target in [ReviewTarget.latest(.daily), .latest(.weekly), .stage] {
             review.open(target)
             await review.reload()
             if case .session(let id) = review.selection { await review.load(id) }
             let name = switch target { case .latest(let k): "review-\(k.rawValue)"; default: "review-stage" }
-            await shot(name, width: 1180, height: 780, ReviewView())
+            await shot(name, width: 1320, height: 860, MainView().background(Palette.bg))
+            if name == "review-daily" { await shot("review-daily-narrow", width: 1100, height: 760, MainView().background(Palette.bg)) }
         }
         if let finalized = review.lists[.daily]?.first(where: { $0.status == .finalized }) {
             review.open(.session(finalized.id))
             await review.load(finalized.id)
-            await shot("review-daily-done", width: 1180, height: 780, ReviewView())
+            await shot("review-daily-done", width: 1320, height: 860, MainView().background(Palette.bg))
         }
         if CommandLine.arguments.contains("--qa-cache") { return }
         state.hub.previewClose()
         review.open(.stage)
-        await shot("review-stage-close", width: 1180, height: 1500, ReviewView())
+        await shot("review-stage-close", width: 1320, height: 1500, MainView().background(Palette.bg))
     }
 }
 

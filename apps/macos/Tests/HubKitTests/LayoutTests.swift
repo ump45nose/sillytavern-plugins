@@ -121,3 +121,37 @@ import Testing
     page.resize(at: health, by: 3)
     #expect(page.items[health].span == nil, "compact cards keep their fixed span")
 }
+
+@Test func olderLayoutsGainNewBuiltinPagesInPlace() throws {
+    var old = LayoutDocument.default
+    old.pages.removeAll { $0.id == "review" }
+    let added = old.addPage(title: "阅读")
+    let custom = try #require(added)
+    let migrated = old.withBuiltins()
+    #expect(migrated.pages.map(\.id) == ["home", "life", "usage", "sky", "memos", "review", custom])
+    #expect(migrated.withBuiltins() == migrated)
+
+    var full = LayoutDocument.default
+    full.pages.removeAll { $0.id == "review" }
+    while full.addPage() != nil {}
+    #expect(full.withBuiltins() == full, "a full document is left alone")
+}
+
+@Test func unknownPageKindsReadAsGrids() throws {
+    let json = #"{"version":1,"pages":[{"id":"x","title":"X","subtitle":"","kind":"timeline","items":[{"module":"token","size":"detail","height":"tall"}]}]}"#
+    let doc = try JSONDecoder().decode(LayoutDocument.self, from: Data(json.utf8))
+    #expect(doc.pages[0].kind == .grid)
+    #expect(doc.pages[0].items[0].height == .tall)
+}
+
+@Test func onlyDetailCardsTakeAFixedHeight() {
+    var page = LayoutDocument.default.page("home")!
+    let goals = page.items.firstIndex { $0.module == .goals }!
+    page.setHeight(.medium, at: goals)
+    #expect(page.items[goals].effectiveHeight == .medium)
+    page.setSize(.compact, at: goals)
+    #expect(page.items[goals].effectiveHeight == nil)
+    let health = page.items.firstIndex { $0.module == .health }!
+    page.setHeight(.tall, at: health)
+    #expect(page.items[health].height == nil)
+}

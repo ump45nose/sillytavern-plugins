@@ -11,11 +11,18 @@ struct ModuleCard: View {
 
     private var info: ModuleInfo { item.module.info }
     private var compact: Bool { item.size == .compact }
+    private var fixedHeight: CGFloat? { info.bare ? nil : item.effectiveHeight.map { CGFloat($0.points) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if info.bare {
                 ModuleBody(id: item.module, size: item.size)
+            } else if fixedHeight != nil {
+                header.padding(.bottom, 14)
+                HubScroll {
+                    ModuleBody(id: item.module, size: item.size).frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .frame(maxHeight: .infinity)
             } else {
                 header.padding(.bottom, 14)
                 ModuleBody(id: item.module, size: item.size)
@@ -23,7 +30,7 @@ struct ModuleCard: View {
             }
         }
         .padding(info.bare ? EdgeInsets(top: 6, leading: 2, bottom: 8, trailing: 2) : EdgeInsets(top: 16, leading: 18, bottom: 18, trailing: 18))
-        .frame(height: compact && !info.autoHeight ? Metrics.compactHeight : nil)
+        .frame(height: compact && !info.autoHeight ? Metrics.compactHeight : fixedHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background { if !info.bare { cardBackground } }
         .overlay(alignment: .topTrailing) { if info.bare { tools.padding(.top, 2) } }
@@ -48,8 +55,8 @@ struct ModuleCard: View {
                 .frame(width: 26, height: 26)
                 .background(RoundedRectangle(cornerRadius: 8).fill(info.tone.tint))
             Text(info.title).font(Typo.sans(13, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-            if !compact { Text(info.meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
-            if let stamp = state.stamp(item.module) { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
+            if !compact && !state.editing { Text(info.meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
+            if !state.editing, let stamp = state.stamp(item.module) { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
             if let status = state.hubStatus(item.module) { HubBadge(status: status) }
             Spacer(minLength: 0)
             tools
@@ -73,29 +80,39 @@ struct ModuleCard: View {
                         toolButton("arrow.left.and.line.vertical.and.arrow.right") { state.editPage { $0.resize(at: index, by: 1) } }
                             .disabled(span >= Page.spanRange.upperBound).help("变宽")
                     }
+                    if !info.bare {
+                        segments([("自", nil), ("中", .medium), ("高", .tall)] as [(String, ModuleHeight?)], item.height) { h in
+                            state.editPage { $0.setHeight(h, at: index) }
+                        }
+                        .help("卡片高度：自动 / 中 / 高，超出部分在卡片内滚动")
+                    }
                 }
             }
-            HStack(spacing: 0) {
-                sizeButton("简", .compact)
-                sizeButton("详", .detail)
+            segments([("简", .compact), ("详", .detail)] as [(String, ModuleSize)], item.size) { size in
+                state.editPage { $0.setSize(size, at: index) }
             }
-            .padding(2)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.sunk))
         }
         .opacity(hovering || state.editing ? 1 : 0)
         .animation(Motion.fast, value: hovering)
     }
 
-    private func sizeButton(_ label: String, _ size: ModuleSize) -> some View {
-        let on = item.size == size
-        return Button { if !on { state.editPage { $0.setSize(size, at: index) } } } label: {
-            Text(label).font(Typo.sans(11, on ? .semibold : .regular))
-                .foregroundStyle(on ? Palette.ink : Palette.ink3)
-                .frame(width: 24, height: 20)
-                .background(RoundedRectangle(cornerRadius: 6).fill(on ? Palette.card : .clear).shadow(color: .black.opacity(on ? 0.06 : 0), radius: 1, y: 1))
-                .contentShape(Rectangle())
+    private func segments<V: Equatable>(_ options: [(String, V)], _ current: V, _ pick: @escaping (V) -> Void) -> some View {
+        HStack(spacing: 0) {
+            ForEach(options.indices, id: \.self) { i in
+                let (label, value) = options[i]
+                let on = value == current
+                Button { if !on { pick(value) } } label: {
+                    Text(label).font(Typo.sans(11, on ? .semibold : .regular))
+                        .foregroundStyle(on ? Palette.ink : Palette.ink3)
+                        .frame(width: 24, height: 20)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(on ? Palette.card : .clear).shadow(color: .black.opacity(on ? 0.06 : 0), radius: 1, y: 1))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Palette.sunk))
     }
 
     private func toolButton(_ symbol: String, _ action: @escaping () -> Void) -> some View {

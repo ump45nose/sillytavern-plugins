@@ -29,7 +29,6 @@ final class AppState {
     var openSettings: () -> Void = {}
     var showQuickTask: () -> Void = {}
     var showQuickMemo: () -> Void = {}
-    var openReviewWindow: () -> Void = {}
     /// The View menu's ⌘1–⌘9 items follow the page order.
     var pagesChanged: () -> Void = {}
 
@@ -89,7 +88,7 @@ final class AppState {
 
     private init() {
         review = ReviewDesk(hub: hub)
-        layout = store.load()
+        layout = store.load().withBuiltins()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
         userName = UserDefaults.standard.string(forKey: Keys.userName) ?? "玮康"
         avatar = Self.isQA ? nil : NSImage(contentsOf: Self.avatarURL)
@@ -248,9 +247,10 @@ final class AppState {
         if let url = entry.url { NSWorkspace.shared.open(url) } else if let m = entry.target { openMainWindow(nil); focus(m) }
     }
 
+    /// Review lives on its built-in page in the main window.
     func openReview(_ target: ReviewTarget) {
         review.open(target)
-        openReviewWindow()
+        openMainWindow("review")
     }
 
     // MARK: Goals
@@ -288,9 +288,11 @@ final class AppState {
                 if layout != local {
                     outcome.state.dirty = true
                 } else if let doc = outcome.adopt {
+                    let migrated = doc.withBuiltins()
                     adopting = true
-                    withAnimation(Motion.spring) { layout = doc }
+                    withAnimation(Motion.spring) { layout = migrated }
                     adopting = false
+                    if migrated != doc { outcome.state.dirty = true }
                 }
                 layoutSync = outcome.state
                 saveLayoutSync()

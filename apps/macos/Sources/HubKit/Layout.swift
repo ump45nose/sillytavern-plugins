@@ -24,17 +24,29 @@ public enum ModuleSize: String, Codable, Sendable {
     public var toggled: ModuleSize { self == .compact ? .detail : .compact }
 }
 
+/// Fixed heights for detail cards; content beyond them scrolls inside the card. nil is automatic.
+public enum ModuleHeight: String, Codable, CaseIterable, Sendable {
+    case medium, tall
+
+    public var points: Double { self == .medium ? 360 : 560 }
+}
+
 public struct LayoutItem: Codable, Hashable, Sendable, Identifiable {
     public var module: ModuleID
     public var size: ModuleSize
     /// Overrides the default span; only applies to the detail size.
     public var span: Int?
+    /// Only applies to the detail size.
+    public var height: ModuleHeight?
 
-    public init(_ module: ModuleID, _ size: ModuleSize, span: Int? = nil) {
+    public init(_ module: ModuleID, _ size: ModuleSize, span: Int? = nil, height: ModuleHeight? = nil) {
         self.module = module
         self.size = size
         self.span = span
+        self.height = height
     }
+
+    public var effectiveHeight: ModuleHeight? { size == .detail ? height : nil }
 
     public var id: ModuleID { module }
 
@@ -45,7 +57,12 @@ public struct LayoutItem: Codable, Hashable, Sendable, Identifiable {
 }
 
 public enum PageKind: String, Codable, Sendable {
-    case grid, sky, memos
+    case grid, sky, memos, review
+
+    /// A kind from a newer client reads as a plain grid instead of failing the whole document.
+    public init(from decoder: Decoder) throws {
+        self = PageKind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .grid
+    }
 }
 
 public struct Page: Codable, Hashable, Sendable, Identifiable {
@@ -79,6 +96,11 @@ public struct Page: Codable, Hashable, Sendable, Identifiable {
         guard items.indices.contains(index), items[index].size == .detail else { return }
         let next = min(max(items[index].effectiveSpan + offset, Self.spanRange.lowerBound), Self.spanRange.upperBound)
         items[index].span = next == items[index].module.defaultSpan(.detail) ? nil : next
+    }
+
+    public mutating func setHeight(_ height: ModuleHeight?, at index: Int) {
+        guard items.indices.contains(index), items[index].size == .detail else { return }
+        items[index].height = height
     }
 
     public mutating func move(at index: Int, by offset: Int) {
@@ -167,6 +189,15 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
         return true
     }
 
+    /// Built-in pages introduced after this document was written, inserted at their default position.
+    public func withBuiltins() -> LayoutDocument {
+        var doc = self
+        for (i, page) in LayoutDocument.default.pages.enumerated() where doc.page(page.id) == nil && doc.canAddPage {
+            doc.pages.insert(page, at: min(i, doc.pages.count))
+        }
+        return doc
+    }
+
     /// Restores a built-in page's modules (keeping its name and position); custom pages are emptied.
     public mutating func resetPage(_ id: String) {
         let items = LayoutDocument.default.page(id)?.items ?? []
@@ -195,6 +226,7 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
         ]),
         Page(id: "sky", title: "电脑历史", subtitle: "MacPro 与 MacAir 的 6 小时窗口摘要", kind: .sky),
         Page(id: "memos", title: "Memos", subtitle: "直接嵌入 Memos · ⌃⌥M 随时记录", kind: .memos),
+        Page(id: "review", title: "复盘", subtitle: "日报、周报与本阶段", kind: .review),
     ])
 }
 

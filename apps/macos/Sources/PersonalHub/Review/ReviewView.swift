@@ -2,14 +2,14 @@ import AppKit
 import HubKit
 import SwiftUI
 
-/// The review window: this cycle's mainline and goals, plus daily and weekly sessions to confirm.
+/// The review page: this cycle's mainline and goals, plus daily and weekly sessions to confirm.
 struct ReviewView: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         let desk = state.review
         HStack(spacing: 0) {
-            ReviewSidebar().frame(width: Metrics.sidebarWidth).background(Palette.side)
+            ReviewSidebar().frame(width: 216)
             Rectangle().fill(Palette.line).frame(width: 1)
             Group {
                 switch desk.selection {
@@ -19,7 +19,6 @@ struct ReviewView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 1040, minHeight: 680)
         .background(Palette.bg)
         .preferredColorScheme(.light)
         .tint(Tone.clay.color)
@@ -33,14 +32,13 @@ private struct ReviewSidebar: View {
     var body: some View {
         let desk = state.review
         VStack(alignment: .leading, spacing: 0) {
-            // The window's title bar overlays this strip; the header stays below the traffic lights.
             VStack(alignment: .leading, spacing: 4) {
-                Text("复盘").font(Typo.serif(24))
+                Text(state.layout.page("review")?.title ?? "复盘").font(Typo.serif(26)).tracking(-0.4)
                 if let direction = desk.goals?.mainline?.direction {
                     Text(direction).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(2).help(direction)
                 }
             }
-            .padding(.horizontal, 20).padding(.top, 46).padding(.bottom, 10)
+            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 10)
             HubScroll {
                 VStack(alignment: .leading, spacing: 2) {
                     row(.stage, title: "本阶段", detail: desk.goals?.cycle.map { "第 \($0.day ?? 0) / \($0.total ?? 42) 天" },
@@ -185,7 +183,7 @@ struct MaterialPanel: View {
                 Label11(raw || session.delivered == nil ? "当天材料" : "灵珺发来的")
                 Spacer()
                 if session.delivered != nil {
-                    Segmented(options: [(false, "灵珺"), (true, "材料")], selection: $raw)
+                    Segmented(options: [(false, "灵珺"), (true, "材料")], selection: $raw).fixedSize()
                 }
             }
             .padding(.bottom, 10)
@@ -229,13 +227,18 @@ struct SessionHeader: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             Text(ReviewText.title(kind: session.kind, label: session.label) + " · " + session.kind.title).font(Typo.serif(26))
-            if let chip = ReviewText.chip(session.status) { Chip(text: chip.0, tone: chip.1) }
-            Spacer()
-            if session.status == .open, let left = ReviewText.remaining(session.expiresAt) {
-                Text(left).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                .lineLimit(1).fixedSize()
+            if let chip = ReviewText.chip(session.status) { Chip(text: chip.0, tone: chip.1).fixedSize() }
+            Spacer(minLength: 8)
+            // Notes give way before the title or the action button do.
+            let left = session.status == .open ? ReviewText.remaining(session.expiresAt) : nil
+            let note = session.status == .open ? action?.note : nil
+            ViewThatFits(in: .horizontal) {
+                notes([left, note])
+                notes([note])
+                Color.clear.frame(width: 0, height: 0)
             }
             if let action, session.status == .open {
-                if let note = action.note { Text(note).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1) }
                 Button(action: action.run) {
                     HStack(spacing: 6) {
                         Text(action.title)
@@ -245,8 +248,16 @@ struct SessionHeader: View {
                 .buttonStyle(.hubPrimary)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!action.enabled)
+                .fixedSize()
             }
         }
+    }
+
+    private func notes(_ texts: [String?]) -> some View {
+        HStack(spacing: 10) {
+            ForEach(texts.compactMap { $0 }, id: \.self) { Text($0).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1) }
+        }
+        .fixedSize()
     }
 }
 
