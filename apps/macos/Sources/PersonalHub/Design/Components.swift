@@ -328,7 +328,8 @@ struct ArcGauge: View {
 }
 
 struct Bars: View {
-    var values: [Double]
+    /// nil is an unknown value: drawn as a faint stub rather than as zero.
+    var values: [Double?]
     var height: CGFloat = 64
     var color: Color
     var highlight: Set<Int>? = nil
@@ -336,14 +337,14 @@ struct Bars: View {
     @ViewState private var shown: CGFloat = 0
 
     var body: some View {
-        let maxV = values.max() ?? 1
+        let maxV = max(values.compactMap { $0 }.max() ?? 1, 0.000_001)
         VStack(spacing: 5) {
             HStack(alignment: .bottom, spacing: 0) {
                 ForEach(values.indices, id: \.self) { i in
                     let on = highlight.map { $0.contains(i) } ?? (i == values.count - 1)
                     RoundedRectangle(cornerRadius: 1.6)
-                        .fill(on ? color : Color(hex: "#E7E0D2"))
-                        .frame(height: max(1.5, values[i] / maxV * height))
+                        .fill(values[i] == nil ? Palette.line2 : on ? color : Color(hex: "#E7E0D2"))
+                        .frame(height: values[i].map { max(1.5, $0 / maxV * height) } ?? 1)
                         .scaleEffect(x: 1, y: shown, anchor: .bottom)
                         .animation(Motion.grow.delay(Double(i) * 0.028), value: shown)
                         .padding(.horizontal, 0)
@@ -363,7 +364,14 @@ struct Bars: View {
         .modifier(AppearProgress(animation: .linear(duration: 0.01), progress: $shown))
     }
 
-    static let days14 = ["7", "", "9", "", "11", "", "13", "", "15", "", "17", "", "19", "今"]
+    /// Day-of-month on every other bar, ending with 今 for today. `dates` are `YYYY-MM-DD`.
+    static func dayLabels(_ dates: [String]) -> [String] {
+        dates.indices.map { i in
+            if i == dates.count - 1 { return "今" }
+            guard (dates.count - 1 - i) % 2 == 0, let d = Int(dates[i].suffix(2)) else { return "" }
+            return "\(d)"
+        }
+    }
 }
 
 struct AreaLine: View {

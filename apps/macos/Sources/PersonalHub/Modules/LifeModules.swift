@@ -1,3 +1,5 @@
+import AVFoundation
+import AppKit
 import HubKit
 import SwiftUI
 
@@ -8,60 +10,103 @@ struct HealthModule: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let h = state.snapshot.health
-        let stepPct = Double(h.steps) / Double(h.stepGoal) * 100
-        if size == .compact {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    Hero(value: Double(h.steps), unit: "步")
-                    Spacer()
-                    Ring(value: stepPct, color: Tone.olive.color, size: 46, width: 6)
-                }
-                Text("睡眠 \(sleepText(h.sleepMinutes)) · 静息心率 \(h.restingHR)").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
-                Spacer(minLength: 6)
-                Bars(values: h.steps14, height: 32, color: Tone.olive.color)
+        HubGate(envelope: state.hub.data.health) { h in
+            if size == .compact { compact(h) } else { detail(h) }
+        }
+    }
+
+    private func pct(_ v: Double?, _ goal: Double?) -> Double? {
+        guard let v, let goal, goal > 0 else { return nil }
+        return v / goal * 100
+    }
+
+    private func days(_ h: HealthData) -> [HealthData.Day] { Array((h.days ?? []).suffix(14)) }
+
+    private func compact(_ h: HealthData) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                if let steps = h.steps { Hero(value: steps, unit: "步") } else { Hero.empty("步") }
+                Spacer()
+                Ring(value: pct(h.steps, h.stepGoal) ?? 0, color: Tone.olive.color, size: 46, width: 6)
             }
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 22) {
-                    ZStack {
-                        Ring(value: stepPct, color: Tone.olive.color, size: 118, width: 11)
-                        Ring(value: Double(h.kcal) / Double(h.kcalGoal) * 100, color: Tone.clay.color, size: 88, width: 11)
-                        Ring(value: Double(h.exercise) / Double(h.exerciseGoal) * 100, color: Tone.sky.color, size: 58, width: 11)
+            Text("睡眠 \(HubFormat.minutes(h.sleepMinutes)) · 静息心率 \(HubFormat.int(h.restingHr))")
+                .font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+            Spacer(minLength: 6)
+            Bars(values: days(h).map(\.steps), height: 32, color: Tone.olive.color)
+        }
+    }
+
+    private func detail(_ h: HealthData) -> some View {
+        let d = days(h), stages = sleepStages(h)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 22) {
+                ZStack {
+                    Ring(value: pct(h.steps, h.stepGoal) ?? 0, color: Tone.olive.color, size: 118, width: 11)
+                    Ring(value: pct(h.activeKcal, h.kcalGoal) ?? 0, color: Tone.clay.color, size: 88, width: 11)
+                    Ring(value: pct(h.exerciseMinutes, h.exerciseGoal) ?? 0, color: Tone.sky.color, size: 58, width: 11)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    if let steps = h.steps {
+                        Hero(value: steps, unit: h.stepGoal.map { "/ \(Fmt.number($0)) 步" } ?? "步")
+                    } else {
+                        Hero.empty("今天还没有步数")
                     }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Hero(value: Double(h.steps), unit: "/ \(Fmt.number(Double(h.stepGoal))) 步")
-                        VStack(alignment: .leading, spacing: 5) {
-                            Legend(items: [("步数 \(Int(stepPct))%", Tone.olive.color)])
-                            Legend(items: [("活动 \(h.kcal) / \(h.kcalGoal) kcal", Tone.clay.color)])
-                            Legend(items: [("锻炼 \(h.exercise) / \(h.exerciseGoal) 分钟", Tone.sky.color)])
-                        }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Legend(items: [("步数 \(pct(h.steps, h.stepGoal).map { "\(Int($0))%" } ?? "—")", Tone.olive.color)])
+                        Legend(items: [("活动 \(HubFormat.int(h.activeKcal)) / \(HubFormat.int(h.kcalGoal)) kcal", Tone.clay.color)])
+                        Legend(items: [("锻炼 \(HubFormat.int(h.exerciseMinutes)) / \(HubFormat.int(h.exerciseGoal)) 分钟", Tone.sky.color)])
                     }
                 }
-                HStack {
-                    Stat(label: "睡眠", value: sleepText(h.sleepMinutes))
-                    Stat(label: "静息心率", value: "\(h.restingHR)", unit: "bpm")
-                    Stat(label: "血氧", value: "\(h.spo2)", unit: "%")
-                }
-                .padding(.top, 18)
-                SectionTitle("近 14 天步数")
-                Bars(values: h.steps14, height: 72, color: Tone.olive.color, labels: Bars.days14)
-                HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        SectionTitle("昨晚睡眠 · 23:48 – 07:00")
-                        SleepBar(stages: h.sleepStages)
-                        Legend(items: h.sleepStages.map { ("\($0.name) \($0.minutes / 60)h\($0.minutes % 60)m", $0.tone.color) }).padding(.top, 8)
+            }
+            HStack {
+                Stat(label: "睡眠", value: HubFormat.minutes(h.sleepMinutes))
+                Stat(label: "静息心率", value: HubFormat.int(h.restingHr), unit: "bpm")
+                Stat(label: "血氧", value: HubFormat.int(h.spo2), unit: "%")
+            }
+            .padding(.top, 18)
+            SectionTitle("近 \(d.count) 天步数")
+            Bars(values: d.map(\.steps), height: 72, color: Tone.olive.color, labels: Bars.dayLabels(d.map(\.date)))
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionTitle("昨晚睡眠")
+                    if stages.isEmpty {
+                        Text("暂无睡眠分期").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    } else {
+                        SleepBar(stages: stages)
+                        Legend(items: stages.map { ("\($0.name) \(HubFormat.minutes(Double($0.minutes)))", $0.tone.color) }).padding(.top, 8)
                     }
-                    VStack(alignment: .leading, spacing: 0) {
-                        SectionTitle("静息心率 · 14 天")
-                        AreaLine(values: h.restingHR14, height: 52, color: Tone.rose.color)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionTitle("静息心率 · \(d.count) 天")
+                    let hr = d.compactMap(\.restingHr)
+                    if hr.count > 1 {
+                        AreaLine(values: hr, height: 52, color: Tone.rose.color)
+                    } else {
+                        Text("暂无").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                     }
                 }
             }
         }
     }
 
-    private func sleepText(_ m: Int) -> String { "\(m / 60)h\(m % 60)m" }
+    private func sleepStages(_ h: HealthData) -> [(name: String, minutes: Int, tone: Tone)] {
+        let names: [String: (String, Tone)] = ["deep": ("深睡", .steel), "core": ("核心", .sky), "light": ("浅睡", .sky), "rem": ("REM", .plum), "awake": ("清醒", .ochre)]
+        return (h.sleepStages ?? []).compactMap { s in
+            guard let m = s.minutes, m > 0 else { return nil }
+            let n = names[s.stage.lowercased()] ?? (s.stage, .kraft)
+            return (n.0, Int(m.rounded()), n.1)
+        }
+    }
+}
+
+extension Hero {
+    /// Placeholder hero for a measurement the source has not reported yet.
+    static func empty(_ caption: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("—").font(Typo.serif(38)).foregroundStyle(Palette.ink3)
+            Text(caption).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+        }
+    }
 }
 
 struct SleepBar: View {
@@ -70,7 +115,7 @@ struct SleepBar: View {
 
     var body: some View {
         GeometryReader { geo in
-            let total = CGFloat(stages.reduce(0) { $0 + $1.minutes })
+            let total = CGFloat(max(1, stages.reduce(0) { $0 + $1.minutes }))
             HStack(spacing: 2) {
                 ForEach(stages.indices, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 3).fill(stages[i].tone.color)
@@ -91,71 +136,107 @@ struct BillsModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
 
+    static let categoryTones: [Tone] = [.kraft, .clay, .olive, .sky, .plum, .ochre, .steel, .rose]
+
     var body: some View {
-        let b = state.snapshot.bills
-        let pct = b.month / b.budget * 100
-        if size == .compact {
-            VStack(alignment: .leading, spacing: 0) {
-                Hero(value: b.today, decimals: 2, prefix: "¥")
-                Text("今日支出 · \(b.items.count) 笔").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
-                Spacer(minLength: 6)
-                HStack {
-                    Text("本月 ¥\(Fmt.number(b.month))").foregroundStyle(Palette.ink2)
-                    Spacer()
-                    Text("预算 \(Int(pct))%").foregroundStyle(Palette.ink3)
-                }
-                .font(Typo.sans(11.5)).padding(.bottom, 6)
-                Track(value: pct, color: Tone.kraft.color)
-                Text("剩 ¥\(Fmt.number(b.budget - b.month)) · 还有 \(b.daysLeft) 天").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.top, 6)
+        HubGate(envelope: state.hub.data.bills) { b in
+            if size == .compact { compact(b) } else { detail(b) }
+        }
+    }
+
+    private func budgetPct(_ b: BillsData) -> Double? {
+        guard let month = b.monthTotal, let budget = b.monthBudget, budget > 0 else { return nil }
+        return month / budget * 100
+    }
+
+    private func compact(_ b: BillsData) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let today = b.todayTotal { Hero(value: today, decimals: 2, prefix: "¥") } else { Hero.empty("今日") }
+            Text("今日支出 · \(b.todayItems?.count ?? 0) 笔").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+            Spacer(minLength: 6)
+            HStack {
+                Text("本月 ¥\(b.monthTotal.map { Fmt.number($0) } ?? "—")").foregroundStyle(Palette.ink2)
+                Spacer()
+                if let pct = budgetPct(b) { Text("预算 \(Int(pct))%").foregroundStyle(Palette.ink3) }
             }
-        } else {
-            let catTotal = b.categories.reduce(0) { $0 + $1.amount }
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Hero(value: b.today, decimals: 2, prefix: "¥", unit: "今日")
-                        VStack(spacing: 0) {
-                            ForEach(b.items.indices, id: \.self) { i in
-                                let it = b.items[i]
-                                Row(title: it.title, sub: "\(it.category) · \(it.time)", trailing: "−" + Fmt.number(it.amount, 2))
-                            }
-                        }
-                        .padding(.top, 12)
-                    }
-                    .frame(maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 0) {
-                        SectionTitle("近 14 天").padding(.top, -18)
-                        Bars(values: b.d14, height: 70, color: Tone.kraft.color, highlight: [6, 13], labels: Bars.days14)
-                        SectionTitle("本月 · ¥\(Fmt.number(b.month)) / \(Fmt.number(b.budget))")
-                        StackBar(parts: b.categories.map { ($0.amount, $0.tone.color) })
-                        Legend(items: b.categories.map { ("\($0.name) \(Int(($0.amount / catTotal * 100).rounded()))%", $0.tone.color) }).padding(.top, 8)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                SectionTitle("资产")
-                HStack(alignment: .bottom, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label11("净资产")
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            CountUp(value: b.netWorth, prefix: "¥").font(Typo.serif(30))
-                            Text("近 6 月 +14%").font(Typo.sans(12)).foregroundStyle(Tone.olive.color)
-                        }
-                    }
-                    AreaLine(values: b.netWorth6, height: 40, color: Tone.olive.color).frame(maxWidth: 260)
-                }
-                HStack(spacing: 8) {
-                    ForEach(b.accounts.indices, id: \.self) { i in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label11(b.accounts[i].name)
-                            Text(b.accounts[i].value).font(Typo.serif(15)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
-                        }
-                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
-                    }
-                }
-                .padding(.top, 12)
+            .font(Typo.sans(11.5)).padding(.bottom, 6)
+            if let pct = budgetPct(b), let month = b.monthTotal, let budget = b.monthBudget {
+                Track(value: pct, color: Tone.kraft.color)
+                Text("剩 ¥\(Fmt.number(budget - month))\(b.daysLeftInMonth.map { " · 还有 \($0) 天" } ?? "")")
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.top, 6)
+            } else {
+                Text("未设置月预算").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             }
         }
+    }
+
+    private func detail(_ b: BillsData) -> some View {
+        let cats = (b.monthCategories ?? []).compactMap { c in c.amount.map { (c.name, $0) } }.filter { $0.1 > 0 }
+        let catTotal = max(cats.reduce(0) { $0 + $1.1 }, 0.01)
+        let days = Array((b.days ?? []).suffix(14))
+        let weekends = Set(days.indices.filter { i in HubFormat.day(days[i].date).map { Calendar.hub.isDateInWeekend($0) } ?? false })
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let today = b.todayTotal { Hero(value: today, decimals: 2, prefix: "¥", unit: "今日") } else { Hero.empty("今日") }
+                    VStack(spacing: 0) {
+                        ForEach(b.todayItems ?? []) { it in
+                            Row(title: it.title ?? "未命名", sub: [it.category, it.time.map(HubFormat.clock)].compactMap { $0 }.joined(separator: " · "),
+                                trailing: it.amount.map { "−" + Fmt.number($0, 2) } ?? "—")
+                        }
+                        if (b.todayItems ?? []).isEmpty {
+                            Text("今天还没有记账").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 9)
+                        }
+                    }
+                    .padding(.top, 12)
+                }
+                .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionTitle("近 \(days.count) 天").padding(.top, -18)
+                    Bars(values: days.map(\.total), height: 70, color: Tone.kraft.color, highlight: weekends, labels: Bars.dayLabels(days.map(\.date)))
+                    SectionTitle("本月 · ¥\(b.monthTotal.map { Fmt.number($0) } ?? "—")\(b.monthBudget.map { " / \(Fmt.number($0))" } ?? "")")
+                    if cats.isEmpty {
+                        Text("暂无分类").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    } else {
+                        StackBar(parts: cats.indices.map { (cats[$0].1, Self.categoryTones[$0 % Self.categoryTones.count].color) })
+                        Legend(items: cats.indices.map { ("\(cats[$0].0) \(Int((cats[$0].1 / catTotal * 100).rounded()))%", Self.categoryTones[$0 % Self.categoryTones.count].color) })
+                            .padding(.top, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            if let netWorth = b.netWorth { assets(b, netWorth) }
+        }
+    }
+
+    @ViewBuilder private func assets(_ b: BillsData, _ netWorth: Double) -> some View {
+        let months = (b.netWorthMonths ?? []).compactMap(\.value)
+        SectionTitle("资产")
+        HStack(alignment: .bottom, spacing: 24) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label11("净资产")
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    CountUp(value: netWorth, prefix: "¥").font(Typo.serif(30))
+                    if let first = months.first, first > 0, months.count > 1 {
+                        let change = (netWorth / first - 1) * 100
+                        Text("近 \(months.count) 月 \(change >= 0 ? "+" : "")\(Int(change.rounded()))%").font(Typo.sans(12))
+                            .foregroundStyle(change >= 0 ? Tone.olive.color : Tone.rose.color)
+                    }
+                }
+            }
+            if months.count > 1 { AreaLine(values: months, height: 40, color: Tone.olive.color).frame(maxWidth: 260) }
+        }
+        HStack(spacing: 8) {
+            ForEach(b.accounts ?? [], id: \.name) { a in
+                VStack(alignment: .leading, spacing: 3) {
+                    Label11(a.name)
+                    Text(a.balance.map { "¥" + Fmt.number($0) } ?? "—").font(Typo.serif(15)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+                }
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
+            }
+        }
+        .padding(.top, 12)
     }
 }
 
@@ -168,7 +249,7 @@ struct Row: View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(Typo.sans(13)).lineLimit(1)
-                Text(sub).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                Text(sub).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
             }
             Spacer()
             Text(trailing).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).monospacedDigit()
@@ -184,7 +265,7 @@ struct StackBar: View {
 
     var body: some View {
         GeometryReader { geo in
-            let total = parts.reduce(0) { $0 + $1.0 }
+            let total = max(parts.reduce(0) { $0 + $1.0 }, 0.000_001)
             HStack(spacing: 2) {
                 ForEach(parts.indices, id: \.self) { i in
                     Rectangle().fill(parts[i].1)
@@ -207,79 +288,151 @@ struct CRMModule: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let c = state.snapshot.crm, cycle = state.snapshot.cycle
-        if size == .compact {
-            VStack(alignment: .leading, spacing: 0) {
-                Hero(value: Double(c.today.count), unit: "人 · 今日交流")
-                HStack(spacing: -6) { ForEach(c.today) { PersonBadge(initial: $0.initial, tone: $0.tone) } }.padding(.top, 12)
-                Spacer(minLength: 6)
-                Chip(text: "2 段录音 · 1:46:52", tone: .rose, systemImage: "play.fill")
+        HubGate(envelope: state.hub.data.crm) { c in
+            if size == .compact { compact(c) } else { detail(c) }
+        }
+    }
+
+    private func people(_ c: CRMData) -> [CRMData.Interaction] {
+        var seen = Set<String>()
+        return (c.today ?? []).filter { seen.insert($0.personId ?? $0.name).inserted }
+    }
+
+    private func compact(_ c: CRMData) -> some View {
+        let who = people(c), recordings = (c.today ?? []).compactMap(\.recording)
+        let length = recordings.compactMap(\.durationSeconds).reduce(0, +)
+        return VStack(alignment: .leading, spacing: 0) {
+            Hero(value: Double(who.count), unit: "人 · 今日交流")
+            HStack(spacing: -6) {
+                ForEach(who.prefix(7)) { PersonBadge(initial: HubFormat.initial($0.name), tone: HubFormat.tone(for: $0.personId ?? $0.name)) }
             }
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionTitle("今日 · \(c.today.count) 人").padding(.top, -18)
-                ForEach(Array(c.today.enumerated()), id: \.1.id) { i, p in
-                    HStack(alignment: .top, spacing: 12) {
-                        PersonBadge(initial: p.initial, tone: p.tone, size: 32)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(p.who).font(Typo.sans(13, .semibold))
-                                Text("\(p.relation) · \(p.channel)").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-                                Spacer()
-                                Text(p.time).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
-                            }
-                            Text(p.summary).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                            if let rec = p.recording, let dur = p.duration {
-                                Recording(title: rec, duration: dur, seed: Int64(i + 2))
-                            }
+            .padding(.top, 12)
+            Spacer(minLength: 6)
+            if !recordings.isEmpty {
+                Chip(text: "\(recordings.count) 段录音\(length > 0 ? " · " + (HubFormat.duration(length) ?? "") : "")", tone: .rose, systemImage: "play.fill")
+            } else if who.isEmpty {
+                Text("今天还没有交流记录").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            }
+        }
+    }
+
+    private func detail(_ c: CRMData) -> some View {
+        let today = c.today ?? []
+        return VStack(alignment: .leading, spacing: 0) {
+            SectionTitle("今日 · \(people(c).count) 人").padding(.top, -18)
+            if today.isEmpty {
+                Text("今天还没有交流记录").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3).padding(.vertical, 10)
+            }
+            ForEach(Array(today.enumerated()), id: \.1.id) { i, p in
+                HStack(alignment: .top, spacing: 12) {
+                    PersonBadge(initial: HubFormat.initial(p.name), tone: HubFormat.tone(for: p.personId ?? p.name), size: 32)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(p.name).font(Typo.sans(13, .semibold))
+                            Text([p.relation, p.channel].compactMap { $0 }.joined(separator: " · ")).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                            Spacer()
+                            if let t = p.time { Text(HubFormat.clock(t)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit() }
                         }
+                        if let s = p.summary, !s.isEmpty {
+                            Text(s).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let rec = p.recording { Recording(recording: rec) }
                     }
-                    .padding(.vertical, 10)
-                    .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.line2).frame(height: 1) } }
-                    .rise(i)
                 }
-                SectionTitle("第 \(cycle.index) 阶段")
+                .padding(.vertical, 10)
+                .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.line2).frame(height: 1) } }
+                .rise(i)
+            }
+            if let cycle = c.cycle {
+                SectionTitle(cycle.days.map { "近 \($0) 天" } ?? "本阶段")
                 HStack(alignment: .bottom, spacing: 28) {
-                    stageStat(c.stagePeople, "联系过的人")
-                    stageStat(c.stageInteractions, "次交流")
-                    stageStat(c.stageRecordings, "段录音")
+                    stageStat(cycle.people, "联系过的人")
+                    stageStat(cycle.interactions, "次交流")
+                    stageStat(cycle.recordings, "段录音")
                     Spacer()
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Label11("久未联系")
-                        Flow(spacing: 6) { ForEach(c.stale.indices, id: \.self) { Chip(text: "\(c.stale[$0].name) · \(c.stale[$0].days) 天") } }
+                    if let stale = c.stale, !stale.isEmpty {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Label11("久未联系")
+                            Flow(spacing: 6) { ForEach(stale.prefix(6), id: \.name) { s in Chip(text: s.days.map { "\(s.name) · \($0) 天" } ?? s.name) } }
+                        }
                     }
                 }
             }
         }
     }
 
-    private func stageStat(_ v: Int, _ label: String) -> some View {
+    private func stageStat(_ v: Int?, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            CountUp(value: Double(v)).font(Typo.serif(30))
+            if let v { CountUp(value: Double(v)).font(Typo.serif(30)) } else { Text("—").font(Typo.serif(30)).foregroundStyle(Palette.ink3) }
             Label11(label)
         }
     }
 }
 
+/// A recording attached to an interaction: streams through hub-api, transcript for Plaud.
 struct Recording: View {
-    var title: String
-    var duration: String
-    var seed: Int64
+    var recording: CRMData.Recording
+    @Environment(AppState.self) private var state
+    @ViewState private var player: AVPlayer?
     @ViewState private var playing = false
+    @ViewState private var transcript: String?
+    @ViewState private var showTranscript = false
+    @ViewState private var loadingTranscript = false
+
+    private var hasTranscript: Bool { recording.id.hasPrefix("plaud:") }
 
     var body: some View {
         HStack(spacing: 10) {
-            Button { playing.toggle() } label: {
+            Button(action: toggle) {
                 Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: 10)).foregroundStyle(.white)
                     .frame(width: 26, height: 26).background(Circle().fill(Tone.rose.color))
             }
             .buttonStyle(.plain)
-            Waveform(bars: 38, seed: seed, color: Tone.rose.color).frame(height: 22)
-            Text("\(title) · \(duration) · 转录稿").font(Typo.sans(11)).foregroundStyle(Palette.ink2).lineLimit(1).fixedSize()
+            .disabled(state.hub.mode != .hub)
+            Waveform(bars: 38, seed: HubFormat.seed(recording.id), color: Tone.rose.color).frame(height: 22)
+            Text([recording.title, HubFormat.duration(recording.durationSeconds)].compactMap { $0 }.joined(separator: " · "))
+                .font(Typo.sans(11)).foregroundStyle(Palette.ink2).lineLimit(1).fixedSize()
+            if hasTranscript {
+                Button { openTranscript() } label: {
+                    Text(loadingTranscript ? "读取中…" : "转录稿").font(Typo.sans(11, .medium)).foregroundStyle(Tone.rose.color)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showTranscript, arrowEdge: .bottom) {
+                    ScrollView {
+                        Text(transcript.map { (try? AttributedString(markdown: $0, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString($0) } ?? "暂无转录稿")
+                            .font(Typo.sans(12.5)).lineSpacing(3).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                    }
+                    .frame(width: 420, height: 360)
+                }
+            }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 10).fill(Tone.rose.tint))
         .padding(.top, 4)
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { note in
+            guard let item = note.object as? AVPlayerItem, item === player?.currentItem else { return }
+            playing = false
+            player?.seek(to: .zero)
+        }
+        .onDisappear { player?.pause(); playing = false }
+    }
+
+    private func toggle() {
+        if player == nil { player = state.hub.player(recording: recording.id) }
+        guard let player else { return }
+        if playing { player.pause() } else { player.play() }
+        playing.toggle()
+    }
+
+    private func openTranscript() {
+        if transcript != nil || state.hub.mode != .hub { showTranscript = true; return }
+        loadingTranscript = true
+        Task {
+            transcript = await state.hub.transcript(recording: recording.id)
+            loadingTranscript = false
+            showTranscript = true
+        }
     }
 }
 
@@ -290,116 +443,184 @@ struct MediaModule: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let m = state.snapshot.media
-        if size == .compact {
-            let p = m.continueWatching[0]
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 12) {
-                    PosterView(poster: p, showTitle: false).frame(width: 62, height: 88)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label11("继续观看")
-                        Text(p.title).font(Typo.serif(17))
-                        Text("\(p.sub) · 已看 \(Int(p.progress))%").font(Typo.sans(12)).foregroundStyle(Palette.ink2)
-                    }
+        HubGate(envelope: state.hub.data.media) { m in
+            if size == .compact {
+                compact(m)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    detail(m, columns: 6, wide: true).frame(minWidth: 820)
+                    detail(m, columns: 3, wide: false)
                 }
-                Spacer(minLength: 6)
-                HStack {
-                    Text("下载中 2 · ↓ 12.4 MB/s").font(Typo.sans(12)).foregroundStyle(Palette.ink2)
-                    Spacer()
-                    Chip(text: "最近添加 3")
-                }
-            }
-        } else {
-            ViewThatFits(in: .horizontal) {
-                detail(columns: 6, wide: true).frame(minWidth: 820)
-                detail(columns: 3, wide: false)
             }
         }
     }
 
-    private func detail(columns: Int, wide: Bool) -> some View {
-        let m = state.snapshot.media
+    private func downloading(_ m: MediaData) -> [MediaData.Download] { (m.downloads ?? []).filter { $0.state == "downloading" } }
+
+    private func compact(_ m: MediaData) -> some View {
+        let active = downloading(m), speed = active.compactMap(\.speedBps).reduce(0, +)
+        return VStack(alignment: .leading, spacing: 0) {
+            if let p = m.continueWatching?.first {
+                HStack(alignment: .top, spacing: 12) {
+                    PosterView(item: p, showTitle: false).frame(width: 62, height: 88)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label11("继续观看")
+                        Text(p.title).font(Typo.serif(17)).lineLimit(2)
+                        Text([p.subtitle, p.progress.map { "已看 \(Int(($0 * 100).rounded()))%" }].compactMap { $0 }.joined(separator: " · "))
+                            .font(Typo.sans(12)).foregroundStyle(Palette.ink2)
+                    }
+                }
+            } else {
+                Text("没有在看的内容").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3)
+            }
+            Spacer(minLength: 6)
+            HStack {
+                Text(active.isEmpty ? "没有下载任务" : "下载中 \(active.count)\(HubFormat.speed(speed).map { " · ↓ \($0)" } ?? "")")
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink2)
+                Spacer()
+                if let n = m.latest?.count, n > 0 { Chip(text: "最近添加 \(n)") }
+            }
+        }
+    }
+
+    private func detail(_ m: MediaData, columns: Int, wide: Bool) -> some View {
+        let watching = m.continueWatching ?? [], downloads = m.downloads ?? []
+        let speed = downloading(m).compactMap(\.speedBps).reduce(0, +)
+        let latest = VStack(alignment: .leading, spacing: 0) {
+            SectionTitle("最近添加")
+            ForEach((m.latest ?? []).prefix(5)) { it in
+                Button { open(it.link) } label: { Row(title: it.title, sub: it.subtitle ?? "", trailing: "Emby").contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+            }
+            if (m.latest ?? []).isEmpty { empty("暂无") }
+        }
+        let music = VStack(alignment: .leading, spacing: 0) {
+            SectionTitle("最近播放 · Navidrome")
+            let albums = Array((m.recentAlbums ?? []).prefix(5))
+            HStack(spacing: 8) {
+                ForEach(Array(albums.enumerated()), id: \.1.id) { i, a in
+                    Button { open(a.link) } label: {
+                        CoverImage(ref: a.image, title: a.title, tone: [.plum, .steel, .clay, .olive, .sky][i % 5])
+                            .aspectRatio(1, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .help([a.title, a.artist].compactMap { $0 }.joined(separator: " · "))
+                }
+            }
+            if let a = albums.first {
+                Text("《\(a.title)》\(a.artist.map { " · \($0)" } ?? "")").font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1).padding(.top, 6)
+            } else {
+                empty("暂无")
+            }
+        }
+        let downloadList = VStack(alignment: .leading, spacing: 0) {
+            SectionTitle("下载 · qBittorrent")
+            ForEach(Array(downloads.prefix(4).enumerated()), id: \.1.id) { i, d in
+                let p = min(max(d.progress ?? 0, 0), 1) * 100
+                VStack(spacing: 5) {
+                    HStack {
+                        Text(d.title).lineLimit(1)
+                        Spacer()
+                        Text(d.state == "downloading" ? "\(Int(p))%" : Self.stateText(d.state, p)).foregroundStyle(Palette.ink3)
+                    }
+                    .font(Typo.sans(12))
+                    Track(value: p, color: d.state == "stalled" ? Tone.ochre.color : Tone.plum.color, delay: Double(i) * 100)
+                }
+                .padding(.vertical, 6)
+            }
+            if downloads.isEmpty { empty("没有下载任务") }
+            if let s = HubFormat.speed(speed) {
+                Text("↓ \(s)").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.top, 2)
+            }
+        }
         return VStack(alignment: .leading, spacing: 0) {
             SectionTitle("继续观看 · Emby").padding(.top, -18)
-            HStack(spacing: 12) {
-                ForEach(Array(m.continueWatching.prefix(columns).enumerated()), id: \.1.id) { i, p in
-                    PosterView(poster: p).aspectRatio(2 / 3, contentMode: .fit).frame(maxWidth: .infinity).rise(i)
-                }
-            }
-            let latest = VStack(alignment: .leading, spacing: 0) {
-                SectionTitle("最近添加")
-                ForEach(m.latest.indices, id: \.self) { Row(title: m.latest[$0].title, sub: m.latest[$0].sub, trailing: "Emby") }
-            }
-            let music = VStack(alignment: .leading, spacing: 0) {
-                SectionTitle("最近播放 · Navidrome")
-                HStack(spacing: 8) {
-                    ForEach(m.albums.indices, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LinearGradient(colors: m.albums[i].map(Color.init(hex:)), startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .aspectRatio(1, contentMode: .fit)
+            if watching.isEmpty {
+                empty("没有在看的内容")
+            } else {
+                HStack(spacing: 12) {
+                    ForEach(Array(watching.prefix(columns).enumerated()), id: \.1.id) { i, p in
+                        Button { open(p.link) } label: { PosterView(item: p) }
+                            .buttonStyle(.plain)
+                            .aspectRatio(2 / 3, contentMode: .fit).frame(maxWidth: .infinity).rise(i)
                     }
+                    ForEach(0..<max(0, columns - watching.count), id: \.self) { _ in Color.clear.aspectRatio(2 / 3, contentMode: .fit).frame(maxWidth: .infinity) }
                 }
-                Text("《Random Access Memories》· 今天 09:12").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
-            }
-            let downloads = VStack(alignment: .leading, spacing: 0) {
-                SectionTitle("下载 · MoviePilot")
-                ForEach(m.downloads.indices, id: \.self) { i in
-                    VStack(spacing: 5) {
-                        HStack {
-                            Text(m.downloads[i].title)
-                            Spacer()
-                            Text("\(Int(m.downloads[i].progress))%").foregroundStyle(Palette.ink3)
-                        }
-                        .font(Typo.sans(12))
-                        Track(value: m.downloads[i].progress, color: Tone.plum.color, delay: Double(i) * 100)
-                    }
-                    .padding(.vertical, 6)
-                }
-                Text("↓ 12.4 MB/s · 做种 186 · 分享率 3.2").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.top, 2)
             }
             if wide {
-                HStack(alignment: .top, spacing: 28) { latest; music; downloads }
+                HStack(alignment: .top, spacing: 28) { latest; music; downloadList }
             } else {
-                HStack(alignment: .top, spacing: 28) { latest; downloads }
+                HStack(alignment: .top, spacing: 28) { latest; downloadList }
                 music
             }
             HStack(spacing: 6) {
-                ForEach(["Emby", "Navidrome", "MoviePilot", "qBittorrent", "PT 站点"], id: \.self) { Chip(text: "\($0) ↗") }
+                ForEach(m.services ?? []) { s in
+                    Button { open(s.link) } label: {
+                        Chip(text: "\(Self.serviceName(s.id))\(s.link == nil ? "" : " ↗")", tone: s.status == .ok ? nil : .rose)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(s.link == nil)
+                }
             }
             .padding(.top, 16)
         }
     }
+
+    private func empty(_ text: String) -> some View {
+        Text(text).font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 8)
+    }
+
+    private func open(_ link: String?) {
+        guard let link, let url = URL(string: link) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    static func stateText(_ state: String?, _ p: Double) -> String {
+        switch state {
+        case "paused": "已暂停 \(Int(p))%"
+        case "queued": "排队中"
+        case "stalled": "停滞 \(Int(p))%"
+        case "completed", "seeding": "已完成"
+        default: "\(Int(p))%"
+        }
+    }
+
+    static func serviceName(_ id: String) -> String {
+        ["emby": "Emby", "navidrome": "Navidrome", "moviepilot": "MoviePilot", "qbittorrent": "qBittorrent"][id] ?? id
+    }
 }
 
 struct PosterView: View {
-    var poster: Poster
+    var item: MediaData.Item
     var showTitle = true
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(LinearGradient(colors: poster.gradient.map(Color.init(hex:)), startPoint: .top, endPoint: .bottom))
+        CoverImage(ref: item.image, title: item.title, tone: HubFormat.tone(for: item.title))
             .overlay {
                 if showTitle {
-                    Text(String(poster.title.prefix(1))).font(Typo.serif(44)).foregroundStyle(.white.opacity(0.18))
+                    LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
                 }
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 6) {
                     if showTitle {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(poster.title).font(Typo.sans(12, .semibold)).lineLimit(1)
-                            Text(poster.sub).font(Typo.sans(10.5)).opacity(0.8)
+                            Text(item.title).font(Typo.sans(12, .semibold)).lineLimit(1)
+                            if let s = item.subtitle { Text(s).font(Typo.sans(10.5)).opacity(0.8).lineLimit(1) }
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                     }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(.white.opacity(0.25))
-                            Rectangle().fill(Tone.clay.color).frame(width: geo.size.width * poster.progress / 100)
+                    if let p = item.progress {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(.white.opacity(0.25))
+                                Rectangle().fill(Tone.clay.color).frame(width: geo.size.width * min(max(p, 0), 1))
+                            }
                         }
+                        .frame(height: 3)
                     }
-                    .frame(height: 3)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))

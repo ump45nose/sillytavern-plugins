@@ -33,6 +33,25 @@ public struct StoredCredential: Codable, Sendable, Equatable {
     }
 }
 
+/// Everything kept in the app's single keychain item. Version 1 stored a bare `StoredCredential`.
+public struct CredentialVault: Codable, Sendable, Equatable {
+    public var version = 2
+    public var google: StoredCredential?
+    public var hub: HubCredential?
+
+    public init(google: StoredCredential? = nil, hub: HubCredential? = nil) {
+        self.google = google
+        self.hub = hub
+    }
+
+    public var isEmpty: Bool { google == nil && hub == nil }
+
+    public static func decode(_ data: Data) throws -> CredentialVault {
+        if let vault = try? JSONDecoder().decode(CredentialVault.self, from: data), vault.version >= 2 { return vault }
+        return CredentialVault(google: try JSONDecoder().decode(StoredCredential.self, from: data))
+    }
+}
+
 public enum OAuth {
     public static let scopes = [
         "https://www.googleapis.com/auth/tasks",
@@ -158,13 +177,15 @@ public actor AccessTokenCache {
 public final class LoopbackReceiver: @unchecked Sendable {
     private let listener: NWListener
     private let state: String
+    private let success: String
     private let queue = DispatchQueue(label: "hub.oauth.loopback")
     private var continuation: CheckedContinuation<String, Error>?
 
     public enum Failure: Error, Sendable { case denied, timeout, listener }
 
-    public init(state: String) throws {
+    public init(state: String, success: String = "Personal Hub 已连接 Google") throws {
         self.state = state
+        self.success = success
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -205,7 +226,7 @@ public final class LoopbackReceiver: @unchecked Sendable {
             let matches = values["state"] == state
             let code = matches ? values["code"] : nil
             let page = code != nil
-                ? "<h3>Personal Hub 已连接 Google</h3><p>可以关闭此页面，回到应用。</p>"
+                ? "<h3>\(success)</h3><p>可以关闭此页面，回到应用。</p>"
                 : "<h3>授权没有完成</h3><p>请回到 Personal Hub 重试。</p>"
             let body = Data("<!doctype html><meta charset=utf-8><body style=\"font:15px -apple-system;padding:40px\">\(page)".utf8)
             let header = "HTTP/1.1 \(code != nil ? "200 OK" : "400 Bad Request")\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"

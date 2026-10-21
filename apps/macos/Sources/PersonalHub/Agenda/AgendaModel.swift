@@ -75,7 +75,7 @@ final class AgendaModel {
 
     private func restore() async {
         guard GoogleAccount.client() != nil else { return }
-        let stored = await Task.detached { try? CredentialStore.load() }.value
+        let stored = await Task.detached { try? CredentialStore.load().google }.value
         guard let stored else { return }
         await activate(stored)
     }
@@ -91,7 +91,7 @@ final class AgendaModel {
             defer { authorizing = nil }
             do {
                 let credential = try await GoogleAccount.authorize(client: client, transport: transport)
-                try await Task.detached { try CredentialStore.save(credential) }.value
+                try await Task.detached { try CredentialStore.update { $0.google = credential } }.value
                 connect = .idle
                 await activate(credential)
                 Reminders.shared.requestAuthorization()
@@ -118,7 +118,7 @@ final class AgendaModel {
         Reminders.shared.clear()
         Task {
             await sync.disconnect()
-            _ = try? await Task.detached { try CredentialStore.delete() }.value
+            _ = try? await Task.detached { try CredentialStore.update { $0.google = nil } }.value
         }
         attach(AgendaSync(seed: AgendaSample.store(now: clock())), mode: .demo)
     }

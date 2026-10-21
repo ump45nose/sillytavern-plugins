@@ -11,6 +11,15 @@ enum QARender {
         let state = AppState.shared
         if let now { state.agenda.clock = { now } }
         state.agenda.start()
+        if let now {
+            HubFormat.current = { now }
+            state.hub.clock = { now }
+        }
+        if CommandLine.arguments.contains("--qa-cache") {
+            await state.hub.previewCache()
+        } else {
+            state.hub.preview(now: now ?? Date())
+        }
         try? await Task.sleep(for: .milliseconds(400))
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
@@ -59,7 +68,14 @@ enum QARender {
             await shot("event-readonly", width: 380, EventEditor(mode: .edit(readOnly)) {})
         }
         await shot("event-create", width: 380, EventEditor(mode: .create(AgendaModule.nextSlot(after: state.agenda.now))) {})
-        await shot("settings-account", width: 520, height: 380, SettingsView(tab: 2))
+        await shot("settings-account", width: 560, height: 440, SettingsView(tab: 2))
+        await shot("settings-data", width: 560, height: 440, SettingsView(tab: 3))
+        await shot("quick-memo", width: 600, QuickMemoView(close: {}))
+        for range in TokenRange.allCases {
+            state.tokenRange = range
+            await shot("token-\(range.rawValue)", width: 1240, ModuleCard(item: LayoutItem(.token, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        }
+        state.tokenRange = .week
     }
 }
 

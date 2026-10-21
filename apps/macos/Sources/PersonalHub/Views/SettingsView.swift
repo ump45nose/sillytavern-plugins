@@ -13,20 +13,21 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Segmented(options: [(0, "通用"), (1, "快捷键"), (2, "账户"), (3, "关于")], selection: $tab)
+            Segmented(options: [(0, "通用"), (1, "快捷键"), (2, "账户"), (3, "数据"), (4, "关于")], selection: $tab)
                 .padding(.top, 18)
             Group {
                 switch tab {
                 case 0: GeneralSettings()
                 case 1: ShortcutSettings()
                 case 2: AccountSettings()
+                case 3: DataSettings()
                 default: AboutSettings()
                 }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 520, height: 380)
+        .frame(width: 560, height: 440)
         .background(Palette.bg)
         .preferredColorScheme(.light)
     }
@@ -156,9 +157,8 @@ private struct AccountSettings: View {
                     Button(state.syncing ? "同步中…" : "立即同步") { agenda.refresh() }.disabled(state.syncing)
                 }
             }
-            SettingRow(title: "Personal Hub 后端", note: "阶段 3：Authelia 登录后签发设备令牌") { Chip(text: "未连接") }
-            SettingRow(title: "数据来源", note: agenda.mode == .google ? "任务与日程来自 Google，其余模块仍是示例数据" : "当前显示设计稿示例数据") {
-                Chip(text: agenda.mode == .google ? "部分真实" : "示例数据", tone: agenda.mode == .google ? .olive : .ochre)
+            SettingRow(title: "Personal Hub 后端", note: state.hub.mode == .hub ? state.hub.baseURL?.host() : "健康、账单等模块的数据来源，在「数据」里连接") {
+                Chip(text: state.hub.mode == .hub ? "已连接" : "未连接", tone: state.hub.mode == .hub ? .olive : .ochre)
             }
         }
         .alert("断开 Google 账户？", isPresented: $confirmDisconnect) {
@@ -213,12 +213,125 @@ private struct AccountSettings: View {
     }
 }
 
+private struct DataSettings: View {
+    @Environment(AppState.self) private var state
+    @ViewState private var address = HubModel.defaultBase.absoluteString
+    @ViewState private var confirmDisconnect = false
+
+    var body: some View {
+        let hub = state.hub
+        VStack(alignment: .leading, spacing: 0) {
+            SettingRow(title: "hub 地址", note: connectionNote) {
+                if hub.mode == .hub {
+                    Text(hub.baseURL?.absoluteString ?? "").font(Typo.mono(12)).foregroundStyle(Palette.ink2)
+                } else {
+                    TextField("https://hub-home…:28443", text: $address).textFieldStyle(.roundedBorder).frame(width: 220)
+                }
+            }
+            SettingRow(title: "设备登录", note: hub.mode == .hub ? "令牌保存在钥匙串，断开只删除本机令牌" : "通过 Authelia 在浏览器里登录") { control }
+            if case .failed(let message) = hub.signIn {
+                Text(message).font(Typo.sans(11.5)).foregroundStyle(Tone.rose.color).padding(.top, 8)
+            }
+            if hub.mode == .hub {
+                SectionTitle("来源 · \(hub.sourcesHealthy.ok) / \(hub.sourcesHealthy.total) 正常").padding(.top, 2)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(hub.data.sources) { s in sourceRow(s) }
+                        if hub.data.sources.isEmpty {
+                            Text("还没有取到来源状态").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 8)
+                        }
+                    }
+                }
+                .scrollIndicators(.never)
+            } else {
+                Text("未连接时各模块显示设计稿示例数据。开发期也可以从终端写入令牌：\nPersonalHub --hub-token-stdin <地址>（令牌从标准输入读取）")
+                    .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineSpacing(3).padding(.top, 12)
+                    .textSelection(.enabled)
+            }
+        }
+        .alert("断开 hub？", isPresented: $confirmDisconnect) {
+            Button("断开", role: .destructive) { state.hub.disconnect() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会删除本机保存的设备令牌和缓存，模块回到示例数据。hub 上的设备记录不受影响。")
+        }
+    }
+
+    private var connectionNote: String {
+        let hub = state.hub
+        guard hub.mode == .hub else { return "默认是 NAS hub-api 的公网入口，登录需要走这个地址" }
+        switch hub.status {
+        case .syncing: return "同步中…"
+        case .offline: return "离线 · 显示缓存"
+        case .needsSignIn: return "令牌失效，请重新登录"
+        case .failed(let m): return m
+        case .idle: return HubFormat.stamp(hub.data.fetchedAt).map { "上次同步 " + $0 } ?? "尚未同步"
+        }
+    }
+
+    @ViewBuilder private var control: some View {
+        let hub = state.hub
+        if hub.signIn == .waiting {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Button("取消") { hub.cancelSignIn() }
+            }
+        } else if hub.mode == .hub {
+            HStack(spacing: 8) {
+                if hub.status == .needsSignIn {
+                    Button("重新登录") { hub.signIn(base: hub.baseURL.flatMap { $0.scheme == "https" ? $0 : nil } ?? HubModel.defaultBase) }.keyboardShortcut(.defaultAction)
+                }
+                Button(hub.status == .syncing ? "同步中…" : "立即同步") { hub.refresh() }.disabled(hub.status == .syncing)
+                Button("断开…") { confirmDisconnect = true }
+            }
+        } else {
+            Button("登录") {
+                if let url = URL(string: address.trimmingCharacters(in: .whitespaces)), url.scheme?.hasPrefix("http") == true { hub.signIn(base: url) }
+            }
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func sourceRow(_ s: HubSourceStatus) -> some View {
+        let tone: Tone = switch s.status {
+        case .ok: .olive
+        case .error: .rose
+        case .unconfigured: .ink
+        default: .ochre
+        }
+        var detail: [String] = []
+        if let e = s.lastError { detail.append(e.statusCode.map { "\(e.type) \($0)" } ?? e.type) }
+        if let at = s.lastSuccess { detail.append("成功于 " + HubFormat.ago(at)) }
+        if let ms = s.latencyMs { detail.append("\(ms) ms") }
+        return HStack(spacing: 10) {
+            Dot(color: s.status == .unconfigured ? Palette.ink4 : tone.color)
+            Text(s.name).font(Typo.sans(12.5)).lineLimit(1)
+            Spacer()
+            Text(detail.joined(separator: " · ")).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
+            Text(Self.label(s.status)).font(Typo.sans(11, .medium)).foregroundStyle(s.status == .unconfigured ? Palette.ink3 : tone.color)
+                .frame(width: 52, alignment: .trailing)
+        }
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
+    }
+
+    static func label(_ s: HubStatus) -> String {
+        switch s {
+        case .ok: "正常"
+        case .partial: "部分可用"
+        case .stale: "数据过旧"
+        case .error: "故障"
+        case .unconfigured: "未接入"
+        }
+    }
+}
+
 private struct AboutSettings: View {
     var body: some View {
         VStack(spacing: 12) {
             LogoMark(animated: true).frame(width: 88, height: 88)
             Text("Personal Hub").font(Typo.serif(24))
-            Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · 阶段 2 · 任务与日程")
+            Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · 阶段 3 · 个人数据接入")
                 .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             Text("汇聚，然后看清方向").font(Typo.serif(14)).foregroundStyle(Palette.ink2)
         }

@@ -6,15 +6,19 @@ struct PopoverView: View {
     @ViewState private var tab = 0
 
     var body: some View {
-        let d = state.snapshot, v = state.agenda.view
+        let v = state.agenda.view, attention = state.attention
         VStack(alignment: .leading, spacing: 0) {
             Segmented(options: [(0, "今天"), (1, "即将"), (2, "全部")], selection: $tab)
                 .frame(maxWidth: .infinity)
-            HStack(spacing: 8) {
-                ForEach(d.attention.prefix(2)) { AttentionCard(item: $0) }
+            if !attention.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(attention.prefix(2)) { a in
+                        Button { state.open(a) } label: { AttentionCard(item: a) }.buttonStyle(.plain)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 12)
             SyncNotice().padding(.top, 10)
             SectionTitle("日程").padding(.top, -4)
             events
@@ -37,13 +41,8 @@ struct PopoverView: View {
                 MiniInput(placeholder: "添加任务，例如「明天下午3点 开会」", shortcut: "⌃⌥Space")
             }
             .buttonStyle(.plain).padding(.top, 10)
-            HStack(spacing: 8) {
-                mini("步数", Fmt.number(Double(d.health.steps)))
-                mini("今日支出", "¥\(Int(d.bills.today))")
-                mini("Token", TokenFormat.short(d.token.today))
-                mini("剩余流量", "\(Int(d.net.pools[0].remaining))G")
-            }
-            .padding(.top, 12)
+            HStack(spacing: 8) { minis }
+                .padding(.top, 12)
             Rectangle().fill(Palette.line2).frame(height: 1).padding(.top, 12)
             HStack {
                 Button { state.openMainWindow(nil) } label: {
@@ -92,6 +91,20 @@ struct PopoverView: View {
                     Text("接下来没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var minis: some View {
+        let d = state.hub.data
+        mini("步数", d.health?.data?.steps.map { Fmt.number($0) } ?? "—")
+        mini("今日支出", d.bills?.data?.todayTotal.map { "¥" + Fmt.number($0, $0 >= 1000 ? 0 : 2) } ?? "—")
+        let token = d.token[.day]?.data
+        mini("Token", (token?.today?.total ?? token?.total).map { TokenFormat.short($0 / 1_000_000) } ?? "—")
+        let net = d.net?.data
+        if let p = net?.pools?.first, let used = p.usedBytes, let total = p.totalBytes {
+            mini("剩余流量", HubFormat.gb(max(0, total - used), 0) + "G")
+        } else {
+            mini("今日流量", net?.today.map { HubFormat.gb(($0.downBytes ?? 0) + ($0.upBytes ?? 0)) + "G" } ?? "—")
         }
     }
 

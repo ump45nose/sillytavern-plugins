@@ -49,7 +49,8 @@ struct ModuleCard: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(info.tone.tint))
             Text(info.title).font(Typo.sans(13, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
             if !compact { Text(info.meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
-            if let stamp = info.stamp { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
+            if let stamp = state.stamp(item.module) { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
+            if let status = state.hubStatus(item.module) { HubBadge(status: status) }
             Spacer(minLength: 0)
             tools
         }

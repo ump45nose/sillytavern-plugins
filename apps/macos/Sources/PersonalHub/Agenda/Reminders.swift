@@ -63,6 +63,42 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    // MARK: Attention
+
+    private static let seenKey = "attentionNotified"
+
+    /// Notifies once per hub attention id while its condition lasts. The first sync only records
+    /// what is already active, so connecting does not replay every open item.
+    func announce(_ items: [AttentionData.Item]) {
+        guard available else { return }
+        let defaults = UserDefaults.standard
+        let current = Set(items.map(\.id))
+        guard let stored = defaults.stringArray(forKey: Self.seenKey) else {
+            defaults.set(Array(current), forKey: Self.seenKey)
+            return
+        }
+        let fresh = items.filter { !stored.contains($0.id) }
+        // Forget cleared conditions so a recurrence notifies again.
+        defaults.set(Array(current), forKey: Self.seenKey)
+        guard !fresh.isEmpty else { return }
+        let center = UNUserNotificationCenter.current()
+        let shown = fresh.prefix(3)
+        for item in shown {
+            let content = UNMutableNotificationContent()
+            content.title = item.title
+            if let s = item.subtitle, HubJSON.parseDate(s) == nil { content.body = s }
+            content.sound = item.severity == "warn" ? .default : nil
+            Task { try? await center.add(UNNotificationRequest(identifier: "hub.attention." + item.id, content: content, trigger: nil)) }
+        }
+        if fresh.count > shown.count {
+            let content = UNMutableNotificationContent()
+            content.title = "另有 \(fresh.count - shown.count) 件事需要注意"
+            Task { try? await center.add(UNNotificationRequest(identifier: "hub.attention.more", content: content, trigger: nil)) }
+        }
+    }
+
+    func forgetAttention() { UserDefaults.standard.removeObject(forKey: Self.seenKey) }
+
     private func removeOurs(_ center: UNUserNotificationCenter) async {
         let ids = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(Self.prefix) }
         center.removePendingNotificationRequests(withIdentifiers: ids)

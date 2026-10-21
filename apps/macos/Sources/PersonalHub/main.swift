@@ -18,7 +18,7 @@ let app = NSApplication.shared
 if CommandLine.arguments.contains("--agenda-smoke") {
     app.setActivationPolicy(.prohibited)
     Task.detached {
-        guard let client = GoogleAccount.client(), let credential = try? CredentialStore.load() else {
+        guard let client = GoogleAccount.client(), let credential = try? CredentialStore.load().google else {
             print("FAIL credentials: Google not connected or credential helper unavailable")
             exit(2)
         }
@@ -29,6 +29,21 @@ if CommandLine.arguments.contains("--agenda-smoke") {
         for c in checks { print("\(c.ok ? "PASS" : "FAIL") \(c.name)\(c.detail.isEmpty ? "" : " — \(c.detail)")") }
         exit(checks.allSatisfy(\.ok) ? 0 : 1)
     }
+    app.run()
+}
+
+// `PersonalHub --hub-token-stdin [URL]` stores a hub device token piped on stdin;
+// `PersonalHub --hub-smoke` checks every hub endpoint the app reads. Both print only counts and statuses.
+if let i = CommandLine.arguments.firstIndex(of: "--hub-token-stdin") {
+    app.setActivationPolicy(.prohibited)
+    let next = CommandLine.arguments.indices.contains(i + 1) ? URL(string: CommandLine.arguments[i + 1]) : nil
+    let base = next.flatMap { $0.scheme?.hasPrefix("http") == true ? $0 : nil } ?? HubModel.defaultBase
+    Task.detached { exit(await HubCLI.storeToken(base: base)) }
+    app.run()
+}
+if CommandLine.arguments.contains("--hub-smoke") {
+    app.setActivationPolicy(.prohibited)
+    Task.detached { exit(await HubCLI.smoke()) }
     app.run()
 }
 

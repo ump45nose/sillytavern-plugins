@@ -1,43 +1,75 @@
+import Foundation
 import Testing
 @testable import HubKit
 
-@Test func everyRangeHasConsistentHeatmapShape() {
-    let all = TokenSample.summaries(usage: Sample.snapshot.token)
-    #expect(Set(all.keys) == Set(TokenRange.allCases))
-    for s in all.values {
-        let h = s.heatmap
+private let now = HubJSON.parseDate("2026-10-20T17:58:00+08:00")!
+private let cal: Calendar = {
+    var c = Calendar.hub
+    c.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    return c
+}()
+
+private func sample(_ r: TokenRange) -> TokenRangeSummary {
+    let data = HubSample.data(now: now, calendar: cal)
+    return TokenRangeSummary(data.token[r]!.data!, now: now, daily: TokenRangeSummary.daily(from: data.token[.year]?.data, calendar: cal), calendar: cal)
+}
+
+@Test func sampleRangesHaveConsistentHeatmapShapes() {
+    for r in TokenRange.allCases {
+        let h = sample(r).heatmap!
         #expect(h.values.count == h.rowLabels.count)
         #expect(h.tips.count == h.rowLabels.count)
         for row in h.values { #expect(row.count == h.columns) }
-        #expect(s.toolTotals.count == Sample.snapshot.token.tools.count)
     }
-    #expect(all[.day]!.heatmap.columns == 24)
-    #expect(all[.week]!.heatmap.rowLabels.count == 7)
-    #expect(all[.month]!.heatmap.columns == 30)
-    #expect(all[.year]!.heatmap.columns == 53)
+    #expect(sample(.day).heatmap!.columns == 24)
+    #expect(sample(.week).heatmap!.rowLabels.count == 7)
+    #expect(sample(.month).heatmap!.columns == 30)
+    #expect(sample(.year).heatmap!.columns == 53)
+    #expect(sample(.week).periodLabel == "近 7 天 · 10/14 – 10/20")
+    #expect(sample(.day).periodLabel == "今天 · 10 月 20 日 周二")
 }
 
 @Test func futureHoursAreEmpty() {
-    let day = TokenSample.summaries(usage: Sample.snapshot.token, nowHour: 17)[.day]!
-    for row in day.heatmap.values {
+    for row in sample(.day).heatmap!.values {
         #expect(row[17] != nil)
         #expect(row[18...].allSatisfy { $0 == nil })
     }
-    #expect(day.heatmap.level(nil) == -1)
+    #expect(sample(.day).heatmap!.level(nil) == -1)
 }
 
-@Test func weekTotalUsesTheLastSevenDays() {
-    let usage = Sample.snapshot.token
-    let week = TokenSample.summaries(usage: usage)[.week]!
-    let expected = usage.d14.suffix(7).reduce(0, +)
-    #expect(abs(week.total - expected) < 0.001)
-    #expect(week.periodLabel == "近 7 天 · 10/14 – 10/20")
+/// hub-api today: no hourly tokens, no per-tool history, year total unknown.
+@Test func sourceGapsStayUnknownInsteadOfZero() throws {
+    let hours = [Double?](repeating: nil, count: 24)
+    let day = TokenData(range: .day, period: .init(start: "2026-10-20", end: "2026-10-20"), total: 25_000_000, previous: 0, cost: 56.7,
+                        tools: [.init(id: "codex", name: "Codex", total: 20_000_000)],
+                        buckets: .init(unit: "hour", rows: "tool", series: [.init(key: "codex", values: hours)]))
+    let d = TokenRangeSummary(day, now: now, calendar: cal)
+    #expect(d.heatmap == nil)
+    #expect(d.peakLabel == nil && d.average == nil)
+    #expect(d.deltaPercent == nil)
+    #expect(d.tools?.first?.total == 20)
+
+    var cells = [Double?](repeating: nil, count: 371)
+    cells[364] = 4_000_000; cells[365] = 9_000_000
+    let year = TokenData(range: .year, period: .init(start: "2025-10-20", end: "2026-10-20"),
+                         buckets: .init(unit: "day", rows: "year", series: [.init(key: "year", values: cells)]))
+    let y = TokenRangeSummary(year, now: now, calendar: cal)
+    #expect(y.total == nil)
+    #expect(y.peakValue == 9)
+    #expect(y.heatmap?.values.flatMap { $0 }.compactMap { $0 }.count == 2)
+
+    let week = TokenData(range: .week, period: .init(start: "2026-10-14", end: "2026-10-20"), total: 70_000_000, previous: 35_000_000,
+                         buckets: .init(unit: "hour", rows: "date", series: (14...20).map { .init(key: "2026-10-\($0)", values: hours) }))
+    let w = TokenRangeSummary(week, now: now, daily: TokenRangeSummary.daily(from: year, calendar: cal), calendar: cal)
+    #expect(w.deltaPercent == 100)
+    #expect(w.average == 10)
+    // Hourly cells are unknown, so the week falls back to the daily totals from the year grid.
+    #expect(w.heatmap?.rowLabels == ["合计"])
+    #expect(w.heatmap?.values[0].compactMap { $0 } == [4, 9])
+    #expect(w.peakLabel == "周二 10/20" && w.peakValue == 9)
 }
 
-@Test func generationIsDeterministic() {
-    let a = TokenSample.summaries(usage: Sample.snapshot.token)[.year]!
-    let b = TokenSample.summaries(usage: Sample.snapshot.token)[.year]!
-    #expect(a.total == b.total)
+@Test func tokenFormatting() {
     #expect(TokenFormat.short(3830) == "3.83B")
     #expect(TokenFormat.short(122.6) == "123M")
     #expect(TokenFormat.short(18.6) == "18.6M")

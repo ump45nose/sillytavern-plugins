@@ -22,20 +22,29 @@ enum CredentialStore {
     static let helper = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/PersonalHub/Personal Hub Credentials.app")
 
-    static func load() throws -> StoredCredential? {
+    /// Serializes read-modify-write of the single keychain item shared by Google and hub.
+    private static let lock = NSLock()
+
+    static func load() throws -> CredentialVault {
         do {
-            guard let data = try call("read") else { return nil }
-            return try JSONDecoder().decode(StoredCredential.self, from: data)
+            guard let data = try call("read") else { return CredentialVault() }
+            return try CredentialVault.decode(data)
         } catch let failure as Failure where failure.status == errSecItemNotFound {
-            return nil
+            return CredentialVault()
         }
     }
 
-    static func save(_ credential: StoredCredential) throws {
-        _ = try call("write", input: try JSONEncoder().encode(credential))
+    static func update(_ change: (inout CredentialVault) -> Void) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        var vault = try load()
+        change(&vault)
+        if vault.isEmpty {
+            _ = try call("delete")
+        } else {
+            _ = try call("write", input: try JSONEncoder().encode(vault))
+        }
     }
-
-    static func delete() throws { _ = try call("delete") }
 
     private static func call(_ operation: String, input: Data? = nil) throws -> Data? {
         // Pin the helper to this running app's certificate rather than to a writable manifest.

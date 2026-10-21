@@ -12,11 +12,11 @@ struct BriefModule: View {
         if size == .compact {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label11("\(d.now.date) · \(d.now.week)")
-                    Text("下午好，玮康").font(Typo.serif(30))
+                    Label11(Self.dateLine(state.agenda.now))
+                    Text(Self.greeting(state.agenda.now)).font(Typo.serif(30))
                 }
                 Spacer()
-                Text(([Self.dueLine(state.agenda.view)] + [Self.eventLine(state.agenda.view)].compactMap { $0 } + ["日报待确认"]).joined(separator: " · "))
+                Text(([Self.dueLine(state.agenda.view)] + [Self.eventLine(state.agenda.view)].compactMap { $0 }).joined(separator: " · "))
                     .font(Typo.serif(15)).foregroundStyle(Palette.ink2)
             }
             .padding(.trailing, 70)
@@ -24,10 +24,10 @@ struct BriefModule: View {
             HStack(alignment: .bottom, spacing: 40) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
-                        Label11("\(d.now.date) · \(d.now.week)")
+                        Label11(Self.dateLine(state.agenda.now))
                         Chip(text: "第 \(d.cycle.index) 阶段 · 第 \(d.cycle.day) 天", tone: .clay)
                     }
-                    Text("下午好，玮康").font(Typo.serif(44)).tracking(-0.8)
+                    Text(Self.greeting(state.agenda.now)).font(Typo.serif(44)).tracking(-0.8)
                     Text(summary)
                         .font(Typo.serif(18.5)).foregroundStyle(Palette.ink2).lineSpacing(6)
                         .tint(Palette.clayDeep)
@@ -74,12 +74,52 @@ struct BriefModule: View {
         } else {
             s += AttributedString("今天没有别的日程了。")
         }
-        s += AttributedString("步数完成了 86%，支出 ¥128.50，仍在预算之内。昨天的")
-        s += link("日报", .goals)
-        s += AttributedString("还在等你确认，GitHub 上有 ")
-        s += link("3 条回复", .git)
-        s += AttributedString("在等你。")
+        let data = state.hub.data
+        var facts: [AttributedString] = []
+        if let h = data.health?.data, let steps = h.steps, let goal = h.stepGoal, goal > 0 {
+            facts.append(AttributedString("步数完成了 ") + link("\(Int(steps / goal * 100))%", .health))
+        }
+        if let b = data.bills?.data, let today = b.todayTotal {
+            var f = AttributedString("今天支出 ") + link("¥" + Fmt.number(today, 2), .bills)
+            if let month = b.monthTotal, let budget = b.monthBudget, budget > 0 {
+                f += AttributedString(month <= budget ? "，仍在预算之内" : "，本月已超预算")
+            }
+            facts.append(f)
+        }
+        if let n = data.crm?.data?.today?.count, n > 0 {
+            facts.append(AttributedString("和 ") + link("\(Set((data.crm?.data?.today ?? []).map { $0.personId ?? $0.name }).count) 个人", .crm) + AttributedString("有过交流"))
+        }
+        if !facts.isEmpty {
+            s += AttributedString(" ")
+            for (i, f) in facts.enumerated() { s += f; s += AttributedString(i == facts.count - 1 ? "。" : "，") }
+        }
+        if let w = data.git?.data?.waiting?.count, w > 0 {
+            s += AttributedString("GitHub 上有 ")
+            s += link("\(w) 条回复", .git)
+            s += AttributedString("在等你。")
+        }
+        let remote = state.attention.filter { !$0.id.hasPrefix("task:") }.count
+        if remote > 0 {
+            s += AttributedString("另外有 ")
+            s += link("\(remote) 件事", .attention)
+            s += AttributedString("需要留意。")
+        }
         return s
+    }
+
+    static func greeting(_ now: Date) -> String {
+        switch Calendar.hub.component(.hour, from: now) {
+        case 5..<11: "早上好，玮康"
+        case 11..<13: "中午好，玮康"
+        case 13..<18: "下午好，玮康"
+        default: "晚上好，玮康"
+        }
+    }
+
+    static func dateLine(_ now: Date) -> String {
+        let c = Calendar.hub
+        let weekday = ["日", "一", "二", "三", "四", "五", "六"][c.component(.weekday, from: now) - 1]
+        return "\(c.component(.month, from: now)) 月 \(c.component(.day, from: now)) 日 · 星期\(weekday)"
     }
 
     static func dueLine(_ v: AgendaView) -> String {
@@ -399,16 +439,45 @@ struct ReviewTile: View {
 
 // MARK: - 需要注意
 
+struct AttentionEntry: Identifiable, Equatable {
+    var id: String
+    var tone: Tone
+    var title: String
+    var subtitle: String
+    var action: String
+    var target: ModuleID?
+    var url: URL?
+
+    static func tone(rule: String, severity: String?) -> Tone {
+        switch rule {
+        case "token_limit": .clay
+        case "traffic_low": .sage
+        case "git_waiting": .sky
+        case "pr_blocked", "source_down": .rose
+        case "subs_renew": .ochre
+        case "stale_contact": .plum
+        default: severity == "warn" ? .clay : .steel
+        }
+    }
+}
+
 struct AttentionModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
 
     var body: some View {
-        let items = state.snapshot.attention
-        if size == .compact {
+        let items = state.attention
+        if items.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle").foregroundStyle(Tone.olive.color)
+                Text(state.hub.data.attention?.status == .unconfigured ? "没有逾期任务 · 跨模块提醒等 hub 开启" : "没有需要注意的事")
+                    .font(Typo.sans(12.5)).foregroundStyle(Palette.ink2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        } else if size == .compact {
             HStack(spacing: 10) {
-                ForEach(Array(items.enumerated()), id: \.1.id) { i, a in
-                    AttentionCard(item: a, pulse: i == 0).rise(i)
+                ForEach(Array(items.prefix(4).enumerated()), id: \.1.id) { i, a in
+                    Button { state.open(a) } label: { AttentionCard(item: a, pulse: i == 0) }.buttonStyle(.plain).rise(i)
                 }
             }
         } else {
@@ -417,11 +486,11 @@ struct AttentionModule: View {
                     HStack(spacing: 10) {
                         Dot(color: a.tone.color)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(a.title).font(Typo.sans(13))
-                            Text(a.subtitle).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                            Text(a.title).font(Typo.sans(13)).lineLimit(1)
+                            Text(a.subtitle).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
                         }
                         Spacer()
-                        Chip(text: a.action, tone: a.tone)
+                        Button { state.open(a) } label: { Chip(text: a.action, tone: a.tone) }.buttonStyle(.plain)
                     }
                     .padding(.vertical, 9)
                     .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
@@ -432,7 +501,7 @@ struct AttentionModule: View {
 }
 
 struct AttentionCard: View {
-    var item: Attention
+    var item: AttentionEntry
     var pulse = false
     @ViewState private var hover = false
 

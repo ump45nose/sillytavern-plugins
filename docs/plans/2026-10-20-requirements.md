@@ -250,6 +250,17 @@ NAS 实现记录（按步骤更新）：
 - 第 6 步订阅、偏好、布局与需要注意已上线（`local/hub-api:d12898e`）。19 项测试通过，覆盖并发版本冲突、配置读取竞争和七条规则；真实 LAN 订阅/需要注意 ok、偏好 version0、未创建的布局 404，未写入生产测试配置。
 - 第 7 步经用户确认重启时间后已上线 OIDC 和公网 API（镜像 `local/hub-api:4c7d8a7`）：`https://hub-home.172906573.xyz:28443`，NPM 规则 42 复用证书 2、不挂 forward-auth；删除生产开发令牌，仅增加 Authelia personal-hub 客户端，其他身份、配置与来源凭据未变。公网 443 实测不是 NAS 证书，沿用现有 NPM 28443，不改 DNS/Tunnel/路由器。31 项测试通过；LAN/公网 modules/status 200、临时设备吊销后 401，日志未发现配置秘密值。2026-10-21 10:16 +08:00 在 MacBook Pro 完成真实 Chrome 登录、双重验证与授权，回环回调及 PKCE 兑换成功；真实设备请求公网 modules/status 均 200（13 个来源），临时设备吊销后 401，脚本 success=true、退出码 0。NAS API 验收完成；net/git 因已记录的来源覆盖缺口保持 partial。来源侧 worktree 与发布分支已推送，聚合 main 仍有他人未提交的启动脚本修改，尚未集成。
 
+Mac 实现记录：
+- 视图只读 `HubData`（与接口同形）；未连接时用同形的示例数据。接口里为 null 的值显示「—」或「暂无」，不当作 0；来源只提供当日分布的 Token 工具 / 设备、没有的流量包和资产直接隐藏或提示，不编造。
+- `GET /api/v1/modules` 每 5 分钟、联网恢复、打开弹出面板时刷新，并行再取 Token 周 / 月 / 年和 `/api/v1/status`；单个模块解析失败不影响其他模块，某区间失败保留上次数据。缓存在 `~/Library/Application Support/PersonalHub/hub.json`（0600，不含令牌）；离线显示缓存并在模块头标「缓存」，401/403 转为「需要重新登录」。
+- 设备登录：设置 →「数据」→ 登录，浏览器经 Authelia，回环 `http://127.0.0.1:{port}/callback` 收一次性码后换设备令牌。`/auth/start` 的查询参数必须完整百分号编码：NPM 的 block-exploits 对未编码的 `=http://` 直接 403。默认地址是公网入口（登录 Cookie 为 Secure，回调登记在公网域名）。
+- 设备令牌与 Google 刷新令牌放在同一个钥匙串项（`{version:2, google, hub}`，兼容旧格式），仍只经冻结的凭据助手读写；断开只删除本机令牌。
+- 录音经 hub 流式播放（AVPlayer 带 Bearer 头），Plaud 录音可看转录稿；封面经签名代理按需加载、会话内缓存。
+- 需要注意：本机算逾期任务，其余取 hub 规则；菜单栏圆点与弹出面板共用。
+- 快捷 Memo 浮窗 `POST /api/v1/memos`（⌘↩ 发布，⌘⇧↩ 发布并打开 Memos 页）；未连接或失败时存本地草稿，不丢内容。
+- 电脑历史读本机 `~/.codex/skysight-sync/archive`：最近两个有数据的日子，6 小时窗口 + 10 分钟片段；还没有 6 小时摘要的片段合成「未汇总」窗口，30 分钟内有新片段才算「进行中」；Dock、Finder 等常驻进程不计入应用分布。
+- 验证：`scripts/test.sh`（假 hub 传输层）；调试版 `--qa-render DIR [--qa-cache]` 离屏渲染，`--qa-cache` 只读本机缓存不联网；安装版 `PersonalHub --hub-smoke` 逐个读取模块、Token 四区间、状态、一张封面、一段录音的 Range 和转录稿，只输出状态、条数和字节数；`--hub-token-stdin [URL]` 供带开发令牌的 hub 使用（生产已关闭开发令牌）。
+
 NAS 侧执行计划与 Mac / 安卓共用的接口约定见 [阶段 3 NAS 侧计划](2026-10-20-phase3-nas.md)。电脑历史在本阶段由 Mac 直接读本机归档。
 
 ### 阶段 4：安卓

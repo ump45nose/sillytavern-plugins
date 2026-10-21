@@ -8,9 +8,10 @@ import SwiftUI
 final class AppState {
     static let shared = AppState()
 
+    /// Design sample, still the source for cycle and goals until personal-review is wired up.
     let snapshot = Sample.snapshot
     let agenda = AgendaModel()
-    let tokenSummaries = TokenSample.summaries(usage: Sample.snapshot.token)
+    let hub = HubModel()
 
     var layout: LayoutDocument { didSet { persistLayout() } }
     var currentPage = "home"
@@ -80,7 +81,60 @@ final class AppState {
         withAnimation(Motion.spring) { layout = .default }
     }
 
-    func sync() { agenda.refresh() }
+    func sync() {
+        agenda.refresh()
+        hub.refresh()
+    }
+
+    var syncingAny: Bool { syncing || hub.status == .syncing }
+
+    // MARK: Module freshness
+
+    func updatedAt(_ module: ModuleID) -> Date? {
+        switch module {
+        case .agenda: return agenda.lastSync
+        case .sky: return hub.sky.map { $0.segments.last?.end ?? $0.end }.max().map { min($0, HubFormat.current()) }
+        case .brief, .goals, .attention: return nil
+        default: return HubModule(rawValue: module.rawValue).flatMap { hub.data.updatedAt($0) }
+        }
+    }
+
+    func stamp(_ module: ModuleID) -> String? { HubFormat.stamp(updatedAt(module)) }
+
+    /// Only the states worth flagging on a module header.
+    func hubStatus(_ module: ModuleID) -> HubStatus? {
+        guard hub.mode == .hub, module != .attention, let m = HubModule(rawValue: module.rawValue),
+              let status = hub.data.status(m) else { return nil }
+        if status.hasData, hub.status == .offline { return .stale }
+        return [.stale, .partial, .error].contains(status) ? status : nil
+    }
+
+    // MARK: Attention
+
+    /// Local overdue tasks first, then whatever hub's rules raised.
+    var attention: [AttentionEntry] {
+        let local = agenda.view.overdue.prefix(2).map { t in
+            AttentionEntry(id: "task:" + t.id, tone: .rose, title: "「\(t.title)」逾期 \(t.overdueDays) 天",
+                           subtitle: t.listTitle, action: "处理", target: .agenda, url: nil)
+        }
+        let remote = (hub.data.attention?.data?.items ?? []).map { a in
+            AttentionEntry(id: a.id, tone: AttentionEntry.tone(rule: a.rule, severity: a.severity), title: a.title,
+                           subtitle: Self.readable(a.subtitle) ?? HubFormat.ago(a.since), action: a.url == nil ? "查看" : "打开",
+                           target: a.target?.module.flatMap(ModuleID.init(rawValue:)), url: a.url.flatMap(URL.init(string:)))
+        }
+        return Array(local) + remote
+    }
+
+    /// Some rules put a bare ISO timestamp (a reset time) in the subtitle.
+    private static func readable(_ subtitle: String?) -> String? {
+        guard let subtitle, !subtitle.isEmpty else { return nil }
+        guard let date = HubJSON.parseDate(subtitle) else { return subtitle }
+        return date > HubFormat.current() ? TokenTone.resets(date) : HubFormat.ago(date)
+    }
+
+    func open(_ entry: AttentionEntry) {
+        if let url = entry.url { NSWorkspace.shared.open(url) } else if let m = entry.target { openMainWindow(nil); focus(m) }
+    }
 
     private func persistLayout() {
         do { try store.save(layout) } catch { NSLog("Personal Hub: layout save failed: \(error.localizedDescription)") }

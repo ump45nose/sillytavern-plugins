@@ -111,23 +111,53 @@ private struct Sidebar: View {
 }
 
 private struct SourceHealth: View {
+    @Environment(AppState.self) private var state
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Dot(color: Tone.olive.color)
-                Text("示例数据 · 10 个来源").font(Typo.sans(12))
-                Spacer()
-                Text("17:58").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-            }
-            HStack(spacing: 3) {
-                ForEach(0..<10, id: \.self) { i in
-                    Capsule().fill(i == 4 ? Tone.ochre.color : Tone.olive.color.opacity(0.6)).frame(height: 4)
+        let hub = state.hub
+        let sources = hub.data.sources.filter { $0.status != .unconfigured }
+        let health = hub.sourcesHealthy
+        let (tone, title): (Tone, String) = switch hub.status {
+        case _ where hub.mode == .demo: (.ochre, "示例数据")
+        case .needsSignIn: (.rose, "hub 需要重新登录")
+        case .offline: (.ochre, "hub 离线 · 显示缓存")
+        case .failed: (.rose, "hub 同步失败")
+        default: (health.ok == health.total ? .olive : .ochre, "\(health.ok) / \(health.total) 来源正常")
+        }
+        Button { state.openSettings() } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Dot(color: tone.color, pulse: hub.status == .syncing)
+                    Text(title).font(Typo.sans(12)).lineLimit(1)
+                    Spacer()
+                    if let at = HubFormat.stamp(hub.data.fetchedAt) { Text(at).font(Typo.sans(11)).foregroundStyle(Palette.ink3) }
+                }
+                if !sources.isEmpty {
+                    HStack(spacing: 3) {
+                        ForEach(sources) { s in
+                            Capsule().fill(s.status == .ok ? Tone.olive.color.opacity(0.6) : s.status == .error ? Tone.rose.color : Tone.ochre.color)
+                                .frame(height: 4)
+                                .help("\(s.name) · \(Self.label(s.status))")
+                        }
+                    }
                 }
             }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Palette.card))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
+            .contentShape(Rectangle())
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.card))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.line))
+        .buttonStyle(.plain)
+    }
+
+    static func label(_ s: HubStatus) -> String {
+        switch s {
+        case .ok: "正常"
+        case .partial: "部分可用"
+        case .stale: "数据过旧"
+        case .error: "故障"
+        case .unconfigured: "未接入"
+        }
     }
 }
 
@@ -149,7 +179,7 @@ private struct Toolbar: View {
             .padding(.horizontal, 12).frame(width: 300, height: 30)
             .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.line))
-            ToolButton(symbol: "arrow.triangle.2.circlepath", title: state.lastSync, spinning: state.syncing) { state.sync() }
+            ToolButton(symbol: "arrow.triangle.2.circlepath", title: state.lastSync, spinning: state.syncingAny) { state.sync() }
             if state.page.kind == .grid {
                 ToolButton(symbol: "square.grid.2x2", title: state.editing ? "完成" : "编辑布局", prominent: state.editing) {
                     withAnimation(Motion.spring) { state.editing.toggle() }
@@ -235,15 +265,23 @@ struct PageView: View {
 
 private struct PageHeader: View {
     var page: Page
+    @Environment(AppState.self) private var state
 
     var body: some View {
+        let modules: [ModuleID] = switch page.kind {
+        case .grid: page.items.map(\.module)
+        case .sky: [.sky]
+        case .memos: [.memos]
+        }
+        let stamp = HubFormat.stamp(modules.compactMap(state.updatedAt).max())
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(page.title).font(Typo.serif(34)).tracking(-0.6)
                 Text(page.subtitle).font(Typo.sans(13)).foregroundStyle(Palette.ink2)
             }
             Spacer()
-            Text(page.kind == .grid ? "\(page.items.count) 个模块 · 更新于 17:58" : "更新于 17:58").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            Text(([page.kind == .grid ? "\(page.items.count) 个模块" : nil, stamp.map { "更新于 " + $0 }].compactMap { $0 }).joined(separator: " · "))
+                .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
         }
     }
 }

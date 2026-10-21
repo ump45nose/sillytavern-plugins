@@ -69,10 +69,21 @@ enum QuickKind { case task, memo }
 /// Quick memo: kept as a local draft until the Memos integration lands.
 struct QuickMemoView: View {
     var close: () -> Void
+    @Environment(AppState.self) private var state
     @ViewState private var text = ""
     @ViewState private var visibility = 0
-    @ViewState private var submitted = false
+    @ViewState private var outcome: Outcome?
+    @ViewState private var posting = false
     @FocusState private var focused: Bool
+
+    private enum Outcome: Equatable {
+        case posted, drafted(String)
+    }
+
+    private var tags: [String] {
+        let top = (state.hub.data.memos?.data?.tags ?? []).sorted { ($0.count ?? 0) > ($1.count ?? 0) }.prefix(4).map(\.name)
+        return top.isEmpty ? ["日报", "想法"] : Array(top)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -96,12 +107,21 @@ struct QuickMemoView: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
 
             HStack(spacing: 6) {
-                if submitted {
-                    Chip(text: "已记录到本地草稿（之后的阶段写入 Memos）", tone: .olive, systemImage: "checkmark")
+                switch outcome {
+                case .posted:
+                    Chip(text: "已发布到 Memos", tone: .olive, systemImage: "checkmark")
                         .transition(.opacity.combined(with: .offset(y: 4)))
-                } else {
-                    Chip(text: "#日报", tone: .sky)
-                    Chip(text: "#想法", tone: .sky)
+                case .drafted(let why):
+                    Chip(text: "\(why) 已存为本地草稿", tone: .ochre, systemImage: "tray.and.arrow.down")
+                        .transition(.opacity.combined(with: .offset(y: 4)))
+                case nil:
+                    if posting {
+                        Chip(text: "发布中…", tone: .sky)
+                    } else {
+                        ForEach(tags, id: \.self) { tag in
+                            Button { insert(tag) } label: { Chip(text: "#" + tag, tone: .sky) }.buttonStyle(.plain)
+                        }
+                    }
                 }
             }
             .padding(.top, 12)
@@ -120,21 +140,47 @@ struct QuickMemoView: View {
         .background(RoundedRectangle(cornerRadius: 18).fill(Palette.card))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.line))
         .background {
-            Button("", action: submit).keyboardShortcut(.return, modifiers: .command).opacity(0)
+            Button("") { submit(open: false) }.keyboardShortcut(.return, modifiers: .command).opacity(0)
+            Button("") { submit(open: true) }.keyboardShortcut(.return, modifiers: [.command, .shift]).opacity(0)
         }
         .preferredColorScheme(.light)
         .onAppear {
             text = ""
-            submitted = false
+            outcome = nil
+            posting = false
             DispatchQueue.main.async { focused = true }
         }
     }
 
-    private func submit() {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        QuickDrafts.appendMemo(text)
-        withAnimation(Motion.spring) { submitted = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+    private func insert(_ tag: String) {
+        let token = "#" + tag
+        guard !text.contains(token) else { return }
+        text += (text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? "" : " ") + token + " "
+        focused = true
+    }
+
+    private func submit(open: Bool) {
+        let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, !posting else { return }
+        posting = true
+        Task {
+            do {
+                try await state.hub.postMemo(content, visibility: visibility == 0 ? "PRIVATE" : "PUBLIC")
+                withAnimation(Motion.spring) { outcome = .posted }
+            } catch {
+                // Never lose what was typed: keep it locally when hub can't take it.
+                QuickDrafts.appendMemo(content)
+                let why = (error as? HubModel.WriteError).map { e -> String in
+                    if case .demo = e { return "未连接 hub，" }
+                    return (e.errorDescription ?? "发布失败") + "，"
+                } ?? "发布失败，"
+                withAnimation(Motion.spring) { outcome = .drafted(why) }
+            }
+            posting = false
+            try? await Task.sleep(for: .milliseconds(outcome == .posted ? 700 : 1800))
+            close()
+            if open, outcome == .posted { state.openMainWindow("memos") }
+        }
     }
 }
 

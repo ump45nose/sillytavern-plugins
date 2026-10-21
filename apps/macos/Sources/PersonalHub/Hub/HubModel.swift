@@ -1,0 +1,247 @@
+import AppKit
+import AVFoundation
+import Foundation
+import HubKit
+import Network
+import Observation
+
+/// Main-actor face of hub-api: mirrors the sync cache for the module views. Shows the design
+/// sample (demo) until a hub device token is stored.
+@MainActor
+@Observable
+final class HubModel {
+    enum Mode: Equatable { case demo, hub }
+    enum SignIn: Equatable { case idle, waiting, failed(String) }
+
+    private(set) var mode: Mode = .demo
+    private(set) var data = HubData()
+    private(set) var status: HubSync.Status = .idle
+    private(set) var baseURL: URL?
+    var signIn: SignIn = .idle
+    /// Bumped when a cover finishes loading so posters re-render.
+    private(set) var imageGeneration = 0
+    /// Computer history comes from the local skysight archive, independent of hub.
+    private(set) var sky: [SkyWindowItem] = []
+    private(set) var skyLive = false
+
+    @ObservationIgnored private var sync = HubSync(seed: HubData())
+    @ObservationIgnored private var api: HubAPI?
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var timers: [Timer] = []
+    @ObservationIgnored private let path = NWPathMonitor()
+    @ObservationIgnored private var online = true
+    @ObservationIgnored private var signingIn: Task<Void, Never>?
+    @ObservationIgnored private let transport = URLSessionTransport()
+    @ObservationIgnored private var images: [String: NSImage] = [:]
+    @ObservationIgnored private var loading: Set<String> = []
+    @ObservationIgnored var clock: () -> Date = { Date() }
+
+    static let cacheFile = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/PersonalHub/hub.json")
+    /// Public NPM entry: device sign-in needs it (Secure cookie, Authelia callback) and it also works on the LAN.
+    nonisolated static let defaultBase = URL(string: "https://hub-home.172906573.xyz:28443")!
+    /// Posted by `--hub-token-stdin` so a running app picks up the new credential.
+    nonisolated static let changed = Notification.Name("com.yuwk.personal-hub.hub-credential-changed")
+
+    func start() {
+        attach(HubSync(seed: HubSample.data(now: clock())), mode: .demo)
+        sky = SkyArchive.sample(now: clock())
+        loadSky()
+        Task { await restore() }
+
+        let poll = Timer(timeInterval: 5 * 60, repeats: true) { _ in MainActor.assumeIsolated { self.refresh() } }
+        RunLoop.main.add(poll, forMode: .common)
+        timers.append(poll)
+        path.pathUpdateHandler = { [weak self] p in
+            let up = p.status == .satisfied
+            Task { @MainActor in
+                guard let self else { return }
+                if up, !self.online { self.refresh() }
+                self.online = up
+            }
+        }
+        path.start(queue: DispatchQueue(label: "hub.data.path"))
+        DistributedNotificationCenter.default().addObserver(forName: Self.changed, object: nil, queue: .main) { _ in
+            Task { @MainActor in await self.restore() }
+        }
+    }
+
+    /// Offscreen QA renders: the demo data at a fixed moment, no network.
+    func preview(now: Date) {
+        attach(HubSync(seed: HubSample.data(now: now)), mode: .demo)
+        sky = SkyArchive.sample(now: now)
+    }
+
+    #if DEBUG
+    /// Offscreen QA renders of the last synced hub data: reads the local cache only, no network or keychain.
+    func previewCache() async {
+        attach(HubSync(file: Self.cacheFile), mode: .hub)
+        let windows = await Task.detached { SkyArchive.load() }.value
+        if !windows.isEmpty { sky = windows; skyLive = true }
+    }
+    #endif
+
+    func refresh() {
+        loadSky()
+        guard mode == .hub else { return }
+        let sync = self.sync
+        Task { await sync.refresh() }
+    }
+
+    private func loadSky() {
+        Task {
+            let windows = await Task.detached(priority: .utility) { SkyArchive.load() }.value
+            guard !windows.isEmpty else { return }
+            if windows != sky { sky = windows }
+            skyLive = true
+        }
+    }
+
+    // MARK: Account
+
+    private func restore() async {
+        let stored = await Task.detached { try? CredentialStore.load().hub }.value
+        if let stored { activate(stored) } else if mode == .hub { forget() }
+    }
+
+    private func activate(_ credential: HubCredential) {
+        Reminders.shared.requestAuthorization()
+        let api = HubAPI(transport: transport, credential: credential)
+        self.api = api
+        baseURL = credential.baseURL
+        images = [:]
+        let engine = mode == .hub ? sync : HubSync(file: Self.cacheFile)
+        if engine !== sync { attach(engine, mode: .hub) }
+        Task {
+            await engine.connect(api: api)
+            await engine.refresh()
+        }
+    }
+
+    /// Browser sign-in through Authelia (hub-api §4.3).
+    func signIn(base: URL) {
+        guard signingIn == nil else { return }
+        signIn = .waiting
+        let transport = self.transport
+        signingIn = Task {
+            defer { signingIn = nil }
+            do {
+                let state = UUID().uuidString, pkce = OAuth.PKCE.make()
+                let receiver = try LoopbackReceiver(state: state, success: "Personal Hub 已登录 hub")
+                let name = Host.current().localizedName ?? "Mac"
+                let code = try await receiver.code { uri in
+                    guard let url = HubSignIn.startURL(base: base, deviceName: name, redirect: uri + "/callback", pkce: pkce, state: state) else { return }
+                    DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+                }
+                let credential = try await HubSignIn.exchange(base: base, code: code, verifier: pkce.verifier, transport: transport)
+                try await Task.detached { try CredentialStore.update { $0.hub = credential } }.value
+                signIn = .idle
+                activate(credential)
+            } catch is CancellationError {
+                signIn = .idle
+            } catch let e as HubError {
+                signIn = .failed(e == .http(404) ? "这个 hub 还没开放设备登录。" : e.message)
+            } catch {
+                signIn = .failed((error as? CredentialStore.Failure)?.errorDescription ?? "登录没有完成，请重试。")
+            }
+        }
+    }
+
+    func cancelSignIn() { signingIn?.cancel() }
+
+    /// Deletes the local device token. Revoking it on the server is done from another device or hub-api.
+    func disconnect() {
+        Task { _ = try? await Task.detached { try CredentialStore.update { $0.hub = nil } }.value }
+        forget()
+    }
+
+    private func forget() {
+        Reminders.shared.forgetAttention()
+        let sync = self.sync
+        api = nil
+        baseURL = nil
+        images = [:]
+        Task { await sync.disconnect() }
+        attach(HubSync(seed: HubSample.data(now: clock())), mode: .demo)
+    }
+
+    private func attach(_ next: HubSync, mode: Mode) {
+        generation += 1
+        let mine = generation
+        sync = next
+        self.mode = mode
+        let handler: @Sendable (HubData, HubSync.Status) -> Void = { [weak self] data, status in
+            Task { @MainActor in
+                guard let self, self.generation == mine else { return }
+                let fetched = data.fetchedAt != self.data.fetchedAt
+                self.data = data
+                self.status = status
+                if self.mode == .hub, fetched, let attention = data.attention, attention.status.hasData {
+                    Reminders.shared.announce(attention.data?.items ?? [])
+                }
+            }
+        }
+        Task { await next.observe(handler) }
+    }
+
+    // MARK: Reading
+
+    func token(_ range: TokenRange) -> TokenRangeSummary? {
+        guard let d = data.token[range]?.data else { return nil }
+        return TokenRangeSummary(d, now: clock(), daily: TokenRangeSummary.daily(from: data.token[.year]?.data))
+    }
+
+    var sourcesHealthy: (ok: Int, total: Int) {
+        let configured = data.sources.filter { $0.status != .unconfigured }
+        return (configured.filter { $0.status == .ok }.count, configured.count)
+    }
+
+    /// Covers are fetched through hub-api's signed proxy and kept in memory for the session.
+    func image(_ ref: String?) -> NSImage? {
+        guard let ref, let api else { return nil }
+        if let hit = images[ref] { return hit }
+        guard !loading.contains(ref) else { return nil }
+        loading.insert(ref)
+        Task {
+            defer { loading.remove(ref) }
+            guard let bytes = try? await api.image(ref: ref), let image = NSImage(data: bytes) else { return }
+            images[ref] = image
+            imageGeneration += 1
+        }
+        return nil
+    }
+
+    func player(recording id: String) -> AVPlayer? {
+        guard let api, let request = try? api.audioRequest(recording: id), let url = request.url else { return nil }
+        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": request.allHTTPHeaderFields ?? [:]])
+        return AVPlayer(playerItem: AVPlayerItem(asset: asset))
+    }
+
+    func transcript(recording id: String) async -> String? {
+        guard let api else { return nil }
+        return try? await api.transcript(recording: id)
+    }
+
+    // MARK: Writing
+
+    enum WriteError: LocalizedError {
+        case demo
+        case hub(HubError)
+        var errorDescription: String? {
+            switch self {
+            case .demo: "还没连接 hub，示例模式下不会保存。"
+            case .hub(let e): e.message
+            }
+        }
+    }
+
+    func postMemo(_ content: String, visibility: String = "PRIVATE") async throws {
+        guard let api else { throw WriteError.demo }
+        do {
+            let created = try await api.createMemo(content: content, visibility: visibility)
+            await sync.inserted(memo: created.id, content: content, visibility: visibility)
+        } catch let e as HubError {
+            throw WriteError.hub(e)
+        }
+    }
+}

@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.showQuickMemo = { [weak self] in self?.toggleQuickPanel(.memo) }
 
         state.agenda.start()
+        state.hub.start()
         setUpStatusItem()
         HotKeyCenter.shared.bind(.quickTask) { [weak self] in self?.toggleQuickPanel(.task) }
         HotKeyCenter.shared.bind(.quickMemo) { [weak self] in self?.toggleQuickPanel(.memo) }
@@ -57,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let title = NSMutableAttributedString(string: " " + state.statusTitle, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular),
         ])
-        if !state.snapshot.attention.isEmpty {
+        if !state.attention.isEmpty {
             title.append(NSAttributedString(string: " ●", attributes: [
                 .font: NSFont.systemFont(ofSize: 8),
                 .foregroundColor: NSColor(Tone.clay.color),
@@ -65,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             ]))
         }
         statusItem.button?.attributedTitle = title
-        withObservationTracking { _ = state.statusTitle } onChange: { [weak self] in
+        withObservationTracking { _ = state.statusTitle; _ = state.attention.isEmpty } onChange: { [weak self] in
             DispatchQueue.main.async { self?.updateStatusTitle() }
         }
     }
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             w.titlebarAppearsTransparent = true
             w.title = "设置"
