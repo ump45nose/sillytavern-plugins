@@ -101,6 +101,7 @@ def register(app, settings, personal, authenticated, now, manager):
         source, base, audio_id = recording(identifier)
         response = await upstream(source, base + ("/audio/" + audio_id if source == "plaud" else "/content"), range)
         headers = {k: v for k, v in response.headers.items() if k.lower() in ("content-type", "content-length", "content-range", "accept-ranges")}
+        headers.update({'Cache-Control': 'private, no-store', 'X-Accel-Buffering': 'no'})
         async def chunks():
             try:
                 async for chunk in response.aiter_raw():
@@ -119,6 +120,6 @@ def register(app, settings, personal, authenticated, now, manager):
             text = (await response.aread()).decode("utf-8")
             for secret in settings.secrets():
                 text = text.replace(secret, "[redacted]")
-            return PlainTextResponse(text, media_type="text/markdown")
+            return PlainTextResponse(text, media_type="text/markdown", headers={'Cache-Control': 'private, no-store'})
         finally:
             await response.aclose()

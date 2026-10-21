@@ -125,5 +125,5 @@ def register(app, settings, memos, authenticated, manager):
             finally:
                 await upstream.aclose()
         return StreamingResponse(chunks(), media_type=media_type,
-            headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'},
+            headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Accel-Buffering': 'no'},
             background=BackgroundTask(upstream.aclose))

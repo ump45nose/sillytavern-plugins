@@ -33,6 +33,7 @@ def source(request):
     if path.endswith("/archives"):
         return httpx.Response(200, json={"items": [{"date": "2026-10-20", "audio_count": 1}], "total": 1})
     if path.endswith("/archives/2026-10-20"):
+        assert request.url.params['metadata_only'] == 'true'
         return httpx.Response(200, json={"audio": [{"id": AUDIO, "name": "录音", "start_at": "2026-10-20T08:50:00+08:00", "duration_ms": 2400000}]})
     if path.endswith("/auth/me"):
         return httpx.Response(200, json={"user": {"name": "users/1"}})
@@ -73,6 +74,8 @@ def test_personal_normalization_writes_and_range_proxy(settings, caplog):
         response = client.get(base + "/audio", headers={**headers, "Range": "bytes=0-3"})
         assert response.status_code == 206 and response.content == b"data"
         assert response.headers["Content-Range"] == "bytes 0-3/10"
+        assert response.headers['cache-control'] == 'private, no-store'
+        assert response.headers['x-accel-buffering'] == 'no'
         response = client.get(base + "/transcript", headers=headers)
         assert response.status_code == 200 and response.headers["Content-Type"].startswith("text/markdown")
         assert "SENTINEL" not in response.text + caplog.text

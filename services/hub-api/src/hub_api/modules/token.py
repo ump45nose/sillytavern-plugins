@@ -57,7 +57,7 @@ def assemble(source, period, now):
     elif period == "week":
         buckets = {"unit": "hour", "rows": "date", "series": [{"key": (start + timedelta(days=i)).isoformat(), "values": [None] * 24} for i in range(7)]}
     elif period == "month":
-        buckets = None  # stats has no historical per-tool attribution.
+        buckets = None  # Preserve the existing month bucket shape; v2 uses history/parts.
     else:
         buckets = {"unit": "day", "rows": "year", "series": [{"key": "year", "values": [value(start + timedelta(days=i), "total") for i in range(371)]}]}
     result = {"range": period, "period": {"start": start.isoformat(), "end": today.isoformat()},

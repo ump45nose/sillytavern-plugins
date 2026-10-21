@@ -82,7 +82,7 @@ class Personal:
         today_days = days if start<=today<=end else (await self.request("plaud", "/api/v1/archives", {"start_date":today.isoformat(),"end_date":today.isoformat(),"limit":1}))["items"]
         recordings = []
         if any(d["date"] == today.isoformat() for d in today_days):
-            detail = await self.request("plaud", "/api/v1/archives/" + today.isoformat())
+            detail = await self.request("plaud", "/api/v1/archives/" + today.isoformat(), {"metadata_only": "true"})
             recordings = [{"id": "plaud:" + today.isoformat() + ":" + a["id"], "title": a["name"],
                 "start_at": local_time(a.get("start_at"), self.now().tzinfo),
                 "duration_seconds": a["duration_ms"] / 1000 if a.get("duration_ms") is not None else None} for a in detail["audio"]]

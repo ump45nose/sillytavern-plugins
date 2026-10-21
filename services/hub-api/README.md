@@ -303,7 +303,9 @@ Clients use the same authenticated Hub audio URL on LAN and public NPM. Hub stre
 from Plaud with the source's existing read credential and forwards Range/206,
 Content-Range and Accept-Ranges for seeking. Clients must send their device bearer
 for each playback/seek request. Audio opens on demand, whole-day Markdown on expand;
-no file mirror, public source URL or source credential is exposed.
+no file mirror, public source URL or source credential is exposed. Audio responses use
+private/no-store and disable reverse-proxy response buffering for streaming. CRM recording
+joins also use metadata-only source reads.
 
 ## Hub v2 Memos CRUD
 
