@@ -52,6 +52,9 @@ def _parser() -> argparse.ArgumentParser:
     serve.add_argument('--host', default='192.168.31.201')
     serve.add_argument('--port', type=int, default=18191)
     serve.add_argument('--token-hash-file', required=True)
+    status = commands.add_parser('review')
+    status.add_argument('action', choices=['status'])
+    status.add_argument('--id', required=True)
 
     cron = commands.add_parser("cron")
     cron.add_argument("action", choices=["diff", "apply"])
@@ -269,6 +272,10 @@ def run(argv: Iterable[str] | None = None) -> int:
         if args.command == 'serve':
             from review.http import serve
             serve(config, state, memos, args.host, args.port, args.token_hash_file)
+            return 0
+        if args.command == 'review':
+            from review.http import ReviewAPI
+            _json_print(ReviewAPI(config,state,memos).review_status(args.id))
             return 0
         if args.command == "doctor":
             _json_print(_doctor(config, state, memos))

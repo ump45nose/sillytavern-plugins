@@ -381,7 +381,7 @@ class StageService:
                 continue
             close_key = f"{cycle_id}:{goal['id']}"
             if not self.state.get_idempotent("stage-goal-close", close_key):
-                self.memos.comment(goal_memo, f"结案：{outcomes[goal['id']]}\n阶段总结：{memo_name}")
+                self.comment_goal(goal['id'], f"结案：{outcomes[goal['id']]}\n阶段总结：{memo_name}")
                 self.memos.pin_memo(goal_memo, False)
                 self.memos.archive_memo(goal_memo)
                 self.state.put_idempotent("stage-goal-close", close_key, {"status": "archived"})

@@ -6,6 +6,7 @@ import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -47,6 +48,19 @@ class ReviewAPI:
         self.stages = StageService(state, config.policy, memos, config.flags.tasks)
         self.notifier = None
 
+    def notify(self, kind, label):
+        if self.notifier is None: return
+        try: self.notifier(kind,label)
+        except Exception as error:
+            logging.getLogger(__name__).warning('archive_notification_failed: %s',type(error).__name__)
+
+    def review_status(self, identifier):
+        try: row=self.session(identifier)
+        except APIError as error: raise ValueError(error.message) from None
+        receipt=self.state.get_idempotent(row['kind']+'-finalize',identifier) or {}
+        return {'status':self.summary(row)['status'],'memo_name':row['memo_name'],
+                'confirmed_from':receipt.get('confirmed_from')}
+
     @staticmethod
     def check(body, required, optional=None):
         optional=optional or {}
@@ -60,7 +74,7 @@ class ReviewAPI:
         with self.state.operation():
             row=self.session(identifier);already=row['status']=='finalized'
             result=(self.daily if row['kind']=='daily' else self.weekly).finalize(identifier,content,confirmation_source='app')
-        if not already and self.notifier: self.notifier(row['kind'],identifier.split(':',1)[1])
+        if not already: self.notify(row['kind'],identifier.split(':',1)[1])
         return {'status':'finalized','memo_name':result['memo_name'],'already':already}
 
     def iso(self, value):
@@ -230,7 +244,7 @@ class ReviewAPI:
                 with self.state.operation():
                     already=self.state.get_idempotent('stage-close',parts[3]) is not None
                     result=self.stages.close_cycle(parts[3],body['text'],body['outcomes'],body.get('dry_run',False),confirmation_source='app')
-                if not already and not body.get('dry_run',False) and self.notifier: self.notifier('stage',parts[3])
+                if not already and not body.get('dry_run',False): self.notify('stage',parts[3])
                 return {key:value for key,value in result.items() if key!='confirmed_from'}
         raise APIError(404,'not_found','接口不存在')
 
@@ -287,6 +301,9 @@ def server(api, token_hash, address):
 
 
 def serve(config,state,memos,host,port,token_hash_file):
+    from review.notifications import ArchiveNotifier
     digest=Path(token_hash_file).read_text().strip()
-    with server(ReviewAPI(config,state,memos),digest,(host,port)) as http:
+    api=ReviewAPI(config,state,memos)
+    api.notifier=ArchiveNotifier(config)
+    with server(api,digest,(host,port)) as http:
         http.serve_forever()

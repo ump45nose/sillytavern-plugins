@@ -1,41 +1,31 @@
-# NAS phase 5 execution — 2026-10-21
+# Phase 5 personal-review HTTP — 2026-10-21
 
-User authorized the fn portion of the attached phase-5 plan and creation of a private
-`ump45nose/personal-review` repository for source publishing. Follow phase-5 §§2/6/7.
+Scope/contract: personal-data-hub/docs/plans/2026-10-21-phase5-nas.md.
+Development: aggregate worktree codex/phase5-review-http-20261021, base 895cd7e.
+Source published with subtree split to user-approved private ump45nose/personal-review.
+Deployment checkout /home/yuwk/src/personal-review; runtime links use that checkout.
+Original config, DB, Memos credentials and artifacts remain in /vol2/1000/Docker/personal-review.
+Aggregate main has others' boot edits and is not overwritten/merged.
 
-Scope: personal-review HTTP, Hub goals/review/stage proxy and attention, write methods,
-App/Telegram first-confirmation coordination, CLI status and Lingjun Skill deployment.
-Production validation is read-only or dry-run; real confirmation belongs to the owner.
-Do not change generation, checkpoints, projections, job IDs/schedule/topic/history or
-paused state. Do not touch Mac code or expand net/git coverage. Never print secrets.
+Source read/preview and all requested write endpoints implemented. CLI/HTTP service
+writes share a reentrant flock; existing idempotent receipts retain confirmed_from.
+New-goal retry identity is cycle_id/domain/goal; changed payload conflicts. Dry-run
+never creates indexes/Memos. The source stores only a private SHA-256 auth hash; raw
+bearer remains in Hub private env. HTTP bodies/logs never expose credentials.
 
-Source worktree: `/vol1/1000/Code/.worktree/phase5-review-http-20261021`, branch
-`codex/phase5-review-http-20261021`, base 895cd7e. Aggregate main has others' boot edits;
-do not overwrite or merge into dirty main. Hub checkout: `/home/yuwk/src/personal-hub`.
-Current Hub image before phase 5: local/hub-api:3d69313.
+Step 1 source main af0a227: read endpoints, stage/comments, preview; 71 tests.
+Step 3 source main 6f48ebe: writes and shared locking; 75 tests.
+Step 4: readonly CLI status, only-first-App non-agent archive notification, source
+Skill 1.1.0 and partial-close retry reuse; 80 source tests pass.
 
-Decisions:
-- Source uses stdlib HTTP server and the existing Hermes runtime; no shared runtime
-  dependency upgrade. Bind LAN 18191 (verify availability before applying).
-- Raw service bearer exists only in Hub private env. Source compares SHA-256 against
-  a private hash file readable by hermes; no raw token in source env or service unit.
-- Shared CLI/HTTP operation locking is required around service writes: existing
-  idempotency checks do not serialize concurrent confirmations/external Memos writes.
-  SQLite already uses WAL and the default five-second connection timeout.
-- Cycle creation gains optional dry_run so every production write path can be checked
-  without creating business data. New-goal retries deduplicate cycle_id/domain/goal;
-  a changed payload for an unfinished identical goal is a conflict.
-- Old weekly material has no material_json; HTTP derives display sections only from
-  the existing frozen evidence, without regenerating or rewriting sessions.
+Native service template deploy/personal-review.service binds LAN 18191 as hermes.
+Production stage/detail reads pass; 3 goals and one active cycle. LAN/public comments,
+close and new-goal dry-runs=200, create-cycle dry-run=409 for existing active cycle.
+Review/session/cycle/goal/idempotency/projection counts unchanged. Current source
+CLI/generation/checkpoint/projection schedules and jobs are untouched.
 
-Steps:
-1. Source read endpoints and preview; tests, systemd deployment, production reads.
-2. Hub goals/read/preview/status/attention; fake-source tests and targeted deployment.
-3. Source and Hub write routes; shared locking/idempotency, production dry-run only.
-4. App notification implementation, CLI status, Skill synchronization; preserve jobs.
-
-Final acceptance: tests plus authenticated LAN/public goals and source read/dry-run.
-Owner must perform an actual App confirmation; do not fabricate production sessions.
-
-Progress: inspection complete; implementation starting. Current time 11:21 +08:00,
-well outside tonight's 21:30 generation window. Existing timers/jobs remain untouched.
+Deployment Skill synchronization must compare the existing installed source before
+replacement. Private rollback: Docker/backups/personal-review/phase5-20261021.
+Owner must perform real App review confirmation; do not create test business data
+or send a production test message. Final deployment evidence is recorded in the Hub
+phase-5 execution plan.

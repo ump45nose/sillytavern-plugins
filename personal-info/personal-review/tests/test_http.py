@@ -235,3 +235,85 @@ def test_cli_and_app_confirmation_are_serialized_across_processes(api,tmp_path):
     results=[queue.get(timeout=5) for _ in processes]
     for p in processes:p.join(5);assert p.exitcode==0
     assert writes.read_text()=='one\n' and results[0]==results[1]
+
+
+def test_only_first_app_finalize_notifies_and_notification_failure_is_nonfatal(api,client,caplog):
+    notices=[];api.notifier=lambda kind,label:notices.append((kind,label))
+    identifier=api.sessions('daily')['items'][0]['id'];label=identifier.split(':',1)[1]
+    text=f'#日报 {label}\n一句话总结今天：真实原文'
+    assert client('/v1/reviews/'+identifier+'/preview',{'content':text})[0]==200
+    assert notices==[]
+    assert client('/v1/reviews/'+identifier+'/finalize',{'content':text})[0]==200
+    assert client('/v1/reviews/'+identifier+'/finalize',{'content':text})[1]['already'] is True
+    assert notices==[('daily',label)]
+    cycle,goal=seed_stage(api)
+    body={'text':'用户原文','outcomes':{goal:'成功'},'dry_run':True}
+    assert client('/v1/stage/cycles/'+cycle+'/close',body)[0]==200
+    assert notices==[('daily',label)]
+    body['dry_run']=False
+    assert client('/v1/stage/cycles/'+cycle+'/close',body)[0]==200
+    assert client('/v1/stage/cycles/'+cycle+'/close',body)[0]==200
+    assert notices==[('daily',label),('stage',cycle)]
+    end=api.now().replace(hour=21,minute=50,second=0,microsecond=0)
+    weekly,_=api.weekly.prepare(TimeWindow(end-timedelta(days=6),end),[],[])
+    def fail(*args): raise RuntimeError('SENTINEL-MEMOS-TOKEN')
+    api.notifier=fail
+    r=client('/v1/reviews/'+weekly+'/finalize',{'content':f'#周报 {weekly.split(":",1)[1]}\n可验证变化：交付完成'})
+    assert r[0]==200 and r[1]['status']=='finalized'
+    assert 'SENTINEL-MEMOS-TOKEN' not in caplog.text
+
+
+def test_telegram_confirmation_before_app_does_not_notify_or_overwrite(api,client):
+    notices=[];api.notifier=lambda *args:notices.append(args)
+    identifier=api.sessions('daily')['items'][0]['id']
+    original=f'#日报 {identifier.split(":",1)[1]}\n一句话总结今天：Telegram 用户原文'
+    first=api.daily.finalize(identifier,original)
+    code,result,_=client('/v1/reviews/'+identifier+'/finalize',{'content':'App 后到的原文'})
+    assert code==200 and result['already'] is True and result['memo_name']==first['memo_name']
+    assert notices==[] and len(api.memos.created)==1
+    assert api.state.get_idempotent('daily-finalize',identifier)['confirmed_from']=='telegram'
+
+
+def test_partial_close_retry_reuses_memo_and_goal_comment(api,client):
+    cycle,goal=seed_stage(api)
+    original=api.memos.pin_memo
+    def fail(*args):raise RuntimeError('pin unavailable')
+    api.memos.pin_memo=fail
+    body={'text':'用户原文','outcomes':{goal:'成功'},'dry_run':False}
+    assert client('/v1/stage/cycles/'+cycle+'/close',body)[0]==502
+    created,comments=len(api.memos.created),len(api.memos.comments)
+    api.memos.pin_memo=original
+    assert client('/v1/stage/cycles/'+cycle+'/close',body)[1]['status']=='closed'
+    assert len(api.memos.created)==created and len(api.memos.comments)==comments
+
+
+def test_archive_notifier_uses_existing_profile_delivery_without_agent(api):
+    from review.notifications import ArchiveNotifier
+    api.config.values.update({'REVIEW_HERMES_BIN':'/hermes','REVIEW_HERMES_PROFILE':'lingjun','REVIEW_DELIVERY_TARGET':'telegram:100:1'})
+    calls=[]
+    def run(command,**kwargs): calls.append((command,kwargs));return SimpleNamespace(returncode=1,stderr='PRIVATE-STDERR')
+    notifier=ArchiveNotifier(api.config,runner=run)
+    notifier('weekly','2026-W43')
+    command,args=calls[0]
+    assert command==['/hermes','-p','lingjun','send','--to','telegram:100:1','--quiet']
+    assert args['input']=='2026-W43 周报已在 App 归档'
+    record=json.loads(notifier.logger.path.read_text())
+    assert record['status']=='failed' and record['error_type']=='RuntimeError'
+    assert 'PRIVATE-STDERR' not in notifier.logger.path.read_text()
+
+
+def test_review_status_cli_is_read_only_and_reports_confirmation_source(api,monkeypatch,capsys):
+    import review.cli as cli
+    monkeypatch.setattr(cli,'load_config',lambda *args:api.config)
+    monkeypatch.setattr(cli,'_runtime',lambda config:(api.state,api.memos))
+    monkeypatch.setattr(cli,'StructuredLogger',lambda path:SimpleNamespace(emit=lambda *args,**kwargs:None))
+    identifier=api.sessions('daily')['items'][0]['id']
+    assert cli.run(['review','status','--id',identifier])==0
+    result=json.loads(capsys.readouterr().out)
+    assert result=={'status':'open','memo_name':None,'confirmed_from':None}
+    text=f'#日报 {identifier.split(":",1)[1]}\n一句话总结今天：用户原文'
+    api.finalize(identifier,text);count=len(api.memos.created)
+    assert cli.run(['review','status','--id',identifier])==0
+    result=json.loads(capsys.readouterr().out)
+    assert result['status']=='finalized' and result['confirmed_from']=='app'
+    assert len(api.memos.created)==count

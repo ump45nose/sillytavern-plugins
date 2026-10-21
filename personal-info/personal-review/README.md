@@ -12,7 +12,7 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 
 ## 运行与部署
 
-源码入口为 `/vol1/1000/Code/personal-info/personal-review`。运行目录 `/vol2/1000/Docker/personal-review` 保留原配置、数据库、产物和认证，静态源码通过链接提供。NAS 任务代码归 `nas-cron-jobs/hermes`。日期、用户确认流程和现有业务开关保持不变。
+聚合开发入口为 `/vol1/1000/Code/personal-info/personal-review`。运行目录 `/vol2/1000/Docker/personal-review` 保留原配置、数据库、产物和认证，静态源码通过链接提供。NAS 任务代码归 `nas-cron-jobs/hermes`。日期、用户确认流程和现有业务开关保持不变。
 
 阶段 5 来源改动在聚合 worktree `codex/phase5-review-http-20261021` 开发，按用户确认发布到私有 `ump45nose/personal-review`。发布后的独立源码 checkout 为 `/home/yuwk/src/personal-review`；运行目录的静态源码链接使用该 checkout，配置、数据库、Memos 凭据和产物不迁移。聚合 main 的其他人修改不代提交或合并。
 
@@ -33,3 +33,7 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 HTTP 写路径包括 review finalize、目标 comments、周期 close/create 和目标新增发布。周期创建也支持 dry_run；新增目标按 cycle_id/domain/goal 去重，payload 变化返回409，发布失败保留索引和既有 Memos 回执供同一请求重试。所有业务写调用原 service，CLI/HTTP 共用 review.write.lock；重复确认返回原归档，确认来源存于既有幂等回执 confirmed_from 中。写操作不自动重试外部 POST。原数据和投影规则保持。
 
 原生 HTTP 返回 status=created 的周期创建结果、status=published 的目标发布结果，dry_run 返回 null ID 与可预览正文。已过结案日不允许新增目标，即便原阶段 cron 处于暂停状态；读取阶段仍不修改冻结状态。
+
+App 首次 finalize／阶段结案后通过原 Hermes `-p <profile> send --to <原 topic>` 非 Agent 投递一句归档通知；正文经 stdin，子进程输出不落日志，失败只记类型、不影响已归档结果，也不重试消息。重复确认、preview 和 dry-run 不通知。`reviewctl review status --id ...` 只读返回 status、memo_name、confirmed_from，Lingjun Skill 1.1.0 在处理用户回复前调用它，已归档时停止 finalize 和附件入队。
+
+最终来源测试 80 项通过；包含跨进程先确认者生效、发布失败重试、阶段部分结案重试不重复 Memo／评论、消息失败不回滚、CLI status 无写入。所有生产验证仅只读／dry-run；真实 App 归档与 Telegram 通知需用户操作后验收。原任务 ID、schedule、topic、历史与暂停状态保持。
