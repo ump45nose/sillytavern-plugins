@@ -5,7 +5,7 @@ const {AsyncLocalStorage} = require("node:async_hooks");
 const scope = new AsyncLocalStorage();
 const LIMIT = 512 * 1024;
 const CAPABILITIES = new Set(("full snapshot before after daily extra punchcards desktop_search mobile_search " +
-  "more_promotions claim app_daily app_promotions daily_streaks bing_streak daily_set_streak app_streak desktop_app_weekly read_to_earn social explore goal local_smoke").split(" "));
+  "more_promotions claim app_daily app_promotions daily_streaks bing_streak app_streak desktop_app_weekly read_to_earn social explore goal local_smoke").split(" "));
 const REASONS = new Set(("human_required captcha login_required terms_changed age_required security_prompt " +
   "account_restricted region_mismatch account_link_required app_token_missing app_token_invalid " +
   "app_token_expired_or_scope_changed app_rate_limited app_authorization_unavailable app_authorization_timeout " +
@@ -18,6 +18,7 @@ const REASONS = new Set(("human_required captcha login_required terms_changed ag
   "search_unconfirmed activation_evidence_unavailable activity_action_unavailable deployment_evidence_unavailable " +
   "action_chunks_missing action_discovery_limit ambiguous_action_id invalid_action_id counter_inventory_unavailable " +
   "inventory_unavailable offer_inventory_unavailable daily_browser_or_network_error daily_progress_unavailable " +
+  "daily_journal_unavailable daily_action_unavailable daily_activity_not_credited daily_already_complete daily_complete " +
   "app_checkin_progress_unavailable previous_daily_submission_requires_reconciliation " +
   "daily_submitted_without_attributable_confirmation not_run_after_stop capability_binding_pending " +
   "full_requested_capabilities_complete full_requested_capabilities_partial full_intervention_pending " +
@@ -40,7 +41,7 @@ const OPERATIONS = new Set(("run stage snapshot browser.launch browser.context b
   "browser.context_close page.goto page.waitForURL page.waitForLoadState page.request_failed " +
   "http.get http.post http.fetch server_action.request auth.http_redirect auth.browser_redirect " +
   "auth.exchange auth.cache app.request app.snapshot app.inventory app.offer app.checkin " +
-  "search.submit search.readback search.skip activity.click promotion.submit promotion.readback " +
+  "search.submit search.readback search.skip activity.submit promotion.submit promotion.readback " +
   "interaction.pause interaction.type interaction.click interaction.review interaction.batch_break " +
   "journal.intent log.truncated log.unavailable").split(" "));
 const ROUTES = new Set(["rewards_dashboard", "rewards_earn", "rewards_quest", "rewards_chunk", "bing_home",

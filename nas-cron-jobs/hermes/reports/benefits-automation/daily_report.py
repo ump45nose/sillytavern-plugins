@@ -148,6 +148,17 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         found = row.get("business_date") or "未知"
         return f"缺少当日结果（最新结果日期：{found}）"
 
+    business = row.get("business")
+    if (platform == "workbuddy" and row.get("execution_status") == "ok"
+            and row.get("reason") == "activity_sent_reward_unconfirmed"
+            and isinstance(business, Mapping)
+            and business.get("activity") == "complete"
+            and business.get("balance") == "complete"
+            and business.get("reward") == "unknown"
+            and all(state in ("complete", "not_applicable")
+                    for name, state in business.items() if name != "reward")):
+        return None
+
     parts: list[str] = []
     execution = row.get("execution_status")
     reason = str(row.get("reason") or "unknown")
@@ -174,7 +185,6 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
             if isinstance(item, Mapping) and item.get("status") not in {"complete", "not_applicable"}
         ]
 
-    business = row.get("business")
     if (not isinstance(business, Mapping) or not business) and not specific_reason:
         parts.append("缺少业务状态")
     elif bot_issues and not specific_reason:
@@ -205,7 +215,7 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
         if platform == "rewards":
             streaks = [str(item.get("name")) + STATE_LABELS.get(str(item.get("status")), str(item.get("status")))
                        for item in items if isinstance(item, Mapping)
-                       and item.get("id") in {"bing_streak", "daily_set_streak", "app_streak"}
+                       and item.get("id") in {"bing_streak", "app_streak"}
                        and item.get("status") not in {"complete", "not_applicable"}]
             if streaks:
                 parts.append("、".join(streaks))

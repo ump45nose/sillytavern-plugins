@@ -76,13 +76,7 @@ async function run(chromium, state, parser, options, capability) {
         await options.journal.mark(row.offerId, "attempted");
         trace.emit("journal.intent", {capability, offer_ref: trace.reference(row.offerId), state: "attempted"});
         try {
-          await actions.request(page, "/earn", {method: "POST", headers: {
-            Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
-            "Next-Action": ids.reportActivity,
-            "Next-Router-State-Tree": parser.routerStateTree("earn"),
-          }, body: JSON.stringify([offer.hash, offer.activityType || 11,
-            {offerid: row.offerId, isPromotional: offer.isPromotional ? true : "$undefined",
-              timezoneOffset}])});
+          await actions.reportActivity(page, parser, ids.reportActivity, offer, timezoneOffset);
         } catch (error) { trace.failure("promotion.submit", error, {capability, offer_ref: trace.reference(row.offerId)}); }
         let complete = false;
         for (let i = 0; i < 3; i++) {

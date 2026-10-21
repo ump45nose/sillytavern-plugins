@@ -12,10 +12,10 @@ PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --ignore-scripts
 npx patchright install chromium
 ```
 
-在仓库外的 `state/rewards/<account>/` 准备 `storage-state.json` 和 `capabilities.json`。原迁移保留旧部署启用的八项，当前另加日常连续打卡核查与桌面 App 周任务：
+在仓库外的 `state/rewards/<account>/` 准备 `storage-state.json` 和 `capabilities.json`。NAS 当前启用简单每日活动、搜索、APP 和桌面 App 等已验收项目，停用不记分的探索阶段：
 
 ```json
-{"schema_version":1,"enabled":["daily","extra","punchcards","desktop_app_weekly","desktop_search","more_promotions","claim","app_daily","app_promotions","daily_streaks"]}
+{"schema_version":1,"enabled":["daily","punchcards","desktop_app_weekly","desktop_search","more_promotions","claim","app_daily","app_promotions","daily_streaks"]}
 ```
 
 可选 `native-config.json` 保存已有稳定地区/设备和搜索配置，例如：
@@ -37,17 +37,17 @@ python3 platforms/rewards/run.py --runtime-root /absolute/private/runtime \
 
 ## 能力与确认
 
-- `daily`：逐个执行当前每日活动卡片。点击前保存 intent，按当前 offer ID 读回确认；整体计数增加不能替代对应卡片完成。未确认点击保留记录，不重放。
-- `extra`：社交、已配置目标和探索必应。探索先用当前任务 hash 激活，再用对应主题搜索，以该任务自身的完成/积分读回确认。锁定任务保留 blocked。
+- `daily`：只执行简单 URL 活动。按平台目标中的交互任务标识排除测验与投票，兼容官方 checkuser 跳转；排除项报告 `not_applicable`，不访问目标页、不答题。简单活动复用现有 `reportActivity`，绑定当前 hash、action ID 与部署身份，提交前保存独立的 `report_<offerId>` intent，按同一 offer 的平台完成标记读回确认。旧卡片浏览 intent 保留，未确认上报不重放。每日进度只统计当前范围内的活动，不能当作平台整组 3/3 完成。
+- `extra`：保留社交、已配置目标和探索必应的独立入口。NAS 正式能力清单已按成本决定移除该阶段，不再自动执行探索、不因其未记分产生日报异常；历史激活、查询与未确认记录保留。
 - `desktop_search`：读取当前账号桌面额度，未满时搜索、等待入账，达到额度或连续停滞则退出；已满不重复搜索。账号、设备和日期各有查询 journal，发出前记录，当天重跑跳过已提交查询，次日重新允许。
 - `punchcards`：旧部署白名单 onboarding 任务；完整清单没有分配该任务时不适用。不会把其他任务组冒充同一任务。
 - `desktop_app_weekly`：按用户授权模拟桌面 App 请求，复用现有 Cookie、地区、代理与 HTTP 客户端，在原设备 User-Agent 后追加官方客户端 `MSRewards/Desktop/1.4.56` 标识。只处理当前 `RewardsApp_weekly_Exclusive` 周任务中的七个积分子项，跳过锁定项，不提交安装奖励或其它任务卡。当前页面的 action ID、部署 ID 与 hash 绑定；每项仅提交一次，对应子项完成标记与周积分同时读回才确认。按当前周卡持久保存 intent，未确认请求不重放。`complete` 表示当前已开放活动完成；周积分和未来锁定项仍单独保留，不代表本周 70 分已全部获得。无任务分配时为不适用。无需安装桌面客户端或启动 Chromium，资源实测见 [成本记录](../../docs/desktop-app-cost-2026-10-13.md)。
 - `more_promotions`：当前可执行 URL 活动，当前 action ID 和任务 hash 绑定，发出前记录 intent。journal 按业务日期保存，避免循环使用的活动 ID 被此前日期的提交永久阻塞；迁移时保留当天已有 intent。
 - `claim`：明确有待收积分时提交一次；无待收积分不适用。
 - `app_daily` / `app_promotions`：通过已有浏览器登录进行 OAuth，token 存在私有账号目录；随后一次性 HTTP 客户端执行 APP 任务，不保留后台浏览器。APP 签到优先用当前页面进度确认，不能把 1000 分连续签到奖励误认作每日签到。
-- `daily_streaks`：在日常阶段完成后核对必应、每日活动、APP 三项连续打卡的当日完成标记、计数及连续天数。必应仍为 0/1 时，独立进行一次真实搜索并读回，即使桌面搜索积分额度已满；未激活的 Edge、视觉搜索不在本阶段的执行范围。
+- `daily_streaks`：在日常阶段完成后核对必应、APP 两项连续打卡的当日完成标记、计数及连续天数。必应仍为 0/1 时，独立进行一次真实搜索并读回，即使桌面搜索积分额度已满；每日活动连续打卡依赖已停做的测验和投票，不再纳入执行与验收。未激活的 Edge、视觉搜索不在本阶段的执行范围。
 
-每日测验支持当前 Bing `.btom_card` 答题页及答案页的 Next 控件，只点击绑定当前 offer 的官方可见选项；每个题目与选项分别记录 intent，读回该 offer 完成后即停止。已有卡片 intent 的测验可从当前官方目标页继续未提交的选项，无需重点击卡片。登录、验证码、未知题目身份和未出现的活动控件仍保持未完成。每日阶段的失败结果保留已观察到的进度、任务清单与脱敏诊断，完整报告不丢弃阶段返回的诊断。
+每日测验与投票按用户决定停做，已删除专用答题执行器。简单活动上报失败时仍保留已观察到的进度、任务清单与脱敏诊断，完整报告不丢弃阶段返回的诊断；不能通过排除交互任务掩盖简单活动的真实失败。
 
 桌面 App 周卡按数值读取进度，不依赖任务标签的页面语言。已完成卡片兼容 React Flight 的独立记录、嵌套节点和共享勾选图标引用；仍须逐天的明确完成标记与周积分共同确认，加载占位内容和缺失引用不能作为完成。已提交但未确认的周任务只做读回，不重放请求。
 
@@ -77,7 +77,7 @@ APP 签到在正式 `full` 入口使用独立的 `app-checkin-journal.json` 记�
 
 ## 当前现场验收
 
-2026-10-20 17:03（北京时间）原 Hermes 完整入口 `d63187c1-57b1-4ea3-b703-468f8443cc96` 返回部分完成：电脑搜索 200/200、更多活动 130/130、APP 签到 1/1、APP 活动 4/4、必应与 APP 连续打卡完成；每日活动及其连续打卡 2/3，探索 0/40。本轮余额 75928→76068，增加 140 分，不能把普通搜索积分当作探索奖励。
+2026-10-21 成本范围修复后的完整执行 `67bc4094-24a9-4ef0-a98f-9b5b6fdd377f` 返回当前启用能力全部完成：简单每日活动 1/1，电脑搜索 200/200、更多活动 100/100、APP 签到 1/1、APP 活动 4/4、必应与 APP 连续打卡完成。简单活动使用一次上报后独立确认完成，余额 76278→76288（+10）。测验与投票为范围排除，不代表已完成平台整组 3/3；探索阶段未执行，也不要求其积分。该运行使用正式 Hermes 身份和账号状态，验证分区独立保存，不手写正式 delivery。
 
 专属回归、合成浏览器夹具及构建冒烟已按用户要求删除；此前的用例数量不作为当前能力验收。逐项现场状态和未完成项见 [能力与现场验收](../../docs/REWARDS_PARITY.md)，历史排查证据保留在 [持续排查记录](../../docs/plans/2026-10-20-benefits-followup.md)。
 

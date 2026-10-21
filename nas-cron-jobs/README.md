@@ -167,6 +167,10 @@ has no error. At the user's request, X `content_unavailable` assets are excluded
 from attachment alerts; asset states and failed execution history are retained.
 Execution history stays in Favsync rather than its notifications.
 Rewards alerts name unsupported exploration topics;
+the NAS capability manifest now disables exploration under the agreed cost limit.
+Daily quizzes and polls are excluded before execution, so their dependent daily-set
+streak is no longer required. Simple daily URL activities and Bing/APP streaks
+still require independent confirmation.
 the existing Rewards job runs at 09:30 and 16:30 (Asia/Taipei) from 2026-10-13,
 retaining its job ID and delivery route. It verifies the preceding platform
 cycle in the morning and handles the reset cycle in the afternoon. Receipts
@@ -178,17 +182,19 @@ jobs use this same path. Each attempt keeps its structured record at
 `benefits-runtime/runs/<run_id>/result.json` and updates its independent delivery
 receipt, including launcher failures and lock contention. Their no-agent jobs
 use local delivery, so successful operations remain in execution history and
-do not produce success notifications. Unknown business outcomes, including an
-unconfirmed international WorkBuddy reward, remain visible in the exception
-report. WeTalk and Yanxuan are not scheduled until credentials and current
+do not produce success notifications. Once the international WorkBuddy activity
+and balance query are confirmed, its expected unknown reward is retained in the
+receipt without an exception alert. Execution failures, other unconfirmed business
+states, stale results and account mismatches remain visible. WeTalk and Yanxuan are not scheduled until credentials and current
 interfaces are accepted.
 Telegram bot check-ins run as `benefits-telegram-ai` (08:40) and
 `benefits-telegram-nsfw` (08:43, Asia/Taipei) through the same launcher, with
 deployment keys `telegram-ai` / `telegram-nsfw` and `platform: telegram`; the
 shared browser lock serialises them. Some bots roll their day over after Taipei
 midnight, so they run after 08:00. The exception report names each unconfirmed
-bot; `bot_rejected` (captcha or join-channel gate) is shown as needing a manual
-check-in. Opening Telegram Web is retried for about three minutes when the proxy
+bot; known bots that require arithmetic or verification must be disabled in the
+private bot configuration before execution. `bot_rejected` from an enabled bot
+still identifies a newly encountered gate. Opening Telegram Web is retried for about three minutes when the proxy
 drops; commands are never resent.
 Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on
 each invocation; previously sent messages retain the snapshot from their send

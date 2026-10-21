@@ -35,7 +35,7 @@ npx playwright install firefox   # 已有共享 --browser-cache 时不需要
 - `success` / `already` / `failure`：回复中出现的子串（不区分大小写、NFKC 归一）。判断顺序 already → failure → success；`success` 必填。只看本次命令之后的回复，先到的公告或“正在签到，请稍后”不会提前结束等待。“人机验证 / 请先加入频道”这类入群门槛建议写进 `failure`，报告 `bot_rejected`（需要手动加入后再签），而不是等到 `reply_timeout`。`already` 避免只写“已经”：不少机器人的成功回复含“您已经获得 1 积分”。确定命令时先看 Web K 输入 `/` 弹出的命令菜单和机器人简介，不要逐个试发。
 - `button`：可选。回复中带有包含该文字的内联按钮时点击一次；此时只认可点击后新出现或内容改变的消息，以及按钮回调弹出的提示，菜单本身的文字不能确认签到。
 - `points`：可选 `{"pattern": "积分为:?\\s*(\\d+)", "unit": "points"}`。正则只能有一个捕获组（数字），与其他模式一样匹配 NFKC 归一、不区分大小写的回复（全角冒号视为 `:`）；`unit` 为 points / coins / beans，默认 points。确认签到时取最近一条匹配回复的数字，写入 `details.metrics.points_<id>`（`id` 中的 `-` 换成 `_`）的 `current`；没有匹配或当天已由 journal 确认、未打开对话时为 null。只保存数字，不保存回复文本。
-- `reply_timeout_seconds`：5–120，默认 30。`enabled: false` 跳过且报告 `not_applicable`。
+- `reply_timeout_seconds`：5–120，默认 30。已知需要计算题或人工验证的机器人在配置中设置 `enabled: false`，执行前直接跳过且报告 `not_applicable`，不打开对话、不发送命令。启用机器人首次遇到新的门槛时仍保留 `bot_rejected`，核实后更新启用清单。
 - `spacing_seconds`：两个需要访问的机器人之间的随机间隔，默认 5–20 秒，可按账号覆盖。
 
 可选 `TELEGRAM_PROXY`（例如 NAS 现有的 `http://127.0.0.1:7890`）只用于本浏览器 context。

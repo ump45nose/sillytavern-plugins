@@ -4,6 +4,8 @@
 任务包括既有来源与 Steam；Steam 只读合格候选会标为待授权领取。
 私有 `benefits-deployment.json` 中 `enabled: false` 的任务不产生缺失／失败告警，
 保留历史结果。配置不可读或过大仍明确报错。
+WorkBuddy 国际版活跃请求与余额查询均已确认时，奖励 unknown 只保留在回执中，不触发异常提醒；
+真实执行失败、其他业务未知、日期过期及账号不匹配继续报告。
 
 入口为本目录 `cron_entrypoint.py`，可信调度入口仍由 `deploy-hermes.py` 管理。
 路径、秘密与运行数据保持在现有 NAS 私有运行环境；本次未改变任何 schedule。

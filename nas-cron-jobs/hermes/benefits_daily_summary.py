@@ -56,8 +56,10 @@ def describe(platform, row):
     if platform == "rewards":
         for key, label in [("daily", "每日活动"), ("desktop_search", "电脑搜索"),
                            ("app_daily", "APP签到"), ("explore", "探索必应")]:
+            if key == "explore" and "extra" not in business:
+                continue
             progress(key, label)
-        for key, label in [("bing_streak", "必应连续打卡"), ("daily_set_streak", "每日连续打卡")]:
+        for key, label in [("bing_streak", "必应连续打卡"), ("app_streak", "APP连续打卡")]:
             if key in metrics:
                 progress(key, label)
         if "desktop_app_weekly" in metrics:

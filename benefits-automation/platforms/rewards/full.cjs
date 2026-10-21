@@ -288,11 +288,11 @@ async function execute(
     failed = Object.values(stages).some(out => out.execution !== "ok");
   }
   if (!stopped && enabled.includes("daily_streaks") && snapshots.after.execution === "ok" &&
-      ["bing_streak", "daily_set_streak", "app_streak"].every(key =>
+      ["bing_streak", "app_streak"].every(key =>
         ["complete", "not_applicable"].includes(snapshots.after.business[key]))) {
     business.daily_streaks = "complete";
     stages.daily_streaks = {execution: "ok", reason: "streaks_readback_finished",
-      business: Object.fromEntries(["bing_streak", "daily_set_streak", "app_streak"].map(key =>
+      business: Object.fromEntries(["bing_streak", "app_streak"].map(key =>
         [key, snapshots.after.business[key]]))};
     failed = Object.values(stages).some(out => out.execution !== "ok");
   }
@@ -398,7 +398,7 @@ function createBindings({
           require("./snapshot.cjs").run(
             chromium,
             state(desktopRequired ? "desktop" : "mobile"),
-            desktopRequired ? base : mobile,
+            {...(desktopRequired ? base : mobile), includeExplore: requested.has("extra")},
           )
       : async () => ({
           execution: "ok",
@@ -427,6 +427,7 @@ function createBindings({
         businessDate: process.env.BENEFITS_BUSINESS_DATE}, "claim"),
     daily: () =>
       require("./activities.cjs").run(chromium, state("desktop"), {...base,
+        timezoneOffset: config.timezoneOffset,
         journalForCycle: date => journal("daily-" + date + ".json")}),
     extra: () =>
       require("./extra.cjs").run(chromium, state("desktop"), parser(), {

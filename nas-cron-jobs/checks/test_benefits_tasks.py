@@ -112,7 +112,7 @@ class JobTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "runtime/runs/successful-run/result.json").read_text())["execution_status"], "ok")
             self.assertFalse((root / "outside").exists())
 
-    def test_new_platform_success_is_silent_and_unknown_reward_is_the_only_issue(self):
+    def test_new_platform_success_and_expected_international_reward_unknown_are_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             delivery = root / "runtime/delivery"
@@ -129,10 +129,43 @@ class JobTests(unittest.TestCase):
             with patch.object(report, "DELIVERY_ROOT", delivery):
                 self.assertEqual(report.build_report("2026-10-19"), "")
                 row.update(platform="workbuddy", reason="activity_sent_reward_unconfirmed",
-                           business={"checkin": "not_applicable", "activity": "complete", "reward": "unknown"})
+                           business={"checkin": "not_applicable", "activity": "complete",
+                                     "reward": "unknown", "balance": "complete"})
                 (delivery / "workbuddy-intl.json").write_text(json.dumps(row))
-                self.assertEqual(report.build_report("2026-10-19"),
-                    "**福利任务异常**\n- WorkBuddy 国际版：国际版活跃请求已发送，奖励未确认")
+                self.assertEqual(report.build_report("2026-10-19"), "")
+
+    def test_expected_workbuddy_reward_unknown_does_not_hide_other_problems(self):
+        row = {"platform": "workbuddy", "business_date": "2026-10-21", "execution_status": "ok",
+               "reason": "activity_sent_reward_unconfirmed", "business": {
+                   "checkin": "not_applicable", "activity": "complete", "reward": "unknown", "balance": "complete"}}
+        self.assertIsNone(report.issue_for("workbuddy", row, "2026-10-21"))
+        cases = [
+            {"execution_status": "failed"},
+            {"reason": "authentication_invalid"},
+            {"business_date": "2026-10-20"},
+            {"platform": "another"},
+            *({"business": {**row["business"], name: "unknown"}} for name in ("activity", "balance")),
+            {"business": {name: state for name, state in row["business"].items() if name != "balance"}},
+            {"business": {**row["business"], "checkin": "incomplete"}},
+        ]
+        for changed in cases:
+            with self.subTest(changed=changed):
+                self.assertIsNotNone(report.issue_for("workbuddy", {**row, **changed}, "2026-10-21"))
+
+    def test_silent_workbuddy_result_still_verifies_configured_account(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            delivery = root / "runtime/delivery"
+            delivery.mkdir(parents=True)
+            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": {"workbuddy-intl": {
+                "label": "WorkBuddy 国际版", "platform": "workbuddy", "account": "expected"}}}))
+            row = {"platform": "workbuddy", "account": "another", "business_date": "2026-10-21",
+                   "execution_status": "ok", "reason": "activity_sent_reward_unconfirmed", "business": {
+                       "activity": "complete", "reward": "unknown", "balance": "complete"}}
+            (delivery / "workbuddy-intl.json").write_text(json.dumps(row))
+            with patch.object(report, "DELIVERY_ROOT", delivery):
+                self.assertEqual(report.build_report("2026-10-21"),
+                    "**福利任务异常**\n- WorkBuddy 国际版：结果账号与配置不一致")
 
     def test_report_uses_configured_tasks_and_verifies_account(self):
         with tempfile.TemporaryDirectory() as tmp:
