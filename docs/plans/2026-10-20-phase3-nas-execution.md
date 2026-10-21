@@ -67,7 +67,7 @@ Progress (each step is tested and committed separately):
   on 2026-10-21. Added only personal-hub to the existing seven OIDC clients; all other
   Authelia configuration, identities, secrets and source credentials compare unchanged.
   Removed HUB_DEV_TOKEN and activated production OIDC with exact verified sub allowlist.
-  Current running image 2dc00a5; final source checkpoint updates the default public URL.
+  Current running image 4c7d8a7; the default and configured public URL both use 28443.
   NPM created only proxy host 42, certificate 2, LAN 18190, no forward-auth, access logs
   disabled and request error logs suppressed. Other NPM hosts compare unchanged.
   Public base is **https://hub-home.172906573.xyz:28443**. Actual public 443 does not
@@ -93,7 +93,7 @@ Progress (each step is tested and committed separately):
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
-Production image is 2dc00a5 (later documentation commits do not change code).
+Production image is 4c7d8a7 (later documentation commits do not change code).
 Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
 Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
 It is clean, with source changes committed and subtree release branches pushed;
@@ -101,8 +101,18 @@ main has unrelated boot edits. Do not merge/overwrite that dirty main.
 Private deployment rollback files are `/vol2/1000/Docker/hub/deployment-backups/`;
 restore only this task's changed fields and preserve live business/OAuth data.
 Boot check still has only ai-resource-center/oauth-disclosure unplanned, no missing
-or stopped planned containers. Dockge browser cards remain unverified; both Compose
+or stopped planned containers. The final check also sees another task's temporary
+favsync-eh-verify-20261021 container as unplanned; it is not modified here. Dockge browser cards remain unverified; both Compose
 contexts were validated. Duplicati backup/restore and production source writes were
 not triggered merely for testing.
 
 Authelia restart was explicitly approved and applied. GitHub reuse was approved; source credentials were available. Defaults for budget/health/cycle apply. Pending human browser acceptance only. Usage-monitor was the sole source restart (step 4); Authelia was restarted for the new client in step 7.
+
+Final deployment checks (2026-10-21): hub-api 4c7d8a7 healthy, UID/GID 1000:1001,
+readonly root, cap_drop ALL and no-new-privileges retained. Public health=200; the
+removed development token=401. Nginx configuration test passed, wildcard certificate
+2 remains unchanged. Source credentials and seven previous Authelia clients compare
+unchanged; only the new personal-hub callback uses public 28443. No business writes.
+The temporary NAS acceptance device was revoked. Real human browser acceptance is
+still pending via the provided script; do not substitute the internal test device
+for a successful OIDC browser/token exchange.
