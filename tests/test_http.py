@@ -131,6 +131,9 @@ def test_weekly_legacy_material_comes_from_frozen_rows(api,client):
     assert detail['material']['template'].startswith('#周报 ')
     assert detail['rules']['auto_fields']==['身体']
     assert 'summary_max_chars' not in detail['rules']
+    code,error,_=client('/v1/reviews/'+identifier+'/preview',{'content':detail['material']['template']})
+    assert code==422 and error['error']['message']=='周报至少需要一项用户确认内容'
+    assert api.memos.created==[]
 
 
 def test_delivered_exposes_only_response_of_successful_execution(api,client):
