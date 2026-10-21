@@ -55,6 +55,15 @@ Step 1 complete (11:45 +08:00):
   material sections=8, delivered present; latest weekly open/detail=200, legacy frozen
   material readable, delivered=null. No production sessions or Memos created.
 
-Step 2: Hub goals/read/preview/status/attention implemented; fake-source tests running.
+Step 2 complete (11:52 +08:00):
+- Hub image local/hub-api:562540e, 52 backend tests pass. goals TTL=60, review status,
+  read/detail/preview proxies and three stable attention rules are live.
+- Actual LAN/public: goals=ok with 3 goals; attention has one pending weekly review;
+  daily/weekly details=200, blank open-weekly preview=422 with field key preserved;
+  status=200 with 14 sources and review=ok. Temporary device removed. No business write.
+- Source remains main af0a227. Only hub-api was recreated; source reads preserve
+  raw bodies for the App and omit internal fields. No changes to net/git behavior.
+
+Step 3: implement write methods and shared CLI/HTTP operation locking next.
 Existing timers/jobs remain untouched; deployment is well before 21:30.
 
