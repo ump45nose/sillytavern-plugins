@@ -42,3 +42,9 @@ Network implementation complete: manual plan validation/storage, inclusive billi
 periods and shared module/attention pool assembly. 36 focused tests pass including
 network/configuration/attention and prior usage behavior. Deployment pending final
 combined release. No production plan has been inserted.
+
+Token implementation complete: full source history, exact rolling parts/device
+history, top-20 today sessions with explicit allowlist. Five focused Token tests pass;
+production read-only candidate reports history=102 days, day tools/models/devices/
+sessions=4/9/4/20, week=6/24/4/null, month=11/49/4/null. Provider identities and arbitrary
+rolling session detail are unavailable and remain null. No Token Monitor change.

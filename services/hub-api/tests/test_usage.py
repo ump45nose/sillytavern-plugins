@@ -35,6 +35,10 @@ def test_token_net_fake_sources_ranges_and_partial(settings):
                  "devices": [{"deviceId": "mac", "hostname": "Mac", "periods": {"today": {"totalTokens": 100}}}],
                  "historyPreview": {"daily": [{"date": "2026-10-19", "tokens": 10, "cost": 0.1}]},
                  "limits": {"providers": [{"provider": "codex", "status": "ok", "planLabel": "Pro", "accountKey": "private", "windows": [{"label": "5h", "usedPercent": 86}]}]}})
+        if request.url.path == '/api/history':
+            return httpx.Response(200, json={'daily': [{'date': '2026-10-19', 'tokens': 10, 'cost': .1}]})
+        if request.url.path == '/api/devices':
+            return httpx.Response(200, json={'devices': []})
         return httpx.Response(200, json={"data": {"pools": None, "today": {"up_bytes": 10, "down_bytes": 20}, "month_bytes": 30, "hourly": []}, "gaps": ["quotas_unavailable"]})
     with TestClient(create_app(settings, now=lambda: NOW, transport=httpx.MockTransport(handle))) as client:
         headers = {"Authorization": "Bearer " + settings.dev_token.get_secret_value()}

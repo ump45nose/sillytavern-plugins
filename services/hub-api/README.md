@@ -73,32 +73,34 @@ into production merely for validation.
 
 ## Token and network data coverage
 
-Token Monitor stats is fetched once per 30 seconds, with limits projected from the
-same response. No Token Monitor changes or restarts are needed. `cost` is the source's
-estimated **USD**, consistent with Mac's existing dollar display. It is not subscription
-spend. Daily total/tool/device values and overall dated history are available.
+Token Monitor `/api/stats`, `/api/history` and `/api/devices` are read concurrently,
+once per 30-second source refresh, shared by all selected ranges. `historyPreview`
+is a 30-day preview; the full authenticated history endpoint provides all recorded
+days (102 days at deployment inspection). Daily/per-client/per-model and per-device
+history are allowlisted before caching. Only session titles and usage are retained;
+no conversation content, project paths, accounts or credentials. Source services are
+unchanged. Cost stays the source's estimated **USD**, with no currency conversion.
 
-Stats currently has no hourly tokens or historical per-tool/per-device attribution:
+| Field | Coverage |
+| --- | --- |
+| history | all source-recorded daily totals/costs, independent of selected range |
+| tools/models | exact selected rolling interval, live today plus dated historical attribution; descending total |
+| devices | same interval; each device has null total/cost if any required date is absent |
+| model provider | null: aggregate model attribution contains no provider identity |
+| sessions | today's top 20; a rolling interval uses source calendar-month sessions only when boundaries exactly coincide and details are complete |
+| sessions for ordinary week/30-day range | null: no dated session history; calendar-month cumulative usage cannot establish rolling usage |
+| session model/device/title | null when multi-model, device attribution ambiguous, or title not synchronized |
+| hourly buckets | null cells: source has no hourly token history |
+| month buckets | unchanged (null); the new UI reads full history and selected-interval parts |
 
-| Range | Available | Null fields |
-| --- | --- | --- |
-| day | total/cost/tools/devices/limits | all hourly cells |
-| week | totals from exact daily history, limits | tools/devices, hourly cells |
-| month | totals from exact daily history, limits | tools/devices/buckets |
-| year | exact daily history in a 53-week grid, limits | tools/devices, absent/future cells |
+Unknown historical days leave interval totals/cost/attribution unknown; never zero-fill
+or estimate. Year keeps the existing Monday-aligned 371-cell grid, with absent/future
+cells null. History is only an in-memory source cache; Hub creates no durable archive.
 
-Unknown historical days make the total/cost/previous interval unknown rather than
-assuming zero. Year starts on Monday 52 weeks before the current week's Monday; the
-371-cell grid ends on Sunday, with future cells null. `period.end` is today, and
-`previous` covers the immediately preceding interval with the same number of observed
-days. The source retains only its own available history; the backend does not archive it.
-
-Usage Monitor GET `/api/v1/net` reads the existing ShellCrash SQLite through a read-only
-transaction and grouped SQL queries. Missing and future hours remain null. Recorded
-bytes represent observed traffic and may omit collection gaps. The current collector
-has no quota/expiry facts, and none of its 21 Mihomo providers exposes subscriptionInfo.
-`pools` therefore remains null; the network module reports partial so this is visible.
-No route class or month traffic is presented as subscription billing usage.
+Usage Monitor GET `/api/v1/net` reads existing ShellCrash SQLite through a read-only
+transaction and grouped SQL queries. Missing/future hours remain null. Observed bytes
+may omit collection gaps, so net remains partial. Provider quotas/expiry are entered
+in Hub's manual plans below; route classes are never treated as subscription usage.
 
 ## Media
 
