@@ -12,9 +12,9 @@ mcp_path: /mcp
 plugin:
   name: dingtalk-workspace
   version: 1.1.3
-  description: 连接钉钉官方办公能力，处理个人与群聊消息、会话历史和搜索、文档与批注、钉盘和知识库、通讯录、日历、待办、日志、审批、在线表格与 AI 表、邮箱、AI 听记、考勤排班、白板、招聘、人事、智能合同、组织大脑、Agoal 及开放平台应用与 MCP 开发。支持对应服务提供的查询和维护操作；实际可用性取决于各服务授权、当前账号权限和企业业务订阅。
+  description: 连接钉钉官方办公能力，以本人身份处理私聊与群消息、会话历史和搜索，维护文档与批注、钉盘和知识库、通讯录、日历、待办、日志、审批、在线表格与 AI 表，读取听记和个人考勤，并处理钉钉邮箱。实际可用性取决于对应服务授权和当前账号权限。
   display_name: 钉钉
-  short_description: 处理钉钉个人与群聊、文件文档、办公协作及企业业务
+  short_description: 处理钉钉本人私聊、群消息、文档协作和邮箱
   brand_color: '#0067FF'
   app_id: asdk_app_6aabd5bd61b08191acdf86118b720bf5
   app_binding: dev-6aabd5bd61b08191acdf86118b720bf5
@@ -37,7 +37,3 @@ plugin:
   - 邮箱
   - 听记
   - 考勤
-  - 白板
-  - 人事
-  - 合同
-  - 开发平台
