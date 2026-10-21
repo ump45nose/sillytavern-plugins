@@ -76,6 +76,41 @@ Step 3 complete:
   active. Review/session/cycle/goal/idempotency/projection counts are unchanged.
 - No actual finalize, comments, close, new goal or new cycle executed in production.
 
-Step 4: notification, readonly status CLI and Skill changes under test; not yet deployed.
-Existing timers/jobs remain untouched; deployment is well before 21:30.
+Step 4 complete:
+- Source code release fd6bd78; current private-repo main feabd88 adds standalone
+  credential/cache ignore rules only. Aggregate code checkpoint 64c09c1, metadata df55f2c.
+  The deployment checkout and source worktree are clean. Source repository privacy
+  is verified. Source service is enabled/active as hermes, with NoNewPrivileges and
+  readonly system paths except the original state/log directories.
+- 80 source tests pass. Added only-first-App non-agent notifications, readonly review
+  status CLI, exact source audit and Skill 1.1.0 synchronization. Dry-run/preview and
+  duplicate confirms do not notify; notification errors cannot roll back an archive.
+  Partial stage-close retries also reuse the original Memo and goal comments.
+- Installed Skill matched its original source before replacement, and now exactly
+  matches the release. All 11 personal-review job records (including runtime/history
+  metadata) compare unchanged; all jobs retain IDs/schedule/topic/prompt/pause fields.
+  Other jobs continued normally and only advanced their repeat.completed counters.
+- The existing Hermes non-agent delivery directory is readable in a one-off service
+  with the production service's User/NoNewPrivileges/readonly restrictions (exit 0).
+  This was a read-only configuration check, not a Telegram send test.
+- Final health/stage reads=200; mainline/cycle and 3 goals present, comments not degraded.
+  Existing Hub credentials compare unchanged; only review URL/token were added, and
+  the source's private hash matches. No configured Hub secret matches in Hub/source
+  service logs. Only hub-api was recreated; Authelia, NPM and source containers retained.
+  Hub image remains 1712dfb. Boot: missing=[], stopped_planned=[], original unplanned
+  ai-resource-center/oauth-disclosure only.
+
+Owner explicitly deferred real App archival acceptance on 2026-10-21. Code/deployment
+and read/dry-run checks are complete; actual Memos archival and Telegram delivery are
+NOT claimed as verified. Do not create production test business data or send a test
+message to substitute for the deferred owner action. No manual confirmation remains
+required to finish this code/deployment delivery.
+
+Recovery/rollback: preserve live databases, OAuth/credentials, projections and cron
+history. The phase5 private checkpoint contains the original source links, Skill, Hub
+settings/tag/Compose and a pre-change SQLite backup. Restore only this release's code,
+image, source links or specific config keys if needed; never overwrite current business
+data with the pre-change DB merely to roll back code. Current deployment source is
+/home/yuwk/src/personal-review; aggregate main still has others' boot edits and is not
+merged or overwritten. Do not restart the shared login stack for this feature.
 

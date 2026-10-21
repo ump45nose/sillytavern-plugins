@@ -166,6 +166,7 @@ archive/v0/          旧实现，只读参考
 | 规则 | 来源 |
 | --- | --- |
 | 日报 / 周报草稿待确认 | personal-review |
+| 阶段临近结案或已过结案日 | personal-review |
 | 任务逾期 | Google Tasks（Mac 本地计算） |
 | Token 额度超过阈值（默认 80%） | usage-monitor |
 | 流量剩余低于阈值或临近到期 | usage-monitor |
@@ -288,8 +289,9 @@ NAS 侧执行计划与 Mac / 安卓共用的接口约定见 [阶段 3 NAS 侧计
 - 2026-10-21 Mac 端按上述约定完成：主线与复盘模块（主线、周期刻度、目标进度、日报／周报／结案状态）、复盘窗口（⌘6；日报分字段填写与本地校验、周报全文、灵珺原文与材料对照、预览终稿后确认归档、历史列表、本地草稿 0600）、阶段页（记进度、每个目标选终态的结案、开新周期、新增目标，写入前均先 dry-run 预览）。`review:` / `stage:close:` 提醒直接打开对应页面。`--hub-smoke` 增加只读复盘检查（列表、会话详情、空白模板预览应被拒），不确认任何会话。hub 未提供 goals 模块时模块显示等待接入；示例模式可完整走查。66 项测试通过。
 
 NAS 实现记录：
-- 阶段 5 第 1–2 步已上线：独立 `personal-review.service` 以 hermes 监听 LAN 18191，运行目录与数据不迁移；来源只存认证哈希，原始读写 Bearer 只在 Hub 私有 env。按用户确认新建私有 `ump45nose/personal-review`，main `af0a227`，部署源码 `/home/yuwk/src/personal-review`。
-- Hub `local/hub-api:562540e` 已提供 goals、review 来源状态、会话列表／详情／preview 和日报／周报／阶段结案提醒。来源测试 71 项、Hub 测试 52 项通过；LAN/公网 goals=ok、3 个目标，列表／详情 200，当前 open 周报空模板 preview=422，来源状态 14 项。未创建生产业务测试数据，写接口与 Telegram 协调继续第 3–4 步。
+- 阶段 5 fn 四步代码与部署已完成：独立 `personal-review.service` 以 hermes 监听 LAN 18191；运行目录、数据库与原凭据保持。来源只存认证哈希，原始 Bearer 只在 Hub 私有 env。用户确认新建的私有 `ump45nose/personal-review` 当前 main `feabd88`（业务代码 `fd6bd78`），部署源码 `/home/yuwk/src/personal-review`；聚合 worktree 已提交，未覆盖主线其他人的修改。
+- Hub `local/hub-api:1712dfb` 提供 goals、review 状态、日报／周报列表／详情／预览／确认、目标评论、阶段结案、创建周期和目标，以及三类待办。CLI/HTTP 共用写锁与幂等回执；App 确认来源可审计，首次 App 归档才经原 Hermes 非 Agent 入口通知 Telegram，失败只记录类型；Skill 1.1.0 在处理回复前查询状态。11 项复盘任务及所有任务调度／投递／暂停配置保持。
+- 来源 80 项、Hub 58 项测试通过。LAN/公网 goals=ok、3 个目标、来源状态 14 项，会话详情 200，空白 open 周报 preview=422；评论／结案／新增目标 dry-run=200，新周期 dry-run 因已有周期返回预期 409。生产复盘／目标／周期／幂等／投影记录数未变化；未创建生产测试业务数据。用户暂缓真实 App 归档，实际 Memos 写入与 Telegram 送达尚未验收。
 
 ### 之后
 

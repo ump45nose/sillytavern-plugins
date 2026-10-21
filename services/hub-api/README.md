@@ -254,3 +254,16 @@ Expired sessions are excluded even when the cached source still says open.
 422 Chinese validation messages/fields and 409 expired. Request bodies are bounded;
 no request/body/credential logging. Source keys and internal error fields are discarded.
 The raw source bearer lives only in private Hub env; the source verifies a private hash.
+
+Write proxies also expose review finalize, goal comments, cycle close/create and goal
+create/publish. They forward once, preserve the source's rules/errors, and invalidate
+review cache after success or an uncertain write outcome; dry-run preserves cache.
+Source write timeout is 30s. Reads retain the ordinary source deadline/60s TTL.
+Cycle creation accepts optional dry_run; successful create/publish replies include status.
+
+Phase-5 release: Hub 1712dfb, source code fd6bd78 (repository main feabd88), 58 Hub
+and 80 source tests pass. Authenticated LAN/public reads and stage dry-runs passed.
+All original credentials and 11 review jobs were retained. The owner deferred real
+App archival; actual Memos writes and Telegram delivery remain unverified. No production
+test archive, comment, goal/cycle or test message was created. Full execution/rollback
+evidence is in docs/plans/2026-10-21-phase5-nas-execution.md at the repository root.
