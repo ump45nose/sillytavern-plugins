@@ -210,7 +210,8 @@ NAS candidate is privately prepared outside Git and validated with the running
 Authelia image against read-only configuration/secret mounts. Applying it requires
 the owner-confirmed restart window. Recheck the original configuration hash before
 merging; preserve external changes. NPM uses existing wildcard certificate 2, LAN
-port 18190 and no forward-auth. Disable access logging and request error logging for
+port 18190 and public HTTPS port 28443, with no forward-auth. Public 443 does not
+reach the NAS certificate; existing direct NPM applications use the same 28443 port. Disable access logging and request error logging for
 this host because authorization callbacks contain one-time credentials.
 
 At activation, merge only OIDC keys into the current private hub env and remove the
@@ -219,3 +220,12 @@ Authelia in the confirmed window. Then update only hub-api and create the single
 NPM host. Browser login/loopback/token/revocation plus authenticated LAN/public module
 and status requests are still required; fake-provider tests do not establish real
 browser acceptance.
+
+
+For the final interactive browser check, run `python3 scripts/device-login-smoke.py`
+on a computer with a desktop browser. It opens Authelia, listens on a random loopback
+port, exchanges the one-time code, requests public module/status data, revokes the
+temporary device and checks 401. All credentials stay in memory. Only statuses/counts
+are printed; source business data is not changed. The repository is private; use the
+existing checkout or authenticated GitHub CLI to retrieve this script. A successful
+run ends with `success: true`; a real run is still required after deployment.

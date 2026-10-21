@@ -63,31 +63,37 @@ Progress (each step is tested and committed separately):
   reference tampering/expiry are covered by tests.
 - Step 5 GitHub: user authorized existing NAS gh classic/OAuth credential reuse for read-only API. Deployed local/hub-api:2b48ca1; 14 fake-source tests pass. Live GitHub source=ok, git=partial (bounded coverage), waiting=13, blocked=23. Actual fetch 7.5s; only GitHub uses configurable 15s, all other sources retain 5s. Media remains ok.
 - Step 6 code: atomic layout/preferences, CNY subscriptions with bounded charge matching, seven cache-only attention rules and shared Git handling. 19 tests pass, including concurrent CAS and config/read races. Deployed local/hub-api:d12898e. LAN all-module/status=200; subs/attention=ok (0/7 rows), preferences=200/version0, absent layout=404. No production configuration/test records were inserted.
-- Step 7 prepared: OIDC code flow with browser binding and separate provider/client
-  S256 PKCE, exact sub allowlist, signed ID-token validation, atomic one-time exchange,
-  auth rate limits/no-store, development-token production guard. 31 tests pass,
-  including full fake-provider flow, bad claims/signatures, key rotation, replay,
-  expiry, concurrent exchange, revocation and all configured secret sentinels.
-  Private candidate directory: /vol2/1000/Docker/hub/deployment-candidates/step7-oidc-20261021.
-  Candidate adds only personal-hub to seven existing OIDC clients, validated using
-  the running Authelia image against read-only mounts, without restarting/changing
-  the active service. Exact allowed sub is copied privately from Authelia's existing
-  global openid identifier for yuwk; the new client secret is generated privately.
-  Candidate NPM host uses existing wildcard certificate 2 and LAN 18190, no forward-auth;
-  exact hub-home domain does not yet exist (mcphub-home is a different existing host).
-  Existing runtime container can retrieve actual issuer discovery over HTTPS 443.
-  Discovery issuer is 443 but advertises same-host HTTPS protocol endpoints on 28443;
-  validation accepts that advertised port while rejecting a different host or plain HTTP.
-  Built candidate image local/hub-api:2dc00a5. Hardened disposable candidate verified
-  real discovery/JWKS, health=200, anonymous status=401, auth/start=302 with Secure
-  binding cookie and no-store headers; candidate container removed afterward.
-  ACTIVE Authelia configuration, NPM, hub private env and production image remain
-  unchanged at this step. Real browser, LAN/public production-token acceptance pending.
-  Stop before activation and obtain the owner-confirmed Authelia restart window.
+- Step 7 activated after the owner explicitly confirmed an immediate Authelia restart
+  on 2026-10-21. Added only personal-hub to the existing seven OIDC clients; all other
+  Authelia configuration, identities, secrets and source credentials compare unchanged.
+  Removed HUB_DEV_TOKEN and activated production OIDC with exact verified sub allowlist.
+  Current running image 2dc00a5; final source checkpoint updates the default public URL.
+  NPM created only proxy host 42, certificate 2, LAN 18190, no forward-auth, access logs
+  disabled and request error logs suppressed. Other NPM hosts compare unchanged.
+  Public base is **https://hub-home.172906573.xyz:28443**. Actual public 443 does not
+  reach the NAS certificate, while 28443 is the established direct NPM entry. Updated
+  the shared interface before changing only this client's callback/public URL; no
+  router, DNS, Tunnel or other public route was changed. Authelia is healthy.
+  Actual public auth/start=302, secure binding cookie/no-store present, registered
+  provider authorization=302 to the login portal. This is not a completed login.
+  LAN and TLS-verified public-domain modules/status each returned 200 using a temporary
+  internally issued device credential; all 13 sources returned status, and that device
+  was revoked through the API (next request=401). Eight modules ok; net/git partial for
+  the previously documented source coverage. No source business records were written.
+  A runtime log scan found none of the configured secrets. Existing source container
+  IDs retained; only hub-api was recreated. Other tasks may create their own temporary
+  containers and are not modified by this work.
+  **Pending acceptance:** real human browser login, loopback and token exchange. Both
+  Mac remote connectors are offline, and the known Mac SSH endpoint is unavailable.
+  Added scripts/device-login-smoke.py: run on the user's browser-equipped computer,
+  complete Authelia login/consent, then it verifies real exchange/API reads/revocation.
+  It prints statuses/counts only, keeps tokens in memory and removes the temporary device.
+  31 backend tests pass; the helper's CLI/syntax are checked, its interactive execution
+  remains pending. Do not mark phase 3 fully accepted until this succeeds.
 
 Recovery: read this execution record, the phase-3 plan and requirements first.
 Checkout main `/home/yuwk/src/personal-hub`; `git pull --rebase` before the next push.
-Production image is d12898e (later documentation commits do not change code).
+Production image is 2dc00a5 (later documentation commits do not change code).
 Actual private env is stacks/hub/env/hub.env, 0600; never display its values.
 Aggregate source worktree is `/vol1/1000/Code/.worktree/hub-api-sources-20261020`.
 It is clean, with source changes committed and subtree release branches pushed;
@@ -99,5 +105,4 @@ or stopped planned containers. Dockge browser cards remain unverified; both Comp
 contexts were validated. Duplicati backup/restore and production source writes were
 not triggered merely for testing.
 
-Pending user decision: Authelia restart window. GitHub reuse was explicitly approved; source credentials were available. Defaults for budget/health/cycle apply.
-Authelia is unchanged; only the explicitly announced usage-monitor source restart occurred in step 4.
+Authelia restart was explicitly approved and applied. GitHub reuse was approved; source credentials were available. Defaults for budget/health/cycle apply. Pending human browser acceptance only. Usage-monitor was the sole source restart (step 4); Authelia was restarted for the new client in step 7.

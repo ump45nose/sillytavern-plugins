@@ -5,7 +5,7 @@ client_name: Personal Hub
 client_secret: '<PBKDF2-SHA512 digest>'
 public: false
 authorization_policy: two_factor
-redirect_uris: ['https://hub-home.172906573.xyz/auth/callback']
+redirect_uris: ['https://hub-home.172906573.xyz:28443/auth/callback']
 scopes: [openid, profile]
 grant_types: [authorization_code]
 response_types: [code]
