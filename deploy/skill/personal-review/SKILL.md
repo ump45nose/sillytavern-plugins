@@ -2,7 +2,7 @@
 name: personal-review
 description: 运行模块化的个人日报、周报、阶段结案与确认后投影流程；适用于定时复盘、用户提交终稿或处理投影回执，不用于普通 Todo 汇总。
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Personal Review
@@ -35,9 +35,10 @@ metadata:
 ## 用户确认
 
 - 用户回复日报材料后走快速路径：从回复日期确定 `daily:YYYY-MM-DD`，禁止搜索旧 `daily-review` Skill、旧 cron 输出、README、源码或测试；固定使用 `/vol2/1000/Docker/personal-review/bin/reviewctl`。
+- 处理日报／周报回复前先调用 `reviewctl review status --id <daily:YYYY-MM-DD 或 weekly:YYYY-Www>`。已 finalized 时直接给出原 Memo；`confirmed_from=app` 时说明“已在 App 归档”，其他来源说明“已归档”，不再 finalize 或入队附件。expired 时说明会话已过期，不补写旧会话。open 才继续下述用户确认流程。
 - 若用户没有明确给出“一句话总结”，最多给两个自然标题候选并等待选择，不得直接 finalize；一句话总结不是事项清单。
 - “瞬间”只能采用用户明确描述、能在脑中重现的具体画面；计划、Todo、抽象判断或“有空再看”不能写入，缺少画面时直接省略。
-- 字段明确后，无图最多使用四次工具调用；有图最多使用六次（附件入队、写终稿、dry-run、finalize、上传及必要的一次回执）。禁止搜索旧 Skill、README、源码、测试或反复重读无变化文件。
+- 包含首次状态查询，字段明确后无图最多使用五次工具调用；有图最多使用七次（状态查询、附件入队、写终稿、dry-run、finalize、上传及必要的一次回执）。禁止搜索旧 Skill、README、源码、测试或反复重读无变化文件。
 - 用户补充日报后，先按 YAML 的 `daily.final_edit=light_compression` 生成轻编辑稿，再写入临时文件并调用 `finalize --content-file`。终稿不是聊天记录备份：保留事实、第一人称语气和“也许／估计”等不确定性；删除重复表达、口语垫词和“标题用这个”等填写指令；相邻同义句可以合并。不得新增事实、因果、评价或更强结论；可能改变原意时先把改写稿交给用户确认。用户明确要求逐字保留的句子不改。
 - 用户补充周报后，同样只做不改变语义的轻量压缩；阶段总结仍严格使用用户原文，不适用这条编辑规则。
 - 终稿只包含用户本次回复和用户明确认可的事实；健康、财务由 CLI 注入。Git、CRM 只有被用户认可时才能精炼进“留痕”，不再是固定字段。
