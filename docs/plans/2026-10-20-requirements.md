@@ -334,3 +334,10 @@ NAS 实现记录：
 5. **Mac 本机 Clash Verge 流量**（阶段 3）：推荐首版只看 NAS ShellCrash，不重建本机采集。
 6. **Token 统计口径**（阶段 3）：设计稿用滚动区间（近 7 天 / 近 30 天），备选自然周期（本周 / 本月）。
 7. **安卓最低版本**（阶段 4）：推荐 Android 12+。
+
+### 2026-10-21 Hub v2 NAS 实现记录
+
+- 已上线 `local/hub-api:5d85450`：手动网络套餐与流量提醒、Plaud 按天列表／元数据与公网鉴权 Range 流式代理、完整 Token 历史／区间工具模型设备统计／会话标题、当前用户 Memos 列表筛选／详情／新增／修改／归档／图片附件代理。安卓布局需保留 review、plaud 与 medium/tall 字段。
+- Plaud 兼容元数据选项经用户确认部署；源码功能版本 `45d4e9a`，文档版 main `8f86e2c`，HTTP 从独立 `/home/yuwk/src/plaud-archive` 运行，沿用原 venv、数据、OAuth、凭据与任务。仅重启 Plaud 与 Hub。
+- Hub 90 项、Plaud 23 项测试通过；局域网／公网只读接口与 MP3／Opus Range206 通过，临时设备吊销401。非1日重置的已用流量、模型 provider 和无法精确得到的滚动区间会话排行为null；不估算。未创建生产测试 Memo／套餐／复盘数据，原真实归档与 Telegram 验收仍按用户选择暂缓；本次未做客户端原生解码播放验收。
+- 完整范围、验收和回退见 [Hub v2 NAS 执行记录](2026-10-21-hub-v2-execution.md)。

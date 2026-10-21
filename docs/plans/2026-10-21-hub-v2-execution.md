@@ -17,8 +17,8 @@ Decisions/evidence:
 - Token /api/stats historyPreview.daily is a 30-day tail (confirmed source and live
   shape). /api/history has full daily/perClient/perModel history (102 days at inspection).
   Preserve only allowlisted usage and title fields, never projects/account/content.
-- Plaud existing archive detail reads Markdown. Owner clarification pending for a
-  compatible metadata-only option/source restart to satisfy no-transcript-read listing.
+- Owner approved the shared authenticated Hub streaming design and compatible
+  Plaud metadata-only options plus a targeted source restart.
 - Memos list must bind current creator in official filter. Detail, patch, archive and
   attachment proxy must check ownership independently (admin token can see others).
   DELETE will PATCH state=ARCHIVED, never upstream DELETE.
@@ -36,7 +36,9 @@ Steps and acceptance:
    authenticated LAN/public read smoke. Preserve other container IDs/config/credentials.
    Record real coverage gaps and Android layout compatibility; commit/push checkpoints.
 
-Progress: source/interface inspection underway. No business writes performed.
+Progress: all five steps complete. Final Hub image `local/hub-api:5d85450`;
+source code `45d4e9a`, current source main `8f86e2c` adds deployment documentation only.
+No production test business records or messages were created.
 
 Network implementation complete: manual plan validation/storage, inclusive billing
 periods and shared module/attention pool assembly. 36 focused tests pass including
@@ -87,4 +89,15 @@ Real LAN and public read acceptance passed on Hub cc45457:
   unplanned before this change, confirmed in the saved container baseline.
 
 Final review also makes manual expiry independent of router cache availability;
-regression covers offline expiry and dismiss with no source I/O. Final image pending.
+regression covers offline expiry and dismiss with no source I/O. Final full Hub
+suite90 passes. Final image local/hub-api:5d85450 is healthy; LAN/public plan/net/
+attention/status200 and revoked-device401 were rechecked after this final change.
+Source main8f86e2c is published and the deployment checkout fast-forwarded (docs-only
+relative to functional code45d4e9a; no further restart needed). Source aggregate worktree
+checkpoints a25bd5d/5641b32 remain clean; main's unrelated boot edits are untouched.
+
+Delivery complete: network plans, recording days/metadata and streaming, full Token
+history/range attribution/session titles, own-user Memos CRUD/attachment proxy, and
+Android layout preservation notes are implemented, tested, committed and published.
+Source capability gaps and production-write/native-playback verification limits above
+are deliberate facts, not pending implementation. No owner decision remains open.

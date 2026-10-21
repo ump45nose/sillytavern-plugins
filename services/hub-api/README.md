@@ -238,9 +238,8 @@ are printed; source business data is not changed. The repository is private; use
 existing checkout or authenticated GitHub CLI to retrieve this script. A successful
 run ends with `success: true`. The deployed service passed this real Chrome flow on
 2026-10-21 at 10:16 +08:00 on the owner's MacBook Pro: public modules/status=200,
-13 sources, and the revoked temporary device=401. Current running image is
-`local/hub-api:3d69313`, including the verified attention copy fix; net/git remain
-partial for the source coverage described above.
+13 sources, and the revoked temporary device=401. The phase-3 attention-copy release was `local/hub-api:3d69313`; later releases
+below supersede it. net/git retain the source coverage limitations described above.
 
 
 ## Mainline, goals and reviews (phase 5)
@@ -339,3 +338,11 @@ Layout storage remains opaque and preserves unknown fields. Android must retain
 when reading/writing shared layouts. If its reader cannot preserve an unfamiliar
 value, it should stop writing that document and show an incompatibility state.
 No Android implementation or external task messaging was performed by this NAS change.
+
+V2 NAS release: `local/hub-api:5d85450`; source functional release `45d4e9a`, current
+source main `8f86e2c` (deployment docs only). Hub 90 tests and Plaud 23 tests pass.
+LAN/public module/status, recording pagination/transcript, MP3+Opus byte ranges,
+Memos own list/detail/filter and Token day/week/month/year reads passed; temporary
+device revoked with 401 on both routes. Memos business writes are fake-source tested,
+and actual native-client decoding/playback is outside this NAS HTTP acceptance.
+See `docs/plans/2026-10-21-hub-v2-execution.md` at the repository root for evidence.
