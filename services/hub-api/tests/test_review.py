@@ -105,3 +105,49 @@ def test_invalid_review_payload_is_source_failure(settings):
         r=client.get('/api/v1/modules?ids=goals,attention',headers=h)
         assert r.status_code==200 and r.json()['modules']['goals']['status']=='error'
         assert r.json()['modules']['attention']['status']=='ok'
+
+
+@pytest.mark.parametrize('path,source_path,body',[
+    ('/review/sessions/daily:2026-10-20/finalize','/v1/reviews/daily:2026-10-20/finalize',{'content':'用户原文'}),
+    ('/stage/goals/G1/comments','/v1/stage/goals/G1/comments',{'text':'用户原文','dry_run':False}),
+    ('/stage/cycles/C1/close','/v1/stage/cycles/C1/close',{'text':'原文','outcomes':{'G1':'成功'},'dry_run':False}),
+    ('/stage/cycles','/v1/stage/cycles',{}),
+    ('/stage/cycles/C1/goals','/v1/stage/cycles/C1/goals',{'domain':'事业','goal':'原文','progress':'进展','deadline':'2026-12-31','success_criteria':'上线','stop_signal':'取消','dry_run':False}),
+])
+def test_writes_forward_once_and_invalidate_goals(settings,path,source_path,body):
+    import json
+    settings.review_token=SecretStr('SENTINEL-REVIEW')
+    writes=[];reads=[]
+    def handle(request):
+        if request.method=='GET': reads.append(1);return httpx.Response(200,json=stage())
+        writes.append(request)
+        return httpx.Response(200,json={'status':'finalized' if 'finalize' in request.url.path else 'closed'})
+    app=create_app(settings,now=lambda:NOW,transport=httpx.MockTransport(handle))
+    h={'Authorization':'Bearer '+settings.dev_token.get_secret_value()}
+    with TestClient(app) as client:
+        assert client.get('/api/v1/modules/goals',headers=h).status_code==200
+        assert 'review' in app.state.sources.cache
+        assert client.post('/api/v1'+path,headers=h,json=body).status_code==200
+        assert 'review' not in app.state.sources.cache
+        assert len(writes)==1 and writes[0].url.path==source_path and json.loads(writes[0].content)==body
+        client.get('/api/v1/modules/goals',headers=h)
+        assert len(reads)==2
+
+
+def test_dry_run_preserves_cache_and_uncertain_write_invalidates_without_retry(settings):
+    settings.review_token=SecretStr('SENTINEL-REVIEW')
+    writes=[]
+    def handle(request):
+        if request.method=='GET': return httpx.Response(200,json=stage())
+        writes.append(request)
+        if len(writes)>1: raise httpx.ReadTimeout('SENTINEL-REVIEW')
+        return httpx.Response(200,json={'status':'dry-run','content':'原文'})
+    app=create_app(settings,now=lambda:NOW,transport=httpx.MockTransport(handle))
+    h={'Authorization':'Bearer '+settings.dev_token.get_secret_value()}
+    with TestClient(app) as client:
+        client.get('/api/v1/modules/goals',headers=h)
+        client.post('/api/v1/stage/goals/G1/comments',headers=h,json={'text':'原文','dry_run':True})
+        assert 'review' in app.state.sources.cache
+        r=client.post('/api/v1/stage/goals/G1/comments',headers=h,json={'text':'原文','dry_run':False})
+        assert r.status_code==502 and 'review' not in app.state.sources.cache and len(writes)==2
+        assert 'SENTINEL-REVIEW' not in r.text

@@ -13,12 +13,16 @@ def register(app,review,settings,manager,authenticated):
         if not 1<=len(value)<=256: raise HTTPException(400)
         return quote(value,safe='')
 
-    async def invoke(method,path,**kwargs):
+    async def invoke(method,path,mutate=False,**kwargs):
         if not settings.review_token: raise HTTPException(503)
         try:
             response=await review.request(method,path,**kwargs)
             payload=response.json()
-        except (httpx.RequestError,ValueError): raise HTTPException(502) from None
+        except (httpx.RequestError,ValueError):
+            if mutate: await manager.invalidate('review')
+            raise HTTPException(502) from None
+        if mutate and (response.is_success or response.status_code>=500):
+            await manager.invalidate('review')
         if response.is_success:
             return response_class(payload,status_code=response.status_code)
         if response.status_code in (400,404,409,422) and isinstance(payload,dict):
@@ -39,3 +43,27 @@ def register(app,review,settings,manager,authenticated):
     @app.post('/api/v1/review/sessions/{value}/preview',dependencies=[Depends(authenticated)])
     async def preview(value:str,request:Request):
         return await invoke('POST','/v1/reviews/'+identifier(value)+'/preview',json=await json_body(request,131072))
+
+    async def write(path,request):
+        body=await json_body(request,131072)
+        return await invoke('POST',path,json=body,mutate=body.get('dry_run') is not True,timeout=30)
+
+    @app.post('/api/v1/review/sessions/{value}/finalize',dependencies=[Depends(authenticated)])
+    async def finalize(value:str,request:Request):
+        return await write('/v1/reviews/'+identifier(value)+'/finalize',request)
+
+    @app.post('/api/v1/stage/goals/{value}/comments',dependencies=[Depends(authenticated)])
+    async def comment(value:str,request:Request):
+        return await write('/v1/stage/goals/'+identifier(value)+'/comments',request)
+
+    @app.post('/api/v1/stage/cycles/{value}/close',dependencies=[Depends(authenticated)])
+    async def close(value:str,request:Request):
+        return await write('/v1/stage/cycles/'+identifier(value)+'/close',request)
+
+    @app.post('/api/v1/stage/cycles',dependencies=[Depends(authenticated)])
+    async def create_cycle(request:Request):
+        return await write('/v1/stage/cycles',request)
+
+    @app.post('/api/v1/stage/cycles/{value}/goals',dependencies=[Depends(authenticated)])
+    async def create_goal(value:str,request:Request):
+        return await write('/v1/stage/cycles/'+identifier(value)+'/goals',request)
