@@ -48,3 +48,17 @@ history, top-20 today sessions with explicit allowlist. Five focused Token tests
 production read-only candidate reports history=102 days, day tools/models/devices/
 sessions=4/9/4/20, week=6/24/4/null, month=11/49/4/null. Provider identities and arbitrary
 rolling session detail are unavailable and remain null. No Token Monitor change.
+
+Recording and Memos implementation complete; full Hub suite 89 passes. Source tests
+23 passes. Owner approved metadata-only Plaud and shared Hub Range-streaming playback.
+Source aggregate checkpoint a25bd5d, subtree/repository release 45d4e9a published;
+HTTP service now selects /home/yuwk/src/plaud-archive/src through a single PYTHONPATH
+entry in its existing private env, original venv/unit/workdir/identity retained.
+No merge into dirty aggregate main. Plaud service active; candidate production list
+reads return 2 days/4 recordings without text, Memos own list/detail/tag/search read
+checks pass. Source write endpoints were not called.
+
+Rollback checkpoint: /vol2/1000/Docker/hub/deployment-backups/v2-20261021, root0700,
+private files0600. Saves original Hub tag/Compose, Plaud env/unit, container IDs and
+Hub env hash. Rollback code via Hub image and removal of only the added Plaud source
+selection key; retain current DB, audio, transcript, OAuth and job state.

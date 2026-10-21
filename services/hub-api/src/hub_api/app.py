@@ -22,6 +22,8 @@ from .sources.review import Review
 from .review_routes import register as review_routes
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
+from .memo_routes import register as memo_routes
+from .sources.memos import Memos
 from .auth import register as auth_routes
 from .store import Store
 from .configuration import register as configuration_routes, preferences, subscriptions
@@ -68,8 +70,9 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
     personal = Personal(client, settings, now, lambda: preferences(store))
+    memos = Memos(personal)
     review = Review(client, settings)
-    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter()]}
+    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + [Adapter("memos", "Memos", 60, memos.module if settings.memos_token else None)] + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
@@ -144,6 +147,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     configuration_routes(app, store, manager, authenticated, now)
     attention_routes(app, manager, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)
+    memo_routes(app, settings, memos, authenticated, manager)
     review_routes(app, review, settings, manager, authenticated)
     media_routes(app, settings, media, authenticated)
     return app

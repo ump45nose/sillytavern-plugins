@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
@@ -89,16 +88,6 @@ class Personal:
                 "duration_seconds": a["duration_ms"] / 1000 if a.get("duration_ms") is not None else None} for a in detail["audio"]]
         return {"recordings": recordings, "cycle_recordings": sum(d["audio_count"] for d in days)}
 
-    async def memos(self):
-        user = (await self.request("memos", "/api/v1/auth/me"))["user"]["name"]
-        memos, stats = await asyncio.gather(
-            self.request("memos", "/api/v1/memos", {"page_size": 20, "state": "NORMAL", "order_by": "create_time desc", "filter": "creator == " + json.dumps(user)}),
-            self.request("memos", "/api/v1/" + user + ":getStats"))
-        return {"recent": [{"id": m["name"].split("/")[-1], "created_at": local_time(m.get("createTime"), self.now().tzinfo),
-                "content": m.get("content"), "tags": m.get("tags"), "visibility": m.get("visibility"),
-                "url": self.settings.memos_public_url.rstrip("/") + "/m/" + m["name"].split("/")[-1]} for m in memos.get("memos", [])[:20]],
-                "tags": [{"name": name, "count": count} for name, count in sorted(stats.get("tagCount", {}).items(), key=lambda p: (-p[1], p[0]))]}
-
     def adapters(self):
         return [Adapter(name, title, 60, getattr(self, name) if getattr(self.settings, name + "_token") else None)
-                for name, title in [("crm", "Personal CRM"), ("plaud", "Plaud Archive"), ("memos", "Memos")]]
+                for name, title in [("crm", "Personal CRM"), ("plaud", "Plaud Archive")]]

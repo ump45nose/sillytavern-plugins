@@ -41,10 +41,10 @@ def source(request):
     if path.endswith("/memos"):
         if request.method == "POST":
             assert json.loads(request.content) == {"content": "hello", "visibility": "PRIVATE"}
-            return httpx.Response(201, json={"name": "memos/new", "createTime": "2026-10-20T04:00:00Z"})
+            return httpx.Response(201, json={"name": "memos/new", "content": "hello", "creator": "users/1", "createTime": "2026-10-20T04:00:00Z"})
         assert request.url.params["page_size"] == "20"
-        assert request.url.params["filter"] == 'creator == "users/1"'
-        return httpx.Response(200, json={"memos": [{"name": "memos/one", "createTime": "2026-10-20T04:00:00Z", "content": "hello", "tags": ["想法"], "visibility": "PRIVATE"}]})
+        assert request.url.params["filter"] == '(creator == "users/1")'
+        return httpx.Response(200, json={"memos": [{"name": "memos/one", "creator": "users/1", "createTime": "2026-10-20T04:00:00Z", "content": "hello", "tags": ["想法"], "visibility": "PRIVATE"}]})
     if "/audio/" in path:
         assert request.headers["Range"] == "bytes=0-3"
         return httpx.Response(206, stream=httpx.ByteStream(b"data"), headers={"Content-Range": "bytes 0-3/10", "Content-Type": "audio/mpeg"})

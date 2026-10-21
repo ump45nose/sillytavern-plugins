@@ -66,7 +66,7 @@ Live Plaud uses its existing LAN listener on **18095**, verified read-only; the 
 older 127.0.0.1:8092 observation did not describe the actual service. No source listener,
 container or network was changed. Memos uses its existing token, `/auth/me`, the latest
 20 own NORMAL memos and official per-user tag statistics; it never scans all memo bodies.
-Both write endpoints forward once without retries. `person_name` must uniquely match
+All write endpoints forward once without retries. `person_name` must uniquely match
 an existing CRM contact; ambiguous/unknown names return 409, and no contact is invented.
 Unit tests exercise writes with fake services; no test memo or interaction is inserted
 into production merely for validation.
@@ -281,3 +281,58 @@ only exposes a natural-month total and today's hours, so other reset days return
 (for the same period, usage is identical); traffic cannot be assigned to individual
 providers. Existing traffic remaining/expiry preferences apply to these manual pools.
 Collection gaps still leave the net module partial. An empty plan list produces `pools: []`.
+
+## Hub v2 recording days and public playback
+
+GET `/api/v1/recordings?source=plaud&before=YYYY-MM-DD&limit=14` returns newest-first
+nonempty recording days. `limit` counts recorded days (1–30), and `before` is exclusive,
+defaulting to tomorrow in Asia/Shanghai. `next_before` is the last returned date only
+when another recorded day exists. Results use a bounded 32-entry, 60-second in-memory
+cache. Details are fetched in batches of at most four; CRM contact/interactions are
+paginated once for the selected range (hard bound 10,000 each), using the same local-day
+interval overlap rule as CRM cards. Names are deduplicated; no match is an empty list.
+
+Plaud's compatible `audio_only=true` list and `metadata_only=true` detail options
+return only audio/index metadata and `has_transcript` from file existence. No Markdown
+or audio body is read for the list. Existing full-detail, transcript and audio APIs
+retain their behavior. The source HTTP release uses `/home/yuwk/src/plaud-archive`,
+selected through private service `PYTHONPATH`, with the original venv, service identity,
+data, OAuth, credentials and paused collection job retained.
+
+Clients use the same authenticated Hub audio URL on LAN and public NPM. Hub streams
+from Plaud with the source's existing read credential and forwards Range/206,
+Content-Range and Accept-Ranges for seeking. Clients must send their device bearer
+for each playback/seek request. Audio opens on demand, whole-day Markdown on expand;
+no file mirror, public source URL or source credential is exposed.
+
+## Hub v2 Memos CRUD
+
+GET `/api/v1/memos` accepts `page_size` (1–100, default 20), opaque `page_token`, `tag`
+and `q`. Filtering is performed by Memos' official CEL filter: an always-bound creator,
+exact tag membership and content.contains with JSON-escaped literals; Hub never scans
+all memo bodies. Responses return `{items, next_page_token}` and the shared full Memo
+shape with timestamps, content, tags, visibility, pinned, public link and attachment
+metadata. The module's recent items and POST results use that same shape.
+
+GET/PATCH/DELETE `/api/v1/memos/{id}` only accepts safe bounded resource IDs and checks
+current creator even when the existing token has administrator privileges. PATCH
+accepts only supplied content/visibility/pinned fields, preserving false. DELETE
+forwards exactly one PATCH with state=ARCHIVED; restoration remains available in
+Memos. Writes never retry and invalidate the module cache after success or uncertain
+outcomes. Production validation is read-only; write/ownership/error cases use fakes.
+
+GET `/api/v1/memos/{id}/attachments/{name}` accepts an attachment ID or its
+`attachments/{id}` resource name. It rechecks own-Memo membership, then streams local
+image attachments from Memos' fixed file route with no-store/nosniff. External links,
+active HTML/SVG, arbitrary URLs and attachments from other memos are rejected.
+Filter/update-mask behavior follows the deployed Memos 0.30
+[official schema](https://github.com/usememos/memos/blob/v0.30.0/internal/filter/schema.go)
+and [Memo API](https://github.com/usememos/memos/blob/v0.30.0/proto/api/v1/memo_service.proto).
+
+## Android layout compatibility
+
+Layout storage remains opaque and preserves unknown fields. Android must retain
+`kind: review` (page id review), `module: plaud`, and optional item height medium/tall
+when reading/writing shared layouts. If its reader cannot preserve an unfamiliar
+value, it should stop writing that document and show an incompatibility state.
+No Android implementation or external task messaging was performed by this NAS change.

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 from urllib.parse import quote
 
@@ -9,12 +9,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from starlette.background import BackgroundTask
 from .sources.personal import local_time
-
-
-class MemoInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    content: str = Field(min_length=1, max_length=100000)
-    visibility: Literal["PRIVATE", "PROTECTED", "PUBLIC"] = "PRIVATE"
+from .recording_days import RecordingDays
 
 
 class InteractionInput(BaseModel):
@@ -33,6 +28,20 @@ class InteractionInput(BaseModel):
 
 
 def register(app, settings, personal, authenticated, now, manager):
+    recording_days = RecordingDays(personal)
+
+    @app.get('/api/v1/recordings', dependencies=[Depends(authenticated)])
+    async def list_recordings(source: Literal['plaud'] = 'plaud', before: date | None = None,
+                              limit: int = 14):
+        if not 1 <= limit <= 30:
+            raise HTTPException(400)
+        if not settings.plaud_token:
+            raise HTTPException(503)
+        try:
+            return await recording_days.get(before or now().date()+timedelta(days=1), limit)
+        except (httpx.HTTPError, TimeoutError, ValueError, KeyError, TypeError):
+            raise HTTPException(502) from None
+
     async def invoke(*args, **kwargs):
         try:
             return await personal.request(*args, **kwargs)
@@ -40,14 +49,6 @@ def register(app, settings, personal, authenticated, now, manager):
             raise HTTPException(400 if exc.response.status_code in (400, 404, 409, 422) else 502) from None
         except (httpx.RequestError, ValueError, KeyError):
             raise HTTPException(502) from None
-
-    @app.post("/api/v1/memos", status_code=201, dependencies=[Depends(authenticated)])
-    async def create_memo(body: MemoInput):
-        if not settings.memos_token:
-            raise HTTPException(503)
-        value = await invoke("memos", "/api/v1/memos", method="POST", body=body.model_dump())
-        manager.states.pop("memos", None)
-        return {"id": value["name"].split("/")[-1], "created_at": local_time(value.get("createTime"), now().tzinfo)}
 
     @app.post("/api/v1/crm/interactions", status_code=201, dependencies=[Depends(authenticated)])
     async def create_interaction(body: InteractionInput):
