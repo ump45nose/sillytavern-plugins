@@ -5,8 +5,9 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request
 
-from .configuration import json_body, preferences, subscriptions
+from .configuration import json_body, preferences, subscriptions, net_plans
 from .modules.crm import assemble as crm_module
+from .modules.net import assemble as net_module
 
 
 TOOL_NAMES = {'antigravity':'Antigravity','claude':'Claude','codex':'Codex',
@@ -71,9 +72,9 @@ def calculate(manager):
             if w['percent']>=p['token_limit_percent']:
                 add(key,'token_limit',f"{limit_label(tool['tool'],w['label'])} 额度已用 {w['percent']:g}%",'token',subtitle=reset_subtitle(w.get('resets_at'),now))
     usage=cached('usage')
-    if usage and usage['net'].get('pools') is not None:
+    if usage is not None:
         scopes.add('traffic-low')
-        for pool in usage['net']['pools']:
+        for pool in net_module(usage, net_plans(store), now)['pools']:
             total,used=pool.get('total_bytes'),pool.get('used_bytes')
             low=total is not None and total>0 and used is not None and (total-used)/total*100<p['traffic_remaining_percent']
             expires=pool.get('expires_on');days=(date.fromisoformat(expires)-now.date()).days if expires else None

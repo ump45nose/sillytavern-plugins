@@ -1,7 +1,7 @@
 # hub-api
 
 Python 3.12 thin backend. Source business records remain in their owning applications.
-Only devices, preferences/layout, subscriptions and attention handling are durable;
+Only devices, preferences/layout, subscriptions, manual network plans and attention handling are durable;
 normalized source responses are cached in memory for their TTL and for at most 24 hours on failure.
 
 ```sh
@@ -267,3 +267,15 @@ All original credentials and 11 review jobs were retained. The owner deferred re
 App archival; actual Memos writes and Telegram delivery remain unverified. No production
 test archive, comment, goal/cycle or test message was created. Full execution/rollback
 evidence is in docs/plans/2026-10-21-phase5-nas-execution.md at the repository root.
+
+## Hub v2 network plans
+
+GET/PUT `/api/v1/net/plans` stores up to five unique manual plans as the `net_plans`
+configuration document. Successful replacement invalidates the usage cache. Billing
+periods include both `period_start` and `period_end`; reset days are limited to 1–28.
+A reset on day 1 uses the observed `month_bytes`. The current Usage Monitor HTTP API
+only exposes a natural-month total and today's hours, so other reset days return
+`used_bytes: null`; usage is never estimated. Every plan uses the same router counter
+(for the same period, usage is identical); traffic cannot be assigned to individual
+providers. Existing traffic remaining/expiry preferences apply to these manual pools.
+Collection gaps still leave the net module partial. An empty plan list produces `pools: []`.

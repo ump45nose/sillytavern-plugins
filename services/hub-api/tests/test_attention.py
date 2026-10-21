@@ -18,7 +18,7 @@ def test_all_rules_cache_only_dismiss_snooze_and_new_episode(settings):
     wait={'id':'git-waiting:I:reply','title':'reply','repo':'o/r','url':'https://github.com/o/r/issues/1','since':old(hours=25)}
     block={'id':'pr-blocked:P:conflict','title':'conflict','repo':'o/r','url':'https://github.com/o/r/pull/2','since':old(days=4)}
     values={'token':{'limits':[{'tool':'codex','windows':[{'label':'5h','percent':80,'resets_at':None}]}]},
-        'usage':{'net':{'pools':[{'id':'a','name':'pool','total_bytes':100,'used_bytes':95,'expires_on':'2026-10-22'}]}},
+        'usage':{'net':{'month_bytes':95}},
         'github':{'waiting':[wait],'blocked':[block],'activity':{},'_partial':False},
         'crm':{'people':{'p':{'name':'Person','last_interaction_date':'2026-09-01'}},'recent':[],'cycle':{'people':1,'interactions':1}},
         'records_bills':{}}
@@ -27,6 +27,7 @@ def test_all_rules_cache_only_dismiss_snooze_and_new_episode(settings):
         manager.states[n]={'status':'ok','checked_at':NOW,'last_success':NOW.isoformat()}
     manager.states['records_health']={'status':'error','failed_since':NOW-timedelta(minutes=31)}
     app.state.store.put_document('subscriptions',{'items':[{'id':'a','name':'Service','price':12,'currency':'CNY','cycle':'month','next_renewal':'2026-10-24'}]},None,NOW.isoformat())
+    app.state.store.put_document('net_plans',{'items':[{'id':'a','name':'pool','total_bytes':100,'reset_day':1,'expires_on':'2026-10-22'}]},None,NOW.isoformat())
     h={'Authorization':'Bearer '+settings.dev_token.get_secret_value()}
     with TestClient(app) as client:
         def attention(): return client.get('/api/v1/modules/attention',headers=h).json()['data']['items']

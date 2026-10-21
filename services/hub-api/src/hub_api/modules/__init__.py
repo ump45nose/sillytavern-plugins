@@ -1,6 +1,7 @@
 import asyncio
 from .crm import assemble as crm_module
 from .token import assemble as token_module
+from .net import assemble as net_module
 
 MODULE_SOURCES = {
     "health": ["records_health"], "bills": ["records_bills"],
@@ -28,7 +29,7 @@ def envelope(identifier, results, data=None):
 
 
 async def modules(manager, ids, token_range="day"):
-    from ..configuration import preferences, subscriptions
+    from ..configuration import preferences, subscriptions, net_plans
     p = preferences(manager.store)
     source_ids = list(dict.fromkeys(s for m in ids for s in MODULE_SOURCES[m]))
     values = dict(zip(source_ids, await asyncio.gather(*(manager.get(s) for s in source_ids))))
@@ -49,7 +50,7 @@ async def modules(manager, ids, token_range="day"):
         if identifier == "token":
             data = token_module(values["token"]["data"], token_range, manager.now())
         if identifier == "net" and values["usage"]["data"] is not None:
-            data = values["usage"]["data"]["net"]
+            data = net_module(values["usage"]["data"], net_plans(manager.store), manager.now())
         if identifier == "health" and data is not None:
             data = {**data, **{k:p[k] for k in ("step_goal","kcal_goal","exercise_goal")}}
         if identifier == "bills" and data is not None:

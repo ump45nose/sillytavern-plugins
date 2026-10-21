@@ -41,7 +41,7 @@ def test_token_net_fake_sources_ranges_and_partial(settings):
         values = client.get("/api/v1/modules?ids=token,net", headers=headers).json()["modules"]
         assert values["token"]["status"] == "ok" and values["token"]["data"]["total"] == 100
         assert values["token"]["data"]["limits"][0]["windows"][0]["percent"] == 86
-        assert values["net"]["status"] == "partial" and values["net"]["data"]["pools"] is None
+        assert values["net"]["status"] == "partial" and values["net"]["data"]["pools"] == []
         month = client.get("/api/v1/modules/token?range=month", headers=headers).json()
         assert month["data"]["range"] == "month" and month["data"]["total"] is None
         assert "accountKey" not in str(month)
