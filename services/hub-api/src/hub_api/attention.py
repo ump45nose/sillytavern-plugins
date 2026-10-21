@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 import re
+import math
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request
@@ -98,6 +99,26 @@ def calculate(manager):
         scopes.add('stale-contact')
         stale=crm_module(crm,None,now,p['stale_contact_days'])['stale']
         if stale: add('stale-contact:summary','stale_contact','有联系人久未联系','crm',subtitle='、'.join(x['name'] or '' for x in stale),severity='info')
+    review=cached('review')
+    if review is not None:
+        scopes.update(('review','stage'))
+        for kind in ('daily','weekly'):
+            session=review['reviews'].get(kind)
+            expires=instant(session.get('expires_at')) if session else None
+            if not session or session['status']!='open' or expires is None or expires<=now: continue
+            seconds=(expires-now).total_seconds()
+            subtitle=f'{math.ceil(seconds/3600)} 小时后过期' if seconds>=3600 else f'{math.ceil(seconds/60)} 分钟后过期'
+            label=session['label']
+            if kind=='daily':
+                day=date.fromisoformat(label);title=f'{day.month}/{day.day} 日报待确认'
+            else: title=label+' 周报待确认'
+            add(f'review:{kind}:{label}','review_pending',title,'goals',session.get('prepared_at'),subtitle)
+        close=review['close'];cycle=review.get('cycle')
+        if cycle and close['status'] in ('preclose','awaiting_close'):
+            end=instant(cycle['ends_at'])
+            frozen=close['status']=='awaiting_close'
+            add('stage:close:'+cycle['id'],'stage_close','阶段待结案','goals',cycle.get('preclose_at'),
+                '已过结案日，目标已冻结' if frozen else f'{end.month}/{end.day} 结案',severity='critical' if frozen else 'warn')
     scopes.add('source-down')
     for identifier,adapter in manager.adapters.items():
         if adapter.fetch is None: continue
@@ -118,7 +139,7 @@ def calculate(manager):
         threshold=row.pop('_threshold',None)
         if threshold is not None and now-instant(row['since'])<=threshold: continue
         if visible(state,now): output.append(row)
-    output.sort(key=lambda r:(r['severity']!='warn',r['since'],r['id']))
+    output.sort(key=lambda r:({'critical':0,'warn':1,'info':2}[r['severity']],r['since'],r['id']))
     return output, states
 
 

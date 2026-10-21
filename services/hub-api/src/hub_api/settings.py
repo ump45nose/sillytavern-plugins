@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     github_timeout_seconds: float = 15
 
+    review_url: str = 'http://192.168.31.201:18191'
+    review_token: SecretStr | None = None
+
     public_url: str = "https://hub-home.172906573.xyz:28443"
     oidc_issuer: str | None = None
     oidc_client_id: str = "personal-hub"

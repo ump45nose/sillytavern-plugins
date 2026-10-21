@@ -18,6 +18,8 @@ from .sources.personal import Personal
 from .sources.usage import Usage
 from .sources.media import Media
 from .sources.github import GitHub
+from .sources.review import Review
+from .review_routes import register as review_routes
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
 from .auth import register as auth_routes
@@ -66,7 +68,8 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     app = FastAPI(title="Personal Hub", lifespan=lifespan, default_response_class=SafeJSONResponse)
     personal = Personal(client, settings, now, lambda: preferences(store))
-    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter()]}
+    review = Review(client, settings)
+    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
@@ -141,5 +144,6 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     configuration_routes(app, store, manager, authenticated, now)
     attention_routes(app, manager, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)
+    review_routes(app, review, settings, manager, authenticated)
     media_routes(app, settings, media, authenticated)
     return app

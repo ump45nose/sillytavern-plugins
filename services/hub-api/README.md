@@ -239,3 +239,18 @@ run ends with `success: true`. The deployed service passed this real Chrome flow
 13 sources, and the revoked temporary device=401. Current running image is
 `local/hub-api:3d69313`, including the verified attention copy fix; net/git remain
 partial for the source coverage described above.
+
+
+## Mainline, goals and reviews (phase 5)
+
+The `review` source reads private personal-review GET `/v1/stage` with a 60-second
+TTL and the usual source isolation/stale expiry. The `goals` module exposes only the
+shared mainline/cycle/goals/review/close shape; failed comment reads mark it partial.
+Source status never triggers a fetch. Attention uses this cache for pending daily/weekly
+reviews and preclose/awaiting-close cards; IDs remain stable and support dismiss/snooze.
+Expired sessions are excluded even when the cached source still says open.
+
+`/api/v1/review/sessions`, detail and preview forward to personal-review, preserving
+422 Chinese validation messages/fields and 409 expired. Request bodies are bounded;
+no request/body/credential logging. Source keys and internal error fields are discarded.
+The raw source bearer lives only in private Hub env; the source verifies a private hash.

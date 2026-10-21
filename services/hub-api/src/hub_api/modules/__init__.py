@@ -6,7 +6,7 @@ MODULE_SOURCES = {
     "health": ["records_health"], "bills": ["records_bills"],
     "crm": ["crm", "plaud"], "media": ["emby", "navidrome", "moviepilot", "qbittorrent"],
     "token": ["token"], "net": ["usage"], "git": ["github"], "memos": ["memos"],
-    "subs": ["records_subscriptions"], "attention": [],
+    "subs": ["records_subscriptions"], "goals": ["review"], "attention": [],
 }
 
 
@@ -61,7 +61,7 @@ async def modules(manager, ids, token_range="day"):
                       "last_charge":charges["charges"].get(item["id"]) if charges else None} for item in subscriptions(manager.store)]
             data = {"items":items,"monthly_total":float(sum((Decimal(str(x["monthly_equivalent"])) for x in items),Decimal(0)))}
         partial = False
-        if identifier == "git" and data is not None:
+        if identifier in ("git","goals") and data is not None:
             partial = data.get("_partial", False)
             data = {k: v for k, v in data.items() if not k.startswith("_")}
         output[identifier] = envelope(identifier, results, data)
