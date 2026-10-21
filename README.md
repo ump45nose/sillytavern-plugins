@@ -14,6 +14,14 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 
 源码入口为 `/vol1/1000/Code/personal-info/personal-review`。运行目录 `/vol2/1000/Docker/personal-review` 保留原配置、数据库、产物和认证，静态源码通过链接提供。NAS 任务代码归 `nas-cron-jobs/hermes`。日期、用户确认流程和现有业务开关保持不变。
 
+阶段 5 来源改动在聚合 worktree `codex/phase5-review-http-20261021` 开发，按用户确认发布到私有 `ump45nose/personal-review`。发布后的独立源码 checkout 为 `/home/yuwk/src/personal-review`；运行目录的静态源码链接使用该 checkout，配置、数据库、Memos 凭据和产物不迁移。聚合 main 的其他人修改不代提交或合并。
+
+`reviewctl serve --host 192.168.31.201 --port 18191 --token-hash-file <私有哈希文件>` 提供 `/v1/reviews`、会话详情与 preview、`/v1/stage`；`/healthz` 无认证。原始 Bearer 只在 Hub 私有环境中，来源只读取 SHA-256 哈希。模板见 `deploy/personal-review.service`；HTTP 不输出访问日志、正文或上游错误。
+
+预览直接调用既有 `finalize(..., dry_run=True)`。旧周报的展示材料来自冻结 evidence，不重新采集或修改会话。阶段读取不冻结结案模板；评论读取失败通过 `X-Review-Partial: true` 标记，正文中不增加内部状态字段。投递正文只读取匹配成功执行输出中的 Response，失败或缺失为 null。
+
+验证：在本目录使用现有 Hermes Python 执行 `python -m pytest -q`。阶段 5 首轮 71 项测试通过。修正了迁移后脚本转发器在测试 import 时意外运行 CLI 的问题（直接执行方式保持），并把旧财务 golden fixture 更新到当前 Personal Records 的 totals 列表；未改变生成或 cron 业务规则。
+
 `reviewctl config validate` 校验配置，`doctor` 检查运行状态。`daily prepare` 冻结材料，重复运行回放快照；`daily refresh` 显式重新读取来源。`daily prepare --dry-run` 不冻结材料或提交来源游标。日报终稿仍需用户确认。
 
 `weekly prepare`、`stage prepare-close`、`projections pending`、`attachment pending`、`annual prepare` 保留既有业务。日报投递成功后由独立回执任务提交 checkpoint；投影失败不回退已确认账本。旧 CRM 日快照输入及旧 raw/derived 保留任务已退役。

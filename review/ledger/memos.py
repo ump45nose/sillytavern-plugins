@@ -139,6 +139,14 @@ class MemosClient:
         path = self._memo_path(parent_name)
         return self._request("POST", f"{path}/comments", {"content": content, "visibility": "PRIVATE"})
 
+    def latest_comment(self, name: str) -> dict[str, Any] | None:
+        """读取目标评论，只返回最近一条展示文本和时间。"""
+        body = self._request('GET', self._memo_path(name) + '/comments')
+        items = body.get('memos', body.get('comments', []))
+        if not items: return None
+        item = max(items, key=lambda x: x.get('createTime') or x.get('create_time') or '')
+        return {'text': item.get('content',''), 'created_at': item.get('createTime') or item.get('create_time')}
+
     def set_reference(self, name: str, related_name: str) -> dict[str, Any]:
         """把阶段目标关联到主线；该操作只设置可变 REFERENCE relation。"""
 

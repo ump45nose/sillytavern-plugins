@@ -292,17 +292,20 @@ class StageService:
                     {"id": row["id"], "domain": row["domain"], "original": json.loads(row["payload_json"])}
                     for row in goals
                 ],
-                "template": (
-                    f"#阶段总结 {cycle_id}\n\n"
-                    "这个 loop 成了没成（成功 / 失败 / 停止）：\n"
-                    "下个 loop 与判定标准、截止日期、中止信号：\n"
-                    "这套模板哪个字段我在敷衍，删掉：\n"
-                    "主线的可观察指标动了吗："
-                ),
+                "template": self.close_template(cycle_id),
             }
             self.state.put_idempotent("stage-preclose", cycle_id, item)
             materials.append(item)
         return materials
+
+    @staticmethod
+    def close_template(cycle_id: str) -> str:
+        """共享原有结案模板；读取模板不冻结或写入材料。"""
+        return (f"#阶段总结 {cycle_id}\n\n"
+                "这个 loop 成了没成（成功 / 失败 / 停止）：\n"
+                "下个 loop 与判定标准、截止日期、中止信号：\n"
+                "这套模板哪个字段我在敷衍，删掉：\n"
+                "主线的可观察指标动了吗：")
 
     def close_cycle(self, cycle_id: str, user_text: str, outcomes: dict[str, str], dry_run: bool = False) -> dict:
         """照抄用户阶段总结并强制每个目标进入终态。"""
