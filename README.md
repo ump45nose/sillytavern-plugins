@@ -29,3 +29,7 @@ Hermes 日报、周报、阶段与年度复盘的业务程序。用户确认内�
 部署与实际验证记录见聚合仓库 `docs/plans/2026-10-19-hub-retirement.md`。
 
 更新日报接入时，同步部署 `deploy/skill/personal-review/SKILL.md` 到 Lingjun profile 的 `skills/lifestyle/personal-review/SKILL.md`，并更新现有日报任务的 prompt；静态源码链接更新不会自动替换 profile 中的 skill。保留任务 ID、schedule、投递 topic、执行历史和暂停状态。`config validate`、`doctor` 不能替代来源实读或实际投递验证。
+
+HTTP 写路径包括 review finalize、目标 comments、周期 close/create 和目标新增发布。周期创建也支持 dry_run；新增目标按 cycle_id/domain/goal 去重，payload 变化返回409，发布失败保留索引和既有 Memos 回执供同一请求重试。所有业务写调用原 service，CLI/HTTP 共用 review.write.lock；重复确认返回原归档，确认来源存于既有幂等回执 confirmed_from 中。写操作不自动重试外部 POST。原数据和投影规则保持。
+
+原生 HTTP 返回 status=created 的周期创建结果、status=published 的目标发布结果，dry_run 返回 null ID 与可预览正文。已过结案日不允许新增目标，即便原阶段 cron 处于暂停状态；读取阶段仍不修改冻结状态。

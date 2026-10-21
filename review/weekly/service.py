@@ -10,7 +10,7 @@ import re
 
 from review.domain import Evidence, TimeWindow
 from review.ledger import MemosClient
-from review.state import StateRepository
+from review.state import StateRepository, serialized
 
 
 class WeeklyReviewService:
@@ -75,7 +75,8 @@ class WeeklyReviewService:
         lines.extend(["", self.blank_template(label)])
         return session_id, "\n".join(lines).strip()
 
-    def finalize(self, session_id: str, user_content: str, dry_run: bool = False) -> dict:
+    @serialized
+    def finalize(self, session_id: str, user_content: str, dry_run: bool = False, confirmation_source: str = 'telegram') -> dict:
         """发布用户确认周报，并把明确状态更新放入投影 outbox。"""
 
         session = self.state.load_session(session_id)
@@ -84,6 +85,8 @@ class WeeklyReviewService:
         previous = self.state.get_idempotent("weekly-finalize", session_id)
         if previous:
             return previous
+        if session['status']=='finalized':
+            return {'status':'finalized','memo_name':session['memo_name']}
         if datetime.now().astimezone() >= datetime.fromisoformat(session["expires_at"]):
             raise ValueError("周报会话已经过期")
         content = user_content.strip()
@@ -105,7 +108,7 @@ class WeeklyReviewService:
         values = dict(session)
         values.update(status="finalized", final_content=content, memo_name=memo_name)
         self.state.save_session(values)
-        result = {"status": "finalized", "memo_name": memo_name}
+        result = {"status": "finalized", "memo_name": memo_name, "confirmed_from": confirmation_source}
         self.state.put_idempotent("weekly-finalize", session_id, result)
         payload = {"kind": "weekly", "memo_name": memo_name, "content": content}
         destinations = ["user_md", "mem0", "stage_writeback"]

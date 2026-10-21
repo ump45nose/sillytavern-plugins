@@ -154,3 +154,84 @@ def test_delivered_exposes_only_response_of_successful_execution(api,client):
     job['last_run_at']=(stamp+timedelta(seconds=2)).isoformat();job['last_delivery_error']='failed'
     jobs.write_text(json.dumps({'jobs':[job]}))
     assert client('/v1/reviews/'+identifier)[1]['delivered'] is None
+
+
+def test_finalize_first_confirmation_is_preserved_and_audited(api,client):
+    identifier=api.sessions('daily')['items'][0]['id']
+    text=f'#日报 {identifier.split(":",1)[1]}\n一句话总结今天：完成确认链路\n留痕：用户原文'
+    code,result,_=client('/v1/reviews/'+identifier+'/finalize',{'content':text})
+    assert code==200 and result['already'] is False
+    code,repeated,_=client('/v1/reviews/'+identifier+'/finalize',{'content':'不可覆盖第一次确认'})
+    assert code==200 and repeated['already'] is True and repeated['memo_name']==result['memo_name']
+    assert len(api.memos.created)==1
+    assert api.state.get_idempotent('daily-finalize',identifier)['confirmed_from']=='app'
+    assert api.daily.finalize(identifier,'Telegram 后到的原文')['memo_name']==result['memo_name']
+    assert '用户原文' in api.state.load_session(identifier)['final_content']
+
+
+def test_stage_dry_runs_and_complete_writes(api,client):
+    assert client('/v1/stage/cycles',{'dry_run':True})[1]=={'status':'dry-run','cycle_id':None}
+    with api.state.connect() as db: assert db.execute('SELECT count(*) FROM stage_cycles').fetchone()[0]==0
+    cycle,goal=seed_stage(api);created=len(api.memos.created)
+    assert client('/v1/stage/cycles',{})[0]==409
+    assert client('/v1/stage/cycles',{'dry_run':'false'})[0]==422
+    assert client('/v1/stage/goals/'+goal+'/comments',{'text':'原文','dry_run':True})[1]['status']=='dry-run'
+    body={'domain':'事业','goal':'新目标','progress':'还在做','deadline':'2026-12-31','success_criteria':'上线','stop_signal':'取消','dry_run':True}
+    assert client('/v1/stage/cycles/'+cycle+'/goals',body)[1]['status']=='dry-run'
+    assert len(api.memos.created)==created and api.memos.comments==[]
+    assert client('/v1/stage/cycles/'+cycle+'/close',{'text':'我的原文','outcomes':{},'dry_run':True})[0]==422
+    close={'text':'我的原文','outcomes':{goal:'成功'},'dry_run':True}
+    assert client('/v1/stage/cycles/'+cycle+'/close',close)[1]['status']=='dry-run'
+    assert api.memos.created and len(api.memos.created)==created
+    close['dry_run']=False
+    code,result,_=client('/v1/stage/cycles/'+cycle+'/close',close)
+    assert code==200 and result['status']=='closed'
+    assert client('/v1/stage/cycles/'+cycle+'/close',close)[1]==result
+    assert client('/v1/stage/cycles',{})[1]['status']=='created'
+
+
+def test_new_goal_publish_retry_deduplication_and_limits(api,client):
+    cycle,_=seed_stage(api)
+    body={'domain':'事业','goal':'新目标','progress':'还在做','deadline':'2026-12-31','success_criteria':'上线','stop_signal':'取消'}
+    original=api.memos.pin_memo
+    def fail(name,pinned=True): raise RuntimeError('SENTINEL-MEMOS-TOKEN')
+    api.memos.pin_memo=fail
+    assert client('/v1/stage/cycles/'+cycle+'/goals',body)[0]==502
+    created=len(api.memos.created)
+    api.memos.pin_memo=original
+    code,result,_=client('/v1/stage/cycles/'+cycle+'/goals',body)
+    assert code==200 and result['status']=='published' and len(api.memos.created)==created
+    assert client('/v1/stage/cycles/'+cycle+'/goals',body)[1]==result
+    assert client('/v1/stage/cycles/'+cycle+'/goals',{**body,'progress':'不同内容'})[0]==409
+    assert client('/v1/stage/cycles/'+cycle+'/goals',{**body,'domain':'未知'})[0]==422
+    assert client('/v1/stage/cycles/'+cycle+'/goals',{**body,'goal':'','progress':'x'})[1]['error']['field']=='goal'
+    for i in range(3): assert client('/v1/stage/cycles/'+cycle+'/goals',{**body,'goal':f'目标{i}'})[0]==200
+    code,error,_=client('/v1/stage/cycles/'+cycle+'/goals',{**body,'goal':'第六个'})
+    assert code==422 and error['error']['field']=='goals'
+    with api.state.connect() as db: assert db.execute('SELECT count(*) FROM stage_goals').fetchone()[0]==5
+
+
+def test_cli_and_app_confirmation_are_serialized_across_processes(api,tmp_path):
+    import multiprocessing
+    import time
+    from review.daily import DailyReviewService
+    identifier=api.sessions('daily')['items'][0]['id']
+    text=f'#日报 {identifier.split(":",1)[1]}\n一句话总结今天：原文'
+    context=multiprocessing.get_context('fork');start=context.Event();queue=context.Queue()
+    writes=tmp_path/'memos-created'
+    def worker(source):
+        class SlowMemos:
+            def create_memo(self,content,visibility):
+                with writes.open('a') as f:f.write('one\n')
+                time.sleep(0.1)
+                return {'name':'memos/one'}
+        state=StateRepository(api.state.path)
+        start.wait(3)
+        result=DailyReviewService(state,api.config.policy,SlowMemos()).finalize(identifier,text,confirmation_source=source)
+        queue.put(result)
+    processes=[context.Process(target=worker,args=(source,)) for source in ('app','telegram')]
+    for p in processes:p.start()
+    start.set()
+    results=[queue.get(timeout=5) for _ in processes]
+    for p in processes:p.join(5);assert p.exitcode==0
+    assert writes.read_text()=='one\n' and results[0]==results[1]
