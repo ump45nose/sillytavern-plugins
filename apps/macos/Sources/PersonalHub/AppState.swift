@@ -12,6 +12,7 @@ final class AppState {
     let agenda = AgendaModel()
     let hub = HubModel()
     let review: ReviewDesk
+    let memos: MemosStore
 
     var layout: LayoutDocument { didSet { layoutChanged() } }
     var currentPage = "home"
@@ -88,6 +89,7 @@ final class AppState {
 
     private init() {
         review = ReviewDesk(hub: hub)
+        memos = MemosStore(hub: hub)
         layout = store.load().withBuiltins()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
         userName = UserDefaults.standard.string(forKey: Keys.userName) ?? "玮康"

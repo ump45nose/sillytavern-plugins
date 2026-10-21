@@ -297,16 +297,35 @@ public struct SubsData: Codable, Equatable, Sendable {
 
 public struct MemosData: Codable, Equatable, Sendable {
     public struct Memo: Codable, Equatable, Sendable, Identifiable {
+        public struct Attachment: Codable, Equatable, Sendable { public var name: String; public var filename: String?; public var type: String? }
         public var id: String
         public var createdAt: Date?
         public var content: String
         public var tags: [String]?
         public var visibility: String?
         public var url: String?
+        public var updatedAt: Date? = nil
+        public var pinned: Bool? = nil
+        public var attachments: [Attachment]? = nil
     }
-    public struct Tag: Codable, Equatable, Sendable { public var name: String; public var count: Int? }
+    public struct Tag: Codable, Equatable, Sendable {
+        public var name: String
+        public var count: Int?
+        public init(name: String, count: Int?) { self.name = name; self.count = count }
+    }
     public var recent: [Memo]?
     public var tags: [Tag]?
+}
+
+/// One page of `GET /api/v1/memos`, newest first.
+public struct MemoPage: Codable, Equatable, Sendable {
+    public var items: [MemosData.Memo]
+    public var nextPageToken: String?
+
+    public init(items: [MemosData.Memo], nextPageToken: String? = nil) {
+        self.items = items
+        self.nextPageToken = nextPageToken
+    }
 }
 
 public struct AttentionData: Codable, Equatable, Sendable {

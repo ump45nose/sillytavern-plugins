@@ -100,6 +100,31 @@ public struct HubAPI: Sendable {
         return try decode(CreatedMemo.self, data)
     }
 
+    /// nil while hub-api has no list endpoint yet (404, or 405 beside the existing POST).
+    public func memos(pageSize: Int = 20, pageToken: String? = nil, tag: String? = nil, query: String? = nil) async throws -> MemoPage? {
+        var q = ["page_size": String(pageSize)]
+        if let pageToken { q["page_token"] = pageToken }
+        if let tag, !tag.isEmpty { q["tag"] = tag }
+        if let query, !query.isEmpty { q["q"] = query }
+        let (data, response) = try await exchange(request("/api/v1/memos", query: q))
+        if response.statusCode == 404 || response.statusCode == 405 { return nil }
+        return try decode(MemoPage.self, try check(data, response))
+    }
+
+    /// Only the fields given are sent.
+    public func updateMemo(id: String, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil) async throws -> MemosData.Memo {
+        var body: [String: Any] = [:]
+        if let content { body["content"] = content }
+        if let visibility { body["visibility"] = visibility }
+        if let pinned { body["pinned"] = pinned }
+        return try decode(MemosData.Memo.self, try await send(request("/api/v1/memos/\(path(id))", method: "PATCH", body: body)))
+    }
+
+    /// hub archives rather than deletes; the memo can be restored in Memos.
+    public func archiveMemo(id: String) async throws {
+        _ = try await send(request("/api/v1/memos/\(path(id))", method: "DELETE"))
+    }
+
     /// Image references from module data are opaque and signed by hub-api.
     public func image(ref: String) async throws -> Data {
         try await get("/api/v1/media/image", query: ["ref": ref])

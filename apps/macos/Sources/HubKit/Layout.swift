@@ -220,7 +220,7 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
             LayoutItem(.net, .detail), LayoutItem(.subs, .detail),
         ]),
         Page(id: "sky", title: "电脑历史", subtitle: "MacPro 与 MacAir 的 6 小时窗口摘要", kind: .sky),
-        Page(id: "memos", title: "Memos", subtitle: "直接嵌入 Memos · ⌃⌥M 随时记录", kind: .memos),
+        Page(id: "memos", title: "Memos", subtitle: "记录、标签与搜索 · ⌃⌥M 随时记录", kind: .memos),
         Page(id: "review", title: "复盘", subtitle: "日报、周报与本阶段", kind: .review),
     ])
 }

@@ -10,6 +10,8 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
     var breakModule: String?
     /// Whether this hub has shipped `/api/v1/net/plans`.
     var plans = false
+    /// Whether this hub has shipped the Memos list, PATCH and DELETE.
+    var memosCRUD = false
     private(set) var paths: [String] = []
     private(set) var authorizations: [String?] = []
     private(set) var bodies: [[String: Any]] = []
@@ -21,7 +23,7 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (offline, code, broken, plans) = locked { (self.offline, statusCode, breakModule, self.plans) }
+        let (offline, code, broken, plans, crud) = locked { (self.offline, statusCode, breakModule, self.plans, self.memosCRUD) }
         if offline { throw URLError(.notConnectedToInternet) }
         let url = request.url!
         let path = url.path + (url.query.map { "?" + $0 } ?? "")
@@ -40,7 +42,13 @@ final class FakeHub: HTTPTransport, @unchecked Sendable {
             let range = url.query?.replacingOccurrences(of: "range=", with: "") ?? "day"
             body = Self.token(range)
         case "/api/v1/status": body = Self.status
+        case "/api/v1/memos" where request.httpMethod == "GET":
+            guard crud else { return (Data(), HTTPURLResponse(url: url, statusCode: 405, httpVersion: nil, headerFields: nil)!) }
+            body = #"{"items": [{"id": "m1", "created_at": "\#(Self.stamp)", "updated_at": "\#(Self.stamp)", "content": "第一条 #想法", "tags": ["想法"], "visibility": "PRIVATE", "pinned": true, "url": null, "attachments": [{"name": "attachments/1", "filename": "a.png", "type": "image/png"}]}], "next_page_token": "p2"}"#
         case "/api/v1/memos": body = #"{"id": "abc", "created_at": "2026-10-20T18:00:00.123456+08:00"}"#
+        case let p where p.hasPrefix("/api/v1/memos/") && crud:
+            if request.httpMethod == "DELETE" { return (Data(), HTTPURLResponse(url: url, statusCode: 204, httpVersion: nil, headerFields: nil)!) }
+            body = #"{"id": "m1", "created_at": "\#(Self.stamp)", "content": "改过了", "tags": [], "visibility": "PUBLIC", "pinned": false, "url": null}"#
         case "/api/v1/net/plans" where plans:
             body = request.httpMethod == "PUT" ? String(decoding: request.httpBody ?? Data(), as: UTF8.self)
                 : #"{"items": [{"id": "main", "name": "主套餐", "total_bytes": 214748364800, "reset_day": 1, "expires_on": null}]}"#
@@ -209,4 +217,23 @@ private func makeSync(_ hub: FakeHub, file: URL? = nil) async -> HubSync {
     #expect(decoded.token.count == 4)
     #expect(decoded.health?.data == data.health?.data)
     #expect(decoded.git?.data?.activity == data.git?.data?.activity)
+}
+
+@Test func memosCRUDWaitsForHubAndSendsOnlyChangedFields() async throws {
+    let hub = FakeHub()
+    let api = HubAPI(transport: hub, credential: credential)
+    #expect(try await api.memos() == nil, "405 beside the existing POST means no list yet")
+    await #expect(throws: HubError.self) { _ = try await api.updateMemo(id: "m1", pinned: true) }
+
+    hub.locked { hub.memosCRUD = true }
+    let page = try #require(try await api.memos(pageToken: "p1", tag: "想法", query: "第一"))
+    #expect(page.nextPageToken == "p2" && page.items.first?.pinned == true && page.items.first?.attachments?.count == 1)
+    let listed = try #require(hub.locked { hub.paths.last })
+    #expect(listed.contains("page_token=p1") && listed.contains("page_size=20") && listed.contains("q=") && listed.contains("tag="))
+
+    let saved = try await api.updateMemo(id: "m1", visibility: "PUBLIC")
+    #expect(saved.visibility == "PUBLIC")
+    #expect(hub.locked { hub.bodies.last }?.keys.sorted() == ["visibility"])
+    try await api.archiveMemo(id: "m1")
+    #expect(hub.locked { hub.paths.last } == "/api/v1/memos/m1")
 }

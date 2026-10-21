@@ -89,7 +89,14 @@ public enum HubSample {
         out.memos = env("memos", MemosData(
             recent: [.init(id: "m1", createdAt: now.addingTimeInterval(-16 * 60), content: "方向定下来了：按模块组装，不按领域；任务和复盘目标合进主页。 #日报", tags: ["日报"]),
                      .init(id: "m2", createdAt: at(12, 10), content: "KiteTasks 的中文日期只认「明日」，我们自己写规则。", tags: []),
-                     .init(id: "m3", createdAt: at(22, 31, -1), content: "上线个人信息中心 v1 —— 进行中 #阶段目标", tags: ["阶段目标"])],
+                     .init(id: "m3", createdAt: at(22, 31, -1), content: "上线个人信息中心 v1 —— 进行中 #阶段目标", tags: ["阶段目标"]),
+                     .init(id: "m4", createdAt: at(9, 40, -2), content: "## 本周要做\n\n- [x] 复盘页并入主窗口\n- [ ] Plaud 转录着色\n- [ ] Memos **原生页**\n\n#周计划", tags: ["周计划"],
+                           visibility: "PROTECTED", pinned: true),
+                     .init(id: "m5", createdAt: at(23, 10, -3), content: "《置身事内》第 3 章：地方政府的土地财政。\n\n> 理解了激励，就理解了行为。\n\n#读书", tags: ["读书"]),
+                     .init(id: "m6", createdAt: at(15, 2, -6), content: "菜单栏面板做成模块化以后，「今天」页应该只放今天能处理的东西，其他的进「生活」「工作」。 #想法", tags: ["想法"], visibility: "PUBLIC"),
+                     .init(id: "m7", createdAt: at(21, 0, -9), content: "跑步 5km，配速 `5'48\"`，比上周快了 12 秒。 #健康", tags: ["健康"]),
+                     .init(id: "m8", createdAt: at(11, 30, -16), content: "试了一下 [Memos 的 API](https://usememos.com/docs)，过滤语法比想象中好用。 #想法", tags: ["想法"]),
+                     .init(id: "m9", createdAt: at(20, 15, -30), content: "一句话总结这个月：把散落的工具收进一个地方。 #日报", tags: ["日报"])],
             tags: [.init(name: "日报", count: 31), .init(name: "周报", count: 6), .init(name: "主线", count: 4), .init(name: "阶段目标", count: 9), .init(name: "想法", count: 18)]))
 
         let goals = ReviewSample.goals(now: now, calendar: calendar)
