@@ -162,7 +162,25 @@ public struct MediaData: Codable, Equatable, Sendable {
 
 public struct TokenData: Codable, Equatable, Sendable {
     public struct Period: Codable, Equatable, Sendable { public var start: String; public var end: String }
-    public struct Part: Codable, Equatable, Sendable, Identifiable { public var id: String; public var name: String; public var total: Double? }
+    public struct Part: Codable, Equatable, Sendable, Identifiable {
+        public var id: String
+        public var name: String
+        public var total: Double?
+        public var cost: Double? = nil
+        public var provider: String? = nil
+    }
+    public struct Day: Codable, Equatable, Sendable { public var date: String; public var total: Double?; public var cost: Double? }
+    /// Titles only: hub keeps no session content, paths or accounts.
+    public struct Session: Codable, Equatable, Sendable, Identifiable {
+        public var id: String
+        public var title: String?
+        public var tool: String?
+        public var model: String?
+        public var device: String?
+        public var total: Double?
+        public var cost: Double?
+        public var updatedAt: Date?
+    }
     public struct Series: Codable, Equatable, Sendable { public var key: String; public var values: [Double?] }
     public struct Buckets: Codable, Equatable, Sendable {
         public var unit: String
@@ -189,6 +207,10 @@ public struct TokenData: Codable, Equatable, Sendable {
     public var buckets: Buckets?
     public var limits: [Limit]?
     public var today: Today?
+    /// Every recorded day, the same whatever the range.
+    public var history: [Day]? = nil
+    public var models: [Part]? = nil
+    public var sessions: [Session]? = nil
 }
 
 public struct GitData: Codable, Equatable, Sendable {

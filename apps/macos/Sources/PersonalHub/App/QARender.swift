@@ -97,7 +97,10 @@ enum QARender {
         await shot("net-detail", width: 640, ModuleCard(item: LayoutItem(.net, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
         await shot("due-picker", width: 372, DuePickerPanel(picked: .constant(PickedDue(day: state.agenda.now, time: DateComponents(hour: 15, minute: 0))), now: state.agenda.now) {})
-        for range in TokenRange.allCases {
+        if let history = state.hub.tokenHistory() {
+            await shot("token-trend", width: 1200, TokenTrend(history: history).frame(height: 168).padding(20).background(Palette.card))
+        }
+        for range in [TokenRange.day, .week, .month] {
             state.tokenRange = range
             await shot("token-\(range.rawValue)", width: 1240, ModuleCard(item: LayoutItem(.token, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         }

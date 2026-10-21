@@ -74,3 +74,37 @@ private func sample(_ r: TokenRange) -> TokenRangeSummary {
     #expect(TokenFormat.short(122.6) == "123M")
     #expect(TokenFormat.short(18.6) == "18.6M")
 }
+
+@Test func historyPrefersHubAndFallsBackToTheYearGrid() throws {
+    let days: [TokenData.Day] = [
+        .init(date: "2026-10-16", total: 2_000_000, cost: 1.5),
+        .init(date: "2026-10-18", total: 6_000_000, cost: 4),
+        .init(date: "2026-10-20", total: 4_000_000, cost: nil),
+    ]
+    let h = try #require(TokenHistory.make(history: days, yearGrid: nil, now: now, calendar: cal))
+    #expect(h.exact && h.days.count == 5, "contiguous from the first record to today")
+    #expect(h.days[1].total == nil)
+    #expect(h.total == 12 && h.cost == 5.5)
+    #expect(h.best?.total == 6)
+    #expect(h.movingAverage(2) == [2, 1, 3, 3, 2])
+
+    var cells = [Double?](repeating: 0, count: 371)
+    cells[364] = 4_000_000; cells[365] = 9_000_000
+    let year = TokenData(range: .year, period: .init(start: "2025-10-20", end: "2026-10-20"), cost: 30,
+                         buckets: .init(unit: "day", rows: "year", series: [.init(key: "year", values: cells)]))
+    let f = try #require(TokenHistory.make(history: [], yearGrid: year, now: now, calendar: cal))
+    #expect(!f.exact && f.cost == 30, "no daily cost in the grid, so the range's own cost")
+    #expect(f.days.count == 2 && f.total == 13)
+    #expect(TokenHistory.make(history: nil, yearGrid: nil, now: now, calendar: cal) == nil)
+}
+
+@Test func historyYearsAreMondayFirstWeeks() throws {
+    let days = (1...20).map { TokenData.Day(date: String(format: "2026-10-%02d", $0), total: 1_000_000, cost: nil) }
+    let h = try #require(TokenHistory.make(history: days, yearGrid: nil, now: now, calendar: cal))
+    let y = h.year(2026, calendar: cal)
+    #expect(y.weeks.allSatisfy { $0.count == 7 })
+    #expect(cal.component(.weekday, from: y.weeks[0][0].date) == 2)
+    #expect(y.months.count == 12 && y.months[0].week == 0)
+    let filled = y.weeks.flatMap { $0 }.filter { $0.day != nil }
+    #expect(filled.count == 20)
+}

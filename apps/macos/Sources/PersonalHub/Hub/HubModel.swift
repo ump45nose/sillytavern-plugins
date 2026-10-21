@@ -247,6 +247,12 @@ final class HubModel {
         return TokenRangeSummary(d, now: clock(), daily: TokenRangeSummary.daily(from: data.token[.year]?.data))
     }
 
+    /// All-time daily totals; any range carries the same `history`.
+    func tokenHistory() -> TokenHistory? {
+        let history = [TokenRange.day, .week, .month].lazy.compactMap { self.data.token[$0]?.data?.history }.first { !$0.isEmpty }
+        return TokenHistory.make(history: history, yearGrid: data.token[.year]?.data, now: clock())
+    }
+
     var sourcesHealthy: (ok: Int, total: Int) {
         let configured = data.sources.filter { $0.status != .unconfigured }
         return (configured.filter { $0.status == .ok }.count, configured.count)

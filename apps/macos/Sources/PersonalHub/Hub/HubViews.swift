@@ -68,6 +68,12 @@ enum HubFormat {
         return "\(calendar.component(.month, from: date))/\(calendar.component(.day, from: date))"
     }
 
+    static func md(_ date: Date) -> String { "\(calendar.component(.month, from: date))/\(calendar.component(.day, from: date))" }
+
+    static func ymd(_ date: Date) -> String { "\(calendar.component(.year, from: date))/" + md(date) }
+
+    static func weekday(_ date: Date) -> String { "周" + ["日", "一", "二", "三", "四", "五", "六"][calendar.component(.weekday, from: date) - 1] }
+
     static func clock(_ date: Date) -> String {
         String(format: "%02d:%02d", calendar.component(.hour, from: date), calendar.component(.minute, from: date))
     }

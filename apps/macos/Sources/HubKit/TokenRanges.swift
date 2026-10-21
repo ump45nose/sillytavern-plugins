@@ -48,6 +48,22 @@ public struct TokenRangeSummary: Sendable {
         public var id: String
         public var name: String
         public var total: Double?
+        public var cost: Double? = nil
+
+        public init(id: String, name: String, total: Double?, cost: Double? = nil) {
+            self.id = id
+            self.name = name
+            self.total = total
+            self.cost = cost
+        }
+
+        /// The first `limit` parts, the rest folded into one「其他」row.
+        public static func top(_ parts: [Part], _ limit: Int) -> [Part] {
+            guard parts.count > limit else { return parts }
+            let rest = parts.dropFirst(limit)
+            let cost = rest.contains { $0.cost != nil } ? rest.compactMap(\.cost).reduce(0, +) : nil
+            return Array(parts.prefix(limit)) + [Part(id: "_other", name: "其他 \(rest.count) 个", total: rest.compactMap(\.total).reduce(0, +), cost: cost)]
+        }
     }
     public var range: TokenRange
     public var periodLabel: String
@@ -61,6 +77,8 @@ public struct TokenRangeSummary: Sendable {
     public var average: Double?
     public var tools: [Part]?
     public var devices: [Part]?
+    public var models: [Part]?
+    public var sessions: [TokenData.Session]?
     public var heatmap: TokenHeatmap?
 
     public var deltaPercent: Int? {
@@ -90,8 +108,13 @@ public struct TokenRangeSummary: Sendable {
         total = m(d.total)
         previous = m(d.previous)
         cost = d.cost
-        tools = d.tools?.map { Part(id: $0.id, name: $0.name, total: m($0.total)) }
-        devices = d.devices?.map { Part(id: $0.id, name: $0.name, total: m($0.total)) }
+        func parts(_ ps: [TokenData.Part]?) -> [Part]? {
+            ps?.map { Part(id: $0.id, name: $0.name, total: m($0.total), cost: $0.cost) }.sorted { ($0.total ?? 0) > ($1.total ?? 0) }
+        }
+        tools = parts(d.tools)
+        devices = parts(d.devices)
+        models = parts(d.models)
+        sessions = d.sessions?.map { var s = $0; s.total = m(s.total); return s }.sorted { ($0.total ?? 0) > ($1.total ?? 0) }
         let hour = calendar.component(.hour, from: now)
         let series = (d.buckets?.series ?? []).map { (key: $0.key, values: $0.values.map(m)) }
         func sum(_ vs: [Double?]) -> Double? { vs.contains { $0 != nil } ? vs.reduce(0) { $0 + ($1 ?? 0) } : nil }
@@ -181,6 +204,110 @@ public struct TokenRangeSummary: Sendable {
             }
         }
         if heatmap?.isEmpty == true { heatmap = nil }
+    }
+}
+
+/// Every recorded day up to today, for the all-time heatmap and trend. Values are in millions of tokens.
+public struct TokenHistory: Sendable {
+    public struct Day: Sendable, Equatable {
+        public var date: Date
+        public var total: Double?
+        public var cost: Double?
+    }
+    public struct Cell: Sendable, Equatable {
+        public var date: Date
+        /// nil before the first record and after today.
+        public var day: Day?
+    }
+    public struct Year: Sendable {
+        public var year: Int
+        /// Monday-first weeks; every week has seven cells.
+        public var weeks: [[Cell]]
+        /// Week index where each month's first day falls.
+        public var months: [(week: Int, month: Int)]
+    }
+
+    public var days: [Day]
+    /// From hub's own history; false means it was rebuilt from the year grid, which has no daily cost.
+    public var exact: Bool
+    private var rangeCost: Double?
+
+    public var first: Date { days[0].date }
+    public var total: Double { days.reduce(0) { $0 + ($1.total ?? 0) } }
+    public var cost: Double? {
+        guard exact else { return rangeCost }
+        let known = days.compactMap(\.cost)
+        return known.isEmpty ? nil : known.reduce(0, +)
+    }
+    public var average: Double { total / Double(days.count) }
+    public var best: Day? { days.filter { $0.total != nil }.max { $0.total! < $1.total! } }
+    public var maxValue: Double { days.compactMap(\.total).max() ?? 0 }
+
+    public func years(_ calendar: Calendar = .hub) -> [Int] {
+        let a = calendar.component(.year, from: first), b = calendar.component(.year, from: days[days.count - 1].date)
+        return Array(a...b)
+    }
+
+    /// Trailing mean over `n` days; days without a record count as zero.
+    public func movingAverage(_ n: Int) -> [Double] {
+        var out: [Double] = [], sum = 0.0
+        for (i, d) in days.enumerated() {
+            sum += d.total ?? 0
+            if i >= n { sum -= days[i - n].total ?? 0 }
+            out.append(sum / Double(min(i + 1, n)))
+        }
+        return out
+    }
+
+    public func year(_ year: Int, calendar: Calendar = .hub) -> Year {
+        var cal = calendar
+        cal.firstWeekday = 2
+        let jan1 = cal.date(from: DateComponents(year: year, month: 1, day: 1))!
+        let dec31 = cal.date(from: DateComponents(year: year, month: 12, day: 31))!
+        let start = cal.dateInterval(of: .weekOfYear, for: jan1)!.start
+        let byDay = Dictionary(days.map { (cal.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { a, _ in a })
+        var weeks: [[Cell]] = [], months: [(Int, Int)] = []
+        var day = start
+        while day <= dec31 {
+            var week: [Cell] = []
+            for _ in 0..<7 {
+                let inYear = cal.component(.year, from: day) == year
+                if inYear, cal.component(.day, from: day) == 1 { months.append((weeks.count, cal.component(.month, from: day))) }
+                week.append(Cell(date: day, day: inYear ? byDay[day] : nil))
+                day = cal.date(byAdding: .day, value: 1, to: day)!
+            }
+            weeks.append(week)
+        }
+        return Year(year: year, weeks: weeks, months: months)
+    }
+
+    /// hub's `history` when it has one; otherwise the year range's daily grid, starting at its first non-zero day.
+    public static func make(history: [TokenData.Day]?, yearGrid: TokenData?, now: Date, calendar: Calendar = .hub) -> TokenHistory? {
+        let today = calendar.startOfDay(for: now)
+        var values: [Date: (Double?, Double?)] = [:]
+        let exact = !(history ?? []).isEmpty
+        if exact {
+            for d in history! { if let date = TokenText.day(d.date, calendar) { values[date] = (d.total, d.cost) } }
+        } else {
+            for (key, v) in TokenRangeSummary.daily(from: yearGrid, calendar: calendar) where v > 0 {
+                if let date = TokenText.day(key, calendar) { values[date] = (v, nil) }
+            }
+        }
+        guard let first = values.filter({ ($0.value.0 ?? 0) > 0 }).keys.min(), first <= today else { return nil }
+        var days: [Day] = [], day = first
+        while day <= today {
+            let v = values[day]
+            days.append(Day(date: day, total: v?.0.map { $0 / 1_000_000 }, cost: v?.1))
+            day = calendar.date(byAdding: .day, value: 1, to: day)!
+        }
+        var out = TokenHistory(days: days, exact: exact)
+        if !exact { out.rangeCost = yearGrid?.cost }
+        return out
+    }
+
+    init(days: [Day], exact: Bool) {
+        self.days = days
+        self.exact = exact
     }
 }
 

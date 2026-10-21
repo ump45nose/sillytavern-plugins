@@ -114,6 +114,19 @@ public enum HubSample {
     }
 
     static let tools: [(id: String, name: String, weight: Double)] = [("claude", "Claude Code", 0.44), ("codex", "Codex", 0.27), ("cursor", "Cursor", 0.19), ("hermes", "Hermes", 0.10)]
+    static let models: [(id: String, name: String, provider: String, weight: Double, rate: Double)] = [
+        ("claude-sonnet", "Claude Sonnet", "anthropic", 0.33, 2.1), ("gpt-codex", "GPT Codex", "openai", 0.25, 1.6),
+        ("claude-opus", "Claude Opus", "anthropic", 0.14, 7.5), ("cursor-auto", "Cursor Auto", "cursor", 0.12, 0.9),
+        ("gemini-pro", "Gemini Pro", "google", 0.09, 1.3), ("grok", "Grok", "xai", 0.07, 1.1),
+    ]
+    static let sessions: [(String, String, String, String)] = [
+        ("Token 模块重做：全部时间热力图", "claude", "Claude Sonnet", "MacPro"), ("hub-api 网络套餐接口", "codex", "GPT Codex", "MacPro"),
+        ("复盘页并入主窗口", "claude", "Claude Opus", "MacAir"), ("Plaud 转录说话人着色", "cursor", "Cursor Auto", "MacPro"),
+        ("Memos 分页与标签筛选", "codex", "GPT Codex", "MacAir"), ("修 skysight-sync 的 YAML 解析", "claude", "Claude Sonnet", "MacPro"),
+        ("Android 布局同步", "hermes", "Gemini Pro", "NAS"), ("MCP 服务的写入确认", "claude", "Claude Opus", "MacPro"),
+        ("阶段目标评论草稿", "codex", "GPT Codex", "MacAir"), ("周报模板整理", "cursor", "Grok", "MacPro"),
+        ("账单识别规则", "claude", "Claude Sonnet", "MacAir"), ("Emby 播放记录接入", "codex", "GPT Codex", "NAS"),
+    ]
     static let hourWeights: [Double] = [0.06, 0.03, 0.01, 0.01, 0.01, 0.02, 0.05, 0.2, 0.55, 0.85, 1, 0.9, 0.55, 0.7, 1, 1, 0.9, 0.8, 0.45, 0.4, 0.65, 0.75, 0.5, 0.2]
 
     /// Deterministic per-range token data so the heatmaps look plausible and stable between launches.
@@ -141,16 +154,26 @@ public enum HubSample {
                           limits: [.init(tool: "Claude Code", plan: "Max", windows: [.init(label: "当前会话 · 5 小时", percent: 42, resetsAt: now.addingTimeInterval(8280)), .init(label: "本周 · 全部模型", percent: 61, resetsAt: now.addingTimeInterval(2.6 * 86400))]),
                                    .init(tool: "Codex", plan: "Pro", windows: [.init(label: "5 小时窗口", percent: 18, resetsAt: now.addingTimeInterval(13200)), .init(label: "本周", percent: 35, resetsAt: now.addingTimeInterval(5.1 * 86400))])],
                           today: .init(total: daily[0], cost: daily[0]! / 1e6 * 2.267))
+        if range != .year {
+            let span = sum(start, 0), rate = 2.267 / 1e6
+            d.history = (-400...0).map { .init(date: key($0), total: daily[$0], cost: daily[$0]! * rate) }
+            d.tools = tools.map { .init(id: $0.id, name: $0.name, total: (span * $0.weight).rounded(), cost: span * $0.weight * rate) }
+            d.devices = [("macpro", "MacPro", 0.6), ("macair", "MacAir", 0.31), ("nas", "NAS", 0.09)].map { .init(id: $0.0, name: $0.1, total: (span * $0.2).rounded()) }
+            d.models = models.map { .init(id: $0.id, name: $0.name, total: (span * $0.weight).rounded(), cost: span * $0.weight * $0.rate / 1e6, provider: $0.provider) }
+            let count = range == .day ? 6 : 12
+            d.sessions = sessions.prefix(count).enumerated().map { i, x in
+                let share = span * 0.42 * pow(0.78, Double(i)) / 3.2
+                return .init(id: "s\(i)", title: x.0, tool: x.1, model: x.2, device: x.3, total: share.rounded(), cost: share * rate,
+                             updatedAt: now.addingTimeInterval(-Double(i) * (range == .day ? 2400 : 26_000)))
+            }
+        }
         switch range {
         case .day:
-            d.tools = tools.map { .init(id: $0.id, name: $0.name, total: (daily[0]! * $0.weight).rounded()) }
-            d.devices = [("macpro", "MacPro", 0.6), ("macair", "MacAir", 0.31), ("nas", "NAS", 0.09)].map { .init(id: $0.0, name: $0.1, total: (daily[0]! * $0.2).rounded()) }
             d.buckets = .init(unit: "hour", rows: "tool", series: tools.map { .init(key: $0.id, values: hours(daily[0]! * $0.weight, upTo: hour)) })
         case .week:
             d.buckets = .init(unit: "hour", rows: "date", series: (start...0).map { .init(key: key($0), values: hours(daily[$0]!, upTo: $0 == 0 ? hour : 23)) })
         case .month:
             d.buckets = .init(unit: "day", rows: "tool", series: tools.map { t in .init(key: t.id, values: (start...0).map { (daily[$0]! * t.weight * (0.7 + rng.next() * 0.6)).rounded() }) })
-            d.tools = tools.map { .init(id: $0.id, name: $0.name, total: (total * $0.weight).rounded()) }
         case .year:
             d.buckets = .init(unit: "day", rows: "year", series: [.init(key: "year", values: (0..<371).map { start + $0 <= 0 ? daily[start + $0] : nil })])
         }
