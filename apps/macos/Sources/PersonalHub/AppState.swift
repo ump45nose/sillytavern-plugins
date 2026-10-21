@@ -92,6 +92,11 @@ final class AppState {
         withAnimation(Motion.spring) { layout.update(currentPage, change) }
     }
 
+    /// Menu bar panel pages live in the same synced document as the window's pages.
+    func editLayout(_ change: (inout LayoutDocument) -> Void) {
+        withAnimation(Motion.spring) { change(&layout) }
+    }
+
     /// Built-in pages get their default modules back; a custom page is emptied.
     func resetPage() {
         withAnimation(Motion.spring) { layout.resetPage(currentPage) }
@@ -139,6 +144,13 @@ final class AppState {
     func sync() {
         agenda.refresh()
         hub.refresh()
+    }
+
+    /// Opening the panel or the window: skip sources synced within the last minute (⌘R still forces).
+    func syncIfStale(_ age: TimeInterval = 60) {
+        let now = Date()
+        if agenda.lastSync.map({ now.timeIntervalSince($0) > age }) ?? true { agenda.refresh() }
+        if hub.data.fetchedAt.map({ now.timeIntervalSince($0) > age }) ?? true { hub.refresh() }
     }
 
     var syncingAny: Bool { syncing || hub.status == .syncing }

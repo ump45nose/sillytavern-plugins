@@ -94,10 +94,13 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
 
     public var version: Int
     public var pages: [Page]
+    /// Menu bar panel pages (Mac only); nil means the default tray.
+    public var tray: [TrayPage]?
 
-    public init(version: Int = LayoutDocument.currentVersion, pages: [Page]) {
+    public init(version: Int = LayoutDocument.currentVersion, pages: [Page], tray: [TrayPage]? = nil) {
         self.version = version
         self.pages = pages
+        self.tray = tray
     }
 
     public func page(_ id: String) -> Page? { pages.first { $0.id == id } }

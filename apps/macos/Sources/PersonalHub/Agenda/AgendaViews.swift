@@ -288,16 +288,46 @@ struct DayTimeline: View {
 struct CheckCircle: View {
     var done: Bool
     var size: CGFloat = 16
+    @ViewState private var burst = false
+    @ViewState private var drawn: CGFloat = 0
+    @ViewState private var pop: CGFloat = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
+            Circle().stroke(Tone.olive.color.opacity(burst ? 0 : 0.55), lineWidth: burst ? 0.5 : 3)
+                .scaleEffect(burst ? 2.1 : 1)
+                .opacity(burst ? 1 : 0)
             Circle().strokeBorder(done ? Tone.olive.color : Palette.ink4, lineWidth: 1.5)
             Circle().fill(Tone.olive.color).scaleEffect(done ? 1 : 0.01)
-            Image(systemName: "checkmark").font(.system(size: size * 0.5, weight: .heavy)).foregroundStyle(.white)
-                .scaleEffect(done ? 1 : 0.3).opacity(done ? 1 : 0)
+            CheckMark().trim(from: 0, to: done ? drawn : 0)
+                .stroke(.white, style: StrokeStyle(lineWidth: max(1.6, size * 0.13), lineCap: .round, lineJoin: .round))
+                .padding(size * 0.27)
         }
         .frame(width: size, height: size)
+        .scaleEffect(pop)
         .contentShape(Rectangle())
+        .onAppear { drawn = done ? 1 : 0 }
+        .onChange(of: done) { _, now in
+            guard now else { drawn = 0; return }
+            guard !reduceMotion else { drawn = 1; return }
+            burst = false
+            withAnimation(.easeOut(duration: 0.22).delay(0.06)) { drawn = 1 }
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.45)) { pop = 1.28 }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.5).delay(0.14)) { pop = 1 }
+            withAnimation(.easeOut(duration: 0.5)) { burst = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { burst = false }
+        }
+    }
+}
+
+private struct CheckMark: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.midY + r.height * 0.02))
+        p.addLine(to: CGPoint(x: r.minX + r.width * 0.36, y: r.maxY - r.height * 0.08))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + r.height * 0.1))
+        return p
     }
 }
 
@@ -306,7 +336,10 @@ struct TaskRow: View {
     var showList = true
     var depth = 0
     @Environment(AppState.self) private var state
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewState private var editor: TaskEditor.Mode?
+    /// Checked but not yet committed: the row celebrates in place before it re-sorts.
+    @ViewState private var finishing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -315,17 +348,38 @@ struct TaskRow: View {
         }
     }
 
+    private var done: Bool { task.completed || finishing }
+
+    private func toggle() {
+        guard !task.completed, !finishing else {
+            if !finishing { withAnimation(Motion.spring) { state.agenda.toggle(task) } }
+            return
+        }
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        withAnimation(.easeOut(duration: 0.28)) { finishing = true }
+        let task = self.task
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0.1 : 0.65)) {
+            withAnimation(Motion.spring) { state.agenda.toggle(task) }
+            finishing = false
+        }
+    }
+
     private var row: some View {
-        let late = task.overdueDays > 0 && !task.completed
+        let late = task.overdueDays > 0 && !done
         return HStack(spacing: 10) {
-            Button { withAnimation(Motion.spring) { state.agenda.toggle(task) } } label: {
-                CheckCircle(done: task.completed, size: depth > 0 ? 14 : 16)
+            Button(action: toggle) {
+                CheckCircle(done: done, size: depth > 0 ? 14 : 16)
             }
             .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 1) {
                 Text(task.title).font(Typo.sans(depth > 0 ? 12.5 : 13))
-                    .foregroundStyle(task.completed ? Palette.ink3 : Palette.ink)
-                    .strikethrough(task.completed, color: Palette.ink3).lineLimit(1)
+                    .foregroundStyle(done ? Palette.ink3 : Palette.ink)
+                    .lineLimit(1)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(Palette.ink3).frame(height: 1)
+                            .scaleEffect(x: done ? 1 : 0, anchor: .leading)
+                            .animation(.easeOut(duration: 0.3).delay(0.08), value: done)
+                    }
                 if let meta { Text(meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
             }
             Spacer(minLength: 4)
@@ -338,6 +392,11 @@ struct TaskRow: View {
         }
         .padding(.vertical, depth > 0 ? 6 : 8)
         .padding(.leading, CGFloat(depth) * 26)
+        .background {
+            RoundedRectangle(cornerRadius: 8).fill(Tone.olive.tint)
+                .opacity(finishing ? 1 : 0).padding(.horizontal, -6)
+                .animation(.easeOut(duration: finishing ? 0.2 : 0.5), value: finishing)
+        }
         .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1).padding(.leading, CGFloat(depth) * 26) }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { editor = .edit }

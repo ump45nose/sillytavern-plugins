@@ -3,7 +3,7 @@ import HubKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverDelegate {
     private let state = AppState.shared
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         setUpStatusItem()
         HotKeyCenter.shared.bind(.quickTask) { [weak self] in self?.toggleQuickPanel(.task) }
         HotKeyCenter.shared.bind(.quickMemo) { [weak self] in self?.toggleQuickPanel(.memo) }
+        HotKeyCenter.shared.bind(.tray) { [weak self] in self?.togglePopover() }
 
         if !CommandLine.arguments.contains("--background") { showMainWindow(page: nil) }
         #if DEBUG
@@ -55,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
         let host = NSHostingController(rootView: PopoverView().environment(state))
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
@@ -82,11 +84,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            state.sync()
+            state.syncIfStale()
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
+            watchOutsideClicks()
         }
+    }
+
+    /// `.transient` misses clicks in other apps while ours is an accessory, and clicks in our own
+    /// windows; close on both. Menus and editors opened from the panel live in child popovers.
+    private var clickMonitors: [Any] = []
+
+    private func watchOutsideClicks() {
+        guard clickMonitors.isEmpty else { return }
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.closePopover() }
+        }) { clickMonitors.append(global) }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, let window = event.window else { return event }
+                let panel = self.popover.contentViewController?.view.window
+                let inside = window === panel || window.className.contains("Popover") || window.className.contains("Menu")
+                    || window === self.statusItem.button?.window
+                if !inside { self.closePopover() }
+                return event
+            }
+        }) { clickMonitors.append(local) }
+    }
+
+    private func closePopover() {
+        if popover.isShown { popover.performClose(nil) }
+        clickMonitors.forEach(NSEvent.removeMonitor)
+        clickMonitors = []
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        clickMonitors.forEach(NSEvent.removeMonitor)
+        clickMonitors = []
     }
 
     // MARK: Windows
@@ -115,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
-        state.sync()
+        state.syncIfStale()
     }
 
     #if DEBUG

@@ -67,6 +67,9 @@ enum QARender {
             state.go("home")
         }
         await shot("popover", width: 380, PopoverView())
+        await shot("popover-life", width: 380, PopoverView(page: "life"))
+        await shot("popover-work", width: 380, PopoverView(page: "work"))
+        await shot("popover-edit", width: 380, PopoverView(page: "today", editing: true))
         await shot("quick-add", width: 640, QuickTaskView(close: {}, resize: {}, openMain: {}, initialText: "明天下午3点 和李雷对齐方案 #工作"))
         await shot("quick-newlist", width: 640, QuickTaskView(close: {}, resize: {}, openMain: {}, initialText: "月底 交房租 #家务"))
         await shot("quick-search", width: 640, QuickTaskView(close: {}, resize: {}, openMain: {}, initialText: "方案", initialMode: 1))

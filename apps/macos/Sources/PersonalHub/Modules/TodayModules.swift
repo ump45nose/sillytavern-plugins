@@ -158,8 +158,8 @@ struct CommandBar: View {
             Text("记一条任务或想法…").font(Typo.sans(13)).foregroundStyle(Palette.ink3)
             Spacer()
             HStack(spacing: 0) {
-                seg("任务 ⌃⌥Space", on: true) { state.showQuickTask() }
-                seg("Memo ⌃⌥M", on: false) { state.showQuickMemo() }
+                seg("任务 " + HotKeyCenter.shared.display(.quickTask), on: true) { state.showQuickTask() }
+                seg("Memo " + HotKeyCenter.shared.display(.quickMemo), on: false) { state.showQuickMemo() }
             }
             .padding(2).background(RoundedRectangle(cornerRadius: 9).fill(Palette.sunk))
         }

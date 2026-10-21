@@ -198,7 +198,7 @@ struct MemosModule: View {
             let memos = d.recent ?? []
             if size == .compact {
                 VStack(alignment: .leading, spacing: 0) {
-                    Button { state.showQuickMemo() } label: { MiniInput(placeholder: "记一条…", shortcut: "⌃⌥M", icon: nil) }.buttonStyle(.plain)
+                    Button { state.showQuickMemo() } label: { MiniInput(placeholder: "记一条…", shortcut: HotKeyCenter.shared.display(.quickMemo), icon: nil) }.buttonStyle(.plain)
                     if let m = memos.first {
                         MemoText(content: m.content).lineLimit(3).padding(.top, 12)
                         Spacer(minLength: 4)
@@ -209,7 +209,7 @@ struct MemosModule: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    Button { state.showQuickMemo() } label: { MiniInput(placeholder: "现在的想法是…", shortcut: "⌃⌥M", icon: nil, height: 40) }.buttonStyle(.plain)
+                    Button { state.showQuickMemo() } label: { MiniInput(placeholder: "现在的想法是…", shortcut: HotKeyCenter.shared.display(.quickMemo), icon: nil, height: 40) }.buttonStyle(.plain)
                     let tags = (d.tags ?? []).sorted { ($0.count ?? 0) > ($1.count ?? 0) }.prefix(8)
                     if !tags.isEmpty {
                         Flow(spacing: 6) { ForEach(Array(tags), id: \.name) { Chip(text: "#\($0.name)\($0.count.map { " \($0)" } ?? "")") } }

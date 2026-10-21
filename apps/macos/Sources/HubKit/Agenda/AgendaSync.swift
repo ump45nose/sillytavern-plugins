@@ -20,6 +20,8 @@ public actor AgendaSync {
     private var again = false
     private var observer: (@Sendable (AgendaStore, Status) -> Void)?
     private var forbidden: Set<String> = []
+    /// Calendars whose sync token came back 410; they are fetched in full each pass this session.
+    private var fullOnly: Set<String> = []
     public private(set) var status: Status = .idle
 
     /// Events are kept from one day back to this many days ahead.
@@ -218,12 +220,14 @@ public actor AgendaSync {
         let windowStart = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: started))!
         let windowEnd = calendar.date(byAdding: .day, value: Self.horizonDays, to: windowStart)!
         for cal in calendars {
-            let token = store.calendarSyncTokens[cal.id]
+            let token = fullOnly.contains(cal.id) ? nil : store.calendarSyncTokens[cal.id]
             let page: GoogleAPI.EventPage
             var full = token == nil
             do {
                 page = try await api.events(calendarID: cal.id, syncToken: token, timeMin: windowStart)
             } catch GoogleAPIError.gone {
+                // Some calendars (public holiday feeds) reject every token they hand out.
+                fullOnly.insert(cal.id)
                 full = true
                 page = try await api.events(calendarID: cal.id, syncToken: nil, timeMin: windowStart)
             } catch GoogleAPIError.http(403), GoogleAPIError.notFound {

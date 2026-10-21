@@ -93,23 +93,39 @@ private struct ShortcutSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(HotKeyCenter.Action.allCases, id: \.rawValue) { action in
-                SettingRow(title: action.title, note: "在任何应用中呼出") { ShortcutRecorder(action: action) }
+                ShortcutRow(action: action)
             }
-            Text("快捷键需要包含 ⌃、⌥ 或 ⌘ 之一；与其他应用冲突时会保留原快捷键。")
+            Text("快捷键需要包含 ⌃、⌥ 或 ⌘ 之一；与系统快捷键（如切换输入法）冲突时不会采用。其他应用占用同一组合时，先注册的应用收到按键。")
                 .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.top, 12)
+        }
+    }
+}
+
+private struct ShortcutRow: View {
+    var action: HotKeyCenter.Action
+    @ViewState private var problem: String?
+
+    var body: some View {
+        SettingRow(title: action.title, note: problem ?? action.note) {
+            ShortcutRecorder(action: action, problem: $problem)
+        }
+        .onAppear {
+            problem = HotKeyCenter.shared.shortcut(for: action).systemConflict.map { "与系统「\($0)」冲突，请换一个" }
         }
     }
 }
 
 private struct ShortcutRecorder: View {
     var action: HotKeyCenter.Action
+    @Binding var problem: String?
     @ViewState private var current: Shortcut
     @ViewState private var recording = false
     @ViewState private var failed = false
     @ViewState private var monitor: Any?
 
-    init(action: HotKeyCenter.Action) {
+    init(action: HotKeyCenter.Action, problem: Binding<String?>) {
         self.action = action
+        _problem = problem
         _current = ViewState(initialValue: HotKeyCenter.shared.shortcut(for: action))
     }
 
@@ -133,7 +149,13 @@ private struct ShortcutRecorder: View {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { stop(); return nil }
             guard let s = Shortcut(event: event) else { return nil }
-            failed = !HotKeyCenter.shared.set(s, for: action)
+            if let conflict = s.systemConflict {
+                failed = true
+                problem = "\(s.display) 是系统「\(conflict)」的快捷键，未采用"
+            } else {
+                failed = !HotKeyCenter.shared.set(s, for: action)
+                problem = failed ? "\(s.display) 无法注册，未采用" : nil
+            }
             current = HotKeyCenter.shared.shortcut(for: action)
             stop()
             return nil

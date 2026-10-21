@@ -224,6 +224,7 @@ struct MiniInput: View {
 struct Segmented<T: Hashable>: View {
     var options: [(T, String)]
     @Binding var selection: T
+    var small = false
     @Namespace private var ns
 
     var body: some View {
@@ -231,12 +232,13 @@ struct Segmented<T: Hashable>: View {
             ForEach(options, id: \.0) { value, label in
                 let on = value == selection
                 Button { withAnimation(Motion.spring) { selection = value } } label: {
-                    Text(label).font(Typo.sans(12.5, on ? .semibold : .regular))
+                    Text(label).font(Typo.sans(small ? 11 : 12.5, on ? .semibold : .regular))
                         .foregroundStyle(on ? Palette.ink : Palette.ink3)
-                        .padding(.horizontal, 14).padding(.vertical, 4)
+                        .lineLimit(1).fixedSize(horizontal: small, vertical: false)
+                        .padding(.horizontal, small ? 8 : 14).padding(.vertical, small ? 2 : 4)
                         .background {
                             if on {
-                                RoundedRectangle(cornerRadius: 7).fill(Palette.card)
+                                RoundedRectangle(cornerRadius: small ? 5 : 7).fill(Palette.card)
                                     .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
                                     .matchedGeometryEffect(id: "seg", in: ns)
                             }
@@ -246,8 +248,8 @@ struct Segmented<T: Hashable>: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
+        .padding(small ? 2 : 3)
+        .background(RoundedRectangle(cornerRadius: small ? 7 : 10).fill(Palette.sunk))
     }
 }
 

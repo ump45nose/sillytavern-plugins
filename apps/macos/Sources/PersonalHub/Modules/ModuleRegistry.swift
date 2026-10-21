@@ -28,7 +28,7 @@ extension ModuleID {
         case .net: ModuleInfo(title: "网络", symbol: "wifi", tone: .sage, meta: "usage-monitor")
         case .subs: ModuleInfo(title: "订阅", symbol: "repeat", tone: .ochre, meta: "hub 偏好 · 账单识别")
         case .sky: ModuleInfo(title: "电脑历史", symbol: "desktopcomputer", tone: .steel, meta: "skysight-sync")
-        case .memos: ModuleInfo(title: "Memos", symbol: "note.text", tone: .sky, meta: "memos · ⌃⌥M")
+        case .memos: ModuleInfo(title: "Memos", symbol: "note.text", tone: .sky, meta: "memos · 快速 Memo")
         }
     }
 }

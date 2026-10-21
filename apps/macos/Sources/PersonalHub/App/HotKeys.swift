@@ -1,13 +1,35 @@
 import AppKit
 import Carbon.HIToolbox
+import os
 
 struct Shortcut: Codable, Equatable {
     var keyCode: UInt32
     /// Carbon modifier mask (controlKey, optionKey, cmdKey, shiftKey).
     var modifiers: UInt32
 
-    static let quickTask = Shortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey))
+    /// ⌃⌥Space is macOS's "next input source", which wins over app hotkeys, so tasks use ⌃⌥N.
+    static let quickTask = Shortcut(keyCode: UInt32(kVK_ANSI_N), modifiers: UInt32(controlKey | optionKey))
     static let quickMemo = Shortcut(keyCode: UInt32(kVK_ANSI_M), modifiers: UInt32(controlKey | optionKey))
+    static let tray = Shortcut(keyCode: UInt32(kVK_ANSI_H), modifiers: UInt32(controlKey | optionKey))
+
+    /// The enabled macOS shortcut (System Settings › Keyboard Shortcuts) this one collides with, if any.
+    var systemConflict: String? {
+        guard let table = UserDefaults(suiteName: "com.apple.symbolichotkeys")?.dictionary(forKey: "AppleSymbolicHotKeys") else { return nil }
+        var flags = 0
+        if modifiers & UInt32(controlKey) != 0 { flags |= 1 << 18 }
+        if modifiers & UInt32(optionKey) != 0 { flags |= 1 << 19 }
+        if modifiers & UInt32(cmdKey) != 0 { flags |= 1 << 20 }
+        if modifiers & UInt32(shiftKey) != 0 { flags |= 1 << 17 }
+        let names = ["60": "切换到上一个输入法", "61": "切换到下一个输入法", "64": "Spotlight 搜索", "65": "访达搜索窗口",
+                     "32": "调度中心", "33": "应用程序窗口", "36": "显示桌面", "52": "程序坞显示／隐藏"]
+        for (key, raw) in table {
+            guard let entry = raw as? [String: Any], (entry["enabled"] as? Bool) ?? (entry["enabled"] as? Int == 1),
+                  let value = entry["value"] as? [String: Any], let p = value["parameters"] as? [Int], p.count == 3,
+                  p[1] == Int(keyCode), p[2] & ~(1 << 23) == flags else { continue }
+            return names[key] ?? "系统快捷键"
+        }
+        return nil
+    }
 
     init(keyCode: UInt32, modifiers: UInt32) {
         self.keyCode = keyCode
@@ -61,12 +83,32 @@ final class HotKeyCenter {
     static let shared = HotKeyCenter()
 
     enum Action: UInt32, CaseIterable {
-        case quickTask = 1, quickMemo = 2
+        case quickTask = 1, quickMemo = 2, tray = 3
 
         var defaultsKey: String { "hotkey.\(self)" }
-        var fallback: Shortcut { self == .quickTask ? .quickTask : .quickMemo }
-        var title: String { self == .quickTask ? "快速任务" : "快速 Memo" }
+        var fallback: Shortcut {
+            switch self {
+            case .quickTask: .quickTask
+            case .quickMemo: .quickMemo
+            case .tray: .tray
+            }
+        }
+        var title: String {
+            switch self {
+            case .quickTask: "快速任务"
+            case .quickMemo: "快速 Memo"
+            case .tray: "托盘面板"
+            }
+        }
+        var note: String {
+            switch self {
+            case .quickTask, .quickMemo: "在任何应用中呼出"
+            case .tray: "打开菜单栏面板，查看任务与日程"
+            }
+        }
     }
+
+    private let log = Logger(subsystem: "com.yuwk.personal-hub", category: "hotkey")
 
     private var refs: [UInt32: EventHotKeyRef] = [:]
     private var handlers: [UInt32: () -> Void] = [:]
@@ -77,6 +119,9 @@ final class HotKeyCenter {
               let s = try? JSONDecoder().decode(Shortcut.self, from: data) else { return action.fallback }
         return s
     }
+
+    /// Display text for hints and key caps.
+    func display(_ action: Action) -> String { shortcut(for: action).display }
 
     @discardableResult
     func set(_ shortcut: Shortcut, for action: Action) -> Bool {
@@ -111,14 +156,18 @@ final class HotKeyCenter {
         let hotKeyID = EventHotKeyID(signature: OSType(0x5048_5542), id: id) // "PHUB"
         let status = RegisterEventHotKey(s.keyCode, s.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref)
         guard status == noErr, let ref else {
-            NSLog("Personal Hub: hotkey \(s.display) unavailable (\(status))")
+            log.error("hotkey \(s.display, privacy: .public) unavailable (\(status))")
             return false
         }
         refs[id] = ref
+        log.notice("hotkey \(id) registered as \(s.display, privacy: .public)")
         return true
     }
 
-    fileprivate func fire(_ id: UInt32) { handlers[id]?() }
+    fileprivate func fire(_ id: UInt32) {
+        log.notice("hotkey \(id) pressed")
+        handlers[id]?()
+    }
 
     private func installHandler() {
         guard !installed else { return }
