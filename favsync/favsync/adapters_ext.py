@@ -524,35 +524,21 @@ class EhAdapter:
         return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
     def download_bundle(self, item, staging):
+        from .eh_download import download_gallery
+
         locator = json.loads(item["locator"]); url = locator["url"]
-        events = self._events(url)
-        metas = [e[-1] for e in events if isinstance(e, list) and e[0] in (2,3)]
-        file_events = [e for e in events if isinstance(e,list) and e[0] == 3]
-        file_meta = [e[-1] for e in file_events]
-        if not file_events:
-            raise SyncError("invalid_export")
-        # `image_token` alone identifies the resized route. Strict mode requires
-        # the extractor's explicit full/original URL for every page.
-        for event in file_events:
-            candidate = str(event[1] if len(event) > 2 else "")
-            if not candidate or "fullimg" not in candidate:
-                raise SyncError("original_unavailable")
         paused = self.store.setting("low_disk_paused") == "1"
         threshold = self.cfg["storage"]["resume_free_bytes"] if paused else self.cfg["storage"]["min_free_bytes"]
         if shutil.disk_usage(self.cfg["eh"]["output_dir"]).free < threshold:
             self.store.setting("low_disk_paused", "1")
             raise SyncError("paused_low_disk")
-        # Keep transport in the pinned gallery-dl build.  Its EH downloader
-        # handles the image host's TLS behavior and resumes .part files, while
-        # Favsync still validates that every selected URL is an original above.
         with self.config_file(staging) as config:
-            command([sys.executable, "-m", "gallery_dl", "--config-ignore", "-c", config, url],
-                    self.cfg["command_timeout_seconds"], warnings_are_errors=True)
+            meta = download_gallery(config, url, self.cfg["command_timeout_seconds"])
         images = sorted(p for p in staging.iterdir() if p.is_file() and p.suffix.lower() not in (".zip", ".xml", ".part"))
-        expected = int((metas[0] if metas else {}).get("filecount") or len(file_meta))
+        expected = int(meta["filecount"])
         if len(images) != expected or any(not p.stat().st_size or not valid_media(p) for p in images):
             raise SyncError("incomplete_gallery")
-        meta = metas[0]; tags = self._tags(meta)
+        tags = self._tags(meta)
         artist = component((tags.get("artist") or ["Unknown"])[0]) or "Unknown"
         title = component(meta.get("title") or meta.get("title_en") or item["item_id"], 180)
         final = self.store.eh_path(item["account"], item["item_id"], artist, title,
