@@ -64,6 +64,18 @@ Step 2 complete (11:52 +08:00):
 - Source remains main af0a227. Only hub-api was recreated; source reads preserve
   raw bodies for the App and omit internal fields. No changes to net/git behavior.
 
-Step 3: implement write methods and shared CLI/HTTP operation locking next.
+Step 3 complete:
+- Source main 6f48ebe (aggregate ac5efb5), 75 tests pass including cross-process
+  first-confirmation locking, App audit source, goal publish-failure retry/no duplicate,
+  dry-run nonmutation, all-goal outcomes and sixth-goal rejection.
+- Hub image local/hub-api:1712dfb, 58 tests pass. All five write routes forward once,
+  preserve validation/expired errors and invalidate goals after success or an uncertain
+  write failure; dry-run keeps cache. POSTs are never automatically retried.
+- Actual LAN/public comments, close and new-goal dry-runs each returned 200/dry-run.
+  Create-cycle dry-run returned expected 409/conflict because the existing cycle is
+  active. Review/session/cycle/goal/idempotency/projection counts are unchanged.
+- No actual finalize, comments, close, new goal or new cycle executed in production.
+
+Step 4: notification, readonly status CLI and Skill changes under test; not yet deployed.
 Existing timers/jobs remain untouched; deployment is well before 21:30.
 
