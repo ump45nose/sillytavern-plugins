@@ -16,7 +16,7 @@ enum StageTone {
     /// The design's tick strip, from live cycle data.
     static func cycle(_ c: GoalsData.Cycle) -> Cycle {
         let total = c.total ?? 42
-        return Cycle(index: c.index ?? 1, day: min(max(c.day ?? 1, 1), total), total: total,
+        return Cycle(index: c.index ?? 0, day: min(max(c.day ?? 1, 1), total), total: total,
                      start: ReviewText.md(c.startsAt), end: ReviewText.md(c.endsAt))
     }
 }
@@ -90,7 +90,7 @@ struct StageView: View {
         let ticks = StageTone.cycle(c)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("第 \(ticks.index) 阶段").font(Typo.sans(13, .semibold))
+                Text(ticks.name).font(Typo.sans(13, .semibold))
                 Text("第 \(ticks.day) / \(ticks.total) 天 · 剩 \(ticks.remaining) 天").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 Spacer()
                 if let chip = ReviewText.closeChip(state.review.goals?.close?.status) { Chip(text: chip.0, tone: chip.1) }
@@ -205,7 +205,7 @@ private struct CloseForm: View {
     var body: some View {
         Card {
             if done {
-                DoneBanner(text: "第 \(cycle.index ?? 1) 阶段已结案，目标已归档")
+                DoneBanner(text: "\(StageTone.cycle(cycle).name)已结案，目标已归档")
             } else if let preview {
                 PreviewSheet(title: "阶段总结预览 · 原文写入，不做润色", content: preview + "\n\n" + summaryLine, confirm: "确认结案", busy: busy, error: error,
                              back: { self.preview = nil }, commit: commit)
@@ -292,7 +292,7 @@ private struct NextCycle: View {
                 Text("上一阶段已经结案").font(Typo.serif(19))
                 Text("开始新的 42 天阶段后，再为它设定不超过 5 个目标。").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3).padding(.top, 4)
                 if let error { Text(error).font(Typo.sans(12)).foregroundStyle(Tone.rose.color).padding(.top, 8) }
-                Button(busy ? "创建中…" : "开始新阶段") { confirm = true }.disabled(busy).padding(.top, 12)
+                Button(busy ? "检查中…" : "开始新阶段") { check() }.disabled(busy).padding(.top, 12)
             }
             .padding(.top, 24)
             .alert("从今天开始新阶段？", isPresented: $confirm) {
@@ -302,13 +302,18 @@ private struct NextCycle: View {
         }
     }
 
-    private func start() {
+    /// Dry-run first so a conflicting active cycle is reported before the confirm dialog.
+    private func check() { run(dryRun: true) }
+    private func start() { run(dryRun: false) }
+
+    private func run(dryRun: Bool) {
         busy = true
         error = nil
         Task {
             defer { busy = false }
             do {
-                _ = try await state.review.stage(false, { try await $0.createCycle() }, demo: { StageResult(status: "dry-run") })
+                _ = try await state.review.stage(dryRun, { try await $0.createCycle(dryRun: dryRun) }, demo: { StageResult(status: "dry-run") })
+                if dryRun { confirm = true }
             } catch { self.error = ReviewDesk.message(error) }
         }
     }

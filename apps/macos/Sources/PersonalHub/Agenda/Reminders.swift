@@ -87,7 +87,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             let content = UNMutableNotificationContent()
             content.title = item.title
             if let s = item.subtitle, HubJSON.parseDate(s) == nil { content.body = s }
-            content.sound = item.severity == "warn" ? .default : nil
+            content.sound = item.severity == "warn" || item.severity == "critical" ? .default : nil
             Task { try? await center.add(UNNotificationRequest(identifier: "hub.attention." + item.id, content: content, trigger: nil)) }
         }
         if fresh.count > shown.count {

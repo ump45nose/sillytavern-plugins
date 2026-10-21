@@ -94,9 +94,11 @@ public enum HubSample {
 
         let goals = ReviewSample.goals(now: now, calendar: calendar)
         out.goals = env("goals", goals)
-        let daily = goals.reviews?.daily
+        let label = goals.reviews?.daily?.label ?? ""
+        let day = label.split(separator: "-").compactMap { Int($0) }
         out.attention = env("attention", AttentionData(items: [
-            .init(id: "review:\(daily?.id ?? "")", rule: "review_pending", severity: "warn", title: "昨天的日报待确认",
+            .init(id: "review:daily:\(label)", rule: "review_pending", severity: "warn",
+                  title: day.count == 3 ? "\(day[1])/\(day[2]) 日报待确认" : "日报待确认",
                   subtitle: "6 小时后过期", target: .init(module: "goals")),
             .init(id: "token-limit:claude:week", rule: "token_limit", severity: "warn", title: "Claude Code 本周额度 61%", subtitle: "周四 09:00 重置", target: .init(module: "token")),
             .init(id: "pr-blocked:2790", rule: "pr_blocked", severity: "warn", title: "PR #2790 等待 review 9 天", subtitle: "modelcontextprotocol/servers", target: .init(module: "git")),

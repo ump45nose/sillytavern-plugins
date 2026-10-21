@@ -34,6 +34,8 @@ public struct Cycle: Sendable {
     public var index: Int, day: Int, total: Int
     public var start: String, end: String
     public var remaining: Int { total - day }
+    /// personal-review cycles carry an id but not always an ordinal; 0 means unknown.
+    public var name: String { index > 0 ? "第 \(index) 阶段" : "本阶段" }
 
     public init(index: Int, day: Int, total: Int, start: String, end: String) {
         self.index = index

@@ -143,8 +143,8 @@ public struct HubAPI: Sendable {
         try await stage("/api/v1/stage/cycles/\(path(id))/close", ["text": text, "outcomes": outcomes, "dry_run": dryRun])
     }
 
-    public func createCycle() async throws -> StageResult {
-        try await stage("/api/v1/stage/cycles", [:])
+    public func createCycle(dryRun: Bool) async throws -> StageResult {
+        try await stage("/api/v1/stage/cycles", ["dry_run": dryRun])
     }
 
     public func addGoal(cycle id: String, _ draft: GoalDraft, dryRun: Bool) async throws -> StageResult {
@@ -193,6 +193,9 @@ public struct HubAPI: Sendable {
         case 401, 403: throw HubError.unauthorized
         case 409 where Self.problem(data)?.code == "expired": throw HubError.expired
         case 422: throw HubError.rejected(Self.problem(data)?.message ?? "内容没有通过校验", field: Self.problem(data)?.field)
+        case 400, 404, 409:
+            guard let problem = Self.problem(data), let message = problem.message else { throw HubError.http(response.statusCode) }
+            throw HubError.rejected(message, field: problem.field)
         default: throw HubError.http(response.statusCode)
         }
     }

@@ -100,6 +100,13 @@ private let goalsJSON = #"""
     #expect(goal["success_criteria"] as? String == "s" && goal["stop_signal"] as? String == "x" && goal["dry_run"] as? Bool == false)
 }
 
+@Test func newCycleDryRunSurfacesTheConflictMessage() async throws {
+    let hub = ScriptedHub { _ in (409, #"{"error": {"code": "conflict", "message": "已有进行中的周期", "field": null}}"#) }
+    await #expect(throws: HubError.rejected("已有进行中的周期", field: nil)) { _ = try await api(hub).createCycle(dryRun: true) }
+    #expect(hub.requests.last?.body?["dry_run"] as? Bool == true)
+    #expect(hub.requests.last?.path == "/api/v1/stage/cycles")
+}
+
 @Test func formKeepsTheTemplateAndFillsFields() {
     let template = ReviewSample.dailyTemplate("2026-10-21")
     var form = ReviewForm(template: template)

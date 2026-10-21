@@ -24,7 +24,7 @@ struct BriefModule: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         Label11(Self.dateLine(state.agenda.now))
-                        if let c = state.cycle { Chip(text: "第 \(c.index) 阶段 · 第 \(c.day) 天", tone: .clay) }
+                        if let c = state.cycle { Chip(text: "\(c.name) · 第 \(c.day) 天", tone: .clay) }
                     }
                     Text(Self.greeting(state.agenda.now)).font(Typo.serif(44)).tracking(-0.8)
                     Text(summary)
@@ -383,7 +383,7 @@ struct GoalsModule: View {
     private func detail(_ d: GoalsData) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Label11(d.mainline?.domain ?? "总主线")
-            Mainline(text: d.mainline?.direction ?? "—", size: 24).padding(.top, 4)
+            Mainline(text: d.mainline?.direction ?? "—", size: 21).padding(.top, 4)
             if let c = state.cycle {
                 CycleTicks(cycle: c, height: 22, spacing: 3).padding(.top, 14)
                 HStack {
@@ -394,7 +394,7 @@ struct GoalsModule: View {
                     Text("\(c.end) 结案")
                 }
                 .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 6)
-                SectionTitle("第 \(c.index) 阶段目标 · \(d.goals?.count ?? 0) / \(Stage.maxGoals)")
+                SectionTitle("\(c.name)目标 · \(d.goals?.count ?? 0) / \(Stage.maxGoals)")
             } else {
                 SectionTitle("阶段目标")
             }
@@ -474,6 +474,8 @@ struct Mainline: View {
     var body: some View {
         (Text("“").foregroundColor(Tone.clay.color) + Text(text) + Text("”").foregroundColor(Tone.clay.color))
             .font(Typo.serif(size)).tracking(-0.3).lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .help(text)
     }
 }
 
@@ -534,7 +536,7 @@ struct AttentionEntry: Identifiable, Equatable {
         case "stale_contact": .plum
         case "review_pending": .clay
         case "stage_close": .rose
-        default: severity == "warn" ? .clay : .steel
+        default: severity == "critical" ? .rose : severity == "warn" ? .clay : .steel
         }
     }
 }

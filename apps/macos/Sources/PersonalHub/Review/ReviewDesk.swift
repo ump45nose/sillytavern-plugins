@@ -5,7 +5,15 @@ import Observation
 enum ReviewTarget: Hashable {
     case session(String)
     case latest(ReviewKind)
+    /// hub attention names a session by kind and label, e.g. `review:daily:2026-10-20`.
+    case labeled(ReviewKind, String)
     case stage
+
+    init?(attention id: String) {
+        let parts = id.split(separator: ":", maxSplits: 2).map(String.init)
+        guard parts.count == 3, parts[0] == "review", let kind = ReviewKind(rawValue: parts[1]) else { return nil }
+        self = .labeled(kind, parts[2])
+    }
 }
 
 /// State behind the review window: session lists, loaded sessions and unsent drafts.
@@ -37,10 +45,26 @@ final class ReviewDesk {
         case .session(let id): selection = .session(id)
         case .stage: selection = .stage
         case .latest(let kind):
-            let latest = kind == .daily ? goals?.reviews?.daily : goals?.reviews?.weekly
-            if let id = latest?.id ?? lists[kind]?.first?.id { selection = .session(id) }
+            if let id = latest(kind)?.id ?? lists[kind]?.first?.id { selection = .session(id) }
+        case .labeled(let kind, let label):
+            if let id = find(kind, label) { selection = .session(id) }
         }
-        Task { await reload() }
+        Task {
+            await reload()
+            if case .labeled(let kind, let label) = target, let id = find(kind, label), selection != .session(id) {
+                selection = .session(id)
+                await load(id)
+            }
+        }
+    }
+
+    private func latest(_ kind: ReviewKind) -> ReviewSummary? {
+        kind == .daily ? goals?.reviews?.daily : goals?.reviews?.weekly
+    }
+
+    private func find(_ kind: ReviewKind, _ label: String) -> String? {
+        if let s = latest(kind), s.label == label { return s.id }
+        return lists[kind]?.first { $0.label == label }?.id
     }
 
     func reload() async {

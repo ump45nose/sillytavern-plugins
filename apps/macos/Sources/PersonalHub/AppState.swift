@@ -134,7 +134,7 @@ final class AppState {
     }
 
     func open(_ entry: AttentionEntry) {
-        if entry.id.hasPrefix("review:") { return openReview(.session(String(entry.id.dropFirst("review:".count)))) }
+        if let target = ReviewTarget(attention: entry.id) { return openReview(target) }
         if entry.id.hasPrefix("stage:close:") { return openReview(.stage) }
         if let url = entry.url { NSWorkspace.shared.open(url) } else if let m = entry.target { openMainWindow(nil); focus(m) }
     }

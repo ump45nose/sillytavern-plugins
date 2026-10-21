@@ -130,12 +130,12 @@ enum ReviewText {
         }
     }
 
-    /// "还有 30 小时" / "还有 40 分钟" until the session closes.
+    /// "还有 4 天" / "还有 30 小时" / "还有 40 分钟" until the session closes.
     static func remaining(_ until: Date?, short: Bool = false, now: Date = HubFormat.current()) -> String? {
         guard let until else { return nil }
         let s = until.timeIntervalSince(now)
         guard s > 0 else { return "已过期" }
-        let span = s < 3600 ? "\(max(1, Int(s / 60))) 分钟" : "\(Int(s / 3600)) 小时"
+        let span = s < 3600 ? "\(max(1, Int(s / 60))) 分钟" : s < 48 * 3600 ? "\(Int(s / 3600)) 小时" : "\(Int(s / 86400)) 天"
         return short ? "剩 " + span : "还有 \(span)过期"
     }
 

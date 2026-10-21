@@ -50,15 +50,6 @@ enum HubCLI {
         }
         func status<T>(_ e: HubEnvelope<T>?) -> String { e.map { $0.status.rawValue } ?? "missing" }
 
-        do {
-            let sources = try await api.status()
-            let bad = sources.filter { $0.status != .ok && $0.status != .unconfigured }
-            line(true, "status", "\(sources.count) sources · \(sources.filter { $0.status == .ok }.count) ok · \(sources.filter { $0.status == .unconfigured }.count) unconfigured"
-                 + (bad.isEmpty ? "" : " · not ok: " + bad.map { "\($0.id)=\($0.status.rawValue)" }.joined(separator: ",")))
-        } catch let e as HubError {
-            line(false, "status", describe(e))
-        } catch { line(false, "status", "\(type(of: error))") }
-
         let d: HubData
         do {
             d = try await api.modules()
@@ -69,6 +60,16 @@ enum HubCLI {
             line(false, "modules", "\(type(of: error))")
             return 1
         }
+
+        // After the batch: hub-api reports sources it has not read since start as stale.
+        do {
+            let sources = try await api.status()
+            let bad = sources.filter { $0.status != .ok && $0.status != .unconfigured }
+            line(true, "status", "\(sources.count) sources · \(sources.filter { $0.status == .ok }.count) ok · \(sources.filter { $0.status == .unconfigured }.count) unconfigured"
+                 + (bad.isEmpty ? "" : " · not ok: " + bad.map { "\($0.id)=\($0.status.rawValue)" }.joined(separator: ",")))
+        } catch let e as HubError {
+            line(false, "status", describe(e))
+        } catch { line(false, "status", "\(type(of: error))") }
         let h = d.health?.data
         line(d.health?.status.hasData ?? false, "health", "\(status(d.health)) · days \(h?.days?.count ?? 0) · steps \(h?.steps == nil ? "null" : "set") · stages \(h?.sleepStages?.count ?? 0)")
         let b = d.bills?.data
