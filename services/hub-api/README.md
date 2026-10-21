@@ -279,7 +279,8 @@ A reset on day 1 uses the observed `month_bytes`. The current Usage Monitor HTTP
 only exposes a natural-month total and today's hours, so other reset days return
 `used_bytes: null`; usage is never estimated. Every plan uses the same router counter
 (for the same period, usage is identical); traffic cannot be assigned to individual
-providers. Existing traffic remaining/expiry preferences apply to these manual pools.
+providers. Existing traffic remaining/expiry preferences apply to these manual pools. Manual
+expiry reminders remain available even without a usable router snapshot.
 Collection gaps still leave the net module partial. An empty plan list produces `pools: []`.
 
 ## Hub v2 recording days and public playback

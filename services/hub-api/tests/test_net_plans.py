@@ -65,6 +65,21 @@ def test_plan_count_uniqueness_and_shared_unknown_counter(settings):
     assert all(p['used_bytes'] is None for p in assemble(None, plans, NOW)['pools'])
 
 
+def test_manual_expiry_does_not_depend_on_router_cache(settings):
+    async def forbidden():
+        raise AssertionError('attention must not fetch the router')
+    app = create_app(settings, adapters=[Adapter('usage', 'network', 30, forbidden)], now=lambda: NOW)
+    with TestClient(app) as client:
+        h = auth(settings)
+        plan = {'id': 'a', 'name': 'plan', 'total_bytes': 100, 'reset_day': 14, 'expires_on': '2026-10-22'}
+        assert client.put('/api/v1/net/plans', headers=h, json={'items': [plan]}).status_code == 200
+        rows = client.get('/api/v1/modules/attention', headers=h).json()['data']['items']
+        assert [r['id'] for r in rows] == ['traffic-low:a']
+        assert client.post('/api/v1/attention/traffic-low:a/dismiss', headers=h).status_code == 204
+        assert client.get('/api/v1/modules/attention', headers=h).json()['data']['items'] == []
+        assert 'usage' not in app.state.sources.cache
+
+
 @pytest.mark.parametrize('now,reset,start,end', [
     ('2026-01-01', 28, '2025-12-28', '2026-01-27'),
     ('2026-02-28', 28, '2026-02-28', '2026-03-27'),

@@ -74,13 +74,14 @@ def calculate(manager):
     usage=cached('usage')
     if usage is not None:
         scopes.add('traffic-low')
-        for pool in net_module(usage, net_plans(store), now)['pools']:
-            total,used=pool.get('total_bytes'),pool.get('used_bytes')
-            low=total is not None and total>0 and used is not None and (total-used)/total*100<p['traffic_remaining_percent']
-            expires=pool.get('expires_on');days=(date.fromisoformat(expires)-now.date()).days if expires else None
-            if low or (days is not None and days<=p['traffic_expiry_days']):
-                add('traffic-low:'+pool['id'],'traffic_low',pool['name']+' 流量不足或临近到期','net',
-                    subtitle=day_label(date.fromisoformat(expires),now.date())+' 到期' if expires else None)
+    # Manual expiry remains a known fact even when router usage is unavailable.
+    for pool in net_module(usage, net_plans(store), now)['pools']:
+        total,used=pool.get('total_bytes'),pool.get('used_bytes')
+        low=total is not None and total>0 and used is not None and (total-used)/total*100<p['traffic_remaining_percent']
+        expires=pool.get('expires_on');days=(date.fromisoformat(expires)-now.date()).days if expires else None
+        if low or (days is not None and days<=p['traffic_expiry_days']):
+            add('traffic-low:'+pool['id'],'traffic_low',pool['name']+' 流量不足或临近到期','net',
+                subtitle=day_label(date.fromisoformat(expires),now.date())+' 到期' if expires else None)
     git=cached('github')
     if git is not None:
         if not git.get('_partial'): scopes.update(('git-waiting','pr-blocked'))
