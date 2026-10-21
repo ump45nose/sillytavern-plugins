@@ -110,6 +110,15 @@ public struct HubAPI: Sendable {
         try request("/api/v1/recordings/\(path(id))/audio")
     }
 
+    /// nil while hub-api has no list endpoint yet (404 or 405 on the bare collection).
+    public func plaudRecordings(before: String? = nil, limit: Int = 14) async throws -> PlaudList? {
+        var query = ["source": "plaud", "limit": String(limit)]
+        if let before { query["before"] = before }
+        let (data, response) = try await exchange(request("/api/v1/recordings", query: query))
+        if response.statusCode == 404 || response.statusCode == 405 { return nil }
+        return try decode(PlaudList.self, try check(data, response))
+    }
+
     public func transcript(recording id: String) async throws -> String {
         String(decoding: try await get("/api/v1/recordings/\(path(id))/transcript"), as: UTF8.self)
     }

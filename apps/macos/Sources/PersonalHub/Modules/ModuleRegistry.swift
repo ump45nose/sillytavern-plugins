@@ -10,6 +10,8 @@ struct ModuleInfo {
     var bare = false
     /// The compact size grows with its content instead of the fixed tile height.
     var autoHeight = false
+    /// The detail body scrolls its own columns, so the card keeps this height unless a preset overrides it.
+    var detailHeight: CGFloat?
 }
 
 extension ModuleID {
@@ -29,6 +31,7 @@ extension ModuleID {
         case .subs: ModuleInfo(title: "订阅", symbol: "repeat", tone: .ochre, meta: "hub 偏好 · 账单识别")
         case .sky: ModuleInfo(title: "电脑历史", symbol: "desktopcomputer", tone: .steel, meta: "skysight-sync")
         case .memos: ModuleInfo(title: "Memos", symbol: "note.text", tone: .sky, meta: "memos · 快速 Memo")
+        case .plaud: ModuleInfo(title: "录音", symbol: "waveform", tone: .rose, meta: "Plaud · 转录稿", detailHeight: 560)
         }
     }
 }
@@ -53,6 +56,7 @@ struct ModuleBody: View {
         case .subs: SubsModule(size: size)
         case .sky: SkyModule(size: size)
         case .memos: MemosModule(size: size)
+        case .plaud: PlaudModule(size: size)
         }
     }
 }

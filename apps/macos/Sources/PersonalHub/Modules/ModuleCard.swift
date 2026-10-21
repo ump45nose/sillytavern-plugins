@@ -12,11 +12,16 @@ struct ModuleCard: View {
     private var info: ModuleInfo { item.module.info }
     private var compact: Bool { item.size == .compact }
     private var fixedHeight: CGFloat? { info.bare ? nil : item.effectiveHeight.map { CGFloat($0.points) } }
+    /// Self-scrolling modules fill the card at their default height or the chosen preset.
+    private var framedHeight: CGFloat? { compact ? nil : info.detailHeight.map { fixedHeight ?? $0 } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if info.bare {
                 ModuleBody(id: item.module, size: item.size)
+            } else if framedHeight != nil {
+                header.padding(.bottom, 14)
+                ModuleBody(id: item.module, size: item.size).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else if fixedHeight != nil {
                 header.padding(.bottom, 14)
                 HubScroll {
@@ -30,7 +35,7 @@ struct ModuleCard: View {
             }
         }
         .padding(info.bare ? EdgeInsets(top: 6, leading: 2, bottom: 8, trailing: 2) : EdgeInsets(top: 16, leading: 18, bottom: 18, trailing: 18))
-        .frame(height: compact && !info.autoHeight ? Metrics.compactHeight : fixedHeight)
+        .frame(height: compact && !info.autoHeight ? Metrics.compactHeight : framedHeight ?? fixedHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background { if !info.bare { cardBackground } }
         .overlay(alignment: .topTrailing) { if info.bare { tools.padding(.top, 2) } }

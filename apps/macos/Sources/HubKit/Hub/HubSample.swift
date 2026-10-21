@@ -180,3 +180,57 @@ public enum HubSample {
         return d
     }
 }
+
+/// Demo recordings and a transcript in the fused Plaud format.
+public enum PlaudSample {
+    static let items: [(day: Int, hour: Int, minute: Int, minutes: Double, title: String, people: [String])] = [
+        (0, 14, 20, 52, "迁移方案评审", ["李雷", "韩梅梅"]), (0, 10, 5, 54, "周会", ["项目组"]),
+        (-1, 20, 30, 18, "和妈妈通话", ["妈妈"]), (-1, 15, 10, 33, "面试复盘", ["陈老师"]),
+        (-2, 11, 0, 41, "季度规划", ["李雷", "王五"]), (-3, 19, 40, 26, "健身课", ["教练"]),
+        (-4, 9, 30, 47, "读书会", ["赵六", "钱七"]), (-5, 16, 0, 22, "和房东沟通", ["房东"]),
+    ]
+
+    public static func list(now: Date, calendar: Calendar = .hub) -> PlaudList {
+        let today = calendar.startOfDay(for: now)
+        var days: [PlaudList.Day] = []
+        for (n, group) in Dictionary(grouping: items.indices, by: { items[$0].day }).sorted(by: { $0.key > $1.key }) {
+            let date = calendar.date(byAdding: .day, value: n, to: today)!
+            let recordings = group.map { i in
+                PlaudList.Recording(id: "sample:plaud:\(i)", title: items[i].title,
+                                    startAt: calendar.date(bySettingHour: items[i].hour, minute: items[i].minute, second: 0, of: date),
+                                    durationSeconds: items[i].minutes * 60)
+            }
+            days.append(.init(date: TokenText.key(date, calendar), recordings: recordings, hasTranscript: true,
+                              people: Array(Set(group.flatMap { items[$0].people })).sorted()))
+        }
+        return PlaudList(days: days)
+    }
+
+    public static func people(_ id: String) -> [String] {
+        Int(id.split(separator: ":").last ?? "").flatMap { items.indices.contains($0) ? items[$0].people : nil } ?? []
+    }
+
+    public static func transcript(_ id: String) -> String? {
+        guard id.hasPrefix("sample:plaud:") else { return nil }
+        return """
+        ## 摘要
+
+        确定先迁健康与账单两个数据源；交流数据等 CRM 接口稳定后再迁。周五前给出回滚预案，下周一灰度。
+
+        - 健康：SQLite 已独立，审计报告核对完毕
+        - 账单：AutoAccounting 导入口径不变
+
+        ## 逐字稿
+
+        [00:12] 【他人】健康这块的 SQLite 已经独立出来了，审计报告也核对过，我觉得可以先切。
+        [00:31] 【我】那账单一起切，AutoAccounting 的导入口径没变。交流先别动。
+        [00:44] 【他人】交流那边 CRM 的接口还在改字段，等它稳定了再说。
+        [01:02] 【我】好，那就先这两个。回滚怎么做？
+        [01:15] Speaker 3: 回滚预案我来写，周五前发群里。
+        [01:28] 【我?】[听不清] 下周一灰度可以吗？
+        [01:34] Speaker 3: 可以，先灰度一半设备。
+
+        > 决定：健康、账单本周切换；交流延后。
+        """
+    }
+}

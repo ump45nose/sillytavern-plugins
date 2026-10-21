@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ModuleID: String, Codable, CaseIterable, Sendable {
-    case brief, agenda, goals, attention, health, bills, crm, media, token, git, net, subs, sky, memos
+    case brief, agenda, goals, attention, health, bills, crm, media, token, git, net, subs, sky, memos, plaud
 
     /// Default column span on the 12-column grid.
     public func defaultSpan(_ size: ModuleSize) -> Int {
@@ -11,7 +11,7 @@ public enum ModuleID: String, Codable, CaseIterable, Sendable {
         case (.attention, .detail): 5
         case (.agenda, .detail): 6
         case (.goals, .detail): 6
-        case (.media, .detail), (.token, .detail): 12
+        case (.media, .detail), (.token, .detail), (.plaud, .detail): 12
         case (_, .compact): 3
         case (_, .detail): 6
         }
@@ -58,11 +58,6 @@ public struct LayoutItem: Codable, Hashable, Sendable, Identifiable {
 
 public enum PageKind: String, Codable, Sendable {
     case grid, sky, memos, review
-
-    /// A kind from a newer client reads as a plain grid instead of failing the whole document.
-    public init(from decoder: Decoder) throws {
-        self = PageKind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .grid
-    }
 }
 
 public struct Page: Codable, Hashable, Sendable, Identifiable {
@@ -218,7 +213,7 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
         ]),
         Page(id: "life", title: "生活", subtitle: "健康、账单、交流与媒体", items: [
             LayoutItem(.health, .detail), LayoutItem(.bills, .detail), LayoutItem(.crm, .detail),
-            LayoutItem(.media, .detail, span: 6),
+            LayoutItem(.media, .detail, span: 6), LayoutItem(.plaud, .detail),
         ]),
         Page(id: "usage", title: "用量", subtitle: "Token、GitHub、网络与订阅", items: [
             LayoutItem(.token, .detail), LayoutItem(.git, .detail, span: 12),

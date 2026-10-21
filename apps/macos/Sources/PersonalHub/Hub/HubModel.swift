@@ -280,8 +280,27 @@ final class HubModel {
     }
 
     func transcript(recording id: String) async -> String? {
-        guard let api else { return nil }
+        guard let api else { return PlaudSample.transcript(id) }
         return try? await api.transcript(recording: id)
+    }
+
+    enum PlaudSource { case hub, crm, sample }
+
+    /// The recordings list; until hub ships it, today's Plaud recordings attached to CRM interactions.
+    func plaudRecordings(before: String? = nil) async throws -> (list: PlaudList, source: PlaudSource) {
+        guard let api else { return (PlaudSample.list(now: clock()), .sample) }
+        do {
+            if let list = try await api.plaudRecordings(before: before) { return (list, .hub) }
+        } catch let e as HubError {
+            throw WriteError.hub(e)
+        }
+        let today = data.crm?.data?.today ?? []
+        let recordings = today.compactMap { i in
+            i.recording.flatMap { r in r.id.hasPrefix("plaud:") ? PlaudList.Recording(id: r.id, title: r.title ?? i.summary, startAt: i.time, durationSeconds: r.durationSeconds) : nil }
+        }
+        let people = Array(Set(today.filter { $0.recording?.id.hasPrefix("plaud:") == true }.map(\.name))).sorted()
+        let days = recordings.isEmpty ? [] : [PlaudList.Day(date: ReviewText.dayKey(clock()), recordings: recordings, hasTranscript: true, people: people)]
+        return (PlaudList(days: days), .crm)
     }
 
     // MARK: Writing

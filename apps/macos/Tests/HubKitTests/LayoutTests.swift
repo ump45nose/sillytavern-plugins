@@ -26,7 +26,7 @@ import Testing
     let home = LayoutDocument.default.page("home")!
     let rows = Grid.rows(spans: home.items.map(\.effectiveSpan))
     #expect(rows.map(\.count) == [1, 2, 1, 4, 4])
-    #expect(home.unusedModules == [.media, .subs])
+    #expect(home.unusedModules == [.media, .subs, .plaud])
 }
 
 @Test func pageEditing() {
@@ -137,10 +137,12 @@ import Testing
     #expect(full.withBuiltins() == full, "a full document is left alone")
 }
 
-@Test func unknownPageKindsReadAsGrids() throws {
-    let json = #"{"version":1,"pages":[{"id":"x","title":"X","subtitle":"","kind":"timeline","items":[{"module":"token","size":"detail","height":"tall"}]}]}"#
-    let doc = try JSONDecoder().decode(LayoutDocument.self, from: Data(json.utf8))
-    #expect(doc.pages[0].kind == .grid)
+@Test func unknownKindsMakeTheDocumentUnreadable() throws {
+    // A newer client's page or module must not be silently rewritten, so the whole document is left alone.
+    let page = #"{"version":1,"pages":[{"id":"x","title":"X","subtitle":"","kind":"timeline","items":[]}]}"#
+    #expect(throws: DecodingError.self) { try JSONDecoder().decode(LayoutDocument.self, from: Data(page.utf8)) }
+    let height = #"{"version":1,"pages":[{"id":"x","title":"X","subtitle":"","kind":"grid","items":[{"module":"plaud","size":"detail","height":"tall"}]}]}"#
+    let doc = try JSONDecoder().decode(LayoutDocument.self, from: Data(height.utf8))
     #expect(doc.pages[0].items[0].height == .tall)
 }
 
