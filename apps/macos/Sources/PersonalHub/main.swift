@@ -11,6 +11,12 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-iconset"), i + 1 < Com
     }
 }
 
+// Thin overlay scrollbars even when System Settings says "always show" or a mouse is attached;
+// the argument domain outranks the global one and is never written to disk.
+var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+arguments["AppleShowScrollBars"] = "WhenScrolling"
+UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+
 let app = NSApplication.shared
 
 // `PersonalHub --agenda-smoke`: real-account acceptance check on a throwaway list (signed build only,

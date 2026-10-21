@@ -91,7 +91,7 @@ struct SkyPage: View {
         } else {
             let selection = min(state.skySelection, items.count - 1)
             HStack(alignment: .top, spacing: 16) {
-                ScrollView {
+                HubScroll {
                     LazyVStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(items.enumerated()), id: \.1.id) { i, s in
                             if i == 0 || !Calendar.hub.isDate(items[i - 1].start, inSameDayAs: s.start) {
@@ -142,7 +142,7 @@ private struct SkyDetail: View {
     var live: Bool
 
     var body: some View {
-        ScrollView {
+        HubScroll {
             VStack(alignment: .leading, spacing: 0) {
                 Text("\(SkyText.day(window.start)) · \(SkyText.span(window)) · \(SkyText.device(window.device))\(live ? "" : " · 示例")")
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink3)

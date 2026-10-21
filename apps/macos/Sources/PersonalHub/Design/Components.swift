@@ -339,6 +339,56 @@ extension ButtonStyle where Self == HubButton {
     static var hubSecondary: HubButton { HubButton(primary: false) }
 }
 
+/// A thin rounded knob with no slot. The system overlay scroller grows a grey track on hover.
+final class HubScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+
+    override func drawKnob() {
+        let knob = rect(for: .knob)
+        let vertical = bounds.height >= bounds.width, thickness: CGFloat = 5
+        let r = vertical ? NSRect(x: knob.maxX - thickness - 3, y: knob.minY + 3, width: thickness, height: max(knob.height - 6, thickness))
+                         : NSRect(x: knob.minX + 3, y: knob.maxY - thickness - 3, width: max(knob.width - 6, thickness), height: thickness)
+        NSColor(Palette.ink2).withAlphaComponent(0.32).setFill()
+        NSBezierPath(roundedRect: r, xRadius: thickness / 2, yRadius: thickness / 2).fill()
+    }
+
+    static func adopt(_ scroll: NSScrollView) {
+        scroll.scrollerStyle = .overlay
+        if !(scroll.verticalScroller is HubScroller) { scroll.verticalScroller = HubScroller() }
+        if !(scroll.horizontalScroller is HubScroller) { scroll.horizontalScroller = HubScroller() }    }
+}
+
+/// `ScrollView` whose scrollers are `HubScroller`s.
+struct HubScroll<Content: View>: View {
+    var axes: Axis.Set = .vertical
+    @ViewBuilder var content: Content
+
+    init(_ axes: Axis.Set = .vertical, @ViewBuilder content: () -> Content) {
+        self.axes = axes
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView(axes) { content.background(ScrollerProbe()) }
+    }
+}
+
+private struct ScrollerProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in
+                if let scroll = self?.enclosingScrollView { HubScroller.adopt(scroll) }
+            }
+        }
+    }
+}
+
 /// Warm switch in place of the system's blue one.
 struct HubSwitch: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {

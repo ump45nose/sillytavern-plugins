@@ -294,7 +294,7 @@ private struct DataSettings: View {
             }
             if hub.mode == .hub {
                 SectionTitle("来源 · \(hub.sourcesHealthy.ok) / \(hub.sourcesHealthy.total) 正常").padding(.top, 2)
-                ScrollView {
+                HubScroll {
                     VStack(spacing: 0) {
                         ForEach(hub.data.sources) { s in sourceRow(s) }
                         if hub.data.sources.isEmpty {

@@ -36,7 +36,7 @@ struct PopoverView: View {
                     .padding(.top, 10)
                     .transition(.opacity.combined(with: .offset(y: -4)))
             }
-            ScrollView {
+            HubScroll {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(page.items.enumerated()), id: \.1) { i, item in
                         TrayItem(id: item, editing: editing)
@@ -221,7 +221,7 @@ private struct TrayTasks: View {
                 Segmented(options: [(0, "今天"), (1, "即将"), (2, "全部")], selection: $tab, small: true)
             }
             if tab == 2, agenda.lists.count > 1 {
-                ScrollView(.horizontal) {
+                HubScroll(.horizontal) {
                     HStack(spacing: 6) {
                         ForEach(agenda.lists) { l in
                             Button { withAnimation(Motion.spring) { listID = l.id } } label: {

@@ -690,11 +690,11 @@ struct DuePickerButton: View {
     var body: some View {
         Button { open.toggle() } label: {
             HStack(spacing: 4) {
-                Image(systemName: picked == nil ? "calendar.badge.clock" : "calendar").font(.system(size: 11, weight: .medium))
-                if let picked { Text(label(picked)).font(Typo.sans(11, .medium)).lineLimit(1) }
+                Image(systemName: picked == nil ? "calendar.badge.clock" : "calendar").font(.system(size: 12.5, weight: .medium))
+                if let picked { Text(label(picked)).font(Typo.sans(11.5, .medium)).lineLimit(1) }
             }
             .foregroundStyle(picked == nil ? Palette.ink3 : Tone.sky.color)
-            .padding(.horizontal, picked == nil ? 4 : 7).frame(height: 22)
+            .padding(.horizontal, picked == nil ? 5 : 8).frame(height: 26)
             .background(RoundedRectangle(cornerRadius: 6).fill(picked == nil ? Color.clear : Tone.sky.tint))
             .contentShape(Rectangle())
         }
@@ -708,72 +708,167 @@ struct DuePickerButton: View {
     }
 }
 
-private struct DuePickerPanel: View {
+struct DuePickerPanel: View {
     @Binding var picked: PickedDue?
     var now: Date
     var close: () -> Void
     @ViewState private var day = Date()
     @ViewState private var time: DateComponents?
 
-    private static let times = [(9, 0), (10, 0), (12, 0), (14, 0), (15, 0), (16, 0), (18, 0), (20, 0), (21, 0)]
+    @ViewState private var month = Date()
+
+    private static let times = [(9, 0), (10, 0), (11, 0), (14, 0), (15, 0), (16, 0), (18, 0), (20, 0)]
+    private static let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
 
     var body: some View {
         let cal = Calendar.hub, today = cal.startOfDay(for: now)
         let quick: [(String, Date)] = [("今天", today), ("明天", cal.date(byAdding: .day, value: 1, to: today)!),
                                        ("后天", cal.date(byAdding: .day, value: 2, to: today)!), ("下周一", nextMonday(today))]
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(summary).font(Typo.serif(22)).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(Agenda.relativeDay(day, now: now)).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            }
             HStack(spacing: 6) {
                 ForEach(quick, id: \.0) { name, d in
-                    Button { day = d } label: { Chip(text: name, tone: cal.isDate(day, inSameDayAs: d) ? .sky : nil) }.buttonStyle(.plain)
+                    choice(name, on: cal.isDate(day, inSameDayAs: d)) { day = d; month = d }
                 }
             }
-            DatePicker("", selection: $day, in: today..., displayedComponents: .date)
-                .datePickerStyle(.graphical).labelsHidden()
-                .frame(width: 250)
-            VStack(alignment: .leading, spacing: 6) {
-                Label11("时间")
-                Flow(spacing: 6) {
-                    Button { time = nil } label: { Chip(text: "全天", tone: time == nil ? .sky : nil) }.buttonStyle(.plain)
-                    ForEach(Self.times, id: \.0) { h, m in
-                        let on = time?.hour == h && time?.minute == m
-                        Button { time = DateComponents(hour: h, minute: m) } label: {
-                            Chip(text: String(format: "%02d:%02d", h, m), tone: on ? .sky : nil)
-                        }
-                        .buttonStyle(.plain)
-                    }
+            calendar(today: today)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label11("时间")
+                    Spacer()
+                    TimeStepper(time: $time)
                 }
-                HStack(spacing: 6) {
-                    Text("其他").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                    DatePicker("", selection: Binding(
-                        get: { cal.date(bySettingHour: time?.hour ?? 9, minute: time?.minute ?? 0, second: 0, of: today) ?? today },
-                        set: { time = cal.dateComponents([.hour, .minute], from: $0) }),
-                               displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.stepperField).labelsHidden().fixedSize()
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+                    choice("全天", on: time == nil) { time = nil }
+                    ForEach(Self.times, id: \.0) { h, m in
+                        choice(String(format: "%02d:%02d", h, m), on: time?.hour == h && time?.minute == m) {
+                            time = DateComponents(hour: h, minute: m)
+                        }
+                    }
                 }
             }
             HStack {
-                Button("清除") { picked = nil; close() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                Button("清除") { picked = nil; close() }.buttonStyle(.hubSecondary)
                 Spacer()
-                Button { picked = PickedDue(day: day, time: time); close() } label: {
-                    Text("确定").font(Typo.sans(12, .semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 26)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(Palette.ink))
-                }
-                .buttonStyle(.plain).keyboardShortcut(.defaultAction)
+                Button { picked = PickedDue(day: day, time: time); close() } label: { Text("确定") }
+                    .buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(14)
-        .frame(width: 280)
+        .padding(20)
+        .frame(width: 372)
         .background(Palette.card)
         .onAppear {
             day = picked?.day ?? today
+            month = day
             time = picked?.time
         }
+    }
+
+    private var summary: String {
+        let cal = Calendar.hub
+        let date = "\(cal.component(.month, from: day))月\(cal.component(.day, from: day))日 周" + Self.weekdays[(cal.component(.weekday, from: day) + 5) % 7]
+        return date + (time.map { String(format: " · %02d:%02d", $0.hour ?? 0, $0.minute ?? 0) } ?? " · 全天")
+    }
+
+    private func choice(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(Typo.sans(13, on ? .semibold : .regular)).monospacedDigit()
+                .foregroundStyle(on ? Tone.sky.color : Palette.ink2)
+                .frame(maxWidth: .infinity).frame(height: 32)
+                .background(RoundedRectangle(cornerRadius: 8).fill(on ? Tone.sky.tint : Palette.sunk))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? Color.clear : Palette.line2))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func calendar(today: Date) -> some View {
+        let cal = Calendar.hub
+        let first = cal.date(from: cal.dateComponents([.year, .month], from: month))!
+        let lead = (cal.component(.weekday, from: first) + 5) % 7
+        let count = cal.range(of: .day, in: .month, for: first)!.count
+        let cells: [Date?] = Array(repeating: nil, count: lead) + (0..<count).map { cal.date(byAdding: .day, value: $0, to: first) }
+        return VStack(spacing: 6) {
+            HStack {
+                Text(verbatim: "\(cal.component(.year, from: first)) 年 \(cal.component(.month, from: first)) 月")
+                    .font(Typo.sans(14, .semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+                ForEach([-1, 1], id: \.self) { step in
+                    Button { month = cal.date(byAdding: .month, value: step, to: first)! } label: {
+                        Image(systemName: step < 0 ? "chevron.left" : "chevron.right")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
+                            .frame(width: 30, height: 28).background(RoundedRectangle(cornerRadius: 7).fill(Palette.sunk))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(step < 0 && first <= cal.date(from: cal.dateComponents([.year, .month], from: today))!)
+                }
+            }
+            .padding(.bottom, 4)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(Self.weekdays, id: \.self) { Text($0).font(Typo.sans(11)).foregroundStyle(Palette.ink3).frame(height: 20) }
+                ForEach(cells.indices, id: \.self) { i in
+                    if let d = cells[i] { dayCell(d, today: today) } else { Color.clear.frame(height: 36) }
+                }
+            }
+        }
+    }
+
+    private func dayCell(_ d: Date, today: Date) -> some View {
+        let cal = Calendar.hub
+        let selected = cal.isDate(d, inSameDayAs: day), isToday = cal.isDate(d, inSameDayAs: today), past = d < today
+        return Button { day = d } label: {
+            Text("\(cal.component(.day, from: d))").font(Typo.sans(13.5, selected || isToday ? .semibold : .regular)).monospacedDigit()
+                .foregroundStyle(selected ? Color.white : past ? Palette.ink4 : isToday ? Tone.clay.color : Palette.ink)
+                .frame(maxWidth: .infinity).frame(height: 36)
+                .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Palette.ink : Color.clear))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(isToday && !selected ? Tone.clay.color.opacity(0.5) : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).disabled(past)
     }
 
     private func nextMonday(_ today: Date) -> Date {
         let cal = Calendar.hub, weekday = cal.component(.weekday, from: today)
         return cal.date(byAdding: .day, value: (9 - weekday) % 7 == 0 ? 7 : (9 - weekday) % 7, to: today)!
+    }
+}
+
+/// Hour and five-minute steppers for times the preset chips don't cover.
+private struct TimeStepper: View {
+    @Binding var time: DateComponents?
+
+    var body: some View {
+        let h = time?.hour ?? 9, m = time?.minute ?? 0
+        HStack(spacing: 2) {
+            steps(60, "小时"); Text(String(format: "%02d", h)).frame(width: 24)
+            Text(":").foregroundStyle(Palette.ink3)
+            Text(String(format: "%02d", m)).frame(width: 24); steps(5, "分钟")
+        }
+        .font(Typo.sans(14, .semibold)).monospacedDigit().foregroundStyle(time == nil ? Palette.ink3 : Palette.ink)
+        .padding(3).background(RoundedRectangle(cornerRadius: 8).fill(Palette.sunk))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.line2))
+    }
+
+    private func steps(_ minutes: Int, _ name: String) -> some View {
+        HStack(spacing: 0) {
+            ForEach([-1, 1], id: \.self) { dir in
+                Button { shift(dir * minutes) } label: {
+                    Image(systemName: dir < 0 ? "minus" : "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.ink2)
+                        .frame(width: 22, height: 24).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help(name + (dir < 0 ? " −" : " +"))
+            }
+        }
+    }
+
+    private func shift(_ minutes: Int) {
+        let total = ((time?.hour ?? 9) * 60 + (time?.minute ?? 0) / 5 * 5 + minutes + 1440) % 1440
+        time = DateComponents(hour: total / 60, minute: total % 60)
     }
 }
 

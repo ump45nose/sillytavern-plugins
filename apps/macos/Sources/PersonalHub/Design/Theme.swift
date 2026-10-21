@@ -66,7 +66,9 @@ extension Tone {
 enum Typo {
     /// New York with Songti SC for CJK, matching the mockup's serif headings.
     /// New York is loaded from its file because the system-UI instance widens CJK punctuation to 1.5em.
-    static func serif(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> Font {
+    static func serif(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> Font { Font(serifFont(size, weight)) }
+
+    static func serifFont(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> NSFont {
         let w = weight.rawValue
         let bold = w >= NSFont.Weight.semibold.rawValue
         let instance: String = switch w {
@@ -79,11 +81,11 @@ enum Typo {
         let cjk = CTFontDescriptorCreateWithNameAndSize((bold ? "STSongti-SC-Bold" : "STSongti-SC-Regular") as CFString, size)
         if let latin = newYork[".NewYork-" + instance] {
             let desc = CTFontDescriptorCreateCopyWithAttributes(latin, [kCTFontCascadeListAttribute: [cjk]] as CFDictionary)
-            return Font(CTFontCreateWithFontDescriptor(desc, size, nil))
+            return CTFontCreateWithFontDescriptor(desc, size, nil) as NSFont
         }
         let base = NSFont.systemFont(ofSize: size, weight: weight)
         let desc = (base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor).addingAttributes([.cascadeList: [cjk]])
-        return Font(NSFont(descriptor: desc, size: size) ?? base)
+        return NSFont(descriptor: desc, size: size) ?? base
     }
 
     private static let newYork: [String: CTFontDescriptor] = {

@@ -23,7 +23,9 @@ enum QARender {
         try? await Task.sleep(for: .milliseconds(400))
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
+        let only = CommandLine.value(after: "--qa-only")?.split(separator: ",")
         func shot(_ name: String, width: CGFloat, height: CGFloat? = nil, _ view: some View) async {
+            if let only, !only.contains(where: { name.hasPrefix($0) }) { return }
             let host = NSHostingView(rootView: AnyView(view.environment(state)))
             host.sizingOptions = height == nil ? [.intrinsicContentSize] : []
             var size = NSSize(width: width, height: height ?? 800)
@@ -88,6 +90,8 @@ enum QARender {
         await shot("settings-account", width: 560, height: 440, SettingsView(tab: 2))
         await shot("settings-data", width: 560, height: 440, SettingsView(tab: 3))
         await shot("quick-memo", width: 600, QuickMemoView(close: {}))
+        await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
+        await shot("due-picker", width: 372, DuePickerPanel(picked: .constant(PickedDue(day: state.agenda.now, time: DateComponents(hour: 15, minute: 0))), now: state.agenda.now) {})
         for range in TokenRange.allCases {
             state.tokenRange = range
             await shot("token-\(range.rawValue)", width: 1240, ModuleCard(item: LayoutItem(.token, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
@@ -115,6 +119,23 @@ enum QARender {
         review.open(.stage)
         await shot("review-stage-close", width: 1180, height: 1500, ReviewView())
     }
+}
+
+enum QASample {
+    static let markdown = """
+    # 第 42 周 · 周报
+    ## 本周完成
+    - 托盘面板模块化：**今天 / 生活 / 工作** 三页
+    - [x] 主窗口卡顿修复，用量页 388ms → 10ms
+    - [ ] 网络套餐总量等 hub 接口
+    1. 先切健康和账单
+    2. 交流延后，见 [迁移方案](https://example.com/plan)
+    > 决定：本周只做能验证的部分。
+    阶段进度：
+    - 目标 [G3]：完成 60%，`hub-api` 布局接口已上线
+    ---
+    *下周* 重点：复盘进主窗口
+    """
 }
 
 /// `PersonalHub --qa-bench [--qa-cache]` lays out each module card repeatedly and prints the cost per pass.

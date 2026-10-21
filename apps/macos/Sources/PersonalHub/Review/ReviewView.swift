@@ -41,7 +41,7 @@ private struct ReviewSidebar: View {
                 }
             }
             .padding(.horizontal, 20).padding(.top, 46).padding(.bottom, 10)
-            ScrollView {
+            HubScroll {
                 VStack(alignment: .leading, spacing: 2) {
                     row(.stage, title: "本阶段", detail: desk.goals?.cycle.map { "第 \($0.day ?? 0) / \($0.total ?? 42) 天" },
                         chip: ReviewText.closeChip(desk.goals?.close?.status))
@@ -189,7 +189,7 @@ struct MaterialPanel: View {
                 }
             }
             .padding(.bottom, 10)
-            ScrollView {
+            HubScroll {
                 VStack(alignment: .leading, spacing: 14) {
                     if let delivered = session.delivered, !raw {
                         Text(ReviewText.markdown(delivered.text)).font(Typo.sans(13)).lineSpacing(4).textSelection(.enabled)
@@ -263,11 +263,8 @@ struct PreviewSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label11(title)
-            ScrollView {
-                Text(content).font(Typo.sans(13.5)).lineSpacing(5).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-            }
-            .background(RoundedRectangle(cornerRadius: Metrics.innerRadius).fill(Palette.sunk))
+            MarkdownEditor(text: .constant(content), editable: false)
+                .background(RoundedRectangle(cornerRadius: Metrics.innerRadius).fill(Palette.sunk))
             if let error { Text(error).font(Typo.sans(12)).foregroundStyle(Tone.rose.color) }
             HStack {
                 Text("确认后写入 Memos，Telegram 会收到已归档的通知").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)

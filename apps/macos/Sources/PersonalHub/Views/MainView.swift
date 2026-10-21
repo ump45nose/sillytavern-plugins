@@ -331,7 +331,7 @@ struct PageView: View {
                 .padding(.horizontal, 28).padding(.bottom, 24)
         case .grid:
             ScrollViewReader { proxy in
-                ScrollView {
+                HubScroll {
                     VStack(alignment: .leading, spacing: 18) {
                         if page.id != "home" { PageHeader(page: page) }
                         if page.items.isEmpty, !state.editing { EmptyPage() }

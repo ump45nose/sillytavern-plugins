@@ -243,7 +243,7 @@ struct AgendaModule: View {
             VStack(alignment: .leading, spacing: 0) {
                 ListChips(selection: $listFilter).padding(.bottom, 2)
                 SyncNotice().padding(.top, 6)
-                ScrollView {
+                HubScroll {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(groups.filter { !$0.1.isEmpty || $0.0.hasPrefix("今天") }, id: \.0) { title, tasks in
                             SectionTitle(title)

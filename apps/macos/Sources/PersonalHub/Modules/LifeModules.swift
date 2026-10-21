@@ -457,7 +457,7 @@ struct Recording: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showTranscript, arrowEdge: .bottom) {
-                    ScrollView {
+                    HubScroll {
                         Text(transcript.map { (try? AttributedString(markdown: $0, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString($0) } ?? "暂无转录稿")
                             .font(Typo.sans(12.5)).lineSpacing(3).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(16)

@@ -28,7 +28,7 @@ struct StageView: View {
 
     var body: some View {
         let g = state.review.goals
-        ScrollView {
+        HubScroll {
             VStack(alignment: .leading, spacing: 0) {
                 if let m = g?.mainline { mainline(m) }
                 if let c = g?.cycle {
