@@ -62,7 +62,9 @@ struct TokenModule: View {
             .sorted { $0.1 > $1.1 }.prefix(2)
         return VStack(alignment: .leading, spacing: 0) {
             if let total {
-                Hero(value: total, decimals: 1, unit: "M tokens" + (cost.map { " · ≈ $\(Fmt.number($0, 2))" } ?? ""))
+                let big = total >= 1000
+                Hero(value: big ? total / 1000 : total, decimals: big ? 2 : 1, unit: big ? "B" : "M")
+                Text("tokens\(cost.map { " · ≈ $\(Fmt.number($0, $0 >= 100 ? 0 : 2))" } ?? "")").font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1)
             } else {
                 Hero.empty("M tokens")
             }
@@ -99,15 +101,9 @@ private struct TokenDetail: View {
                 HeatLegend()
             }
             .padding(.bottom, 18)
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 32) {
-                    main(range).frame(minWidth: 560)
-                    limits.frame(width: 320)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    main(range)
-                    limits
-                }
+            AdaptiveRow(threshold: 560 + 32 + 320, spacing: 32, stackSpacing: 4) {
+                main(range)
+                limits.adaptiveWidth(320)
             }
         }
     }
@@ -187,9 +183,9 @@ private struct TokenDetail: View {
                 Label11(label)
                 let main = Text(value).font(Typo.serif(20)).foregroundStyle(value == "—" ? Palette.ink3 : color).monospacedDigit().lineLimit(1)
                 let note = small.map { Text($0).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) { main.fixedSize(); note?.fixedSize() }
-                    VStack(alignment: .leading, spacing: 1) { main.minimumScaleFactor(0.7); note }
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    main.minimumScaleFactor(0.7).layoutPriority(1)
+                    note
                 }
             }
             Spacer(minLength: 0)
@@ -254,22 +250,48 @@ struct HeatLegend: View {
     }
 }
 
+/// Drawn in one canvas with a single hover tracker: hundreds of cell views, each with its own
+/// tooltip and hover handler, made the token page stutter.
 struct TokenHeatmapView: View {
     var map: TokenHeatmap
-    @ViewState private var hovered: [Int]?
-    @ViewState private var shown = false
+    @ViewState private var hovered: Cell?
+    @ViewState private var shown: CGFloat = 0
+
+    struct Cell: Equatable { var row: Int, column: Int }
 
     /// Cells stretch horizontally; heights are tuned per range so they read as roughly square at module widths.
     private var cellHeight: CGFloat { map.dense ? 9 : map.columns >= 30 ? 16 : 20 }
+    private var gap: CGFloat { map.dense ? 2 : 3 }
+    private var labelWidth: CGFloat { map.dense ? 28 : 78 }
+    private var gridHeight: CGFloat { CGFloat(map.rowLabels.count) * (cellHeight + gap) - gap }
 
     var body: some View {
-        let gap: CGFloat = map.dense ? 2 : 3, labelWidth: CGFloat = map.dense ? 28 : 78
-        VStack(alignment: .leading, spacing: gap) {
-            ForEach(map.rowLabels.indices, id: \.self) { r in
-                HStack(spacing: gap) {
-                    Text(map.rowLabels[r]).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1).frame(width: labelWidth, alignment: .leading)
-                    ForEach(0..<map.columns, id: \.self) { c in cellView(r, c) }
+        VStack(alignment: .leading, spacing: gap + 2) {
+            HStack(alignment: .top, spacing: gap) {
+                VStack(alignment: .leading, spacing: gap) {
+                    ForEach(map.rowLabels.indices, id: \.self) { r in
+                        Text(map.rowLabels[r]).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
+                            .frame(width: labelWidth, height: cellHeight, alignment: .leading)
+                    }
                 }
+                HeatCanvas(map: map, cellHeight: cellHeight, gap: gap, hovered: hovered, shown: shown)
+                    .frame(height: gridHeight)
+                    .overlay {
+                        GeometryReader { geo in
+                            ZStack {
+                                Color.clear.contentShape(Rectangle())
+                                    .onContinuousHover { phase in
+                                        switch phase {
+                                        case .active(let p):
+                                            let c = cell(at: p, width: geo.size.width)
+                                            if c != hovered { hovered = c }
+                                        case .ended: hovered = nil
+                                        }
+                                    }
+                                tooltip(in: geo.size)
+                            }
+                        }
+                    }
             }
             HStack(spacing: gap) {
                 Color.clear.frame(width: labelWidth, height: 1)
@@ -279,25 +301,63 @@ struct TokenHeatmapView: View {
                 }
             }
             .frame(height: 14)
-            .padding(.top, 2)
         }
-        .onAppear { shown = true }
+        .onAppear { withAnimation(.easeOut(duration: 0.6)) { shown = 1 } }
     }
 
-    private func cellView(_ r: Int, _ c: Int) -> some View {
-        let v = map.values[r][c], lv = map.level(v)
-        let on = hovered == [r, c]
-        return RoundedRectangle(cornerRadius: map.dense ? 2 : 3)
-            .fill(lv < 0 ? Color.clear : Palette.heat[lv])
-            .overlay(RoundedRectangle(cornerRadius: map.dense ? 2 : 3).strokeBorder(lv < 0 ? Palette.line2 : on ? Palette.ink2 : .clear, lineWidth: on ? 1.5 : 1))
-            .frame(maxWidth: .infinity).frame(height: cellHeight)
-            .scaleEffect(on ? 1.3 : 1)
-            .zIndex(on ? 1 : 0)
-            .opacity(shown ? 1 : 0)
-            .animation(.easeOut(duration: 0.45).delay(Double(c + r * 2) * (map.dense ? 0.004 : 0.009)), value: shown)
-            .animation(Motion.fast, value: on)
-            .onHover { hovered = $0 ? [r, c] : (hovered == [r, c] ? nil : hovered) }
-            .help(map.tips[r][c] + (v.map { " · " + TokenFormat.short($0) } ?? " · 暂无数据"))
+    private func cellWidth(_ width: CGFloat) -> CGFloat {
+        max(1, (width - gap * CGFloat(map.columns - 1)) / CGFloat(max(1, map.columns)))
+    }
+
+    private func cell(at p: CGPoint, width: CGFloat) -> Cell? {
+        let w = cellWidth(width)
+        let c = Int(p.x / (w + gap)), r = Int(p.y / (cellHeight + gap))
+        guard map.values.indices.contains(r), (0..<map.columns).contains(c) else { return nil }
+        return Cell(row: r, column: c)
+    }
+
+    @ViewBuilder private func tooltip(in size: CGSize) -> some View {
+        if let h = hovered {
+            let w = cellWidth(size.width), v = map.values[h.row][h.column]
+            let text = map.tips[h.row][h.column] + (v.map { " · " + TokenFormat.short($0) } ?? " · 暂无数据")
+            let x = CGFloat(h.column) * (w + gap) + w / 2, y = CGFloat(h.row) * (cellHeight + gap)
+            Text(text).font(Typo.sans(11)).foregroundStyle(.white).fixedSize()
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Palette.ink))
+                .position(x: min(max(x, 70), size.width - 70), y: max(10, y - 14))
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct HeatCanvas: View {
+    var map: TokenHeatmap
+    var cellHeight: CGFloat
+    var gap: CGFloat
+    var hovered: TokenHeatmapView.Cell?
+    var shown: CGFloat
+
+    var body: some View {
+        Canvas { ctx, size in
+            let columns = max(1, map.columns)
+            let w = max(1, (size.width - gap * CGFloat(columns - 1)) / CGFloat(columns))
+            let radius: CGFloat = map.dense ? 2 : 3
+            for r in map.values.indices {
+                for c in 0..<map.columns {
+                    let rect = CGRect(x: CGFloat(c) * (w + gap), y: CGFloat(r) * (cellHeight + gap), width: w, height: cellHeight)
+                    let lv = map.level(map.values[r][c])
+                    let path = Path(roundedRect: rect, cornerRadius: radius)
+                    if lv < 0 {
+                        ctx.stroke(Path(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerRadius: radius), with: .color(Palette.line2), lineWidth: 1)
+                    } else {
+                        ctx.fill(path, with: .color(Palette.heat[lv].opacity(Double(shown))))
+                    }
+                    if hovered == TokenHeatmapView.Cell(row: r, column: c) {
+                        ctx.stroke(Path(roundedRect: rect.insetBy(dx: -1.5, dy: -1.5), cornerRadius: radius + 1), with: .color(Palette.ink2), lineWidth: 1.5)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -344,9 +404,9 @@ struct GitModule: View {
                     valueText(g.activity?.commitsToday.map(String.init) ?? "—", g.activity?.streakDays.map { "· 连续 \($0) 天" } ?? "", Palette.ink)
                 }
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 28) { waitList(waiting).frame(minWidth: 360); blockedList(blocked).frame(minWidth: 360) }
-                VStack(alignment: .leading, spacing: 0) { waitList(waiting); blockedList(blocked) }
+            AdaptiveRow(threshold: 360 * 2 + 28, spacing: 28) {
+                waitList(waiting)
+                blockedList(blocked)
             }
             .padding(.top, 2)
             if let a = g.activity {
@@ -496,43 +556,50 @@ struct NetModule: View {
     }
 
     private struct PoolView {
-        var name: String, remaining: Double, total: Double, daysLeft: Int?, expires: String?
-        var pct: Double { total > 0 ? remaining / total * 100 : 0 }
+        var name: String, used: Double, total: Double, daysLeft: Int?, expires: String?
+        var remaining: Double { max(0, total - used) }
+        var pct: Double { total > 0 ? min(100, used / total * 100) : 0 }
     }
 
     private func pools(_ n: NetData) -> [PoolView] {
         (n.pools ?? []).compactMap { p in
             guard let used = p.usedBytes, let total = p.totalBytes, total > 0 else { return nil }
             let left = HubFormat.day(p.expiresOn).flatMap { d in Calendar.hub.dateComponents([.day], from: Calendar.hub.startOfDay(for: HubFormat.current()), to: d).day }
-            return PoolView(name: p.name, remaining: max(0, total - used) / 1_073_741_824, total: total / 1_073_741_824, daysLeft: left, expires: p.expiresOn)
+            return PoolView(name: p.name, used: used / 1_073_741_824, total: total / 1_073_741_824, daysLeft: left, expires: p.expiresOn)
         }
     }
+
+    private func usageTone(_ pct: Double) -> Tone { pct >= 90 ? .rose : pct >= 75 ? .ochre : .sage }
 
     @ViewBuilder private func compact(_ n: NetData) -> some View {
         if let p = pools(n).first {
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
-                    ArcGauge(value: p.pct, color: Tone.sage.color)
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        CountUp(value: p.remaining).font(Typo.serif(26))
-                        Text("GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                    ArcGauge(value: p.pct, color: usageTone(p.pct).color)
+                    VStack(spacing: 0) {
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            CountUp(value: p.used).font(Typo.serif(24))
+                            Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                        }
+                        Text("已用").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3)
                     }
                 }
                 Spacer(minLength: 4)
-                Text("\(p.name) · 剩 \(Int(p.pct.rounded()))%\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
-                    .font(Typo.sans(12)).foregroundStyle(Palette.ink2)
+                Text("\(p.name) · 剩 \(HubFormat.gb(p.remaining * 1_073_741_824, 0)) GB\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                Label11("今日流量")
+                Label11("本月已用")
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(HubFormat.gb(n.today.map { ($0.downBytes ?? 0) + ($0.upBytes ?? 0) })).font(Typo.serif(38)).monospacedDigit()
+                    Text(HubFormat.gb(n.monthBytes, 1)).font(Typo.serif(38)).monospacedDigit()
                     Text("GB").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 }
-                Text("↓ \(HubFormat.gb(n.today?.downBytes)) · ↑ \(HubFormat.gb(n.today?.upBytes)) GB").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 4)
+                Text("今日 \(HubFormat.gb(n.today.map { ($0.downBytes ?? 0) + ($0.upBytes ?? 0) })) GB · ↓ \(HubFormat.gb(n.today?.downBytes)) ↑ \(HubFormat.gb(n.today?.upBytes))")
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 4)
                 Spacer(minLength: 6)
-                Text("本月 \(HubFormat.gb(n.monthBytes, 0)) GB · 流量包暂未接入").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                Text("套餐总量未接入").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
             }
         }
     }
@@ -542,19 +609,21 @@ struct NetModule: View {
         return VStack(alignment: .leading, spacing: 10) {
             let ps = pools(n)
             if ps.isEmpty {
-                Text("流量包余量暂未接入，先显示实际流量").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                Text("套餐总量与已用暂未接入，先显示本机统计的实际流量").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             }
             ForEach(Array(ps.enumerated()), id: \.1.name) { i, p in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(p.name).font(Typo.sans(13, .semibold))
                         Spacer()
-                        CountUp(value: p.remaining, decimals: 1).font(Typo.serif(18))
-                        Text("/ \(Int(p.total)) GB 剩余").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                        Text("已用").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                        CountUp(value: p.used, decimals: 1).font(Typo.serif(18))
+                        Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
                     }
-                    Track(value: p.pct, color: Tone.sage.color, delay: Double(i) * 100)
+                    Track(value: p.pct, color: usageTone(p.pct).color, delay: Double(i) * 100)
                     HStack {
-                        if let e = p.expires { Text("\(e) 到期") }
+                        Text("剩 \(String(format: "%.1f", p.remaining)) GB")
+                        if let e = p.expires { Text("· \(e) 到期") }
                         Spacer()
                         if let d = p.daysLeft, d > 0 { Text("日均可用 \(String(format: "%.1f", p.remaining / Double(d))) GB") }
                     }

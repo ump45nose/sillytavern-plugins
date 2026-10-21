@@ -27,12 +27,19 @@ struct HealthModule: View {
             HStack(alignment: .top) {
                 if let steps = h.steps { Hero(value: steps, unit: "步") } else { Hero.empty("步") }
                 Spacer()
-                Ring(value: pct(h.steps, h.stepGoal) ?? 0, color: Tone.olive.color, size: 46, width: 6)
+                ZStack {
+                    Ring(value: pct(h.steps, h.stepGoal) ?? 0, color: Tone.olive.color, size: 48, width: 5)
+                    Ring(value: pct(h.activeKcal, h.kcalGoal) ?? 0, color: Tone.clay.color, size: 36, width: 5)
+                    Ring(value: pct(h.exerciseMinutes, h.exerciseGoal) ?? 0, color: Tone.sky.color, size: 24, width: 5)
+                }
+                .help("外圈步数 · 中圈活动 · 内圈锻炼")
             }
-            Text("睡眠 \(HubFormat.minutes(h.sleepMinutes)) · 静息心率 \(HubFormat.int(h.restingHr))")
-                .font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+            Text("睡眠 \(HubFormat.minutes(h.sleepMinutes)) · 心率 \(HubFormat.int(h.restingHr)) · 血氧 \(HubFormat.int(h.spo2))%")
+                .font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1).padding(.top, 4)
+            Text("活动 \(HubFormat.int(h.activeKcal)) kcal · 锻炼 \(HubFormat.int(h.exerciseMinutes)) 分钟")
+                .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1).padding(.top, 2)
             Spacer(minLength: 6)
-            Bars(values: days(h).map(\.steps), height: 32, color: Tone.olive.color)
+            Bars(values: days(h).map(\.steps), height: 26, color: Tone.olive.color)
         }
     }
 
@@ -286,6 +293,7 @@ struct StackBar: View {
 struct CRMModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
+    @ViewState private var showAll = false
 
     var body: some View {
         HubGate(envelope: state.hub.data.crm) { c in
@@ -299,31 +307,56 @@ struct CRMModule: View {
     }
 
     private func compact(_ c: CRMData) -> some View {
-        let who = people(c), recordings = (c.today ?? []).compactMap(\.recording)
+        let today = c.today ?? [], who = people(c), recordings = today.compactMap(\.recording)
         let length = recordings.compactMap(\.durationSeconds).reduce(0, +)
+        let latest = today.max { ($0.time ?? .distantPast) < ($1.time ?? .distantPast) }
         return VStack(alignment: .leading, spacing: 0) {
-            Hero(value: Double(who.count), unit: "人 · 今日交流")
-            HStack(spacing: -6) {
-                ForEach(who.prefix(7)) { PersonBadge(initial: HubFormat.initial($0.name), tone: HubFormat.tone(for: $0.personId ?? $0.name)) }
+            Hero(value: Double(who.count), unit: "人 · \(today.count) 条交流")
+            HStack(spacing: 8) {
+                HStack(spacing: -6) {
+                    ForEach(who.prefix(5)) { PersonBadge(initial: HubFormat.initial($0.name), tone: HubFormat.tone(for: $0.personId ?? $0.name), size: 26) }
+                }
+                if !recordings.isEmpty {
+                    Chip(text: "\(recordings.count) 段录音\(length > 0 ? " · " + (HubFormat.duration(length) ?? "") : "")", tone: .rose, systemImage: "waveform")
+                }
             }
-            .padding(.top, 12)
-            Spacer(minLength: 6)
-            if !recordings.isEmpty {
-                Chip(text: "\(recordings.count) 段录音\(length > 0 ? " · " + (HubFormat.duration(length) ?? "") : "")", tone: .rose, systemImage: "play.fill")
-            } else if who.isEmpty {
-                Text("今天还没有交流记录").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            .padding(.top, 8)
+            if let latest {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text([latest.name, latest.time.map(HubFormat.clock)].compactMap { $0 }.joined(separator: " · "))
+                        .font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                    Text(Self.preview(latest.summary)).font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(2)
+                }
+                .padding(.top, 10)
+            } else {
+                Text("今天还没有交流记录").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.top, 10)
             }
         }
     }
 
+    /// Markdown attachment links (`[图片](attachment://…)`) become their bare label.
+    static func clean(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\[([^\]]*)\]\(attachment://[^)]*\)"#, with: "[$1]", options: .regularExpression)
+    }
+
+    /// Chat-log summaries arrive as one line per message; the card shows the last real line.
+    static func preview(_ summary: String?) -> String {
+        let lines = clean(summary ?? "").split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        let text = lines.last { !$0.isEmpty && !$0.hasSuffix("[图片]") && $0.count > 1 } ?? lines.last ?? ""
+        return text.isEmpty ? "没有摘要" : text
+    }
+
+    private static let shownRows = 5
+
     private func detail(_ c: CRMData) -> some View {
         let today = c.today ?? []
+        let rows = showAll ? today : Array(today.prefix(Self.shownRows))
         return VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("今日 · \(people(c).count) 人").padding(.top, -18)
+            SectionTitle("今日 · \(people(c).count) 人 · \(today.count) 条").padding(.top, -18)
             if today.isEmpty {
                 Text("今天还没有交流记录").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3).padding(.vertical, 10)
             }
-            ForEach(Array(today.enumerated()), id: \.1.id) { i, p in
+            ForEach(Array(rows.enumerated()), id: \.1.id) { i, p in
                 HStack(alignment: .top, spacing: 12) {
                     PersonBadge(initial: HubFormat.initial(p.name), tone: HubFormat.tone(for: p.personId ?? p.name), size: 32)
                     VStack(alignment: .leading, spacing: 4) {
@@ -333,15 +366,19 @@ struct CRMModule: View {
                             Spacer()
                             if let t = p.time { Text(HubFormat.clock(t)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit() }
                         }
-                        if let s = p.summary, !s.isEmpty {
-                            Text(s).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                        }
+                        if let s = p.summary, !s.isEmpty { CollapsibleText(text: Self.clean(s)) }
                         if let rec = p.recording { Recording(recording: rec) }
                     }
                 }
                 .padding(.vertical, 10)
                 .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.line2).frame(height: 1) } }
                 .rise(i)
+            }
+            if today.count > Self.shownRows {
+                Button { withAnimation(Motion.spring) { showAll.toggle() } } label: {
+                    Chip(text: showAll ? "收起" : "展开全部 \(today.count) 条")
+                }
+                .buttonStyle(.plain).padding(.top, 4)
             }
             if let cycle = c.cycle {
                 SectionTitle(cycle.days.map { "近 \($0) 天" } ?? "本阶段")
@@ -350,12 +387,10 @@ struct CRMModule: View {
                     stageStat(cycle.interactions, "次交流")
                     stageStat(cycle.recordings, "段录音")
                     Spacer()
-                    if let stale = c.stale, !stale.isEmpty {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Label11("久未联系")
-                            Flow(spacing: 6) { ForEach(stale.prefix(6), id: \.name) { s in Chip(text: s.days.map { "\(s.name) · \($0) 天" } ?? s.name) } }
-                        }
-                    }
+                }
+                if let stale = c.stale, !stale.isEmpty {
+                    Label11("久未联系").padding(.top, 14).padding(.bottom, 6)
+                    Flow(spacing: 6) { ForEach(stale.prefix(8), id: \.name) { s in Chip(text: s.days.map { "\(s.name) · \($0) 天" } ?? s.name) } }
                 }
             }
         }
@@ -365,6 +400,30 @@ struct CRMModule: View {
         VStack(alignment: .leading, spacing: 2) {
             if let v { CountUp(value: Double(v)).font(Typo.serif(30)) } else { Text("—").font(Typo.serif(30)).foregroundStyle(Palette.ink3) }
             Label11(label)
+        }
+    }
+}
+
+/// Long text clipped to a few lines, with a toggle when it does not fit.
+struct CollapsibleText: View {
+    var text: String
+    var lines = 3
+    @ViewState private var expanded = false
+
+    private var long: Bool { text.count > 120 || text.filter { $0 == "\n" }.count >= lines }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(text).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(2)
+                .lineLimit(expanded ? nil : lines)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if long {
+                Button { withAnimation(Motion.spring) { expanded.toggle() } } label: {
+                    Text(expanded ? "收起" : "展开").font(Typo.sans(11, .medium)).foregroundStyle(Palette.ink3)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }
@@ -441,16 +500,15 @@ struct Recording: View {
 struct MediaModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
+    @ViewState private var wide = true
 
     var body: some View {
         HubGate(envelope: state.hub.data.media) { m in
             if size == .compact {
                 compact(m)
             } else {
-                ViewThatFits(in: .horizontal) {
-                    detail(m, columns: 6, wide: true).frame(minWidth: 820)
-                    detail(m, columns: 3, wide: false)
-                }
+                detail(m, columns: wide ? 6 : 3, wide: wide)
+                    .onGeometryChange(for: Bool.self) { $0.size.width >= 820 } action: { wide = $0 }
             }
         }
     }

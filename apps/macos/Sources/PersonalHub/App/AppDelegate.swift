@@ -246,7 +246,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             AnyView(QuickMemoView { [weak panel] in panel?.dismiss() })
         }
         let host = NSHostingView(rootView: root.environment(state))
-        host.sizingOptions = []
+        // Empty options make fittingSize (0, 0). Intrinsic size is only a measurement;
+        // present() and fit() still place the frame so the top edge stays put.
+        host.sizingOptions = [.intrinsicContentSize]
         panel.contentView = host
         if kind == .task { taskPanel = panel } else { memoPanel = panel }
         panel.present()

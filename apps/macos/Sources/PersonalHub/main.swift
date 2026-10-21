@@ -63,6 +63,16 @@ if let dir = CommandLine.value(after: "--qa-render") {
     }
     app.run()
 }
+if CommandLine.arguments.contains("--qa-bench") {
+    app.setActivationPolicy(.prohibited)
+    MainActor.assumeIsolated {
+        Task {
+            await QABench.run()
+            exit(0)
+        }
+    }
+    app.run()
+}
 #endif
 
 let delegate = MainActor.assumeIsolated { AppDelegate() }

@@ -128,7 +128,6 @@ private struct SkyListItem: View {
                 if let badge = SkyText.badge(window) { Chip(text: badge, tone: SkyText.live(window) ? .steel : nil) }
             }
             Text(window.title).font(Typo.sans(13, .semibold)).lineLimit(2)
-            Text(window.summary).font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(2)
             AppIcons(bundles: window.apps.map(\.bundle), size: 13).padding(.top, 2)
         }
         .padding(12)

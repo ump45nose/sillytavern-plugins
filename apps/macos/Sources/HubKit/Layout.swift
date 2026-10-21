@@ -9,8 +9,8 @@ public enum ModuleID: String, Codable, CaseIterable, Sendable {
         case (.brief, _): 12
         case (.attention, .compact): 12
         case (.attention, .detail): 5
-        case (.agenda, .detail): 7
-        case (.goals, .detail): 5
+        case (.agenda, .detail): 6
+        case (.goals, .detail): 6
         case (.media, .detail), (.token, .detail): 12
         case (_, .compact): 3
         case (_, .detail): 6
@@ -70,6 +70,15 @@ public struct Page: Codable, Hashable, Sendable, Identifiable {
     public mutating func setSize(_ size: ModuleSize, at index: Int) {
         guard items.indices.contains(index) else { return }
         items[index].size = size
+    }
+
+    /// Detail cards can be resized from a third of the grid up to full width.
+    public static let spanRange = 4...Grid.columns
+
+    public mutating func resize(at index: Int, by offset: Int) {
+        guard items.indices.contains(index), items[index].size == .detail else { return }
+        let next = min(max(items[index].effectiveSpan + offset, Self.spanRange.lowerBound), Self.spanRange.upperBound)
+        items[index].span = next == items[index].module.defaultSpan(.detail) ? nil : next
     }
 
     public mutating func move(at index: Int, by offset: Int) {

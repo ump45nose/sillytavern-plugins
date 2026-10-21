@@ -42,8 +42,12 @@ struct CountUp: View {
     var suffix = ""
     @ViewState private var shown: CGFloat = 0
 
+    /// The final value sizes the view so the per-frame text never re-runs the surrounding layout.
     var body: some View {
-        CountingText(value: value * shown, decimals: decimals, prefix: prefix, suffix: suffix)
+        Text(prefix + Fmt.number(value, decimals) + suffix).monospacedDigit().hidden()
+            .overlay(alignment: .leading) {
+                CountingText(value: value * shown, decimals: decimals, prefix: prefix, suffix: suffix).fixedSize()
+            }
             .modifier(AppearProgress(animation: .timingCurve(0.25, 1, 0.5, 1, duration: 1.1), progress: $shown))
     }
 }
@@ -62,13 +66,73 @@ private struct CountingText: View, Animatable {
 }
 
 enum Fmt {
-    static func number(_ v: Double, _ decimals: Int = 0) -> String {
+    /// NumberFormatter is thread-safe once configured, and creating one per call showed up in animated numbers.
+    nonisolated(unsafe) private static let formatters = (0...4).map(make)
+
+    private static func make(_ decimals: Int) -> NumberFormatter {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.minimumFractionDigits = decimals
         f.maximumFractionDigits = decimals
+        return f
+    }
+
+    static func number(_ v: Double, _ decimals: Int = 0) -> String {
+        let f = formatters.indices.contains(decimals) ? formatters[decimals] : make(decimals)
         return f.string(from: NSNumber(value: v)) ?? "\(v)"
     }
+}
+
+/// Side by side when the proposed width allows, stacked otherwise. Unlike `ViewThatFits` it decides
+/// from the width alone, so it never measures its children's ideal sizes.
+struct AdaptiveRow: Layout {
+    var threshold: CGFloat
+    var spacing: CGFloat = 24
+    var stackSpacing: CGFloat = 0
+
+    /// A fixed column width in the side-by-side arrangement; other columns share what is left.
+    struct Width: LayoutValueKey {
+        static let defaultValue: CGFloat? = nil
+    }
+
+    private func widths(_ total: CGFloat, _ subviews: Subviews) -> [CGFloat] {
+        let fixed = subviews.compactMap { $0[Width.self] }
+        let flexible = subviews.count - fixed.count
+        let rest = max(0, total - fixed.reduce(0, +) - spacing * CGFloat(max(0, subviews.count - 1)))
+        return subviews.map { $0[Width.self] ?? (flexible > 0 ? rest / CGFloat(flexible) : 0) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? threshold
+        if width >= threshold {
+            let w = widths(width, subviews)
+            let h = subviews.indices.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w[$0], height: nil)).height }.max() ?? 0
+            return CGSize(width: width, height: h)
+        }
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + stackSpacing * CGFloat(max(0, subviews.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        if bounds.width >= threshold {
+            var x = bounds.minX
+            for (i, w) in widths(bounds.width, subviews).enumerated() {
+                subviews[i].place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(width: w, height: nil))
+                x += w + spacing
+            }
+        } else {
+            var y = bounds.minY
+            for s in subviews {
+                let h = s.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+                s.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: bounds.width, height: h))
+                y += h + stackSpacing
+            }
+        }
+    }
+}
+
+extension View {
+    func adaptiveWidth(_ width: CGFloat) -> some View { layoutValue(key: AdaptiveRow.Width.self, value: width) }
 }
 
 // MARK: - Text styles
@@ -251,6 +315,52 @@ struct Segmented<T: Hashable>: View {
         .padding(small ? 2 : 3)
         .background(RoundedRectangle(cornerRadius: small ? 7 : 10).fill(Palette.sunk))
     }
+}
+
+/// Filled ink button for the one action that moves a flow forward; `.secondary` is the quiet companion.
+struct HubButton: ButtonStyle {
+    var primary = true
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Typo.sans(12.5, primary ? .semibold : .regular))
+            .foregroundStyle(primary ? Color.white : Palette.ink)
+            .padding(.horizontal, 14).frame(height: 30)
+            .background(RoundedRectangle(cornerRadius: 8).fill(primary ? Palette.ink : Palette.sunk))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(primary ? Color.clear : Palette.line))
+            .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
+            .contentShape(Rectangle())
+    }
+}
+
+extension ButtonStyle where Self == HubButton {
+    static var hubPrimary: HubButton { HubButton() }
+    static var hubSecondary: HubButton { HubButton(primary: false) }
+}
+
+/// Warm switch in place of the system's blue one.
+struct HubSwitch: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.label
+            Capsule()
+                .fill(configuration.isOn ? Tone.olive.color : Color(hex: "#E2DACB"))
+                .frame(width: 34, height: 20)
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                    Circle().fill(Palette.card).padding(2.5)
+                        .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+                }
+                .contentShape(Capsule())
+                .onTapGesture { withAnimation(Motion.fast) { configuration.isOn.toggle() } }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityValue(configuration.isOn ? "开" : "关")
+        }
+    }
+}
+
+extension ToggleStyle where Self == HubSwitch {
+    static var hub: HubSwitch { HubSwitch() }
 }
 
 struct Legend: View {
@@ -449,6 +559,27 @@ struct ContributionGrid: View {
             let v = Double(s) / 2147483647
             return v < 0.32 ? 0 : v < 0.58 ? 1 : v < 0.8 ? 2 : v < 0.93 ? 3 : 4
         }
+    }
+}
+
+/// The user's picked photo, or the first character of their name on clay.
+struct UserAvatar: View {
+    var size: CGFloat
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        Group {
+            if let image = state.avatar {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Text(String(state.displayName.prefix(1))).font(Typo.sans(size * 0.43, .semibold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Tone.clay.color)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(Palette.line))
     }
 }
 

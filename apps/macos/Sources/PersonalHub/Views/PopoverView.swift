@@ -83,6 +83,7 @@ struct PopoverView: View {
         .frame(width: 380)
         .background(Palette.card)
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
         .animation(Motion.spring, value: page.id)
     }
 
@@ -289,6 +290,7 @@ private struct TrayTaskInput: View {
     @Environment(AppState.self) private var state
     @ViewState private var text = ""
     @ViewState private var added: String?
+    @ViewState private var picked: PickedDue?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -300,6 +302,7 @@ private struct TrayTaskInput: View {
                     .textFieldStyle(.plain).font(Typo.sans(12.5))
                     .focused($focused)
                     .onSubmit(submit)
+                DuePickerButton(picked: $picked, now: state.agenda.now)
                 Button { state.showQuickTask() } label: { Kbd(HotKeyCenter.shared.display(.quickTask)) }
                     .buttonStyle(.plain).help("打开快速任务窗口")
             }
@@ -311,7 +314,7 @@ private struct TrayTaskInput: View {
             .animation(Motion.fast, value: focused)
             if let added {
                 Chip(text: added, tone: .olive, systemImage: "checkmark").transition(.opacity.combined(with: .offset(y: 3)))
-            } else if !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            } else if !text.trimmingCharacters(in: .whitespaces).isEmpty || picked != nil {
                 QuickEntryChips(entry: entry, timeBlock: false) {}.transition(.opacity)
             }
         }
@@ -325,6 +328,7 @@ private struct TrayTaskInput: View {
 
     private var parsed: QuickEntry {
         var e = QuickEntryParser.parse(text, now: state.agenda.now)
+        picked?.apply(to: &e)
         if dueToday, e.due == nil { e.due = Calendar.hub.startOfDay(for: state.agenda.now) }
         if let list, e.listTag == nil { e.listTag = list.title }
         return e
@@ -337,6 +341,7 @@ private struct TrayTaskInput: View {
         let when = entry.due.map { Agenda.relativeDay($0, now: state.agenda.now) + (entry.hasTime ? " " + Agenda.clock($0) : "") }
         added = "已添加到「\(target)」" + (when.map { " · " + $0 } ?? "")
         text = ""
+        picked = nil
         focused = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { added = nil }
     }

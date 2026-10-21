@@ -22,6 +22,7 @@ struct ReviewView: View {
         .frame(minWidth: 1040, minHeight: 680)
         .background(Palette.bg)
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
         .task { await desk.reload() }
     }
 }
@@ -31,28 +32,34 @@ private struct ReviewSidebar: View {
 
     var body: some View {
         let desk = state.review
-        ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("复盘").font(Typo.serif(24)).padding(.top, 34).padding(.bottom, 4).padding(.horizontal, 10)
+        VStack(alignment: .leading, spacing: 0) {
+            // The window's title bar overlays this strip; the header stays below the traffic lights.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("复盘").font(Typo.serif(24))
                 if let direction = desk.goals?.mainline?.direction {
-                    Text(direction).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(2).padding(.horizontal, 10).padding(.bottom, 10)
-                }
-                row(.stage, title: "本阶段", detail: desk.goals?.cycle.map { "第 \($0.day ?? 0) / \($0.total ?? 42) 天" },
-                    chip: ReviewText.closeChip(desk.goals?.close?.status))
-                ForEach(ReviewKind.allCases, id: \.self) { kind in
-                    SectionTitle(kind.title).padding(.horizontal, 10)
-                    let items = desk.lists[kind] ?? []
-                    ForEach(items) { s in
-                        row(.session(s.id), title: ReviewText.title(s), detail: nil, chip: ReviewText.chip(s.status))
-                    }
-                    if items.isEmpty {
-                        Text(desk.listError ?? "还没有\(kind.title)").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.horizontal, 10)
-                    }
+                    Text(direction).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(2).help(direction)
                 }
             }
-            .padding(.horizontal, 10).padding(.bottom, 20)
+            .padding(.horizontal, 20).padding(.top, 46).padding(.bottom, 10)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    row(.stage, title: "本阶段", detail: desk.goals?.cycle.map { "第 \($0.day ?? 0) / \($0.total ?? 42) 天" },
+                        chip: ReviewText.closeChip(desk.goals?.close?.status))
+                    ForEach(ReviewKind.allCases, id: \.self) { kind in
+                        SectionTitle(kind.title).padding(.horizontal, 10)
+                        let items = desk.lists[kind] ?? []
+                        ForEach(items) { s in
+                            row(.session(s.id), title: ReviewText.title(s), detail: nil, chip: ReviewText.chip(s.status))
+                        }
+                        if items.isEmpty {
+                            Text(desk.listError ?? "还没有\(kind.title)").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.horizontal, 10)
+                        }
+                    }
+                }
+                .padding(.horizontal, 10).padding(.bottom, 20)
+            }
+            .scrollIndicators(.never)
         }
-        .scrollIndicators(.never)
     }
 
     private func row(_ target: ReviewDesk.Selection, title: String, detail: String?, chip: (String, Tone)?) -> some View {
@@ -207,16 +214,37 @@ struct MaterialPanel: View {
     }
 }
 
+/// The step that moves an open session forward, shown in the header so it never scrolls away.
+struct SessionAction {
+    var title: String
+    var enabled: Bool
+    var note: String?
+    var run: () -> Void
+}
+
 struct SessionHeader: View {
     var session: ReviewSession
+    var action: SessionAction? = nil
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Text(ReviewText.title(kind: session.kind, label: session.label) + " · " + session.kind.title).font(Typo.serif(26))
             if let chip = ReviewText.chip(session.status) { Chip(text: chip.0, tone: chip.1) }
             Spacer()
             if session.status == .open, let left = ReviewText.remaining(session.expiresAt) {
                 Text(left).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+            }
+            if let action, session.status == .open {
+                if let note = action.note { Text(note).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1) }
+                Button(action: action.run) {
+                    HStack(spacing: 6) {
+                        Text(action.title)
+                        Text("⌘↩").font(Typo.sans(11)).opacity(0.6)
+                    }
+                }
+                .buttonStyle(.hubPrimary)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!action.enabled)
             }
         }
     }
@@ -244,8 +272,8 @@ struct PreviewSheet: View {
             HStack {
                 Text("确认后写入 Memos，Telegram 会收到已归档的通知").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
                 Spacer()
-                Button("返回修改", action: back).disabled(busy)
-                Button(busy ? "写入中…" : confirm, action: commit).keyboardShortcut(.defaultAction).disabled(busy)
+                Button("返回修改", action: back).buttonStyle(.hubSecondary).disabled(busy)
+                Button(busy ? "写入中…" : confirm, action: commit).buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction).disabled(busy)
             }
         }
     }

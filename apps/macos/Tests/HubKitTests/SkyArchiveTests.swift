@@ -76,9 +76,28 @@ import Testing
         try write("macair", "2026-10-19T02-00-00-cccc-6h-notes.md", "ignored")
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        let windows = SkyArchive.load(root: root, calendar: calendar)
+        let windows = SkyArchive.load(root: root, live: nil, calendar: calendar)
         #expect(windows.map(\.title) == ["latest", "day before"])
-        #expect(SkyArchive.load(root: root.appendingPathComponent("missing")).isEmpty)
+        #expect(SkyArchive.load(root: root.appendingPathComponent("missing"), live: nil).isEmpty)
+    }
+
+    @Test func liveSummariesFillInTodayForThisMac() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("sky-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let root = base.appendingPathComponent("archive"), live = base.appendingPathComponent("live")
+        let archived = root.appendingPathComponent("macair/objects/x")
+        try FileManager.default.createDirectory(at: archived, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
+        func summary(_ title: String) -> String { "---\ntitle: \(title)\ndescription: a: b\napplications: []\n---\n" }
+        try summary("yesterday").write(to: archived.appendingPathComponent("2026-10-19T02-00-00-aaaa-6h-memory-summary.md"), atomically: true, encoding: .utf8)
+        try summary("yesterday").write(to: live.appendingPathComponent("2026-10-19T02-00-00-aaaa-6h-memory-summary.md"), atomically: true, encoding: .utf8)
+        try summary("this morning").write(to: live.appendingPathComponent("2026-10-21T01-00-00-bbbb-10min-memory-summary.md"), atomically: true, encoding: .utf8)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let windows = SkyArchive.load(root: root, live: live, liveDevice: "macair", calendar: calendar)
+        #expect(windows.map(\.title) == ["this morning", "yesterday"])
+        #expect(windows.first?.inProgress == true)
+        #expect(windows.last?.segments.isEmpty == true, "the copy in both places counts once")
     }
 
     @Test func sampleHasTodayAndYesterday() {

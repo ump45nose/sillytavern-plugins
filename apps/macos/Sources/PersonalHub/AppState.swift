@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import HubKit
 import Observation
@@ -20,6 +21,8 @@ final class AppState {
     var skySelection = 0
 
     var memosURL: String { didSet { UserDefaults.standard.set(memosURL, forKey: Keys.memosURL) } }
+    var userName: String { didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) } }
+    private(set) var avatar: NSImage?
 
     /// Set by the app delegate so views can open windows and panels without knowing AppKit.
     var openMainWindow: (String?) -> Void = { _ in }
@@ -31,7 +34,7 @@ final class AppState {
     var pagesChanged: () -> Void = {}
 
     /// Offscreen QA renders edit pages; they must not touch the real layout or its sync state.
-    static let isQA = CommandLine.arguments.contains("--qa-render")
+    static let isQA = CommandLine.arguments.contains("--qa-render") || CommandLine.arguments.contains("--qa-bench")
     private let store = isQA
         ? LayoutStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("PersonalHub-qa-\(ProcessInfo.processInfo.processIdentifier)/layout.json"))
         : LayoutStore.appSupport()
@@ -44,12 +47,52 @@ final class AppState {
     private enum Keys {
         static let memosURL = "memosURL"
         static let layoutSync = "layoutSync"
+        static let userName = "userName"
+    }
+
+    /// Square-cropped copy of the picked avatar, kept next to the layout.
+    static let avatarURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("PersonalHub/avatar.png")
+
+    /// Name used in the greeting and sidebar; falls back to the macOS account name.
+    var displayName: String {
+        let n = userName.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? (NSFullUserName().isEmpty ? "你" : NSFullUserName()) : n
+    }
+
+    func setAvatar(from url: URL?) {
+        guard let url else {
+            try? FileManager.default.removeItem(at: Self.avatarURL)
+            avatar = nil
+            return
+        }
+        guard let image = NSImage(contentsOf: url), let png = Self.squarePNG(image, side: 256) else { return }
+        try? FileManager.default.createDirectory(at: Self.avatarURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? png.write(to: Self.avatarURL, options: .atomic)
+        avatar = NSImage(data: png)
+    }
+
+    private static func squarePNG(_ image: NSImage, side: CGFloat) -> Data? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let w = CGFloat(cg.width), h = CGFloat(cg.height), s = min(w, h)
+        guard let crop = cg.cropping(to: CGRect(x: (w - s) / 2, y: (h - s) / 2, width: s, height: s)),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(side), pixelsHigh: Int(side), bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        NSGraphicsContext.current?.cgContext.draw(crop, in: CGRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
     }
 
     private init() {
         review = ReviewDesk(hub: hub)
         layout = store.load()
         memosURL = UserDefaults.standard.string(forKey: Keys.memosURL) ?? "http://192.168.31.201:5230"
+        userName = UserDefaults.standard.string(forKey: Keys.userName) ?? "玮康"
+        avatar = Self.isQA ? nil : NSImage(contentsOf: Self.avatarURL)
         layoutSync = UserDefaults.standard.data(forKey: Keys.layoutSync).flatMap { try? JSONDecoder().decode(LayoutSyncState.self, from: $0) } ?? LayoutSyncState()
         if !Self.isQA { hub.onRefresh = { [weak self] in self?.syncLayout() } }
     }

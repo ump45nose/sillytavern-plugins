@@ -37,6 +37,7 @@ struct MainView: View {
         .frame(minWidth: 1100, minHeight: 720)
         .ignoresSafeArea()
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
     }
 }
 
@@ -92,10 +93,9 @@ private struct Sidebar: View {
             Spacer()
             SourceHealth().padding(.horizontal, 12)
             HStack(spacing: 10) {
-                Text("玮").font(Typo.sans(13, .semibold)).foregroundStyle(.white)
-                    .frame(width: 30, height: 30).background(Circle().fill(Tone.clay.color))
+                UserAvatar(size: 30)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("玮康").font(Typo.sans(13, .semibold))
+                    Text(state.displayName).font(Typo.sans(13, .semibold)).lineLimit(1)
                     Text("\(Host.current().localizedName ?? "Mac") · 设置 ⌘,").font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
                 }
             }

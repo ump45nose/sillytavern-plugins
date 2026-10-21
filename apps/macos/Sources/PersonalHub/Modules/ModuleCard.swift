@@ -64,6 +64,16 @@ struct ModuleCard: View {
                     toolButton("chevron.left") { state.editPage { $0.move(at: index, by: -1) } }.disabled(index == 0)
                     toolButton("chevron.right") { state.editPage { $0.move(at: index, by: 1) } }.disabled(index == count - 1)
                 }
+                if !compact {
+                    let span = item.effectiveSpan
+                    HStack(spacing: 2) {
+                        toolButton("arrow.right.and.line.vertical.and.arrow.left") { state.editPage { $0.resize(at: index, by: -1) } }
+                            .disabled(span <= Page.spanRange.lowerBound).help("变窄")
+                        Text("\(span)/12").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3).monospacedDigit().frame(width: 34)
+                        toolButton("arrow.left.and.line.vertical.and.arrow.right") { state.editPage { $0.resize(at: index, by: 1) } }
+                            .disabled(span >= Page.spanRange.upperBound).help("变宽")
+                    }
+                }
             }
             HStack(spacing: 0) {
                 sizeButton("简", .compact)
@@ -134,7 +144,8 @@ extension EnvironmentValues {
     }
 }
 
-/// 12-column grid: items wrap greedily, each row takes the height of its tallest item.
+/// 12-column grid: items wrap greedily and keep their own height, so a tall neighbour no longer
+/// stretches a short card; the row advances by its tallest item.
 struct ModuleGrid: Layout {
     var gap: CGFloat = Grid.gap
 
@@ -142,31 +153,45 @@ struct ModuleGrid: Layout {
         static let defaultValue = 3
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 1000
-        let heights = rowHeights(width: width, subviews: subviews)
-        return CGSize(width: width, height: heights.reduce(0) { $0 + $1.1 } + gap * CGFloat(max(0, heights.count - 1)))
+    struct Measured {
+        var width: CGFloat = -1
+        var rows: [[Int]] = []
+        var heights: [CGFloat] = []
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func makeCache(subviews: Subviews) -> Measured { Measured() }
+
+    func updateCache(_ cache: inout Measured, subviews: Subviews) { cache = Measured() }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) -> CGSize {
+        let width = proposal.width ?? 1000
+        measure(width, subviews, &cache)
+        let total = cache.rows.reduce(0) { $0 + rowHeight($1, cache) } + gap * CGFloat(max(0, cache.rows.count - 1))
+        return CGSize(width: width, height: total)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) {
+        measure(bounds.width, subviews, &cache)
         var y = bounds.minY
-        for (row, height) in rowHeights(width: bounds.width, subviews: subviews) {
+        for row in cache.rows {
             var x = bounds.minX
             for i in row {
                 let w = Grid.width(span: subviews[i][Span.self], total: bounds.width)
-                subviews[i].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: height))
+                subviews[i].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: cache.heights[i]))
                 x += w + gap
             }
-            y += height + gap
+            y += rowHeight(row, cache) + gap
         }
     }
 
-    private func rowHeights(width: CGFloat, subviews: Subviews) -> [([Int], CGFloat)] {
-        Grid.rows(spans: subviews.map { $0[Span.self] }).map { row in
-            let h = row.map { i in
-                subviews[i].sizeThatFits(ProposedViewSize(width: Grid.width(span: subviews[i][Span.self], total: width), height: nil)).height
-            }.max() ?? 0
-            return (row, h)
+    private func rowHeight(_ row: [Int], _ cache: Measured) -> CGFloat { row.map { cache.heights[$0] }.max() ?? 0 }
+
+    private func measure(_ width: CGFloat, _ subviews: Subviews, _ cache: inout Measured) {
+        guard cache.width != width || cache.heights.count != subviews.count else { return }
+        cache.width = width
+        cache.rows = Grid.rows(spans: subviews.map { $0[Span.self] })
+        cache.heights = subviews.map { s in
+            s.sizeThatFits(ProposedViewSize(width: Grid.width(span: s[Span.self], total: width), height: nil)).height
         }
     }
 }

@@ -34,18 +34,35 @@ public struct SkyWindowItem: Sendable, Equatable, Identifiable {
 
 public enum SkyArchive {
     public static let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/skysight-sync/archive")
+    /// Where Skysight writes this Mac's summaries as they happen; the archive only receives them at the next daily sync.
+    public static let live = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/memories/extensions/skysight/resources")
+    public static let config = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/skysight-sync/config.json")
 
-    /// Windows from the two most recent local days that have data, newest first.
-    public static func load(root: URL = root, calendar: Calendar = .hub, days: Int = 2) -> [SkyWindowItem] {
+    /// This Mac's device name in the archive, from skysight-sync's config.
+    public static func localDevice(config: URL = config) -> String? {
+        guard let data = try? Data(contentsOf: config),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["device_id"] as? String
+    }
+
+    /// Windows from the two most recent local days that have data, newest first. This Mac's live
+    /// summaries are merged in, so today shows up before the daily sync has run.
+    public static func load(root: URL = root, live: URL? = live, liveDevice: String? = localDevice(),
+                            calendar: Calendar = .hub, days: Int = 2) -> [SkyWindowItem] {
         let fm = FileManager.default
-        guard let devices = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return [] }
         var files: [(device: String, url: URL, span: SkySummary.Span, start: Date, id: String)] = []
-        for device in devices where !device.lastPathComponent.hasPrefix(".") {
+        var seen = Set<String>()
+        func add(_ device: String, _ url: URL) {
+            guard url.pathExtension == "md", let (start, span, id) = parseName(url.lastPathComponent),
+                  seen.insert(device + "/" + id).inserted else { return }
+            files.append((device, url, span, start, id))
+        }
+        for device in (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [] where !device.lastPathComponent.hasPrefix(".") {
             guard let e = fm.enumerator(at: device.appendingPathComponent("objects"), includingPropertiesForKeys: nil) else { continue }
-            for case let url as URL in e where url.pathExtension == "md" {
-                guard let (start, span, id) = parseName(url.lastPathComponent) else { continue }
-                files.append((device.lastPathComponent, url, span, start, id))
-            }
+            for case let url as URL in e { add(device.lastPathComponent, url) }
+        }
+        if let live, let liveDevice {
+            for url in (try? fm.contentsOfDirectory(at: live, includingPropertiesForKeys: nil)) ?? [] { add(liveDevice, url) }
         }
         let dayKeys = Set(files.map { calendar.startOfDay(for: $0.start) }).sorted(by: >).prefix(days)
         guard let oldest = dayKeys.last else { return [] }
@@ -97,13 +114,15 @@ public enum SkyArchive {
                              inProgress: inProgress, segments: segments, apps: apps)
     }
 
+    nonisolated(unsafe) private static let stampFormatter = ISO8601DateFormatter()
+
     /// `2026-10-13T03-40-00-hNeq-10min-memory-summary.md` → UTC start, span, id.
     static func parseName(_ name: String) -> (Date, SkySummary.Span, String)? {
         let parts = name.split(separator: "-")
         guard parts.count >= 7, parts.suffix(2) == ["memory", "summary.md"] else { return nil }
         guard let span = SkySummary.Span(rawValue: String(parts[parts.count - 3])) else { return nil }
         let stamp = parts[0...2].joined(separator: "-") + ":" + parts[3] + ":" + parts[4] + "Z"
-        guard let start = ISO8601DateFormatter().date(from: stamp) else { return nil }
+        guard let start = stampFormatter.date(from: stamp) else { return nil }
         return (start, span, String(name.dropLast(3)))
     }
 

@@ -18,7 +18,7 @@ import Testing
 @Test func spanOverrideOnlyAppliesToDetail() {
     #expect(LayoutItem(.git, .detail, span: 12).effectiveSpan == 12)
     #expect(LayoutItem(.git, .compact, span: 12).effectiveSpan == 3)
-    #expect(LayoutItem(.agenda, .detail).effectiveSpan == 7)
+    #expect(LayoutItem(.agenda, .detail).effectiveSpan == 6)
     #expect(LayoutItem(.attention, .compact).effectiveSpan == 12)
 }
 
@@ -104,4 +104,20 @@ import Testing
     #expect(store.load() == .default)
     let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
     #expect(names.contains { $0.contains("unreadable") })
+}
+
+@Test func detailCardsResizeWithinTheGrid() {
+    var page = LayoutDocument.default.page("home")!
+    let goals = page.items.firstIndex { $0.module == .goals }!
+    page.resize(at: goals, by: 2)
+    #expect(page.items[goals].span == 8)
+    page.resize(at: goals, by: 10)
+    #expect(page.items[goals].effectiveSpan == 12)
+    page.resize(at: goals, by: -20)
+    #expect(page.items[goals].effectiveSpan == 4)
+    page.resize(at: goals, by: 2)
+    #expect(page.items[goals].span == nil, "back at the default span the override is dropped")
+    let health = page.items.firstIndex { $0.module == .health }!
+    page.resize(at: health, by: 3)
+    #expect(page.items[health].span == nil, "compact cards keep their fixed span")
 }

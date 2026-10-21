@@ -27,7 +27,10 @@ struct DailyEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SessionHeader(session: session).padding(.bottom, 16)
+            SessionHeader(session: session, action: phase == .editing ? SessionAction(
+                title: busy ? "检查中…" : "预览并确认", enabled: !busy && issues.isEmpty,
+                note: issues.isEmpty ? nil : "还有 \(issues.count) 项待填写或修正", run: preview) : nil)
+                .padding(.bottom, 16)
             HStack(alignment: .top, spacing: 20) {
                 MaterialPanel(session: session).frame(maxWidth: .infinity)
                 Group {
@@ -62,9 +65,7 @@ struct DailyEditor: View {
             HStack {
                 Text(form.isEmpty ? "填写会自动存为本机草稿" : "草稿已存在本机").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
                 Spacer()
-                Button(busy ? "检查中…" : "预览终稿", action: preview)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(busy || !issues.isEmpty)
+                Text("填好后点右上角「预览并确认」").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
             }
             .padding(.top, 10)
             .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
@@ -179,7 +180,10 @@ struct WeeklyEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SessionHeader(session: session).padding(.bottom, 16)
+            SessionHeader(session: session, action: preview == nil ? SessionAction(
+                title: busy ? "检查中…" : "预览并确认", enabled: !busy && text != template,
+                note: text == template ? "先在模板上填写" : nil, run: check) : nil)
+                .padding(.bottom, 16)
             HStack(alignment: .top, spacing: 20) {
                 MaterialPanel(session: session).frame(maxWidth: .infinity)
                 Group {
@@ -203,10 +207,11 @@ struct WeeklyEditor: View {
 
     private var editor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextEditor(text: $text)
-                .font(Typo.sans(13)).scrollContentBackground(.hidden).padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Palette.card))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.line))
+            Label11("正文 · 按模板逐项填写，冒号后写内容")
+            DocumentEditor(text: $text)
+                .frame(minHeight: 260)
+                .background(RoundedRectangle(cornerRadius: Metrics.innerRadius).fill(Palette.card))
+                .overlay(RoundedRectangle(cornerRadius: Metrics.innerRadius).strokeBorder(Palette.line))
             if let goals = state.review.goals?.goals, !goals.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     Label11("阶段进度和下周行动用 [目标ID] 指明目标，点一下复制")
@@ -222,12 +227,7 @@ struct WeeklyEditor: View {
                 }
             }
             if let error { Text(error).font(Typo.sans(12)).foregroundStyle(Tone.rose.color) }
-            HStack {
-                Text(text == template ? "从模板开始写" : "草稿已存在本机").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                Spacer()
-                Button(busy ? "检查中…" : "预览终稿") { check() }
-                    .keyboardShortcut(.return, modifiers: .command).disabled(busy || text == template)
-            }
+            Text(text == template ? "从模板开始写，填写会自动存为本机草稿" : "草稿已存在本机").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
         }
     }
 
@@ -250,6 +250,86 @@ struct WeeklyEditor: View {
                 done = already ? "这篇周报之前已在 Telegram 确认，没有重复写入" : "已归档到 Memos"
                 preview = nil
             } catch { self.error = ReviewDesk.message(error) }
+        }
+    }
+}
+
+/// Plain-text editor styled as a document: roomy line spacing, headings in bold, no scroller chrome.
+struct DocumentEditor: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.scrollerStyle = .overlay
+        guard let view = scroll.documentView as? NSTextView else { return scroll }
+        view.delegate = context.coordinator
+        view.drawsBackground = false
+        view.isRichText = false
+        view.allowsUndo = true
+        view.isAutomaticQuoteSubstitutionEnabled = false
+        view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false
+        view.textContainerInset = NSSize(width: 14, height: 14)
+        view.insertionPointColor = NSColor(Tone.clay.color)
+        view.typingAttributes = Coordinator.body
+        view.string = text
+        Coordinator.restyle(view)
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
+        view.string = text
+        Coordinator.restyle(view)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var text: Binding<String>
+        init(text: Binding<String>) { self.text = text }
+
+        static let paragraph: NSParagraphStyle = {
+            let p = NSMutableParagraphStyle()
+            p.lineSpacing = 5
+            p.paragraphSpacing = 2
+            return p
+        }()
+        static let body: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13.5), .foregroundColor: NSColor(Palette.ink), .paragraphStyle: paragraph,
+        ]
+        static let heading: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13.5, weight: .semibold), .foregroundColor: NSColor(Palette.ink), .paragraphStyle: paragraph,
+        ]
+        static let label: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor(Palette.ink2)]
+
+        func textDidChange(_ note: Notification) {
+            guard let view = note.object as? NSTextView else { return }
+            text.wrappedValue = view.string
+            Self.restyle(view)
+        }
+
+        /// `#…` lines and lines ending in a colon are section headings; `- 项：` labels are muted.
+        static func restyle(_ view: NSTextView) {
+            guard let storage = view.textStorage else { return }
+            let ns = storage.string as NSString
+            storage.beginEditing()
+            storage.setAttributes(body, range: NSRange(location: 0, length: ns.length))
+            ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: .byLines) { line, range, _, _ in
+                guard let line = line?.trimmingCharacters(in: .whitespaces), !line.isEmpty else { return }
+                if line.hasPrefix("#") || line.hasSuffix("：") || line.hasSuffix(":") {
+                    storage.setAttributes(heading, range: range)
+                } else if line.hasPrefix("- "), let colon = line.firstIndex(where: { $0 == "：" || $0 == ":" }) {
+                    let length = line.distance(from: line.startIndex, to: colon) + 1
+                    let start = ns.range(of: line, range: range).location
+                    if start != NSNotFound { storage.addAttributes(label, range: NSRange(location: start, length: length)) }
+                }
+            }
+            storage.endEditing()
+            view.typingAttributes = body
         }
     }
 }

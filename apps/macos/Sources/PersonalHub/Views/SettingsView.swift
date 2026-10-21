@@ -30,6 +30,7 @@ struct SettingsView: View {
         .frame(width: 560, height: 440)
         .background(Palette.bg)
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
     }
 }
 
@@ -58,11 +59,31 @@ private struct GeneralSettings: View {
     @ViewState private var loginError: String?
     @ViewState private var confirmReset = false
 
+    private func pickAvatar() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "设为头像"
+        if panel.runModal() == .OK, let url = panel.url { state.setAvatar(from: url) }
+    }
+
     var body: some View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 0) {
+            SettingRow(title: "称呼与头像", note: "用于问候语和侧栏；头像裁成正方形保存在本机") {
+                HStack(spacing: 10) {
+                    TextField(NSFullUserName(), text: $state.userName).textFieldStyle(.roundedBorder).frame(width: 120)
+                        .onChange(of: state.userName) { _, n in if n.count > 12 { state.userName = String(n.prefix(12)) } }
+                    Button { pickAvatar() } label: { UserAvatar(size: 28) }.buttonStyle(.plain).help("选择头像图片")
+                    if state.avatar != nil {
+                        Button("移除") { state.setAvatar(from: nil) }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    } else {
+                        Button("选择…") { pickAvatar() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink2)
+                    }
+                }
+            }
             SettingRow(title: "登录时启动", note: loginError) {
-                Toggle("", isOn: $launchAtLogin).toggleStyle(.switch).labelsHidden()
+                Toggle("", isOn: $launchAtLogin).toggleStyle(.hub).labelsHidden()
                     .onChange(of: launchAtLogin) { _, on in
                         do {
                             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }

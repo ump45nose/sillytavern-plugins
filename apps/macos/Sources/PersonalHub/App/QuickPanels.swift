@@ -41,7 +41,10 @@ final class QuickPanel: NSPanel {
 
     func present() {
         guard let screen = NSScreen.main?.visibleFrame else { return }
-        let size = contentView?.fittingSize ?? frame.size
+        contentView?.layoutSubtreeIfNeeded()
+        let fitted = contentView?.fittingSize ?? .zero
+        // A hosting view with no sizing options reports (0, 0) here and the panel vanishes.
+        let size = fitted.width > 1 && fitted.height > 1 ? fitted : frame.size
         setContentSize(size)
         setFrameOrigin(NSPoint(x: screen.midX - size.width / 2, y: screen.maxY - screen.height * 0.24 - size.height))
         alphaValue = 0
@@ -144,6 +147,7 @@ struct QuickMemoView: View {
             Button("") { submit(open: true) }.keyboardShortcut(.return, modifiers: [.command, .shift]).opacity(0)
         }
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
         .onAppear {
             text = ""
             outcome = nil
@@ -196,11 +200,13 @@ struct QuickTaskView: View {
     @ViewState private var mode = 0
     @ViewState private var timeBlock = true
     @ViewState private var added: String?
+    @ViewState private var picked: PickedDue?
     @FocusState private var focused: Bool
 
     var body: some View {
         let agenda = state.agenda
-        let entry = QuickEntryParser.parse(text, now: agenda.now)
+        var entry = QuickEntryParser.parse(text, now: agenda.now)
+        let _ = picked?.apply(to: &entry)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(HotKeyCenter.shared.shortcut(for: .quickTask).display)
@@ -213,15 +219,18 @@ struct QuickTaskView: View {
                 Segmented(options: [(0, "新增"), (1, "搜索"), (2, "今天")], selection: $mode)
                     .scaleEffect(0.9, anchor: .trailing)
             }
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(Typo.serif(22))
-                .focused($focused)
-                .onSubmit { submit(entry, open: false) }
-                .onKeyPress(.tab) {
-                    withAnimation(Motion.spring) { mode = (mode + 1) % 3 }
-                    return .handled
-                }
+            HStack(spacing: 8) {
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .font(Typo.serif(22))
+                    .focused($focused)
+                    .onSubmit { submit(entry, open: false) }
+                    .onKeyPress(.tab) {
+                        withAnimation(Motion.spring) { mode = (mode + 1) % 3 }
+                        return .handled
+                    }
+                if mode != 1 { DuePickerButton(picked: $picked, now: agenda.now) }
+            }
                 .padding(.top, 14)
                 .padding(.bottom, 12)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
@@ -239,7 +248,7 @@ struct QuickTaskView: View {
                     if let added {
                         Chip(text: added, tone: .olive, systemImage: "checkmark")
                             .transition(.opacity.combined(with: .offset(y: 4)))
-                    } else if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    } else if text.trimmingCharacters(in: .whitespaces).isEmpty && picked == nil {
                         Flow(spacing: 6) {
                             ForEach(["明天下午3点", "下周五", "月底", "后天晚上8点"], id: \.self) { Chip(text: $0, tone: .sky) }
                             Chip(text: "#清单", tone: .olive)
@@ -275,11 +284,13 @@ struct QuickTaskView: View {
             Button("") { timeBlock.toggle() }.keyboardShortcut("t", modifiers: .command).opacity(0)
         }
         .preferredColorScheme(.light)
+        .tint(Tone.clay.color)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in DispatchQueue.main.async(execute: resize) }
         .onAppear {
             text = initialText
             mode = initialMode
             added = nil
+            picked = nil
             timeBlock = true
             DispatchQueue.main.async { focused = true }
         }
@@ -319,6 +330,7 @@ struct QuickTaskView: View {
         let when = entry.due.map { Agenda.relativeDay($0, now: state.agenda.now) + (entry.hasTime ? " " + Agenda.clock($0) : "") }
         withAnimation(Motion.spring) { added = "已添加到「\(list)」" + (when.map { " · " + $0 } ?? "") }
         text = ""
+        picked = nil
         if open {
             state.focus(.agenda)
             openMain()

@@ -12,7 +12,7 @@ struct BriefModule: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label11(Self.dateLine(state.agenda.now))
-                    Text(Self.greeting(state.agenda.now)).font(Typo.serif(30))
+                    Text(Self.greeting(state.agenda.now, name: state.displayName)).font(Typo.serif(30))
                 }
                 Spacer()
                 Text(([Self.dueLine(state.agenda.view)] + [Self.eventLine(state.agenda.view)].compactMap { $0 }).joined(separator: " · "))
@@ -26,7 +26,7 @@ struct BriefModule: View {
                         Label11(Self.dateLine(state.agenda.now))
                         if let c = state.cycle { Chip(text: "\(c.name) · 第 \(c.day) 天", tone: .clay) }
                     }
-                    Text(Self.greeting(state.agenda.now)).font(Typo.serif(44)).tracking(-0.8)
+                    Text(Self.greeting(state.agenda.now, name: state.displayName)).font(Typo.serif(44)).tracking(-0.8)
                     Text(summary)
                         .font(Typo.serif(18.5)).foregroundStyle(Palette.ink2).lineSpacing(6)
                         .tint(Palette.clayDeep)
@@ -116,13 +116,14 @@ struct BriefModule: View {
         return s
     }
 
-    static func greeting(_ now: Date) -> String {
-        switch Calendar.hub.component(.hour, from: now) {
-        case 5..<11: "早上好，玮康"
-        case 11..<13: "中午好，玮康"
-        case 13..<18: "下午好，玮康"
-        default: "晚上好，玮康"
+    static func greeting(_ now: Date, name: String) -> String {
+        let part = switch Calendar.hub.component(.hour, from: now) {
+        case 5..<11: "早上好"
+        case 11..<13: "中午好"
+        case 13..<18: "下午好"
+        default: "晚上好"
         }
+        return part + "，" + name
     }
 
     static func dateLine(_ now: Date) -> String {
@@ -402,9 +403,10 @@ struct GoalsModule: View {
                 HStack(spacing: 12) {
                     Text(g.domain).font(Typo.sans(11.5, .medium)).foregroundStyle(StageTone.of(g.domain).color)
                         .frame(width: 46, height: 22).background(Capsule().fill(StageTone.of(g.domain).tint))
-                    Text(g.goal).font(Typo.sans(13)).lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(g.progress ?? "").font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).lineLimit(1).frame(maxWidth: 200, alignment: .trailing)
+                    Text(g.goal).font(Typo.sans(13)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(g.progress ?? "").font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).lineLimit(2).multilineTextAlignment(.trailing)
+                        .frame(width: 150, alignment: .trailing).help(g.progress ?? "")
                 }
                 .padding(.vertical, 7)
                 .rise(i)
@@ -473,7 +475,7 @@ struct Mainline: View {
 
     var body: some View {
         (Text("“").foregroundColor(Tone.clay.color) + Text(text) + Text("”").foregroundColor(Tone.clay.color))
-            .font(Typo.serif(size)).tracking(-0.3).lineLimit(2)
+            .font(Typo.serif(size)).tracking(-0.3).lineLimit(3)
             .fixedSize(horizontal: false, vertical: true)
             .help(text)
     }

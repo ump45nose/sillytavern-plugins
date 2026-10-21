@@ -117,6 +117,54 @@ enum QARender {
     }
 }
 
+/// `PersonalHub --qa-bench [--qa-cache]` lays out each module card repeatedly and prints the cost per pass.
+@MainActor
+enum QABench {
+    static func run() async {
+        let state = AppState.shared
+        state.agenda.start()
+        if CommandLine.arguments.contains("--qa-cache") { await state.hub.previewCache() } else { state.hub.preview(now: Date()) }
+        try? await Task.sleep(for: .milliseconds(400))
+
+        func measure(_ name: String, width: CGFloat, _ view: some View) async {
+            let host = NSHostingView(rootView: AnyView(view.environment(state)))
+            let window = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: width, height: 900),
+                                  styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = host
+            let first = ContinuousClock.now
+            host.frame = NSRect(x: 0, y: 0, width: width, height: 900)
+            host.layoutSubtreeIfNeeded()
+            let initial = ContinuousClock.now - first
+            try? await Task.sleep(for: .milliseconds(1500))
+            let passes = 20
+            let start = ContinuousClock.now
+            for i in 0..<passes {
+                host.frame.size.width = width + CGFloat(i % 2)
+                host.layoutSubtreeIfNeeded()
+                host.displayIfNeeded()
+            }
+            let each = (ContinuousClock.now - start) / passes
+            print(String(format: "%-28@ first %7.1f ms   relayout %7.2f ms", name as NSString,
+                         Double(initial.components.attoseconds) / 1e15 + Double(initial.components.seconds) * 1000,
+                         Double(each.components.attoseconds) / 1e15 + Double(each.components.seconds) * 1000))
+            window.contentView = nil
+        }
+
+        for module in ModuleID.allCases {
+            for size in [ModuleSize.compact, .detail] {
+                let width: CGFloat = size == .compact ? 300 : 1240
+                await measure("\(module.rawValue).\(size.rawValue)", width: width, ModuleCard(item: LayoutItem(module, size), index: 0, count: 1))
+            }
+        }
+        for page in state.layout.pages.map(\.id) {
+            state.go(page)
+            await measure("page.\(page)", width: 1320, MainView())
+        }
+        await measure("popover", width: 380, PopoverView())
+    }
+}
+
 extension CommandLine {
     static func value(after flag: String) -> String? {
         guard let i = arguments.firstIndex(of: flag), i + 1 < arguments.count else { return nil }

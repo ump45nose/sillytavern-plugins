@@ -100,7 +100,7 @@ struct EventEditor: View {
                     .textFieldStyle(.plain).font(Typo.serif(17)).focused($focused)
                     .padding(.bottom, 6)
                     .overlay(alignment: .bottom) { Rectangle().fill(Palette.line2).frame(height: 1) }
-                Toggle("全天", isOn: $allDay).toggleStyle(.switch).controlSize(.small).font(Typo.sans(12.5))
+                Toggle("全天", isOn: $allDay).toggleStyle(.hub).font(Typo.sans(12.5))
                 HStack(spacing: 6) {
                     DatePicker("", selection: $start, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
                         .labelsHidden().datePickerStyle(.field)
@@ -668,33 +668,146 @@ struct QuickEntryChips: View {
     private var blockable: Bool { state.agenda.writableCalendar != nil }
 }
 
+/// A due date picked by hand; overrides whatever date the typed text implies.
+struct PickedDue: Equatable {
+    var day: Date
+    var time: DateComponents?
+
+    func apply(to entry: inout QuickEntry) {
+        var due = Calendar.hub.startOfDay(for: day)
+        if let time, let at = Calendar.hub.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: due) { due = at }
+        entry.due = due
+        entry.hasTime = time != nil
+    }
+}
+
+/// Calendar button next to a task field: quick days, a month calendar and common times.
+struct DuePickerButton: View {
+    @Binding var picked: PickedDue?
+    var now: Date
+    @ViewState private var open = false
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: picked == nil ? "calendar.badge.clock" : "calendar").font(.system(size: 11, weight: .medium))
+                if let picked { Text(label(picked)).font(Typo.sans(11, .medium)).lineLimit(1) }
+            }
+            .foregroundStyle(picked == nil ? Palette.ink3 : Tone.sky.color)
+            .padding(.horizontal, picked == nil ? 4 : 7).frame(height: 22)
+            .background(RoundedRectangle(cornerRadius: 6).fill(picked == nil ? Color.clear : Tone.sky.tint))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("选择日期和时间")
+        .popover(isPresented: $open, arrowEdge: .bottom) { DuePickerPanel(picked: $picked, now: now) { open = false } }
+    }
+
+    private func label(_ p: PickedDue) -> String {
+        Agenda.relativeDay(p.day, now: now) + (p.time.map { String(format: " %02d:%02d", $0.hour ?? 0, $0.minute ?? 0) } ?? "")
+    }
+}
+
+private struct DuePickerPanel: View {
+    @Binding var picked: PickedDue?
+    var now: Date
+    var close: () -> Void
+    @ViewState private var day = Date()
+    @ViewState private var time: DateComponents?
+
+    private static let times = [(9, 0), (10, 0), (12, 0), (14, 0), (15, 0), (16, 0), (18, 0), (20, 0), (21, 0)]
+
+    var body: some View {
+        let cal = Calendar.hub, today = cal.startOfDay(for: now)
+        let quick: [(String, Date)] = [("今天", today), ("明天", cal.date(byAdding: .day, value: 1, to: today)!),
+                                       ("后天", cal.date(byAdding: .day, value: 2, to: today)!), ("下周一", nextMonday(today))]
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                ForEach(quick, id: \.0) { name, d in
+                    Button { day = d } label: { Chip(text: name, tone: cal.isDate(day, inSameDayAs: d) ? .sky : nil) }.buttonStyle(.plain)
+                }
+            }
+            DatePicker("", selection: $day, in: today..., displayedComponents: .date)
+                .datePickerStyle(.graphical).labelsHidden()
+                .frame(width: 250)
+            VStack(alignment: .leading, spacing: 6) {
+                Label11("时间")
+                Flow(spacing: 6) {
+                    Button { time = nil } label: { Chip(text: "全天", tone: time == nil ? .sky : nil) }.buttonStyle(.plain)
+                    ForEach(Self.times, id: \.0) { h, m in
+                        let on = time?.hour == h && time?.minute == m
+                        Button { time = DateComponents(hour: h, minute: m) } label: {
+                            Chip(text: String(format: "%02d:%02d", h, m), tone: on ? .sky : nil)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 6) {
+                    Text("其他").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                    DatePicker("", selection: Binding(
+                        get: { cal.date(bySettingHour: time?.hour ?? 9, minute: time?.minute ?? 0, second: 0, of: today) ?? today },
+                        set: { time = cal.dateComponents([.hour, .minute], from: $0) }),
+                               displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.stepperField).labelsHidden().fixedSize()
+                }
+            }
+            HStack {
+                Button("清除") { picked = nil; close() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                Spacer()
+                Button { picked = PickedDue(day: day, time: time); close() } label: {
+                    Text("确定").font(Typo.sans(12, .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(Palette.ink))
+                }
+                .buttonStyle(.plain).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 280)
+        .background(Palette.card)
+        .onAppear {
+            day = picked?.day ?? today
+            time = picked?.time
+        }
+    }
+
+    private func nextMonday(_ today: Date) -> Date {
+        let cal = Calendar.hub, weekday = cal.component(.weekday, from: today)
+        return cal.date(byAdding: .day, value: (9 - weekday) % 7 == 0 ? 7 : (9 - weekday) % 7, to: today)!
+    }
+}
+
 /// Inline add field for the agenda module; the global quick panel has the full version.
 struct InlineQuickAdd: View {
     var placeholder = "明天下午3点 和李雷对齐方案 #工作"
     @Environment(AppState.self) private var state
     @ViewState private var text = ""
     @ViewState private var timeBlock = true
+    @ViewState private var picked: PickedDue?
 
     var body: some View {
-        let entry = QuickEntryParser.parse(text, now: state.agenda.now)
+        var entry = QuickEntryParser.parse(text, now: state.agenda.now)
+        let _ = picked?.apply(to: &entry)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink3)
                 TextField(placeholder, text: $text).textFieldStyle(.plain).font(Typo.sans(12.5))
                     .onSubmit {
-                        if state.agenda.add(entry, timeBlock: timeBlock) { text = "" }
+                        if state.agenda.add(entry, timeBlock: timeBlock) { text = ""; picked = nil }
                     }
+                DuePickerButton(picked: $picked, now: state.agenda.now)
                 Kbd("↩")
             }
             .padding(.horizontal, 12).frame(height: 34)
             .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.line2))
-            if !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            if !text.trimmingCharacters(in: .whitespaces).isEmpty || picked != nil {
                 QuickEntryChips(entry: entry, timeBlock: timeBlock) { timeBlock.toggle() }
                     .transition(.opacity.combined(with: .offset(y: -3)))
             }
         }
         .animation(Motion.fast, value: text.isEmpty)
+        .animation(Motion.fast, value: picked)
     }
 }
 
