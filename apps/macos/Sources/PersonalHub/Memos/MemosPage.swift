@@ -8,11 +8,12 @@ struct MemosPage: View {
 
     var body: some View {
         let store = state.memos
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 24) {
             HubScroll {
                 MemosSidebar().padding(.bottom, 8)
             }
-            .frame(width: 292)
+            .scrollIndicators(.never)
+            .frame(width: 284)
             MemosTimeline()
         }
         .task(id: state.hub.mode) { await store.reload() }
@@ -48,15 +49,22 @@ private struct MemosSidebar: View {
     @ViewState private var busy = false
     @ViewState private var error: String?
 
+    @ViewState private var allTags = false
+
     var body: some View {
         let store = state.memos
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("记下此刻").font(Typo.serif(18))
+                    Spacer()
+                    Text("随时 " + HotKeyCenter.shared.display(.quickMemo)).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                }
                 MarkdownEditor(text: $draft, size: 13, inset: NSSize(width: 12, height: 10))
-                    .frame(height: 132)
+                    .frame(height: 120)
                     .overlay(alignment: .topLeading) {
                         if draft.isEmpty {
-                            Text("现在的想法是…").font(Typo.sans(13)).foregroundStyle(Palette.ink4)
+                            Text("现在的想法是…  可用 #标签").font(Typo.sans(13)).foregroundStyle(Palette.ink4)
                                 .padding(.leading, 17).padding(.top, 10).allowsHitTesting(false)
                         }
                     }
@@ -76,37 +84,55 @@ private struct MemosSidebar: View {
                 }
                 if let error { Text(error).font(Typo.sans(11.5)).foregroundStyle(Tone.rose.color) }
             }
-            .padding(14)
+            .padding(16)
             .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
             .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
 
-            SectionTitle("标签")
-            Flow(spacing: 6) {
-                tagChip(nil, "全部")
-                ForEach(store.tags.prefix(24), id: \.name) { t in tagChip(t.name, "#\(t.name)" + (t.count.map { " · \($0)" } ?? "")) }
-            }
+            MemoActivity(dates: store.items.compactMap(\.createdAt), now: state.agenda.now, partial: store.next != nil)
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
+                .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
 
-            SectionTitle("近 12 周")
-            MemoActivity(dates: store.items.compactMap(\.createdAt), now: state.agenda.now)
-            Text(store.next == nil ? "按全部 \(store.items.count) 条统计" : "按已加载的 \(store.items.count) 条统计")
-                .font(Typo.sans(11)).foregroundStyle(Palette.ink4).padding(.top, 6)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Label11("标签")
+                    Spacer()
+                    if store.tag != nil {
+                        Button("清除筛选") { Task { await store.select(tag: nil) } }.buttonStyle(.plain)
+                            .font(Typo.sans(11)).foregroundStyle(Tone.clay.color)
+                    }
+                }
+                .padding(.bottom, 4)
+                let tags = Array(store.tags.prefix(allTags ? 60 : 8))
+                ForEach(tags, id: \.name) { t in tagRow(t.name, count: t.count) }
+                if store.tags.count > 8 {
+                    Button(allTags ? "收起" : "全部 \(store.tags.count) 个标签") { withAnimation(Motion.spring) { allTags.toggle() } }
+                        .buttonStyle(.plain).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.top, 4).padding(.leading, 8)
+                }
+                if store.tags.isEmpty { Text("还没有标签").font(Typo.sans(12)).foregroundStyle(Palette.ink3) }
+            }
+            .padding(.horizontal, 8)
 
             Button { if let u = URL(string: state.memosURL) { NSWorkspace.shared.open(u) } } label: {
                 Text("在浏览器中打开 Memos ↗").font(Typo.sans(12)).foregroundStyle(Palette.ink2)
             }
-            .buttonStyle(.plain).padding(.top, 18)
+            .buttonStyle(.plain).padding(.leading, 16)
         }
     }
 
-    private func tagChip(_ tag: String?, _ label: String) -> some View {
+    private func tagRow(_ tag: String, count: Int?) -> some View {
         let on = state.memos.tag == tag
-        return Button { Task { await state.memos.select(tag: tag) } } label: {
-            Text(label).font(Typo.sans(11.5, on ? .semibold : .regular)).lineLimit(1)
-                .foregroundStyle(on ? Color.white : Palette.ink2)
-                .padding(.horizontal, 10).padding(.vertical, 3.5)
-                .background(Capsule().fill(on ? Palette.ink : Palette.sunk))
-                .overlay(Capsule().strokeBorder(on ? .clear : Palette.line2))
-                .fixedSize()
+        return Button { Task { await state.memos.select(tag: on ? nil : tag) } } label: {
+            HStack(spacing: 6) {
+                Text("#").font(Typo.sans(12.5, .semibold)).foregroundStyle(on ? Tone.clay.color : Palette.ink4)
+                Text(tag).font(Typo.sans(12.5, on ? .semibold : .regular)).foregroundStyle(on ? Palette.ink : Palette.ink2).lineLimit(1)
+                Spacer(minLength: 4)
+                if let count { Text("\(count)").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).monospacedDigit() }
+            }
+            .padding(.horizontal, 8).frame(height: 28)
+            .background(RoundedRectangle(cornerRadius: 8).fill(on ? Palette.card : .clear))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? Palette.line : .clear))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -151,36 +177,69 @@ private struct VisibilityMenu: View {
     }
 }
 
-/// Twelve weeks of memo counts, Monday-first columns ending this week.
+/// This week, the last 30 days and the current streak, over twelve weeks of counts (Monday-first columns).
 private struct MemoActivity: View {
     var dates: [Date]
     var now: Date
+    var partial: Bool
 
     var body: some View {
-        var cal = Calendar.hub
-        cal.firstWeekday = 2
+        let cal = Calendar.hub
+        let today = cal.startOfDay(for: now)
         let thisWeek = cal.dateInterval(of: .weekOfYear, for: now)!.start
         let start = cal.date(byAdding: .day, value: -77, to: thisWeek)!
-        var counts: [Int: Int] = [:]
-        for d in dates {
-            let n = cal.dateComponents([.day], from: start, to: cal.startOfDay(for: d)).day ?? -1
-            if (0..<84).contains(n) { counts[n, default: 0] += 1 }
-        }
-        let today = cal.dateComponents([.day], from: start, to: cal.startOfDay(for: now)).day ?? 83
-        return HStack(spacing: 3) {
-            ForEach(0..<12, id: \.self) { w in
-                VStack(spacing: 3) {
-                    ForEach(0..<7, id: \.self) { d in
-                        let n = w * 7 + d, c = counts[n] ?? 0
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(n > today ? Color.clear : Palette.heat[min(c == 0 ? 0 : c + 1, 5)])
-                            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(n > today ? Palette.line2 : .clear))
-                            .frame(width: 17, height: 17)
-                            .help("\(HubFormat.md(cal.date(byAdding: .day, value: n, to: start)!)) · \(c) 条")
+        let days = Dictionary(grouping: dates) { cal.startOfDay(for: $0) }.mapValues(\.count)
+        let week = dates.filter { $0 >= thisWeek }.count
+        let month = dates.filter { $0 >= cal.date(byAdding: .day, value: -29, to: today)! }.count
+        let streak = Self.streak(days, today: today, calendar: cal)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                stat("\(week)", "本周")
+                stat("\(month)", "近 30 天")
+                stat("\(streak)", "连续天数")
+            }
+            GeometryReader { g in
+                let side = (g.size.width - 11 * 3) / 12
+                HStack(spacing: 3) {
+                    ForEach(0..<12, id: \.self) { w in
+                        VStack(spacing: 3) {
+                            ForEach(0..<7, id: \.self) { d in
+                                let day = cal.date(byAdding: .day, value: w * 7 + d, to: start)!
+                                let c = days[day] ?? 0
+                                RoundedRectangle(cornerRadius: 3.5)
+                                    .fill(day > today ? Color.clear : Palette.heat[min(c, 5)])
+                                    .overlay(RoundedRectangle(cornerRadius: 3.5).strokeBorder(cal.isDate(day, inSameDayAs: today) ? Palette.ink3 : .clear))
+                                    .frame(width: side, height: side)
+                                    .help("\(HubFormat.md(day)) · \(c) 条")
+                            }
+                        }
                     }
                 }
             }
+            .aspectRatio(12 / 7, contentMode: .fit)
+            HStack(spacing: 4) {
+                Text(partial ? "按已加载的 \(dates.count) 条" : "近 12 周 · 共 \(dates.count) 条").font(Typo.sans(10.5)).foregroundStyle(Palette.ink4)
+                Spacer()
+                Text("少").font(Typo.sans(10)).foregroundStyle(Palette.ink4)
+                ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Palette.heat[$0 + ($0 > 0 ? 1 : 0)]).frame(width: 9, height: 9) }
+                Text("多").font(Typo.sans(10)).foregroundStyle(Palette.ink4)
+            }
         }
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value).font(Typo.serif(24)).monospacedDigit()
+            Text(label).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Days in a row with at least one memo, ending today (or yesterday, before today's first memo).
+    static func streak(_ days: [Date: Int], today: Date, calendar: Calendar) -> Int {
+        var day = days[today] == nil ? calendar.date(byAdding: .day, value: -1, to: today)! : today, n = 0
+        while days[day] != nil { n += 1; day = calendar.date(byAdding: .day, value: -1, to: day)! }
+        return n
     }
 }
 
@@ -220,9 +279,18 @@ private struct MemosTimeline: View {
                     Text(store.tag != nil || !store.query.isEmpty ? "没有符合条件的 Memo" : "还没有 Memo")
                         .font(Typo.sans(13)).foregroundStyle(Palette.ink3).frame(maxWidth: .infinity, minHeight: 200)
                 } else {
+                    let filtered = store.tag != nil || !store.query.isEmpty
+                    let pinned = filtered ? [] : store.items.filter { $0.pinned == true }
+                    let rest = store.items.filter { filtered || $0.pinned != true }
                     HubScroll {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(store.items) { MemoCard(memo: $0) }
+                        LazyVStack(alignment: .leading, spacing: 8, pinnedViews: [.sectionHeaders]) {
+                            if !pinned.isEmpty {
+                                Section { ForEach(pinned) { MemoCard(memo: $0, dated: true) } } header: { dayHeader("置顶", nil, pinned.count) }
+                            }
+                            ForEach(Self.days(rest), id: \.0) { day, memos in
+                                let (title, caption) = Self.dayTitle(day, now: state.agenda.now)
+                                Section { ForEach(memos) { MemoCard(memo: $0) } } header: { dayHeader(title, caption, memos.count) }
+                            }
                             if store.next != nil {
                                 ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.vertical, 12)
                                     .onAppear { Task { await store.loadMore() } }
@@ -230,10 +298,45 @@ private struct MemosTimeline: View {
                         }
                         .padding(.bottom, 12).padding(.trailing, 10)
                     }
+                    .scrollIndicators(.never)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: 880, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func dayHeader(_ title: String, _ caption: String?, _ count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title).font(Typo.serif(17))
+            if let caption { Text(caption).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3) }
+            Text("\(count) 条").font(Typo.sans(11.5)).foregroundStyle(Palette.ink4)
+            Rectangle().fill(Palette.line).frame(height: 1).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
+        }
+        .padding(.leading, 56).padding(.top, 14).padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.bg)
+    }
+
+    /// Newest day first; memos without a date go last.
+    static func days(_ memos: [MemosData.Memo]) -> [(Date, [MemosData.Memo])] {
+        let cal = Calendar.hub
+        var order: [Date] = [], groups: [Date: [MemosData.Memo]] = [:]
+        for m in memos {
+            let day = m.createdAt.map { cal.startOfDay(for: $0) } ?? .distantPast
+            if groups[day] == nil { order.append(day) }
+            groups[day, default: []].append(m)
+        }
+        return order.sorted(by: >).map { ($0, groups[$0]!) }
+    }
+
+    /// "今天" over "10 月 21 日 周三"; older days lead with the date and keep the weekday as the caption.
+    static func dayTitle(_ day: Date, now: Date) -> (String, String?) {
+        if day == .distantPast { return ("没有日期", nil) }
+        let rel = Agenda.relativeDay(day, now: now)
+        if rel == "今天" || rel == "昨天" { return (rel, Agenda.longDay(day)) }
+        let c = Calendar.hub.dateComponents([.year, .month, .day], from: day)
+        let sameYear = Calendar.hub.isDate(day, equalTo: now, toGranularity: .year)
+        return ((sameYear ? "" : "\(c.year!) 年 ") + "\(c.month!) 月 \(c.day!) 日", Agenda.weekdayName(day))
     }
 
     private func search() {
@@ -260,6 +363,8 @@ private struct MemosTimeline: View {
 
 private struct MemoCard: View {
     var memo: MemosData.Memo
+    /// Pinned memos sit outside their day, so they show the date too.
+    var dated = false
     @Environment(AppState.self) private var state
     @ViewState private var editing = false
     @ViewState private var draft = ""
@@ -272,8 +377,17 @@ private struct MemoCard: View {
     private static let collapsed: CGFloat = 280
 
     var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(dated ? MemoCard.when(memo.createdAt, now: state.agenda.now) : memo.createdAt.map(HubFormat.clock) ?? "")
+                .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).monospacedDigit()
+                .frame(width: 42, alignment: .trailing).lineLimit(2).multilineTextAlignment(.trailing)
+                .padding(.top, 17)
+            card
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header
             if editing {
                 MarkdownEditor(text: $draft, size: 13, inset: NSSize(width: 12, height: 10))
                     .frame(height: min(420, max(140, CGFloat(draft.components(separatedBy: "\n").count) * 22 + 40)))
@@ -303,16 +417,20 @@ private struct MemoCard: View {
                     Button(expanded ? "收起" : "展开全文") { withAnimation(Motion.spring) { expanded.toggle() } }
                         .buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Tone.clay.color)
                 }
-                if let a = memo.attachments, !a.isEmpty {
-                    Chip(text: "\(a.count) 个附件", systemImage: "paperclip")
-                }
+                footer
                 if let error { Text(error).font(Typo.sans(11.5)).foregroundStyle(Tone.rose.color) }
             }
         }
-        .padding(16)
+        .padding(.horizontal, 18).padding(.vertical, 14)
+        .padding(.trailing, editing ? 0 : 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
-        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(editing ? Tone.clay.color.opacity(0.5) : Palette.line))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(editing ? Tone.clay.color.opacity(0.5) : Palette.line2))
+        .overlay(alignment: .leading) {
+            if memo.pinned == true { Capsule().fill(Tone.clay.color).frame(width: 3).padding(.vertical, 14) }
+        }
+        .overlay(alignment: .topTrailing) { if !editing { menu.padding(.top, 10).padding(.trailing, 8) } }
+        .shadow(color: .black.opacity(0.025), radius: 3, y: 1)
         .confirmationDialog("归档这条 Memo？", isPresented: $confirmArchive) {
             Button("归档", role: .destructive) { archive() }
         } message: {
@@ -320,24 +438,21 @@ private struct MemoCard: View {
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text(MemoCard.when(memo.createdAt, now: state.agenda.now)).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).monospacedDigit()
-            if let u = memo.updatedAt, let c = memo.createdAt, u.timeIntervalSince(c) > 60 {
-                Text("已编辑").font(Typo.sans(11)).foregroundStyle(Palette.ink4)
+    /// Only what differs from the default: shared visibility, edits, attachments.
+    @ViewBuilder private var footer: some View {
+        let shared = (memo.visibility ?? "PRIVATE") != "PRIVATE"
+        let edited = memo.updatedAt.flatMap { u in memo.createdAt.map { u.timeIntervalSince($0) > 60 } } ?? false
+        let files = memo.attachments?.count ?? 0
+        if shared || edited || files > 0 {
+            HStack(spacing: 10) {
+                if shared {
+                    Label(MemoVisibility.label(memo.visibility), systemImage: MemoVisibility.symbol(memo.visibility))
+                }
+                if files > 0 { Label("\(files) 个附件", systemImage: "paperclip") }
+                if edited { Text("已编辑") }
             }
-            HStack(spacing: 4) {
-                Image(systemName: MemoVisibility.symbol(memo.visibility)).font(.system(size: 9, weight: .semibold))
-                Text(MemoVisibility.label(memo.visibility))
-            }
+            .labelStyle(TightLabel())
             .font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-            .padding(.horizontal, 7).padding(.vertical, 1.5)
-            .background(Capsule().fill(Palette.sunk))
-            if memo.pinned == true {
-                Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(Tone.clay.color).help("已置顶")
-            }
-            Spacer()
-            if !editing { menu }
         }
     }
 
@@ -411,6 +526,12 @@ private struct MemoCard: View {
             }
             busy = false
         }
+    }
+}
+
+private struct TightLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.icon.font(.system(size: 9.5, weight: .semibold)); configuration.title }
     }
 }
 
