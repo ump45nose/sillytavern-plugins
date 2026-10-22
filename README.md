@@ -31,6 +31,8 @@ application owns and rewrites them itself.
 
 ## Managed jobs
 
+- `personal-subscriptions`: independent HTTP/MCP systemd service and five-minute AI/network quota collection; business code lives in personal-subscriptions. Native service source, SQLite and secrets are separate.
+
 - `apisix-auto-stop`: retired; the timer stays disabled because Hermes uses
   APISIX as its persistent model entrypoint.
 - `hermes-env-audit`: daily shared-secret placement audit for Hermes profiles.
