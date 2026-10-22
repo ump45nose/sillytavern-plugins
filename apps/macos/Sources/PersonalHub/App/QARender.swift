@@ -54,6 +54,19 @@ enum QARender {
             state.go(String(page))
             await shot("page-\(page)", width: 1320, height: 1500, MainView().background(Palette.bg))
         }
+        let scopes: [(String, TaskScope)] = [("today", .today), ("upcoming", .upcoming), ("calendar", .calendar),
+                                             ("completed", .completed), ("all", .all), ("list", .list("work"))]
+        for (name, scope) in scopes {
+            state.go("tasks")
+            state.taskScope = scope
+            state.taskSelection = name == "list" ? "s7" : nil
+            await shot("tasks-\(name)", width: 1320, height: 860, MainView().background(Palette.bg))
+        }
+        state.taskSelection = nil
+        state.go("home")
+        for tab in 0..<3 {
+            await shot("tray-tasks-\(tab)", width: 380, TrayTasks(tab: tab).padding(16).background(Palette.card))
+        }
         if let id = state.newPage() {
             await shot("page-custom-edit", width: 1320, height: 900, MainView().background(Palette.bg))
             state.editing = false
@@ -87,6 +100,7 @@ enum QARender {
             await shot("event-readonly", width: 380, EventEditor(mode: .edit(readOnly)) {})
         }
         await shot("event-create", width: 380, EventEditor(mode: .create(AgendaModule.nextSlot(after: state.agenda.now))) {})
+        await shot("settings-general", width: 560, height: 520, SettingsView(tab: 0))
         await shot("settings-account", width: 560, height: 520, SettingsView(tab: 2))
         await shot("settings-data", width: 560, height: 520, SettingsView(tab: 3))
         await shot("settings-ai", width: 560, height: 520, SettingsView(tab: 4))

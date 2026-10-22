@@ -13,6 +13,9 @@ public struct AgendaTask: Sendable, Identifiable, Hashable {
     public var link: String?
     /// Days past due (0 when due today or later).
     public var overdueDays: Int
+    public var completedAt: Date? = nil
+    /// Google's manual order within the list; sorts lexically.
+    public var position: String? = nil
 }
 
 public struct AgendaEvent: Sendable, Identifiable, Hashable {
@@ -45,11 +48,15 @@ public struct AgendaView: Sendable {
     public var upcoming: [AgendaTask] = []
     public var later: [AgendaTask] = []
     public var undated: [AgendaTask] = []
+    /// Every finished top-level task, most recently completed first.
+    public var completed: [AgendaTask] = []
     /// Today's timed events, then all-day ones separately.
     public var events: [AgendaEvent] = []
     public var allDay: [AgendaEvent] = []
     /// Everything ahead in the cache, for the popover's "即将" tab.
     public var upcomingEvents: [AgendaEvent] = []
+    /// Everything in the cache, cancelled ones removed, by start.
+    public var allEvents: [AgendaEvent] = []
     public var nextEvent: AgendaEvent?
     public var currentEvent: AgendaEvent?
 
@@ -59,6 +66,38 @@ public struct AgendaView: Sendable {
     public var todayDone: Int { today.filter(\.completed).count }
     public var todayTotal: Int { overdue.count + today.count }
     public var allTasks: [AgendaTask] { overdue + today + upcoming + later + undated }
+    public var dueNow: [AgendaTask] { overdue + today }
+
+    /// Open tasks of one list in Google's manual order, or by due date (undated last).
+    public func open(in listID: String, byDue: Bool = false) -> [AgendaTask] {
+        allTasks.filter { $0.listID == listID && !$0.completed }.sorted {
+            if byDue, $0.due != $1.due { return ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
+            return ($0.position ?? "~") < ($1.position ?? "~")
+        }
+    }
+
+    public func completed(in listID: String) -> [AgendaTask] { completed.filter { $0.listID == listID } }
+
+    /// Dated open tasks from `today` on, overdue folded into today; today always comes first, even when empty.
+    public func days(from today: Date, calendar: Calendar = .hub) -> [(day: Date, tasks: [AgendaTask])] {
+        let start = calendar.startOfDay(for: today)
+        let ahead = (upcoming + later).filter { !$0.completed && $0.due != nil }
+        let grouped = Dictionary(grouping: ahead) { calendar.startOfDay(for: $0.due!) }
+        return [(start, dueNow)] + grouped.keys.filter { $0 > start }.sorted().map { ($0, grouped[$0]!) }
+    }
+
+    /// Tasks due on a day (open, plus ones finished) and the events touching it.
+    public func tasks(on day: Date, calendar: Calendar = .hub) -> [AgendaTask] {
+        let open = allTasks, seen = Set(open.map(\.id))
+        return (open + completed.filter { !seen.contains($0.id) })
+            .filter { $0.due.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
+            .sorted { $0.completed != $1.completed ? !$0.completed : ($0.position ?? "~") < ($1.position ?? "~") }
+    }
+
+    public func events(on day: Date, calendar: Calendar = .hub) -> [AgendaEvent] {
+        let start = calendar.startOfDay(for: day), end = calendar.date(byAdding: .day, value: 1, to: start)!
+        return allEvents.filter { $0.start < end && $0.end > start }.sorted { ($0.allDay ? 0 : 1, $0.start) < ($1.allDay ? 0 : 1, $1.start) }
+    }
 }
 
 public enum Agenda {
@@ -74,7 +113,8 @@ public enum Agenda {
             let late = due.map { calendar.dateComponents([.day], from: $0, to: today).day ?? 0 } ?? 0
             return AgendaTask(id: r.id, listID: r.listID, listTitle: titles[r.listID] ?? "", title: r.title.isEmpty ? "（无标题）" : r.title,
                               notes: r.notes, due: due, completed: r.completed, parentID: r.parent, subtasks: [], link: r.webLink,
-                              overdueDays: max(0, late))
+                              overdueDays: max(0, late), completedAt: r.completed ? r.completedAt.flatMap(GoogleDate.rfc3339) : nil,
+                              position: r.position)
         }
 
         let visible = store.tasks.filter { !$0.deleted && titles[$0.listID] != nil }
@@ -102,6 +142,7 @@ public enum Agenda {
         }
 
         var v = AgendaView()
+        v.completed = roots.filter(\.completed).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
         for t in roots {
             guard let due = t.due else {
                 if !t.completed { v.undated.append(t) }
@@ -134,6 +175,7 @@ public enum Agenda {
         v.events = todays.filter { !$0.allDay }
         v.allDay = todays.filter(\.allDay)
         v.upcomingEvents = events.filter { $0.end > now && !$0.allDay }
+        v.allEvents = events
         v.currentEvent = v.events.first { $0.start <= now && $0.end > now }
         v.nextEvent = events.first { !$0.allDay && $0.start > now }
         return v

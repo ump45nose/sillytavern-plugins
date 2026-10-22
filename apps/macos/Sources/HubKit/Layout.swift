@@ -57,7 +57,7 @@ public struct LayoutItem: Codable, Hashable, Sendable, Identifiable {
 }
 
 public enum PageKind: String, Codable, Sendable {
-    case grid, sky, memos, review
+    case grid, sky, memos, review, tasks
 }
 
 public struct Page: Codable, Hashable, Sendable, Identifiable {
@@ -211,6 +211,7 @@ public struct LayoutDocument: Codable, Equatable, Sendable {
             LayoutItem(.crm, .compact), LayoutItem(.token, .compact), LayoutItem(.net, .compact),
             LayoutItem(.git, .compact), LayoutItem(.sky, .compact), LayoutItem(.memos, .compact),
         ]),
+        Page(id: "tasks", title: "任务", subtitle: "Google Tasks 的清单、日历与已完成", kind: .tasks),
         Page(id: "life", title: "生活", subtitle: "健康、账单、交流与媒体", items: [
             LayoutItem(.health, .detail), LayoutItem(.bills, .detail), LayoutItem(.crm, .detail),
             LayoutItem(.media, .detail, span: 6), LayoutItem(.plaud, .detail),

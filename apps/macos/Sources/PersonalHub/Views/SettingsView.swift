@@ -95,6 +95,15 @@ private struct GeneralSettings: View {
                         }
                     }
             }
+            SettingRow(title: "「今天」显示的清单", note: "菜单栏和任务页的「今天」除了到期任务，还列出这些清单里的未完成任务") {
+                let agenda = state.agenda, on = Set(agenda.todayLists.map(\.id))
+                Menu(agenda.todayLists.isEmpty ? "不显示" : agenda.todayLists.map(\.title).joined(separator: "、")) {
+                    ForEach(agenda.lists) { l in
+                        Toggle(l.title, isOn: Binding(get: { on.contains(l.id) }, set: { agenda.showInToday(l.id, $0) }))
+                    }
+                }
+                .fixedSize()
+            }
             SettingRow(title: "Memos 地址", note: "Memos 页面直接嵌入此地址") {
                 TextField("http://nas:5230", text: $state.memosURL).textFieldStyle(.roundedBorder).frame(width: 240)
             }

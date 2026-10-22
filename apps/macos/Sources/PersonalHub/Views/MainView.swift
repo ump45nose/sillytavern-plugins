@@ -6,6 +6,7 @@ enum NavEntry {
     static func symbol(_ page: Page) -> String {
         switch page.id {
         case "home": "house"
+        case "tasks": "checklist"
         case "life": "heart"
         case "usage": "chart.bar"
         case "sky": "desktopcomputer"
@@ -72,38 +73,45 @@ private struct Sidebar: View {
             }
             .padding(.leading, 18).padding(.top, 46).padding(.bottom, 22)
 
-            VStack(spacing: 2) {
-                let pages = state.layout.pages
-                ForEach(Array(pages.enumerated()), id: \.1.id) { i, page in
-                    row(page, index: i, count: pages.count)
+            HubScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(spacing: 2) {
+                        let pages = state.layout.pages
+                        ForEach(Array(pages.enumerated()), id: \.1.id) { i, page in
+                            row(page, index: i, count: pages.count)
+                            if page.kind == .tasks, state.currentPage == page.id {
+                                TaskNav().transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .animation(Motion.spring, value: state.currentPage)
+                    .animation(Motion.spring, value: state.layout.pages.map(\.id))
+
+                    Text("自定义").font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.leading, 22).padding(.top, 22).padding(.bottom, 8)
+                    Button {
+                        if let id = state.newPage() { renaming = id }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus").font(.system(size: 12)).frame(width: 18)
+                            Text("新建页面").font(Typo.sans(13))
+                            Spacer()
+                        }
+                        .foregroundStyle(Palette.ink3)
+                        .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!state.layout.canAddPage)
+                    .opacity(state.layout.canAddPage ? 1 : 0.5)
+                    .padding(.horizontal, 10)
+                    .help(state.layout.canAddPage ? "新建一个空页面，再从「添加模块」放入模块" : "最多 \(LayoutDocument.maxPages) 个页面")
+                    Text("拖动或右键调整顺序、重命名").font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).padding(.leading, 22).padding(.top, 6)
+                        .padding(.bottom, 12)
                 }
             }
-            .padding(.horizontal, 10)
-            .animation(Motion.spring, value: state.currentPage)
-            .animation(Motion.spring, value: state.layout.pages.map(\.id))
-
-            Text("自定义").font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.leading, 22).padding(.top, 22).padding(.bottom, 8)
-            Button {
-                if let id = state.newPage() { renaming = id }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "plus").font(.system(size: 12)).frame(width: 18)
-                    Text("新建页面").font(Typo.sans(13))
-                    Spacer()
-                }
-                .foregroundStyle(Palette.ink3)
-                .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!state.layout.canAddPage)
-            .opacity(state.layout.canAddPage ? 1 : 0.5)
-            .padding(.horizontal, 10)
-            .help(state.layout.canAddPage ? "新建一个空页面，再从「添加模块」放入模块" : "最多 \(LayoutDocument.maxPages) 个页面")
-            Text("拖动或右键调整顺序、重命名").font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).padding(.leading, 22).padding(.top, 6)
-
-            Spacer()
+            .scrollIndicators(.never)
             SourceHealth().padding(.horizontal, 12)
             HStack(spacing: 10) {
                 UserAvatar(size: 30)
@@ -354,6 +362,8 @@ struct PageView: View {
                 .padding(.horizontal, 28).padding(.bottom, 24)
         case .review:
             ReviewView()
+        case .tasks:
+            TasksPage()
         case .grid:
             ScrollViewReader { proxy in
                 HubScroll {
@@ -399,6 +409,7 @@ private struct PageHeader: View {
         case .sky: [.sky]
         case .memos: [.memos]
         case .review: [.goals]
+        case .tasks: [.agenda]
         }
         let stamp = HubFormat.stamp(modules.compactMap(state.updatedAt).max())
         HStack(alignment: .bottom) {

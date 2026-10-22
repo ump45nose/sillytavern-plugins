@@ -124,11 +124,11 @@ import Testing
 
 @Test func olderLayoutsGainNewBuiltinPagesInPlace() throws {
     var old = LayoutDocument.default
-    old.pages.removeAll { $0.id == "review" }
+    old.pages.removeAll { $0.id == "review" || $0.id == "tasks" }
     let added = old.addPage(title: "阅读")
     let custom = try #require(added)
     let migrated = old.withBuiltins()
-    #expect(migrated.pages.map(\.id) == ["home", "life", "usage", "sky", "memos", "review", custom])
+    #expect(migrated.pages.map(\.id) == ["home", "tasks", "life", "usage", "sky", "memos", "review", custom])
     #expect(migrated.withBuiltins() == migrated)
 
     var full = LayoutDocument.default

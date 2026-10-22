@@ -334,7 +334,11 @@ private struct CheckMark: Shape {
 struct TaskRow: View {
     var task: AgendaTask
     var showList = true
+    var showDue = true
     var depth = 0
+    /// Set on the task page: a click selects the row for the details panel instead of double-click editing.
+    var onSelect: ((AgendaTask) -> Void)? = nil
+    var selectedID: String? = nil
     @Environment(AppState.self) private var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewState private var editor: TaskEditor.Mode?
@@ -344,7 +348,7 @@ struct TaskRow: View {
     var body: some View {
         VStack(spacing: 0) {
             row
-            ForEach(task.subtasks) { TaskRow(task: $0, showList: false, depth: depth + 1) }
+            ForEach(task.subtasks) { TaskRow(task: $0, showList: false, depth: depth + 1, onSelect: onSelect, selectedID: selectedID) }
         }
     }
 
@@ -393,13 +397,18 @@ struct TaskRow: View {
         .padding(.vertical, depth > 0 ? 6 : 8)
         .padding(.leading, CGFloat(depth) * 26)
         .background {
+            RoundedRectangle(cornerRadius: 8).fill(Tone.sky.tint)
+                .opacity(selectedID == task.id && !finishing ? 1 : 0).padding(.horizontal, -8)
             RoundedRectangle(cornerRadius: 8).fill(Tone.olive.tint)
                 .opacity(finishing ? 1 : 0).padding(.horizontal, -6)
                 .animation(.easeOut(duration: finishing ? 0.2 : 0.5), value: finishing)
         }
-        .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1).padding(.leading, CGFloat(depth) * 26) }
+        .overlay(alignment: .top) {
+            Rectangle().fill(Palette.line2).frame(height: 1).padding(.leading, CGFloat(depth) * 26)
+                .opacity(selectedID == task.id ? 0 : 1)
+        }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { editor = .edit }
+        .gesture(onSelect == nil ? TapGesture(count: 2).onEnded { editor = .edit } : TapGesture().onEnded { onSelect?(task) })
         .contextMenu { TaskMenu(task: task) { editor = $0 } }
         .popover(item: $editor, arrowEdge: .leading) { mode in
             TaskEditor(task: task, mode: mode) { editor = nil }.environment(state)
@@ -415,7 +424,7 @@ struct TaskRow: View {
     }
 
     private var dueLabel: String? {
-        guard let due = task.due else { return nil }
+        guard let due = task.due, showDue || (task.overdueDays > 0 && !task.completed) else { return nil }
         if task.overdueDays > 0 && !task.completed {
             let c = Calendar.hub.dateComponents([.month, .day], from: due)
             return "\(c.month!)/\(c.day!)"
@@ -599,7 +608,7 @@ struct ListChips: View {
     }
 }
 
-private struct NameField: View {
+struct NameField: View {
     var title: String
     var initial: String
     var done: (String?) -> Void

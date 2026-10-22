@@ -204,82 +204,168 @@ private struct TrayAgenda: View {
     }
 }
 
-/// Tasks with their own 今天 / 即将 / 全部 switch; 全部 shows one list at a time, the first by default.
-private struct TrayTasks: View {
+/// 今天: due by today, then the lists pinned to 今天 (the first list unless changed).
+/// 所有: one list at a time by chip, or every list in sidebar order. 即将: today onward, one section per day.
+struct TrayTasks: View {
     @Environment(AppState.self) private var state
-    @ViewState private var tab = 0
+    @ViewState private var tab: Int
     @ViewState private var listID: String?
+    @AppStorage("trayTasksByList") private var byList = false
 
-    private static let limit = 8
+    init(tab: Int = 0) { _tab = ViewState(initialValue: tab) }
+
+    private static let limit = 10
+
+    struct Section: Identifiable {
+        var id: String
+        var title: String?
+        var tasks: [AgendaTask]
+        var showList = true
+        var showDue = true
+        var empty: String?
+        var pinMenu = false
+    }
 
     var body: some View {
         let agenda = state.agenda
         let list = listID.flatMap { id in agenda.lists.first { $0.id == id } } ?? agenda.lists.first
-        let tasks = self.tasks(list: list)
+        let all = sections(list: list)
+        let (shown, hidden) = Self.cap(all, Self.limit)
         VStack(alignment: .leading, spacing: 0) {
-            TrayHeading(title: heading(tasks)) {
-                Segmented(options: [(0, "今天"), (1, "即将"), (2, "全部")], selection: $tab, small: true)
+            TrayHeading(title: heading(all)) {
+                Segmented(options: [(0, "今天"), (1, "所有"), (2, "即将")], selection: $tab, small: true)
             }
-            if tab == 2, agenda.lists.count > 1 {
+            if tab == 1 { allBar(list) }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(shown) { s in
+                    if let title = s.title { header(title, count: all.first { $0.id == s.id }?.tasks.count ?? 0, pin: s.pinMenu) }
+                    ForEach(s.tasks) { TaskRow(task: $0, showList: s.showList, showDue: s.showDue) }
+                    if s.tasks.isEmpty, let empty = s.empty {
+                        Text(empty).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                    }
+                }
+                if hidden > 0 {
+                    Button { state.showTasks(scope) } label: {
+                        Text("还有 \(hidden) 项 · 在任务页查看").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .animation(Motion.spring, value: all.flatMap { $0.tasks.map(\.completed) })
+            .animation(Motion.spring, value: tab)
+            TrayTaskInput(dueToday: tab == 0, list: tab == 1 && !byList ? list : nil).padding(.top, 8)
+        }
+    }
+
+    private var scope: TaskScope {
+        switch tab {
+        case 0: .today
+        case 2: .upcoming
+        default: byList ? .all : (listID ?? state.agenda.lists.first?.id).map(TaskScope.list) ?? .all
+        }
+    }
+
+    private func allBar(_ list: TaskListRecord?) -> some View {
+        HStack(spacing: 8) {
+            Segmented(options: [(false, "标签"), (true, "按清单")], selection: $byList, small: true).fixedSize()
+            if !byList {
                 HubScroll(.horizontal) {
                     HStack(spacing: 6) {
-                        ForEach(agenda.lists) { l in
+                        ForEach(state.agenda.lists) { l in
                             Button { withAnimation(Motion.spring) { listID = l.id } } label: {
                                 Chip(text: l.title, tone: l.id == list?.id ? .sky : nil)
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 1)
                 }
                 .scrollIndicators(.never)
-                .padding(.bottom, 6)
             }
-            VStack(spacing: 0) {
-                ForEach(tasks.prefix(Self.limit)) { TaskRow(task: $0, showList: tab == 1) }
-                if tasks.isEmpty {
-                    Text(empty(list)).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 10)
-                }
-                if tasks.count > Self.limit {
-                    Button { state.openMainWindow("home"); state.focus(.agenda) } label: {
-                        Text("还有 \(tasks.count - Self.limit) 项 · 在主窗口查看").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .animation(Motion.spring, value: tasks.map(\.completed))
-            .animation(Motion.spring, value: tab)
-            TrayTaskInput(dueToday: tab == 0, list: tab == 2 ? list : nil).padding(.top, 8)
+            Spacer(minLength: 0)
         }
+        .padding(.bottom, 6)
     }
 
-    private func tasks(list: TaskListRecord?) -> [AgendaTask] {
-        let v = state.agenda.view
+    private func header(_ title: String, count: Int, pin: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(title).font(Typo.sans(11, .semibold)).foregroundStyle(Palette.ink2)
+            if count > 0 { Text("\(count)").font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit() }
+            Spacer()
+            if pin { TodayListsMenu() }
+        }
+        .padding(.top, 10).padding(.bottom, 2)
+    }
+
+    private func sections(list: TaskListRecord?) -> [Section] {
+        let agenda = state.agenda, v = agenda.view
         switch tab {
-        case 0: return v.today
-        case 1: return v.upcoming + v.later
+        case 0:
+            return [Section(id: "due", title: "今天到期", tasks: v.dueNow, empty: "今天没有到期的任务", pinMenu: true)]
+                + agenda.todayExtras.filter { !$0.tasks.isEmpty }
+                .map { Section(id: "list-" + $0.list.id, title: $0.list.title, tasks: $0.tasks, showList: false) }
+        case 2:
+            return v.days(from: agenda.now).map { day, tasks in
+                Section(id: "day-\(day.timeIntervalSince1970)", title: Self.dayTitle(day, now: agenda.now), tasks: tasks,
+                        showDue: false, empty: "今天没有到期的任务")
+            }
         default:
-            guard let list else { return [] }
-            return v.allTasks.filter { $0.listID == list.id }
+            if byList {
+                return agenda.lists.map { Section(id: "list-" + $0.id, title: $0.title, tasks: v.open(in: $0.id), showList: false) }
+                    .filter { !$0.tasks.isEmpty }
+            }
+            guard let list else { return [Section(id: "none", tasks: [], empty: "还没有任务清单")] }
+            return [Section(id: "list-" + list.id, tasks: v.open(in: list.id), showList: false, empty: "「\(list.title)」里没有未完成的任务")]
         }
     }
 
-    private func heading(_ tasks: [AgendaTask]) -> String {
-        let open = tasks.filter { !$0.completed }.count
+    static func dayTitle(_ day: Date, now: Date) -> String {
+        let rel = Agenda.relativeDay(day, now: now), long = Agenda.longDay(day)
+        return ["今天", "明天", "后天"].contains(rel) ? "\(rel) · \(long)" : long
+    }
+
+    /// Keeps whole sections in order until `limit` rows are used; returns the rest as a count.
+    static func cap(_ sections: [Section], _ limit: Int) -> ([Section], Int) {
+        var left = limit, out: [Section] = [], hidden = 0
+        for var s in sections {
+            if left <= 0 { hidden += s.tasks.count; continue }
+            hidden += max(0, s.tasks.count - left)
+            s.tasks = Array(s.tasks.prefix(left))
+            left -= max(s.tasks.count, 1)
+            out.append(s)
+        }
+        return (out, hidden)
+    }
+
+    private func heading(_ sections: [Section]) -> String {
+        let open = (tab == 0 ? state.agenda.view.dueNow : sections.flatMap(\.tasks)).filter { !$0.completed }.count
         switch tab {
         case 0: return open == 0 ? "任务" : "任务 · 今天 \(open) 项"
-        case 1: return "任务 · 一周内 \(open) 项"
+        case 2: return "任务 · 即将 \(open) 项"
         default: return "任务 · \(open) 项未完成"
         }
     }
+}
 
-    private func empty(_ list: TaskListRecord?) -> String {
-        switch tab {
-        case 0: "今天没有到期的任务"
-        case 1: "接下来一周没有到期的任务"
-        default: list.map { "「\($0.title)」里没有未完成的任务" } ?? "还没有任务清单"
+/// Picks which lists join 今天; shared by the menu bar, the task page and Settings.
+struct TodayListsMenu: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let agenda = state.agenda, on = Set(agenda.todayLists.map(\.id))
+        Menu {
+            Section("在「今天」显示的清单") {
+                ForEach(agenda.lists) { l in
+                    Toggle(l.title, isOn: Binding(get: { on.contains(l.id) }, set: { agenda.showInToday(l.id, $0) }))
+                }
+            }
+        } label: {
+            Image(systemName: "pin").font(.system(size: 10.5, weight: .medium)).foregroundStyle(Palette.ink3)
         }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().tint(Palette.ink3)
+        .help("选择在「今天」里显示的清单")
     }
 }
 

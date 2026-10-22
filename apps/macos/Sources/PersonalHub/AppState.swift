@@ -28,6 +28,8 @@ final class AppState {
     var skyDay: Date?
     var skyWindow: String?
     var skyDevice: String?
+    var taskScope: TaskScope = .today
+    var taskSelection: String?
 
     var memosURL: String { didSet { UserDefaults.standard.set(memosURL, forKey: Keys.memosURL) } }
     var userName: String { didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) } }
@@ -132,6 +134,12 @@ final class AppState {
         guard pageID != currentPage, layout.page(pageID) != nil else { return }
         editing = false
         withAnimation(Motion.rise) { currentPage = pageID }
+    }
+
+    /// Opens the task page on a view; falls back to the agenda module when the page was removed from the layout.
+    func showTasks(_ scope: TaskScope) {
+        taskScope = scope
+        if layout.page("tasks") != nil { openMainWindow("tasks") } else { openMainWindow("home"); focus(.agenda) }
     }
 
     func focus(_ module: ModuleID) {

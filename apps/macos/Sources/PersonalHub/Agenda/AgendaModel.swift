@@ -237,6 +237,28 @@ final class AgendaModel {
 
     var defaultList: TaskListRecord? { store.lists.first }
 
+    /// Lists whose open tasks join 今天; nil until chosen, which means the first list.
+    var todayListIDs: [String]? = UserDefaults.standard.stringArray(forKey: "todayLists") {
+        didSet { UserDefaults.standard.set(todayListIDs, forKey: "todayLists") }
+    }
+
+    var todayLists: [TaskListRecord] {
+        guard let ids = todayListIDs else { return Array(store.lists.prefix(1)) }
+        return store.lists.filter { ids.contains($0.id) }
+    }
+
+    func showInToday(_ listID: String, _ on: Bool) {
+        var ids = todayLists.map(\.id).filter { $0 != listID }
+        if on { ids.append(listID) }
+        todayListIDs = store.lists.map(\.id).filter(ids.contains)
+    }
+
+    /// 今天's extra sections: open tasks of the pinned lists not already due by today.
+    var todayExtras: [(list: TaskListRecord, tasks: [AgendaTask])] {
+        let due = Set(view.dueNow.map(\.id))
+        return todayLists.map { l in (l, view.open(in: l.id).filter { !due.contains($0.id) }) }
+    }
+
     var writableCalendar: CalendarRecord? {
         store.calendars.first { $0.primary && $0.writable } ?? writableCalendars.first
     }
