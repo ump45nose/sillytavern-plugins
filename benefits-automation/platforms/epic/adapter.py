@@ -1,4 +1,4 @@
-"""Native one-shot Epic entry; model and browser dependencies load on demand."""
+"""Native one-shot Epic entry; browser dependencies load on demand."""
 
 import os
 import json

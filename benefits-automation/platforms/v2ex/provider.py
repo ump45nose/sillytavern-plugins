@@ -54,9 +54,11 @@ class V2ex:
         if on_balance is not None:
             on_balance(msg)
         response = session.get(url="https://www.v2ex.com/mission/daily", verify=True)
-        data = re.findall(
-            pattern=r"<div class=\"cell\">(.*?)天</div>", string=response.text
-        )
+        data = re.findall(r"已连续登录\s*(\d+)\s*天", response.text)
+        if not data:
+            data = re.findall(
+                pattern=r"<div class=\"cell\">(\d+)天</div>", string=response.text
+            )
         data = data[0] + "天" if data else "获取连续签到天数失败"
         msg += [
             {"name": "签到天数", "value": data},

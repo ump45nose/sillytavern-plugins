@@ -31,7 +31,7 @@ Rewards server_actions.cjs、punchcards.cjs、app.cjs 的版本绑定协议改�
 
 ## 2026-10-03 窄范围实现接入
 
-Epic `native.py`、`model_bridge.py` 现在包含参考 Ronchy2000/epic-freebies-helper 的浏览器、登录和 OpenAI compatible 模型桥适配；依旧按 GPL-3.0-or-later 保留，完整许可在 `upstream/epic-freebies-verifier/LICENSE`，固定提交 `d90190bf3f9f87e9da71c50c81f155c4586bdb33` 由 `platforms/epic/upstream-contract.json` 指定。没有复制完整应用、settings、容器或调度服务。Camoufox、hcaptcha-challenger、Google GenAI 等可选安装包遵循各自原许可证。
+Epic `native.py` 包含参考 Ronchy2000/epic-freebies-helper 的浏览器、登录适配；依旧按 GPL-3.0-or-later 保留，完整许可在 `upstream/epic-freebies-verifier/LICENSE`，固定提交 `d90190bf3f9f87e9da71c50c81f155c4586bdb33` 由 `platforms/epic/upstream-contract.json` 指定。没有复制完整应用、settings、容器或调度服务。模型桥与验证码 SDK 接线已删除；Camoufox 等浏览器安装包遵循各自原许可证。
 
 Rewards `promotions.cjs`、`app_auth.cjs` 以及 `extra.cjs` 的探索激活部分，窄范围改造自 TheNetsky/Microsoft-Rewards-Script v4.3.2 的 URL 活动、积分领取、OAuth 与 SearchOnBing 协议，沿用 GPL-3.0-or-later，完整许可在 `platforms/rewards/vendor/rewards-parser/LICENSE`。本段取代前述“Epic 上游未复制”和仅 parser 被分发的旧检查点描述。
 

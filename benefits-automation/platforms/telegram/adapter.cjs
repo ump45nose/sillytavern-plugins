@@ -136,7 +136,7 @@ async function send(page, bot, journal, snap) {
   const input = page.locator(web.SELECTORS.messageInput).locator("visible=true").first();
   await input.click({timeout: 10000});
   await input.fill(bot.command, {timeout: 10000});
-  const typed = await input.evaluate((element) => element.innerText || element.textContent || "");
+  const typed = await web.boundedRead(input.evaluate((element) => element.innerText || element.textContent || ""));
   if (typed.trim() !== bot.command) {
     await input.fill("", {timeout: 10000}).catch(() => {});
     return "input_unconfirmed";
@@ -240,7 +240,7 @@ function journalItems(config, journal) {
 const failure = (reason, checkin = "unknown") => ({execution: "failed", reason, checkin});
 
 async function run(firefox, {profile, stateDir, businessDate, account, configFile, proxy,
-  statusOnly = false, clock = realClock} = {}) {
+  statusOnly = false, clock = realClock, onProgress = () => {}} = {}) {
   if (!hasProfile(profile)) return failure("not_logged_in", "blocked");
   let config, journal;
   try {
@@ -250,6 +250,13 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
     if (error instanceof ConfigError || error instanceof StateError) return failure(error.code);
     throw error;
   }
+  let latest = summary(journalItems(config, journal));
+  const checkpoint = (items = [], metrics = {}) => {
+    const observed = new Map(items.map((item) => [item.id, item]));
+    latest = summary(journalItems(config, journal).map((item) => observed.get(item.id) || item), metrics);
+    if (!statusOnly) onProgress(latest);
+  };
+  checkpoint();
   try {
     return await withProfile(firefox, {profile, proxy, headless: true, contextOptions: CONTEXT},
       async (context, page) => {
@@ -265,16 +272,21 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
           const pending = bot.enabled && journal.get(bot.id).phase !== "confirmed";
           if (pending && visited) await clock.sleep(page, clock.spacing(config.spacing));
           items.push(await checkBot(page, bot, journal, clock, points));
+          checkpoint(items, pointMetrics(config.bots, points));
           visited = visited || pending;
         }
         return summary(items, pointMetrics(config.bots, points));
       });
   } catch (error) {
-    if (error instanceof NotLoggedIn) return failure("not_logged_in", "blocked");
-    if (error instanceof StateError) return failure(error.code);
-    if (error && error.message === "selector_broken") return failure("selector_broken");
-    if (error && error.message === "telegram_app_unavailable") return failure("telegram_app_unavailable");
-    return failure("browser_or_network_error");
+    const reason = error instanceof NotLoggedIn ? "not_logged_in"
+      : error instanceof StateError ? error.code
+        : ["selector_broken", "telegram_app_unavailable", "telegram_snapshot_timeout"].includes(error?.message) ? error.message
+          : "browser_or_network_error";
+    console.error(JSON.stringify({event: "telegram_browser_failure", reason, type: error?.name,
+      interaction: ["intercepts pointer events", "not stable", "outside of the viewport", "not visible", "Target closed"]
+        .filter((marker) => String(error?.message || "").includes(marker))}));
+    return {...latest, execution: "failed", reason,
+      ...(error instanceof NotLoggedIn ? {checkin: "blocked"} : {})};
   }
 }
 
@@ -295,11 +307,11 @@ async function submitPassword(page, secret, clock) {
   if ((await fields.count()) !== 1) return "password_field_ambiguous";
   const input = fields.first();
   await input.fill(secret, {timeout: 10000});
-  const filled = await input.evaluate((element, length) => {
+  const filled = await web.boundedRead(input.evaluate((element, length) => {
     if (element.value.length !== length) return false;
     element.classList.remove("error"); // A previous verdict must not decide this attempt.
     return true;
-  }, secret.length);
+  }, secret.length));
   if (!filled) {
     await input.fill("", {timeout: 10000}).catch(() => {});
     return "password_input_unconfirmed";
@@ -370,7 +382,8 @@ async function main() {
       : await run(firefox, {profile, stateDir: env.BENEFITS_STATE_DIR,
         businessDate: env.BENEFITS_BUSINESS_DATE, account: env.BENEFITS_ACCOUNT,
         configFile: env.TELEGRAM_CONFIG, proxy: env.TELEGRAM_PROXY,
-        statusOnly: args.includes("--status")});
+        statusOnly: args.includes("--status"),
+        onProgress: (value) => publish("failed", "bots_in_progress", {checkin: value.checkin}, value.details)});
   } catch {
     r = failure("browser_cleanup_failed");
   }

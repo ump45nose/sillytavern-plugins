@@ -21,6 +21,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ContainmentTests(unittest.TestCase):
+    def test_exited_child_is_reaped_without_requiring_pidfd(self):
+        scope = BrowserScope("unused", "fixture")
+        with (patch("common.containment.children", side_effect=[[123], []]),
+              patch("common.containment.os.waitpid", return_value=(123, 0)) as wait,
+              patch("common.containment.os.pidfd_open", side_effect=ProcessLookupError) as open_fd):
+            self.assertTrue(scope.cleanup())
+        wait.assert_called_once_with(123, os.WNOHANG)
+        open_fd.assert_not_called()
+
+    def test_unconfirmed_ownership_is_logged_without_signalling(self):
+        records = []
+        scope = BrowserScope("unused", "fixture", report=records.append)
+        with (patch("common.containment.children", return_value=[123]),
+              patch("common.containment.os.waitpid", side_effect=ChildProcessError),
+              patch("common.containment.os.pidfd_open") as open_fd):
+            self.assertFalse(scope.cleanup())
+        self.assertEqual(records, [{"event": "browser_cleanup_failed", "reason": "ownership_unconfirmed", "pid": 123}])
+        open_fd.assert_not_called()
+
     def test_does_not_adopt_or_kill_unrelated_existing_child(self):
         proc = subprocess.Popen([sys.executable, "-c", "import time;time.sleep(30)"])
         try:

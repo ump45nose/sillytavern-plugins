@@ -11,6 +11,15 @@ const web = require("../platforms/telegram/selectors.cjs");
 const {validateDetails} = require("../common/details.cjs");
 
 const DAY = "2026-10-19";
+
+test("a stalled browser read is bounded without treating it as a successful snapshot", async (context) => {
+  context.mock.timers.enable({apis: ["setTimeout"]});
+  const read = web.snapshot({evaluate: () => new Promise(() => {})});
+  const rejected = assert.rejects(read, /telegram_snapshot_timeout/);
+  context.mock.timers.tick(10000);
+  await rejected;
+});
+
 const bot = (extra = {}) => ({id: "alpha", username: "AlphaBot", command: "/checkin",
   success: ["签到成功"], already: ["已签到"], failure: ["失败"], ...extra});
 
@@ -176,7 +185,11 @@ test("login page reports not_logged_in and sends nothing", async () => {
   const ws = workspace({accounts: {"tg-ai": {bots: [bot()]}}});
   try {
     const fake = fakeTelegram({authenticated: false, chats: {AlphaBot: {messages: []}}});
-    assert.deepEqual(await run(fake, ws), {execution: "failed", reason: "not_logged_in", checkin: "blocked"});
+    const output = await run(fake, ws);
+    assert.equal(output.execution, "failed");
+    assert.equal(output.reason, "not_logged_in");
+    assert.equal(output.checkin, "blocked");
+    assert.equal(output.details.metrics.bots.current, 0);
     assert.deepEqual(fake.state.sends, []);
     assert.equal(fake.state.closed, 1);
   } finally {
@@ -546,12 +559,47 @@ test("a lasting outage reports telegram_app_unavailable and sends nothing", asyn
       await flakyGoto(fake, Infinity);
       const c = clock();
       const out = await run(fake, ws, {clock: c, statusOnly});
-      assert.deepEqual(out, {execution: "failed", reason: "telegram_app_unavailable", checkin: "unknown"});
+      assert.equal(out.execution, "failed");
+      assert.equal(out.reason, "telegram_app_unavailable");
+      assert.equal(out.checkin, "incomplete");
+      assert.equal(out.details.metrics.bots.current, 0);
       assert.deepEqual(fake.state.sends, []);
       assert.ok(c.now() <= 240000, "bounded retry budget");
     } finally {
       ws.cleanup();
     }
+  }
+});
+
+test("a later browser failure preserves confirmed bots and publishes partial progress", async () => {
+  const ws = workspace({accounts: {"tg-ai": {bots: [bot(), bot({id: "beta", username: "BetaBot"})]}}});
+  try {
+    const fake = fakeTelegram({chats: {AlphaBot: {messages: [], onCommand: ({incoming}) => incoming("签到成功")}}});
+    const launch = fake.firefox.launchPersistentContext;
+    fake.firefox.launchPersistentContext = async (...args) => {
+      const context = await launch(...args);
+      const page = context.pages()[0];
+      const goto = page.goto;
+      page.goto = async (url) => {
+        if (url.endsWith("#@BetaBot")) throw Error("selector_broken");
+        return goto(url);
+      };
+      return context;
+    };
+    const progress = [];
+    const output = await run(fake, ws, {onProgress: (value) => progress.push(value)});
+    assert.equal(output.execution, "failed");
+    assert.equal(output.reason, "selector_broken");
+    assert.equal(output.details.metrics.bots.current, 1);
+    assert.equal(output.details.metrics.bots.max, 2);
+    assert.equal(output.details.items[0].status, "complete");
+    assert.equal(output.details.items[1].reason, "not_attempted");
+    assert.equal(progress.at(-1).details.metrics.bots.current, 1);
+    const next = fakeTelegram({chats: {BetaBot: {messages: [], onCommand: ({incoming}) => incoming("签到成功")}}});
+    assert.equal((await run(next, ws)).checkin, "complete");
+    assert.deepEqual(next.state.sends.map((value) => value.chat), ["BetaBot"]);
+  } finally {
+    ws.cleanup();
   }
 });
 

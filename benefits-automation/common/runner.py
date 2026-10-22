@@ -133,6 +133,7 @@ def run(task: Task):
                                 BrowserScope(
                                     runtime / "locks/browser-cleanup.json",
                                     context["run_id"],
+                                    report=lambda record: sink.feed((json.dumps(record) + "\n").encode()),
                                 )
                             )
                         outcome = supervise(

@@ -8,7 +8,6 @@ import asyncio
 import os
 from pathlib import Path
 import time
-import shutil
 import re
 from urllib.parse import parse_qs, urlsplit, urljoin
 
@@ -17,7 +16,6 @@ from .browser_driver import BrowserDriver, STORE, clean_target
 from .workflow import ClaimWorkflow, Paused
 
 LOGIN = "https://store.epicgames.com/login"
-CHALLENGE_TIMEOUT = 300
 
 
 async def report_purchase_error(response):
@@ -136,7 +134,6 @@ class Login:
     def __init__(self, driver, config):
         self.driver, self.config = driver, config
         self.acted = set()
-        self.challenge = None
 
     async def sso(self, obstacle, *, timeout):
         page, offer = self.driver.page, self.driver.offer
@@ -156,6 +153,8 @@ class Login:
         await page.wait_for_timeout(3000)
 
     async def captcha(self, obstacle, *, timeout):
+        if (obstacle.payload or {}).get("_provider") != "cloudflare":
+            raise Paused("human_required")
         page = self.driver.page
         for frame in page.frames:
             if urlsplit(frame.url).hostname == "challenges.cloudflare.com":
@@ -164,25 +163,7 @@ class Login:
                     await page.mouse.click(box["x"] + 28, box["y"] + box["height"] / 2)
                     await page.wait_for_timeout(5000)
                     return
-        if (obstacle.payload or {}).get("_provider") == "cloudflare":
-            # Managed Challenges can verify automatically without a visible
-            # widget. Keep this document open, then let the workflow re-observe;
-            # it must not be sent to the unrelated hCaptcha model handler.
-            await page.wait_for_timeout(min(5000, int(timeout * 1000)))
-            return
-        if self.challenge is None:
-            captured = self.driver.challenge_responses
-            self.challenge = build_challenge(page, self.config, initial_responses=(
-                captured[kind] for kind in ("script", "payload") if kind in captured))
-        try:
-            outcome = await self.challenge.handle(obstacle, timeout=min(timeout, CHALLENGE_TIMEOUT))
-        except TimeoutError:
-            raise Paused("challenge_timeout") from None
-        signal = outcome.get("solver_signal")
-        if signal in {"challenge_execution_timeout", "challenge_response_timeout"}:
-            raise Paused("challenge_timeout")
-        if signal != "success":
-            raise Paused("challenge_unconfirmed")
+        await page.wait_for_timeout(min(5000, int(timeout * 1000)))
 
     async def login(self, obstacle, *, timeout):
         page = self.driver.page
@@ -242,28 +223,6 @@ class Login:
         await page.wait_for_timeout(3000)
 
 
-def build_challenge(page, config, *, initial_responses=()):
-    """Only the challenge path loads the model SDK/image libraries."""
-    from .challenges import HCaptchaHandler, load_sdk
-    AgentConfig = load_sdk().AgentConfig
-    from .model_bridge import install
-    from hcaptcha_challenger.tools.internal.providers.gemini import GeminiProvider
-    from tenacity import stop_after_attempt
-    model = config.get("model", {})
-    if not model.get("api_key") or not model.get("name"):
-        raise Paused("challenge_model_not_configured")
-    install(model)
-    # AgentConfig's retry flag does not disable the provider's HTTP decorator.
-    GeminiProvider.generate_with_images.retry.stop = stop_after_attempt(1)
-    temporary = Path(os.environ["TMPDIR"]) / "challenge"
-    temporary.mkdir(mode=0o700, exist_ok=True)
-    settings = AgentConfig(GEMINI_API_KEY=model["api_key"],
-        RETRY_ON_FAILURE=False, EXECUTION_TIMEOUT=CHALLENGE_TIMEOUT, RESPONSE_TIMEOUT=60,
-        cache_dir=temporary / "cache", challenge_dir=temporary / "images",
-        captcha_response_dir=temporary / "responses")
-    return HCaptchaHandler(page, settings, initial_responses=initial_responses)
-
-
 async def execute(context, config, state_dir):
     # Importing HTTP platforms does not import Camoufox/numpy/Playwright.
     from camoufox import AsyncCamoufox
@@ -274,11 +233,6 @@ async def execute(context, config, state_dir):
     pkgman.INSTALL_DIR = cache
     async with AsyncCamoufox(from_options=_browser_options(config, state_dir),
                             persistent_context=True) as browser:
-        async def identity_encoding(route):
-            headers = await route.request.all_headers()
-            headers["accept-encoding"] = "identity"
-            await route.continue_(headers=headers)
-        await browser.route("**/hsw.js*", identity_encoding)
         page = browser.pages[0] if browser.pages else await browser.new_page()
         driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
         browser.on("response", driver.observe_response)
@@ -291,8 +245,4 @@ async def execute(context, config, state_dir):
             expires_at=context["business_date"] + "T23:59:59+08:00",
             automatic_kinds={"login", "captcha", "account_link"},
             handlers={"login": auth.login, "captcha": auth.captcha, "account_link": auth.link})
-        try:
-            return await workflow.run()
-        finally:
-            if auth.challenge: await auth.challenge.close()
-            shutil.rmtree(Path(os.environ["TMPDIR"]) / "challenge", ignore_errors=True)
+        return await workflow.run()

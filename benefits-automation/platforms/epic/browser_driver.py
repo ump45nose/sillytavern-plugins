@@ -8,6 +8,7 @@ of checkout submission. Site acceptance is recorded separately from code checks.
 
 import asyncio
 import hashlib
+import json
 import math
 import uuid
 from dataclasses import replace
@@ -17,7 +18,6 @@ import re
 from urllib.parse import urlsplit
 from common.interventions import fingerprint
 from .catalog import parse_catalog, storefront_owned
-from .challenges import response_kind
 from .guard import zero_total
 from .obstacles import classify
 from .workflow import Paused
@@ -100,8 +100,8 @@ class BrowserDriver:
         self.observation_session = uuid.uuid4().hex
         self.device_acknowledged = set()
         self.assets_denied = False
+        self.assets_reload_attempted = False
         self.cloudflare_document = None
-        self.challenge_responses = {}
 
     def observe_response(self, response):
         target = urlsplit(response.url)
@@ -110,19 +110,12 @@ class BrowserDriver:
             self.assets_denied = True
         if (response.request.resource_type == "document"
                 and response.frame is self.page.main_frame):
-            self.challenge_responses.pop("payload", None)
+            self.assets_denied = False
             self.cloudflare_document = (
                 clean_target(response.url)
                 if target.hostname in ALLOWED and response.headers.get("cf-mitigated") == "challenge"
                 else None
             )
-        kind = response_kind(response)
-        if kind in {"script", "payload"} and response.frame.page is self.page:
-            # At most the latest script and payload, held only in this process.
-            # A failed replacement must not leave an older puzzle to be replayed.
-            self.challenge_responses.pop(kind, None)
-            if response.status == 200:
-                self.challenge_responses[kind] = response
 
     def _purchase_controls(self, page):
         # Both storefront versions expose named buttons. Test IDs are absent
@@ -318,6 +311,15 @@ class BrowserDriver:
         # A denied optional script does not negate working controls or a real
         # obstacle. Keep the rejection when the observation budget is exhausted.
         if self.assets_denied:
+            if phase in {"session", "product", "verification"} and not self.assets_reload_attempted:
+                remaining = deadline - monotonic()
+                if remaining > 0:
+                    self.assets_reload_attempted = True
+                    print(json.dumps({"event": "epic_read_only_reload", "phase": phase}), flush=True)
+                    await self._goto(self.page.url, remaining)
+                    remaining = deadline - monotonic()
+                    if remaining > 0:
+                        return await self.observe(phase, timeout=remaining)
             raise Paused("store_assets_access_denied")
         return state or classify({}, phase=phase, target=clean_target(self.page.url),
                                  evidence_fingerprint=fingerprint("unconfirmed", phase))

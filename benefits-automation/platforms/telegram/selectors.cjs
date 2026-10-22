@@ -70,8 +70,19 @@ function readPage({selectors, limits}) {
   };
 }
 
+async function boundedRead(promise) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(Error("telegram_snapshot_timeout")), 10000);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function snapshot(page) {
-  const value = await page.evaluate(readPage, {selectors: SELECTORS, limits: LIMITS});
+  const value = await boundedRead(page.evaluate(readPage, {selectors: SELECTORS, limits: LIMITS}));
   if (!value || typeof value !== "object" || !Array.isArray(value.messages))
     throw Error("selector_broken");
   return value;
@@ -83,4 +94,4 @@ function midValue(message) {
   return /^\d{1,20}(?:\.\d{1,12})?$/.test(message.mid) ? Number(message.mid) : null;
 }
 
-module.exports = {BASE_URL, SELECTORS, LIMITS, readPage, snapshot, normalize, midValue};
+module.exports = {BASE_URL, SELECTORS, LIMITS, readPage, snapshot, boundedRead, normalize, midValue};
