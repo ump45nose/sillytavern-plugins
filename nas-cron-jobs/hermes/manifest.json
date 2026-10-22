@@ -7,7 +7,6 @@
     "benefits_automation_daily_report.py": "hermes/benefits_automation_daily_report.py",
     "benefits_automation_notice_daily.py": "hermes/benefits_automation_notice_daily.py",
     "benefits_daily_summary.py": "hermes/benefits_daily_summary.py",
-    "benefits_epic.py": "hermes/benefits_epic.py",
     "benefits_glados.py": "hermes/benefits_glados.py",
     "benefits_yingshijufeng.py": "hermes/benefits_yingshijufeng.py",
     "benefits_ole.py": "hermes/benefits_ole.py",

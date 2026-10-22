@@ -271,16 +271,6 @@
     "source": "hermes/benefits_laowang.py"
   },
   {
-    "name": "benefits-epic",
-    "schedule": {
-      "kind": "cron",
-      "expr": "0 9 * * *",
-      "display": "0 9 * * *"
-    },
-    "no_agent": true,
-    "source": "hermes/benefits_epic.py"
-  },
-  {
     "name": "benefits-rewards",
     "schedule": {
       "kind": "cron",

@@ -31,6 +31,11 @@ summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 class JobTests(unittest.TestCase):
     def test_external_task_never_launches_but_still_reports_its_returned_result(self):
+        manifest = json.loads((ROOT / "hermes/manifest.json").read_text())["profile_scripts"]
+        schedules = json.loads((ROOT / "hermes/schedules.json").read_text())
+        self.assertNotIn("benefits_epic.py", manifest)
+        self.assertNotIn("benefits-epic", {row["name"] for row in schedules})
+        self.assertFalse((ROOT / "hermes/benefits_epic.py").exists())
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             delivery = root / "runtime/delivery"
