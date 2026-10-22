@@ -14,8 +14,8 @@
 | V2EX | [V2EX](platforms/v2ex/README.md) | 今日奖励确认 |
 | 阿里云开发者社区 | [Aliyun](platforms/aliyun/README.md) | CookieCloud 最新 Cookie，签到与待收积分确认 |
 | Laowang | [Laowang](platforms/laowang/README.md) | 自动验证码、提交和签到读回通过 |
-| Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 2026-10-20：搜索、APP 等已确认；每日投票及探索 0/40 未完成 |
-| Epic 免费游戏 | [Epic](platforms/epic/README.md) | 2026-10-20：核验 Bad Cheese 手动入库；自动领取仍被验证码/支付流程阻塞 |
+| Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 只执行约定范围内的脚本任务；测验、投票、探索不执行，派生要求同步排除 |
+| Epic 免费游戏 | [Epic](platforms/epic/README.md) | MacAir 独立脚本执行并回传 fn；2026-10-22 原始结果为商店资源 403，fn 不再执行 |
 
 [Steam ASF / FreePackages](platforms/steam/README.md) 已合入 main 并部署到 NAS：登录、持久恢复、真实接口、定时和通知已核验。用户已授权免费领取，Arena of Trophies 实际取得免费许可，owned 回查与防重复检查通过；公开商店超时的代理路由已修复，Hermes 已启用经核实的限免领取。缺少访问 token 的包继续待核查，合格普通游戏的限时赠送正向样本仍待实际活动覆盖。见 [2026-10-07 部署与验收记录](docs/STEAM_DEPLOYMENT_2026-10-07.md)。这次 Steam 部署独立于下述六平台生产迁移。
 
