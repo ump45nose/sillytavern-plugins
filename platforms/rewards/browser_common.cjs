@@ -311,29 +311,42 @@ async function readFlyout(context, existingPage = null) {
   if (context.request) {
     // APIRequestContext shares this browser's cookie jar and avoids homepage
     // regional redirects/CORS. This is the pinned provider's authenticated path.
-    let response;
     for (let attempt = 0; attempt < 2; attempt++) {
+      let response;
       try {
         response = await context.request.get(FLYOUT, {
           timeout: 20000, maxRedirects: 0,
         });
-        break;
       } catch (error) {
         // A bounded retry of this read-only request handles observed proxy TLS
         // drops. Transport exceptions may include the entire Cookie header.
         trace.failure("http.get", error, {route: "bing_flyout", attempt: attempt + 1});
         if (attempt === 1) throw Error("flyout_request_failed");
-        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+      if (response) {
+        try {
+          if ([301, 302, 303, 307, 308].includes(response.status())) {
+            let target;
+            try {
+              if (response.headers().location) target = new URL(response.headers().location, FLYOUT);
+            } catch {}
+            trace.emit("http.redirect", {route: "bing_flyout", status: response.status(),
+              redirect_route: trace.route(target?.href), attempt: attempt + 1});
+            if (target && ["login.live.com", "account.live.com", "login.microsoftonline.com"].includes(target.hostname))
+              throw new obstacles.Obstacle({url: target.href, flags: {login: true}});
+            if (attempt === 1) throw Error("flyout_redirect_unavailable");
+          } else {
+            if (response.status() !== 200) throw Error("flyout_unavailable");
+            const length = Number(response.headers()["content-length"] || 0);
+            if (length > MAX_FLYOUT) throw Error("response_too_large");
+            const body = await response.body();
+            if (body.length > MAX_FLYOUT) throw Error("response_too_large");
+            return JSON.parse(body);
+          }
+        } finally { await response.dispose(); }
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    try {
-      if (response.status() !== 200) throw Error("flyout_unavailable");
-      const length = Number(response.headers()["content-length"] || 0);
-      if (length > MAX_FLYOUT) throw Error("response_too_large");
-      const body = await response.body();
-      if (body.length > MAX_FLYOUT) throw Error("response_too_large");
-      return JSON.parse(body);
-    } finally { await response.dispose(); }
   }
   // Stream and cap the body in the browser before transferring data to Node.
   const page = existingPage || (await context.newPage());

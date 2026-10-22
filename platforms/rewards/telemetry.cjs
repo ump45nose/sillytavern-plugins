@@ -12,7 +12,7 @@ const REASONS = new Set(("human_required captcha login_required terms_changed ag
   "app_authorization_navigation_failed app_token_exchange_failed app_inventory_unavailable app_response_unavailable " +
   "app_response_too_large app_locale_invalid app_inventory_limit app_offer_invalid journal_invalid journal_limit " +
   "business_date_invalid business_date_regressed authenticated_inventory_unavailable flyout_request_failed " +
-  "flyout_unavailable input_too_large session_invalid dependency_not_configured dependency_incompatible " +
+  "flyout_unavailable flyout_redirect_unavailable input_too_large session_invalid dependency_not_configured dependency_incompatible " +
   "page_too_large session_state_limit snapshot_unavailable capability_failed browser_operation_failed " +
   "search_submission_uncertain search_stagnant quota_unknown quota_regressed_reprobe_required " +
   "search_unconfirmed activation_evidence_unavailable activity_action_unavailable deployment_evidence_unavailable " +
@@ -39,7 +39,7 @@ const STATES = new Set(["ok", "failed", "busy", "timeout", "complete", "unknown"
   "blocked", "not_applicable", "attempted", "confirmed", "http", "browser", "cached"]);
 const OPERATIONS = new Set(("run stage snapshot browser.launch browser.context browser.page browser.close " +
   "browser.context_close page.goto page.waitForURL page.waitForLoadState page.request_failed " +
-  "http.get http.post http.fetch server_action.request auth.http_redirect auth.browser_redirect " +
+  "http.get http.post http.fetch http.redirect server_action.request auth.http_redirect auth.browser_redirect " +
   "auth.exchange auth.cache app.request app.snapshot app.inventory app.offer app.checkin " +
   "search.submit search.readback search.skip activity.submit promotion.submit promotion.readback " +
   "interaction.pause interaction.type interaction.click interaction.review interaction.batch_break " +
@@ -94,7 +94,7 @@ function clean(fields) {
     if (Number.isFinite(fields[key]) && Math.abs(fields[key]) <= 1e9) out[key] = fields[key];
   for (const key of ["refresh_required", "proxy_configured", "has_code", "state_matches", "has_error", "complete", "reconciled", "closing"])
     if (typeof fields[key] === "boolean") out[key] = fields[key];
-  for (const [key, values] of [["capability", CAPABILITIES], ["phase", CAPABILITIES], ["route", ROUTES],
+  for (const [key, values] of [["capability", CAPABILITIES], ["phase", CAPABILITIES], ["route", ROUTES], ["redirect_route", ROUTES],
     ["reason", REASONS], ["state", STATES], ["execution", STATES], ["error_name", NAMES], ["error_code", CODES]])
     if (values.has(fields[key])) out[key] = fields[key];
   if (["timeout", "network", "tls", "cancelled", "navigation_context", "page_closed", "obstacle", "authentication", "rate_limit", "unknown"].includes(fields.failure_class)) out.failure_class = fields.failure_class;
