@@ -2,23 +2,31 @@ import AppKit
 import HubKit
 import SwiftUI
 
-/// The review page: this cycle's mainline and goals, plus daily and weekly sessions to confirm.
+/// The review page: header with what's due, the mainline (foldable, so it stays in view while writing),
+/// then sessions on the left and the selected session or the stage on the right.
 struct ReviewView: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         let desk = state.review
-        HStack(spacing: 0) {
-            ReviewSidebar().frame(width: 216)
-            Rectangle().fill(Palette.line).frame(width: 1)
-            Group {
-                switch desk.selection {
-                case .stage: StageView()
-                case .session(let id): SessionDetail(id: id)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            ReviewHeader().padding(.horizontal, 28).padding(.top, 4)
+            if desk.selection != .stage, desk.goals != nil {
+                MainlinePanel().padding(.horizontal, 28).padding(.top, 14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            HStack(alignment: .top, spacing: 0) {
+                ReviewRail().frame(width: 208).padding(.leading, 28).padding(.top, 18).padding(.bottom, 24)
+                Group {
+                    switch desk.selection {
+                    case .stage: StageView()
+                    case .session(let id): SessionDetail(id: id)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
+        .animation(Motion.spring, value: desk.selection)
         .background(Palette.bg)
         .preferredColorScheme(.light)
         .tint(Tone.clay.color)
@@ -26,53 +34,194 @@ struct ReviewView: View {
     }
 }
 
-private struct ReviewSidebar: View {
+private struct ReviewHeader: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let page = state.layout.page("review"), d = state.review.goals
+        HStack(alignment: .bottom, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(page?.title ?? "复盘").font(Typo.serif(34)).tracking(-0.6)
+                Text(page?.subtitle.isEmpty == false ? page!.subtitle : "日报、周报与本阶段").font(Typo.sans(13)).foregroundStyle(Palette.ink2)
+            }
+            Spacer()
+            if let d {
+                pill(GoalsModule.dailyTile(d.reviews), d.reviews?.daily.map { .session($0.id) } ?? .latest(.daily))
+                pill(GoalsModule.weeklyTile(d.reviews), d.reviews?.weekly.map { .session($0.id) } ?? .latest(.weekly))
+                pill(GoalsModule.closeTile(d), .stage)
+            }
+        }
+    }
+
+    private func pill(_ t: (title: String, sub: String, hot: Bool), _ target: ReviewTarget) -> some View {
+        Button { state.review.open(target) } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if t.hot { Dot(color: Tone.clay.color, pulse: true) }
+                    Text(t.title).font(Typo.sans(12, .semibold)).foregroundStyle(t.hot ? Palette.clayDeep : Palette.ink)
+                }
+                Text(t.sub).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .frame(minWidth: 128, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 11).fill(t.hot ? Tone.clay.tint : Palette.card))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(t.hot ? Tone.clay.color.opacity(0.25) : Palette.line))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The home page's mainline and goals, kept above the editors; folds to one line.
+private struct MainlinePanel: View {
+    @Environment(AppState.self) private var state
+    @AppStorage("reviewMainlineOpen") private var open = true
+
+    var body: some View {
+        let d = state.review.goals, c = state.cycle, goals = d?.goals ?? []
+        VStack(alignment: .leading, spacing: 0) {
+            Button { withAnimation(Motion.spring) { open.toggle() } } label: {
+                HStack(spacing: 10) {
+                    Text(d?.mainline?.domain ?? "总主线").font(Typo.sans(11, .medium)).foregroundStyle(Tone.clay.color)
+                        .padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Tone.clay.tint))
+                    if !open {
+                        Mainline(text: d?.mainline?.direction ?? "—", size: 15).lineLimit(1)
+                        if let c { Text("\(c.name) · 第 \(c.day) / \(c.total) 天").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).fixedSize() }
+                        HStack(spacing: 4) {
+                            ForEach(goals) { g in Circle().fill(StageTone.of(g.domain).color).frame(width: 6, height: 6).help("\(g.domain) · \(g.goal)") }
+                        }
+                    } else {
+                        Text("写周报时对照主线和阶段目标").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                    }
+                    Spacer(minLength: 8)
+                    Text(open ? "收起" : "展开").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.ink3)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open {
+                HStack(alignment: .top, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Mainline(text: d?.mainline?.direction ?? "—", size: 21)
+                        if let now = d?.mainline?.status, !now.isEmpty {
+                            Text("现在 · " + now).font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+                        }
+                        if let c {
+                            CycleTicks(cycle: c, height: 12, spacing: 2).padding(.top, 14)
+                            HStack {
+                                Text("\(c.start) 开始")
+                                Spacer()
+                                Text("\(c.name) · 第 \(c.day) 天").fontWeight(.semibold).foregroundStyle(Palette.clayDeep)
+                                Spacer()
+                                Text("\(c.end) 结案")
+                            }
+                            .font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.top, 5)
+                        }
+                    }
+                    .frame(minWidth: 300, maxWidth: 420, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Label11("阶段目标 · \(goals.count) / \(Stage.maxGoals)").padding(.bottom, 4)
+                        ForEach(goals) { g in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(g.domain).font(Typo.sans(11, .medium)).foregroundStyle(StageTone.of(g.domain).color)
+                                    .frame(width: 40, height: 20).background(Capsule().fill(StageTone.of(g.domain).tint))
+                                Text(g.goal).font(Typo.sans(12.5)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).help(g.goal)
+                                Text(g.progress ?? "").font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).lineLimit(1)
+                                    .frame(maxWidth: 200, alignment: .trailing).help(g.progress ?? "")
+                            }
+                            .padding(.vertical, 5)
+                            .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
+                        }
+                        if goals.isEmpty { Text("这个阶段还没有目标").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.top, 12)
+                .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
+    }
+}
+
+/// Stage first, then daily and weekly sessions with their state and time left.
+private struct ReviewRail: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         let desk = state.review
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(state.layout.page("review")?.title ?? "复盘").font(Typo.serif(26)).tracking(-0.4)
-                if let direction = desk.goals?.mainline?.direction {
-                    Text(direction).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(2).help(direction)
-                }
-            }
-            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 10)
             HubScroll {
                 VStack(alignment: .leading, spacing: 2) {
-                    row(.stage, title: "本阶段", detail: desk.goals?.cycle.map { "第 \($0.day ?? 0) / \($0.total ?? 42) 天" },
-                        chip: ReviewText.closeChip(desk.goals?.close?.status))
+                    stageRow
                     ForEach(ReviewKind.allCases, id: \.self) { kind in
-                        SectionTitle(kind.title).padding(.horizontal, 10)
                         let items = desk.lists[kind] ?? []
-                        ForEach(items) { s in
-                            row(.session(s.id), title: ReviewText.title(s), detail: nil, chip: ReviewText.chip(s.status))
+                        HStack {
+                            Text(kind.title).font(Typo.sans(11, .semibold)).foregroundStyle(Palette.ink3).tracking(0.5)
+                            Spacer()
+                            let open = items.filter { $0.status == .open }.count
+                            if open > 0 { Text("\(open) 篇待确认").font(Typo.sans(10.5)).foregroundStyle(Tone.clay.color) }
                         }
+                        .padding(.horizontal, 10).padding(.top, 14).padding(.bottom, 4)
+                        ForEach(items) { s in sessionRow(s) }
                         if items.isEmpty {
                             Text(desk.listError ?? "还没有\(kind.title)").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.horizontal, 10)
                         }
                     }
                 }
-                .padding(.horizontal, 10).padding(.bottom, 20)
+                .padding(8)
             }
             .scrollIndicators(.never)
         }
+        .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
     }
 
-    private func row(_ target: ReviewDesk.Selection, title: String, detail: String?, chip: (String, Tone)?) -> some View {
-        let on = state.review.selection == target
-        return Button { state.review.selection = target } label: {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(Typo.sans(13, on ? .semibold : .regular)).foregroundStyle(Palette.ink).lineLimit(1)
-                    if let detail { Text(detail).font(Typo.sans(11)).foregroundStyle(Palette.ink3) }
+    private var stageRow: some View {
+        let desk = state.review, on = desk.selection == .stage
+        return Button { desk.selection = .stage } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(state.cycle?.name ?? "本阶段").font(Typo.sans(13, on ? .semibold : .medium)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    if let chip = ReviewText.closeChip(desk.goals?.close?.status) { Chip(text: chip.0, tone: chip.1) }
+                    else if let c = state.cycle { Text("剩 \(c.remaining) 天").font(Typo.sans(11)).foregroundStyle(Palette.ink3) }
                 }
-                Spacer(minLength: 4)
-                if let chip { Chip(text: chip.0, tone: chip.1) }
+                if let c = state.cycle { CycleTicks(cycle: c, height: 5, spacing: 1) }
+                Text("主线、目标与结案").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 9).fill(on ? Palette.card : .clear))
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(on ? Palette.sunk : .clear))
+            .overlay(alignment: .leading) { if on { Capsule().fill(Tone.clay.color).frame(width: 3, height: 22).offset(x: -5) } }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sessionRow(_ s: ReviewSummary) -> some View {
+        let on = state.review.selection == .session(s.id)
+        let tone: Tone = switch s.status { case .open: .clay; case .finalized: .olive; case .expired: .ink }
+        let sub: String = switch s.status {
+        case .open: "待确认 · " + (ReviewText.remaining(s.expiresAt, short: true) ?? "")
+        case .finalized: "已归档"
+        case .expired: "已过期"
+        }
+        return Button { state.review.selection = .session(s.id) } label: {
+            HStack(spacing: 9) {
+                Circle().fill(s.status == .expired ? Palette.ink4 : tone.color).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ReviewText.title(s)).font(Typo.sans(12.5, on ? .semibold : .regular)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(sub).font(Typo.sans(10.5)).foregroundStyle(s.status == .open ? Tone.clay.color : Palette.ink3)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 9).fill(on ? Palette.sunk : .clear))
+            .overlay(alignment: .leading) { if on { Capsule().fill(Tone.clay.color).frame(width: 3, height: 18).offset(x: -5) } }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -60,7 +60,7 @@ struct StageView: View {
                         .font(Typo.sans(13)).foregroundStyle(Palette.ink3).padding(.top, 40)
                 }
             }
-            .padding(.horizontal, 28).padding(.top, 30).padding(.bottom, 28)
+            .padding(.horizontal, 24).padding(.top, 18).padding(.bottom, 28)
             .frame(maxWidth: 860, alignment: .leading)
         }
         .scrollIndicators(.never)
