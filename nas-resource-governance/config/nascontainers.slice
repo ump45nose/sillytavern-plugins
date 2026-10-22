@@ -1,0 +1,7 @@
+[Unit]
+Description=Budget for selected NAS containers
+[Slice]
+MemoryAccounting=yes
+MemoryMax=6G
+MemorySwapMax=1G
+IOWeight=50

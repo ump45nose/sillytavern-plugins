@@ -25,9 +25,10 @@ paths in `/home/yuwk/cron/env/plaud-archive.env`; business code lives in
 acceptance and an explicit scheduler cutover; deploying source does not resume it.
 See [host entry](plaud-archive/README.md) for the native service.
 
-`/etc/systemd/system` contains symlinks only. Custom host scheduling uses
-systemd timers; user crontabs are intentionally kept empty unless an
-application owns and rewrites them itself.
+Scheduled-job units link from `/etc/systemd/system` to their runtime copies.
+Agent budgets and native logging configuration are installed directly by
+`nas-resource-governance/install.sh`. Custom host scheduling uses systemd timers;
+user crontabs are intentionally empty unless an application owns them.
 
 ## Managed jobs
 
@@ -37,10 +38,12 @@ application owns and rewrites them itself.
 - `hermes-telegram-recovery`: retired, disabled; native Hermes adapter
   reconnection replaces the old whole-gateway restart timer.
 - `nas-container-boot`: ordered NAS container startup after Docker starts.
-- `nas-resource-history`: minute host/process resource records and bounded
-  persistent journals; see `nas-resource-history/README.md` for selective installation.
+- `nas-resource-governance`: native budgets: Codex total 3 GiB, Hermes user total
+  3 GiB, selected containers total 6 GiB. Deploy with
+  `sudo bash nas-resource-governance/install.sh`. Services use group OOM cleanup
+  and limited native restarts; logs use journal, Docker and sysstat.
 - `qbittorrent-portmap-renew`: hourly qBittorrent UPnP mapping renewal.
-- `rsyslog-logrotate`: rotate rsyslog files every 30 minutes.
+- `rsyslog-logrotate`: retired; the native global logrotate timer covers it every 30 minutes.
 - `shellcrash-traffic`: traffic collector, reports, AI JSON and SubBoost refresh.
 - `subboost-update`: subscription refresh every six minutes and rule index hourly.
 - `taglab-delete-worker`: music cleanup every five minutes.
