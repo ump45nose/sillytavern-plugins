@@ -344,6 +344,39 @@ class V2exStreamingTests(unittest.TestCase):
 
 
 class V2exRequestsBindingTests(unittest.TestCase):
+    def test_provider_redeems_with_rotated_cookie_and_does_not_redeem_again(self):
+        import tempfile
+        from types import SimpleNamespace
+        try:
+            import requests
+        except ImportError:
+            from pip._vendor import requests
+        from platforms.v2ex.provider import V2ex
+
+        writes = []
+
+        class Transport(requests.Session):
+            def get(self, url, **kwargs):
+                request = self.prepare_request(requests.Request("GET", url, headers=kwargs.get("headers")))
+                if "/redeem?" in url:
+                    writes.append(request.headers["Cookie"])
+                    if "PB3_SESSION=fresh" not in request.headers["Cookie"]:
+                        raise AssertionError("stale session rejected the current nonce")
+                    raise ValueError("unexpected_redirect")
+                if url.endswith("/balance"):
+                    value = "20261001 每日登录奖励" if writes else "20260930 每日登录奖励"
+                    return SimpleNamespace(text=f'<td class="d"><span class="gray">{value}</span></td>')
+                self.cookies.set("PB3_SESSION", "fresh", domain="www.v2ex.com", path="/")
+                return SimpleNamespace(text='<input type="button" class="super normal button" value="领取" onclick="location.href = \'/mission/daily/redeem?once=fixture\';" /><div class="cell"><span>已连续登录 28 天</span></div>')
+
+        context = dict(run_id="rotation", platform="v2ex", account="test", business_date="2026-10-01")
+        with tempfile.TemporaryDirectory() as directory:
+            for attempt in range(2):
+                output = execute(context, V2ex, Transport, "A2=account; PB3_SESSION=stale", state_dir=directory)
+                self.assertEqual(output["business"], {"checkin": "complete", "reward": "complete"})
+                self.assertEqual(output["details"]["metrics"]["streak"]["current"], 28)
+        self.assertEqual(len(writes), 1)
+
     def test_rotated_session_cookie_replaces_seeded_cookie(self):
         try:
             import requests
