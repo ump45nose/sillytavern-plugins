@@ -11,6 +11,7 @@
 ## 有界 HTTP 与重复执行
 
 - 请求强制 TLS 证书验证，关闭环境代理/凭据发现；显式代理仍可配置
+- 私有 Cookie 仅用于初始化官方域名的会话 Cookie jar，接受后续 Set-Cookie 更新；不固定 Cookie 请求头，以免 PB3_SESSION 更新后仍携带旧会话导致领取令牌失效。
 - 强制 streaming，按解码后的响应流累计最多 1 MiB，超限立即关闭响应；每次请求 30 秒，整任务仍受运行器总超时约束
 - 禁止自动重定向，同时禁用 requests 为 `Response.next` 预读重定向响应的路径，避免在字节上限生效前缓冲大响应。遇到重定向返回未知/失败，不绕过证书或站点限制
 - `BENEFITS_STATE_DIR/http-actions.json` 保存一个账号/业务日的有界 redeem intent。发出领取 GET 前先原子同步记录；该 GET 虽不是 POST，仍视为写操作

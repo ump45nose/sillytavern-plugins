@@ -70,6 +70,8 @@ python3 platforms/telegram/run.py --runtime-root $R --browser-cache $C --account
 4. 命令写入输入框并核对后，先在 journal 记 sent，再点击发送按钮（不按 Enter，避免选中命令建议）。之后当天只读回：找到本次命令之后的回复并匹配，确认后记 confirmed。
 5. 已 sent 但未确认的机器人（例如上次超时或进程中断）不会重发，只读历史；仍无法确认时报告 `previous_send_unconfirmed`。按钮同样只点击一次。
 
+网页执行脚本的只读查询最多等待 10 秒，卡住时明确失败，不一直等到总任务 deadline。每完成一个机器人即保存正式部分结果；后续网页、网络或浏览器回收失败仍保留已确认条目，下一次由同一 journal 续查，不由 Agent 代签或改写结果。
+
 journal 只保存阶段、消息编号和按钮消息文本的 16 位 hash，不保存命令、回复或任何消息文本；回复文本只在进程内存中匹配，不进入结果或日志。
 
 ## 结果

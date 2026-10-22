@@ -1,6 +1,7 @@
 """Pinned dailycheckin provider; one account per invocation, no write retry."""
 
 import os
+from http.cookies import SimpleCookie, CookieError
 from pathlib import Path
 import sys
 
@@ -61,6 +62,13 @@ def execute(
 ):
     if not cookie or "\n" in cookie or "\r" in cookie:
         return result(context, reason="missing_or_invalid_cookie")
+    cookies = SimpleCookie()
+    try:
+        cookies.load(cookie)
+    except CookieError:
+        return result(context, reason="missing_or_invalid_cookie")
+    if not cookies:
+        return result(context, reason="missing_or_invalid_cookie")
     try:
         journal = Journal(context, state_dir, confirmed_path)
     except Exception:
@@ -79,11 +87,12 @@ def execute(
             session.trust_env = False
             session.headers.update(
                 {
-                    "Cookie": cookie,
                     "User-Agent": os.getenv("V2EX_USER_AGENT", "Mozilla/5.0"),
                     "Accept-Language": "zh-CN,zh;q=0.9",
                 }
             )
+            for name, morsel in cookies.items():
+                session.cookies.set(name, morsel.value, domain="www.v2ex.com", path="/")
             if proxy:
                 session.proxies.update({"http": proxy, "https": proxy})
 

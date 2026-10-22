@@ -8,6 +8,7 @@ class Session:
     def __init__(self):
         self.headers = {}
         self.proxies = {}
+        self.cookies = Cookies()
 
     def __enter__(self):
         return self
@@ -20,6 +21,11 @@ class Provider:
     @staticmethod
     def sign(s, **kwargs):
         return [{"name": "今日签到", "value": "20261001 每日登录奖励"}]
+
+
+class Cookies(dict):
+    def set(self, name, value, **kwargs):
+        self[name] = value
 
 
 class V2exTests(unittest.TestCase):
@@ -37,7 +43,7 @@ class V2exTests(unittest.TestCase):
         c = dict(
             run_id="r", platform="v2ex", account="test", business_date="2026-10-01"
         )
-        out = execute(c, Provider, Session, "synthetic-cookie")
+        out = execute(c, Provider, Session, "A2=synthetic-cookie")
         self.assertEqual(out["business"]["reward"], "complete")
         self.assertTrue(Session.closed)
 
@@ -122,13 +128,13 @@ class V2exRecoveryTests(unittest.TestCase):
                 )
 
         with tempfile.TemporaryDirectory() as directory:
-            first = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
+            first = execute(self.context, V2ex, Fake, "A2=synthetic", state_dir=directory)
             self.assertEqual(first["business"]["checkin"], "complete")
-            second = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
+            second = execute(self.context, V2ex, Fake, "A2=synthetic", state_dir=directory)
             self.assertEqual(second["business"]["reward"], "complete")
             self.assertEqual(sum("/redeem" in url for url in calls), 1)
             calls.clear()
-            execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
+            execute(self.context, V2ex, Fake, "A2=synthetic", state_dir=directory)
             self.assertFalse(any("/redeem" in url for url in calls))
 
     def test_final_read_error_does_not_erase_balance_confirmation(self):
@@ -156,13 +162,13 @@ class V2exRecoveryTests(unittest.TestCase):
                 )
 
         with tempfile.TemporaryDirectory() as directory:
-            out = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory)
+            out = execute(self.context, V2ex, Fake, "A2=synthetic", state_dir=directory)
             self.assertEqual(out["execution_status"], "failed")
             self.assertEqual(
                 out["business"], {"checkin": "complete", "reward": "complete"}
             )
             self.assertEqual(
-                execute(self.context, V2ex, None, "synthetic", state_dir=directory)[
+                execute(self.context, V2ex, None, "A2=synthetic", state_dir=directory)[
                     "execution_status"
                 ],
                 "ok",
@@ -192,7 +198,7 @@ class V2exRecoveryTests(unittest.TestCase):
                 )
 
         with tempfile.TemporaryDirectory() as directory:
-            out = execute(self.context, V2ex, Fake, "synthetic", state_dir=directory,
+            out = execute(self.context, V2ex, Fake, "A2=synthetic", state_dir=directory,
                           retry_delay=0)
         self.assertEqual(out["business"]["reward"], "complete")
         self.assertEqual(sum("/redeem" in url for url in calls), 1)
@@ -209,7 +215,7 @@ class V2exRecoveryTests(unittest.TestCase):
                     raise error
 
             with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
-                out = execute(self.context, Provider, Session, "synthetic",
+                out = execute(self.context, Provider, Session, "A2=synthetic",
                               state_dir=directory, retry_delay=0)
                 self.assertEqual(out["reason"], reason)
 
@@ -235,7 +241,7 @@ class V2exRecoveryTests(unittest.TestCase):
                 self.context,
                 None,
                 None,
-                "synthetic",
+                "A2=synthetic",
                 state_dir=directory,
                 confirmed_path=saved,
             )
@@ -255,7 +261,7 @@ class V2exRecoveryTests(unittest.TestCase):
                     self.context,
                     None,
                     None,
-                    "synthetic",
+                    "A2=synthetic",
                     state_dir=directory,
                     confirmed_path=saved,
                 )["reason"],
@@ -269,7 +275,7 @@ class V2exRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "http-actions.json").write_text("broken")
             self.assertEqual(
-                execute(self.context, None, None, "synthetic", state_dir=directory)[
+                execute(self.context, None, None, "A2=synthetic", state_dir=directory)[
                     "reason"
                 ],
                 "invalid_action_state",
@@ -338,6 +344,31 @@ class V2exStreamingTests(unittest.TestCase):
 
 
 class V2exRequestsBindingTests(unittest.TestCase):
+    def test_rotated_session_cookie_replaces_seeded_cookie(self):
+        try:
+            import requests
+        except ImportError:
+            from pip._vendor import requests
+
+        seen = []
+
+        class Provider:
+            @staticmethod
+            def sign(session, **kwargs):
+                request = requests.Request("GET", "https://www.v2ex.com/mission/daily")
+                seen.append(session.prepare_request(request).headers["Cookie"])
+                session.cookies.set("PB3_SESSION", "fresh", domain="www.v2ex.com", path="/")
+                seen.append(session.prepare_request(request).headers["Cookie"])
+                return [{"name": "今日签到", "value": "20261001 每日登录奖励"}]
+
+        context = dict(run_id="rotation", platform="v2ex", account="test", business_date="2026-10-01")
+        output = execute(context, Provider, requests.Session, "A2=account; PB3_SESSION=stale")
+        self.assertEqual(output["business"]["reward"], "complete")
+        self.assertIn("PB3_SESSION=stale", seen[0])
+        self.assertIn("PB3_SESSION=fresh", seen[1])
+        self.assertNotIn("PB3_SESSION=stale", seen[1])
+        self.assertIn("A2=account", seen[1])
+
     def test_requests_redirect_does_not_eagerly_consume_body(self):
         # Exercise requests.Session.send's Response.next branch, which otherwise
         # buffers redirects even with stream=True and allow_redirects=False.

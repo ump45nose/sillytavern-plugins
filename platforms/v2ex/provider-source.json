@@ -8,6 +8,7 @@
     "Extracted only V2ex.sign; removed CheckIn inheritance and package-wide discovery",
     "Enforced TLS certificate verification",
     "Added optional read-only reconciliation and pre-redeem intent callback",
-    "Added balance confirmation callback before optional trailing daily-page read; default sign output and request sequence retain fake-session parity"
+    "Added balance confirmation callback before optional trailing daily-page read; default sign output and request sequence retain fake-session parity",
+    "Read current nested markup for the consecutive-login day count"
   ]
 }

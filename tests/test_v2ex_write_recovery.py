@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from platforms.v2ex.adapter import execute
+from test_v2ex import Cookies
 
 
 class RecoverySmoke(unittest.TestCase):
@@ -20,6 +21,7 @@ class RecoverySmoke(unittest.TestCase):
         class Session:
             headers = {}
             proxies = {}
+            cookies = Cookies()
 
             def __enter__(self):
                 return self
@@ -40,7 +42,7 @@ class RecoverySmoke(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             output = execute(
-                context, Provider, Session, "session-cookie", state_dir=Path(directory)
+                context, Provider, Session, "A2=session-cookie", state_dir=Path(directory)
             )
         self.assertEqual(calls, [False, True])
         self.assertEqual(output["execution_status"], "ok")

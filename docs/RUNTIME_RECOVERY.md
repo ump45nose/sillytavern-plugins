@@ -16,6 +16,8 @@ Playwright/Patchright 在 Linux 中会把浏览器放到独立进程组。仅 `k
 
 adapter 结束或被 deadline 终止后，脱离组的后代由 launcher 收养。回收以 `waitpid` 确认父子关系，以 pidfd 定向发信号并回收；不按进程名或全机搜索结果杀进程。清理等待有界，无法验证全部回收时保留阻塞记录。运行阶段的 TERM→KILL 时限后最多另加两秒回收检查；不能把操作系统不可中断状态描述为一定可杀死。
 
+已退出的子进程先通过 `waitpid` 回收，不要求先取得 pidfd；仍存活的已确认子进程才打开 pidfd 并终止。清理失败记录明确区分父子归属、系统调用错误和清理超时，保留必要 PID/errno，不再只剩一个无法诊断的失败码。
+
 ## launcher 被 SIGKILL 后怎么办
 
 浏览器任务启动前，在 `runtime-root/locks/browser-cleanup.json` 写入当前启动周期和 run ID。只有清理确认后才移除。launcher 自身 SIGKILL 无法执行 finally；marker 因此保留。即使浏览器 flock 随其他进程退出而释放，下次浏览器任务仍拒绝运行，返回 `browser_cleanup_unverified`，避免新旧浏览器重叠。HTTP 任务不受该全局浏览器标记影响。

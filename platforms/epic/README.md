@@ -4,12 +4,11 @@
 
 ## 依赖
 
-浏览器与挑战处理分开安装；未遇到挑战不会加载模型 SDK、numpy 或图像库。
+只安装浏览器依赖。任务不使用语言或视觉模型解验证码，也不由 Agent 代替脚本领取。
 
 ```sh
 python3 -m venv .venv-epic
 .venv-epic/bin/pip install --require-hashes -r locks/epic-browser-python312-linux-x86_64.txt
-.venv-epic/bin/pip install --require-hashes -r locks/epic-challenge-python312-linux-x86_64.txt
 .venv-epic/bin/python -m camoufox fetch
 ```
 
@@ -24,24 +23,17 @@ python3 -m venv .venv-epic
   "email":"your-account@example.com",
   "password":"your-private-password",
   "proxy":"http://your-existing-proxy:7890",
-  "browser_cache":"/absolute/camoufox-cache",
-  "model":{
-    "name":"your-CPA-model",
-    "base_url":"http://your-existing-provider/v1",
-    "api_key":"your-private-key"
-  }
+  "browser_cache":"/absolute/camoufox-cache"
 }
 ```
 
-model 是可选挑战路径使用的 OpenAI compatible 视觉模型。当前 NAS 延用已有 CPA 的 `gemini-3.8-flash-high` 配置。图片只在挑战期间临时使用，不保留截图/录屏；调用不自动重试。不要将邮箱、密码或 key 放命令行或 Git。
+2026-10-22 按用户要求删除模型桥、验证码 SDK 接线与专用依赖锁；私有运行配置不再使用模型字段。遇到 hCaptcha 等必须解题的验证时明确返回 `human_required`，不调用模型、不伪造验证或成功结果。不要将邮箱、密码放命令行或 Git。
 
-验证码模型同时接收当前原题和 SDK 技能提示。单次模型请求最多 120 秒，整轮挑战最多 300 秒，并受本次任务剩余时间约束；验证码通过后继续独立确认游戏所有权。
+浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口和工作流保留异常类型及源码位置，不记录原始错误消息或会话 token。商店部分脚本的 403 不覆盖实际可用的业务控件或当前登录、验证码状态；有界观察后仍无法确认页面状态时，才报告资源拒绝。进入结算后仍须通过商品身份、零价和独立所有权回查，不能据此确认领取。
 
-挑战 SDK 返回的执行超时和响应超时统一报告 `challenge_timeout`，与实际未通过区分。浏览器在进入业务工作流之前超时报 `browser_timeout`。原生入口、工作流和 SDK 内部捕获的错误保留异常类型及源码位置，不记录原始错误消息、会话 token、图片或模型响应。商店部分脚本的 403 不覆盖实际可用的业务控件或当前登录、验证码状态；有界观察后仍无法确认页面状态时，才报告资源拒绝。进入结算后仍须通过商品身份、零价和独立所有权回查，不能据此确认领取。
+资源拒绝只记录当前主文档；只读会话/商品/所有权阶段因资源拒绝而无法就绪时，单次任务最多重新加载当前官方页面一次，仍失败才停止。结算和提交后阶段不做这种重新导航，也不重下订单。该恢复只能覆盖暂时资源失败，不承诺绕过站点验证或领取成功。
 
 主文档返回 `cf-mitigated: challenge` 时，以响应协议识别 Cloudflare 验证，不依赖页面语言或可见 iframe。浏览器使用 Camoufox 的 [`disable_coop=True`](https://camoufox.com/python/usage/)，使 Turnstile 跨域 iframe 可读取和正常点击；自动 Managed Challenge 保持当前页面并有界等待，再由工作流读取真实状态，不调用 hCaptcha 模型。初始化阶段也先完成当前验证，随后才处理明确的未登录状态。单个子资源的挑战响应不能替代主文档状态。
-
-hCaptcha 组件可能在显示前已取得题目。浏览器仅在内存保留当前页面最新的脚本与题目响应，处理器按需创建后读取一次，避免错过响应而空等 30 秒或丢失题型、题数。CORS OPTIONS 不交给题目/答案解析器；HTTP 400 的真实 POST 答案响应仍保留失败语义。没有重发验证码 API 请求，也不落盘响应或 token。
 
 ```sh
 EPIC_CONFIG=/absolute/private/epic.json \
@@ -73,4 +65,4 @@ NAS 浏览器可能触发“Device not supported”提示。仅在已绑定当�
 
 2026-10-20 正式回执已确认用户手动领取的 Bad Cheese 在库，Agent A 仍未在库；自动领取未通过核心验收。最新尝试卡在验证码 SDK，未发送支付确认；模型调用另有超时，昨日验证码通过后的支付拒绝与间歇性资源 403 也未解决。专属回归及浏览器夹具已按用户要求删除，当前结论只依据真实执行和所有权读回。完整阻塞与证据见 [当前阻塞记录](../../docs/plans/2026-10-20-benefits-regression-cleanup.md)。
 
-业务状态机、浏览器绑定和挑战模型桥彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。
+业务状态机与浏览器绑定彼此分开；通用生命周期/锁/结果使用 `common/`。参考 Ronchy2000/epic-freebies-helper 的窄范围实现，GPL-3.0-or-later，原始许可证及固定来源保留在 [upstream](../../upstream/epic-freebies-verifier/) 和 [上游版本契约](upstream-contract.json)。不导入完整上游应用、settings 单例或常驻 worker。

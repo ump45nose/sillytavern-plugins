@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import sys
 import time
 import threading
 import uuid
@@ -90,12 +91,13 @@ def inspect_marker(path):
 class BrowserScope:
     """Held inside the global browser lease; owns only this launcher's children."""
 
-    def __init__(self, marker, run_id):
+    def __init__(self, marker, run_id, *, report=None):
         self.marker = Path(marker)
         self.run_id = run_id
         self.libc = None
         self.previous = ctypes.c_int()
         self.cleanup_verified = False
+        self.report = report or (lambda record: print(json.dumps(record), file=sys.stderr, flush=True))
 
     def __enter__(self):
         current_boot = boot_id()
@@ -148,6 +150,10 @@ class BrowserScope:
         This scope is only for the standalone single-threaded launcher.
         """
         end = time.monotonic() + timeout
+        def failed(reason, **details):
+            self.report({"event": "browser_cleanup_failed", "reason": reason, **details})
+            return False
+
         while True:
             try:
                 remaining = children()
@@ -156,24 +162,25 @@ class BrowserScope:
                     return True
                 for pid in remaining:
                     try:
+                        reaped, _ = os.waitpid(pid, os.WNOHANG)
+                    except ChildProcessError:
+                        return failed("ownership_unconfirmed", pid=pid)
+                    if reaped:
+                        continue
+                    try:
                         fd = os.pidfd_open(pid)
                     except ProcessLookupError:
                         continue
                     try:
-                        try:
-                            reaped, _ = os.waitpid(pid, os.WNOHANG)
-                        except ChildProcessError:
-                            return False  # Ownership is not established.
-                        if not reaped:
-                            signal.pidfd_send_signal(fd, signal.SIGKILL)
+                        signal.pidfd_send_signal(fd, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
                     finally:
                         os.close(fd)
-            except (OSError, ValueError):
-                return False
+            except (OSError, ValueError) as error:
+                return failed("cleanup_error", type=type(error).__name__, errno=getattr(error, "errno", None))
             if time.monotonic() >= end:
-                return False
+                return failed("cleanup_deadline", pids=remaining)
             time.sleep(0.02)
 
     def __exit__(self, *args):
