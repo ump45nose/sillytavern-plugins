@@ -30,6 +30,28 @@ summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 
 class JobTests(unittest.TestCase):
+    def test_external_task_never_launches_but_still_reports_its_returned_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            delivery = root / "runtime/delivery"
+            delivery.mkdir(parents=True)
+            config = root / "benefits-deployment.json"
+            config.write_text(json.dumps({"tasks": {"epic": {
+                "label": "Epic 免费游戏（Mac）", "account": "default", "executor": "external"}}}))
+            path = delivery / "epic.json"
+            returned = {"platform": "epic", "account": "default", "business_date": "2026-10-22",
+                        "execution_status": "failed", "reason": "store_assets_access_denied",
+                        "business": {"claim": "unknown"}}
+            path.write_text(json.dumps(returned))
+            before = path.read_bytes()
+            with patch.object(runner, "CONFIG", config), \
+                    patch.object(runner.subprocess, "run") as launch, redirect_stdout(StringIO()):
+                self.assertEqual(runner.main("epic"), 0)
+            launch.assert_not_called()
+            self.assertEqual(path.read_bytes(), before)
+            with patch.object(report, "DELIVERY_ROOT", delivery):
+                self.assertIn("Epic 免费游戏（Mac）：商店资源被拒绝访问", report.build_report("2026-10-22"))
+
     def test_international_activity_summary_preserves_unknown_reward_and_observed_balance(self):
         text = summary.describe("workbuddy", {"execution_status": "ok",
             "business": {"activity": "complete", "reward": "unknown", "balance": "complete"},

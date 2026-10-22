@@ -53,3 +53,12 @@
 
 - 等待仅集成本次分支和 Epic 暂停状态的两项确认，然后选择性部署报告、使用正式 Hermes 包装更新真实 delivery，并由正式 Rewards full 脚本续跑；不直接覆盖任何成功回执。
 - V2EX 新业务日首次提交、Epic 下一期未拥有免费游戏的脚本新领，以及长期故障下的回收稳定性尚无自然实测样本，必须据实保留验收缺口。
+
+## 用户确认与 Mac 回传核查
+
+- 用户允许仅合入本次修复、完整保留原两处容器启动修改；已将 `cd8a32e` 快进合入 main，并选择性部署报告。V2EX、Telegram 已由正式 Hermes 包装执行，分别自然保存 ok 回执；没有手写 delivery。
+- 用户明确 Epic 已迁往 Mac，fn 不再执行。实际设备是 SSH 别名 mac-work 对应的 MacAir（`/Users/sm5145`），不是远程工作台默认连接的 MacPro。MacAir 原生 launchd `com.benefits-automation.epic` 每日 09:00 调用独立仓库的 `schedules/mac/epic-claim.py`，原入口生成本地结果后经 SSH 回传 fn。
+- Mac 2026-10-22 `35b7b0f1-af27-424c-b8bf-6c92fe654b74` 的 result.json 与 fn delivery/epic.json、fn 同 run/result.json 的 SHA-256 全部为 `b95e250109e9ef6d2e37d846c7e6890f4c38942fdecd1648c1fa49f5f9ccd9db`。Mac 本地还有 adapter-result.json。昨日定时结果是 ok/complete，今日是真实脚本失败 `store_assets_access_denied`，并非 fn 旧任务或伪造记录。
+- 更正此前的来源疑虑：Mac 发布器设计上只复制最终结果，不上传适配器结果和浏览器日志，故 fn 仅有 result.json 是正常的跨机回传结构。不能从这个现象推断 Agent/模型介入。Mac 配置仅含 email/password/browser_cache，没有模型凭据；本次未修改 Mac 执行器、未启动 Mac 领取或调用模型。
+- Mac 今天的发布进程等待 SSH 确认超过 60 秒，日志没有 published 成功行；但上述完整字节比对证明实际数据已到 fn。发送端确认超时与业务 403 分开记录，不因缺少 ACK 否定实际到账，也不自动重放。
+- fn 私有清单将明确标注 executor=external，保留远端结果监控并显示 Mac 来源；本机入口在读取本地运行参数或启动进程之前直接返回，不再误执行已迁走任务，不将整个任务 enabled=false 而隐藏 Mac 的真实失败。

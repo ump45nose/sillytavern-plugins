@@ -80,6 +80,13 @@ deduplicated by platform. Execution history remains in its source state and is
 not repeated after recovery. Benefits remain exception-only reports.
 Disabled tasks stay disabled, including Aliyun.
 
+Benefits tasks executed on another device use `executor: external` in the private
+deployment inventory. The local launcher never starts them or replaces their
+delivery records; exception reports still consume the remote script's returned
+result. Epic runs on MacAir and publishes its original JSON to the NAS. Its local
+Hermes schedule stays paused; a paused local launcher does not disable monitoring
+of the remote result.
+
 The media report includes download events and watchlist/theme business changes
 since its previous successful report. Download submissions use their event times
 (24 hours on first run); refreshed timestamps alone do not prove a state change.
