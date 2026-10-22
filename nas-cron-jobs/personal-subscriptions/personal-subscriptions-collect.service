@@ -1,0 +1,19 @@
+[Unit]
+Description=Collect subscription AI and supplier quotas
+After=network-online.target personal-subscriptions.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yuwk
+Group=Users
+WorkingDirectory=/home/yuwk/src/personal-subscriptions
+EnvironmentFile=/home/yuwk/.config/personal-subscriptions/service.env
+ExecStart=/home/yuwk/src/personal-subscriptions/.venv/bin/personal-subscriptions collect
+TimeoutStartSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/vol2/1000/Docker/personal-subscriptions/data
