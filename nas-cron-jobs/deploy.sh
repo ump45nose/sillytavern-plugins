@@ -37,9 +37,11 @@ sudo -n systemctl disable --now apisix-auto-stop.timer 2>/dev/null || true
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable nas-container-boot.service shellcrash-traffic-collector.service >/dev/null
 
-sudo -n systemctl enable --now    hermes-env-audit.timer   hermes-telegram-recovery.timer   qbittorrent-portmap-renew.timer   rsyslog-logrotate.timer   shellcrash-subboost-refresh.timer   shellcrash-traffic-ai-export.timer   shellcrash-traffic-report.timer   subboost-update-rule-index.timer   subboost-update-subscriptions.timer   taglab-delete-worker.timer >/dev/null
+sudo -n systemctl enable --now    hermes-env-audit.timer   hermes-telegram-recovery.timer   qbittorrent-portmap-renew.timer   shellcrash-subboost-refresh.timer   shellcrash-traffic-ai-export.timer   shellcrash-traffic-report.timer   subboost-update-rule-index.timer   subboost-update-subscriptions.timer   taglab-delete-worker.timer >/dev/null
 
 sudo -n systemctl restart shellcrash-traffic-collector.service
+
+sudo -n bash "$repo_dir/nas-resource-governance/install.sh"
 
 python3 "$repo_dir/deploy-hermes.py"
 

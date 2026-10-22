@@ -30,6 +30,15 @@ summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 
 class JobTests(unittest.TestCase):
+    def setUp(self):
+        # These production entrypoints run separately and both own a common package.
+        modules = patch.dict(sys.modules)
+        modules.start()
+        self.addCleanup(modules.stop)
+        for name in list(sys.modules):
+            if name == "common" or name.startswith("common."):
+                sys.modules.pop(name)
+
     def test_external_task_never_launches_but_still_reports_its_returned_result(self):
         manifest = json.loads((ROOT / "hermes/manifest.json").read_text())["profile_scripts"]
         schedules = json.loads((ROOT / "hermes/schedules.json").read_text())
