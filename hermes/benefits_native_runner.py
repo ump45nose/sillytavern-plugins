@@ -30,6 +30,9 @@ def main(task_id):
     if task.get("enabled", True) is False:
         print(task["label"] + "：已停用")
         return 0
+    if task.get("executor") == "external":
+        print(task["label"] + "：由外部设备执行，本机只接收结果")
+        return 0
     repo, runtime = Path(cfg["repository"]), Path(cfg["runtime_root"])
     sys.path.insert(0, str(repo))
     from common.model import result, validate, atomic_json
