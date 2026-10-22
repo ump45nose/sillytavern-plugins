@@ -121,10 +121,6 @@ enum QARender {
         state.aiRun.reset()
         await shot("ai-pending", width: 460, AIPendingList())
         await shot("quick-memo", width: 600, QuickMemoView(close: {}))
-        await shot("net-plans", width: 400, NetPlanEditor(close: {}, seed: [
-            NetPlan(id: "a", name: "主力机场", totalBytes: 500 * 1_073_741_824, resetDay: 1, expiresOn: "2026-12-01"),
-            NetPlan(id: "b", name: "备用", totalBytes: 100 * 1_073_741_824, resetDay: 15),
-        ]))
         await shot("net-detail", width: 640, ModuleCard(item: LayoutItem(.net, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("compact-narrow", width: 760, HStack(alignment: .top, spacing: 14) {
             ForEach([ModuleID.git, .net, .bills], id: \.self) { m in ModuleCard(item: LayoutItem(m, .compact), index: 0, count: 1).frame(width: 230) }

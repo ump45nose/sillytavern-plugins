@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request
 
-from .configuration import json_body, preferences, subscriptions, net_plans
+from .configuration import json_body, preferences
 from .modules.crm import assemble as crm_module
 from .modules.net import assemble as net_module
 
@@ -67,15 +67,17 @@ def calculate(manager):
             for w in tool.get('windows') or []:
                 if w.get('percent') is None: continue
                 key=f"token-limit:{tool['tool']}:{w['label']}:{w.get('resets_at') or ''}"
+                if tool.get('id'): key += ':'+tool['id']
                 if key not in limits or w['percent']>limits[key][1]['percent']: limits[key]=(tool,w)
         for key,(tool,w) in limits.items():
             if w['percent']>=p['token_limit_percent']:
-                add(key,'token_limit',f"{limit_label(tool['tool'],w['label'])} 额度已用 {w['percent']:g}%",'token',subtitle=reset_subtitle(w.get('resets_at'),now))
+                account = ' · '+tool['account'] if tool.get('account') else ''
+                add(key,'token_limit',f"{limit_label(tool['tool'],w['label'])}{account} 额度已用 {w['percent']:g}%",'token',subtitle=reset_subtitle(w.get('resets_at'),now))
     usage=cached('usage')
-    if usage is not None:
+    subscription_data=cached('subscriptions')
+    if subscription_data is not None:
         scopes.add('traffic-low')
-    # Manual expiry remains a known fact even when router usage is unavailable.
-    for pool in net_module(usage, net_plans(store), now)['pools']:
+    for pool in net_module(usage, subscription_data, now)['pools']:
         total,used=pool.get('total_bytes'),pool.get('used_bytes')
         low=total is not None and total>0 and used is not None and (total-used)/total*100<p['traffic_remaining_percent']
         expires=pool.get('expires_on');days=(date.fromisoformat(expires)-now.date()).days if expires else None
@@ -91,8 +93,9 @@ def calculate(manager):
                 # Unknown conflict onset starts when Hub first sees the condition.
                 rows[item['id']]={'id':item['id'],'rule':rule,'severity':'warn','title':item['title'],'subtitle':item['repo'],
                     'since':item.get('since'),'target':{'module':'git'},'url':item['url'],'_threshold':threshold}
-    scopes.add('subs-renew')
-    for item in subscriptions(store):
+    if subscription_data is not None: scopes.add('subs-renew')
+    for item in (subscription_data or {}).get('items', []):
+        if not item.get('active'): continue
         if item['next_renewal'] and 0<=(date.fromisoformat(item['next_renewal'])-now.date()).days<=p['subs_renew_days']:
             add('subs-renew:'+item['id'],'subs_renew',item['name']+' 即将续费','subs',
                 subtitle=day_label(date.fromisoformat(item['next_renewal']),now.date())+' 续费',severity='info')

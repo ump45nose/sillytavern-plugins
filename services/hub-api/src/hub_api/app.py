@@ -19,6 +19,8 @@ from .sources.usage import Usage
 from .sources.media import Media
 from .sources.github import GitHub
 from .sources.review import Review
+from .sources.subscriptions import Subscriptions
+from .subscription_routes import register as subscription_routes
 from .review_routes import register as review_routes
 from .media_routes import register as media_routes
 from .personal_routes import register as personal_routes
@@ -26,7 +28,7 @@ from .memo_routes import register as memo_routes
 from .sources.memos import Memos
 from .auth import register as auth_routes
 from .store import Store
-from .configuration import register as configuration_routes, preferences, subscriptions
+from .configuration import register as configuration_routes, preferences
 from .attention import register as attention_routes
 
 ZONE = ZoneInfo("Asia/Shanghai")
@@ -72,7 +74,8 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     personal = Personal(client, settings, now, lambda: preferences(store))
     memos = Memos(personal)
     review = Review(client, settings)
-    defaults = {a.id: a for a in Records(client, settings, now, lambda: subscriptions(store)).adapters() + personal.adapters() + Usage(client, settings).adapters() + [Adapter("memos", "Memos", 60, memos.module if settings.memos_token else None)] + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter()]}
+    subscription_source = Subscriptions(client, settings)
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + [Adapter("memos", "Memos", 60, memos.module if settings.memos_token else None)] + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter(),subscription_source.adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
@@ -81,7 +84,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     app.state.store, app.state.sources, app.state.client = store, manager, client
 
     def error(status):
-        codes = {400: "bad_request", 401: "unauthorized", 403: "unauthorized", 404: "not_found", 409: "conflict", 422: "bad_request", 429: "bad_request"}
+        codes = {400: "bad_request", 401: "unauthorized", 403: "unauthorized", 404: "not_found", 409: "conflict", 410: "retired", 428: "version_required", 422: "bad_request", 429: "bad_request"}
         return SafeJSONResponse({"error": {"code": codes.get(status, "upstream"), "message": codes.get(status, "upstream")}}, status_code=status)
 
     @app.exception_handler(StarletteHTTPException)
@@ -145,6 +148,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
 
     auth_routes(app, settings, store, client, now)
     configuration_routes(app, store, manager, authenticated, now)
+    subscription_routes(app, subscription_source, settings, manager, authenticated)
     attention_routes(app, manager, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)
     memo_routes(app, settings, memos, authenticated, manager)

@@ -26,8 +26,9 @@ def test_all_rules_cache_only_dismiss_snooze_and_new_episode(settings):
         manager.cache[n]={'data':v,'updated_at':NOW.isoformat() if n!='records_bills' else old(hours=7)}
         manager.states[n]={'status':'ok','checked_at':NOW,'last_success':NOW.isoformat()}
     manager.states['records_health']={'status':'error','failed_since':NOW-timedelta(minutes=31)}
-    app.state.store.put_document('subscriptions',{'items':[{'id':'a','name':'Service','price':12,'currency':'CNY','cycle':'month','next_renewal':'2026-10-24'}]},None,NOW.isoformat())
-    app.state.store.put_document('net_plans',{'items':[{'id':'a','name':'pool','total_bytes':100,'reset_day':1,'expires_on':'2026-10-22'}]},None,NOW.isoformat())
+    manager.cache['subscriptions']={'updated_at':NOW.isoformat(),'data':{'items':[
+        {'id':'a','name':'Service','active':True,'category':'ai','next_renewal':'2026-10-24'},
+        {'id':'n','name':'pool','active':True,'category':'network','next_renewal':None,'expires_on':'2026-10-22'}]}}
     h={'Authorization':'Bearer '+settings.dev_token.get_secret_value()}
     with TestClient(app) as client:
         def attention(): return client.get('/api/v1/modules/attention',headers=h).json()['data']['items']

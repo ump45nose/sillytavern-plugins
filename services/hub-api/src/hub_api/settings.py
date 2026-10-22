@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     source_timeout_seconds: float = 5
     records_url: str = "http://192.168.31.201:18087"
     records_token: SecretStr | None = None
+    subscriptions_url: str = 'http://192.168.31.201:18192'
+    subscriptions_token: SecretStr | None = None
+    subscriptions_write_token: SecretStr | None = None
 
     crm_url: str = "http://192.168.31.201:18186"
     crm_token: SecretStr | None = None

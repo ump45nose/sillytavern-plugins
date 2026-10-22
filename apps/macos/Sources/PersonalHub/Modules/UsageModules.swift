@@ -887,10 +887,10 @@ struct NetModule: View {
 
     private var editButton: some View {
         Button { editing = true } label: {
-            Label("设置套餐", systemImage: "slider.horizontal.3").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+            Label("管理订阅", systemImage: "slider.horizontal.3").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $editing, arrowEdge: .bottom) { NetPlanEditor { editing = false }.environment(state) }
+        .popover(isPresented: $editing, arrowEdge: .bottom) { SubscriptionManager { editing = false }.environment(state) }
     }
 
     private func usageTone(_ pct: Double) -> Tone { pct >= 90 ? .rose : pct >= 75 ? .ochre : .sage }
@@ -924,7 +924,7 @@ struct NetModule: View {
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 4)
                 Spacer(minLength: 6)
                 HStack {
-                    Text("未设置套餐总量").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                    Text("供应商套餐用量暂无数据").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
                     Spacer()
                     editButton
                 }
@@ -980,182 +980,22 @@ struct NetModule: View {
 }
 
 /// Traffic plans entered by hand and stored on hub-api.
-struct NetPlanEditor: View {
-    var close: () -> Void
-    /// QA: start editing these instead of loading from hub.
-    var seed: [NetPlan]? = nil
-    @Environment(AppState.self) private var state
-    @ViewState private var plans: [NetPlan] = []
-    @ViewState private var phase = Phase.loading
-    @ViewState private var error: String?
-    @ViewState private var saving = false
-
-    enum Phase: Equatable { case loading, unsupported, demo, ready }
-
-    private static let gb = 1_073_741_824.0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("流量套餐").font(Typo.serif(20))
-            switch phase {
-            case .loading:
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 80)
-            case .unsupported:
-                note("hub 还没提供套餐接口（已列入 hub v2 任务），上线后在这里设置。")
-            case .demo:
-                note("示例模式不会保存，连接 hub 后可以设置。")
-            case .ready:
-                ForEach($plans) { $plan in row($plan) }
-                if plans.count < 5 {
-                    Button { plans.append(NetPlan(name: plans.isEmpty ? "主套餐" : "套餐 \(plans.count + 1)", totalBytes: 200 * Self.gb)) } label: {
-                        Label("添加套餐", systemImage: "plus").font(Typo.sans(12.5))
-                    }
-                    .buttonStyle(.hubSecondary)
-                }
-                Text("已用按路由器计数统计；多个套餐共用同一个计数。").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-            }
-            if let error { Text(error).font(Typo.sans(12)).foregroundStyle(Tone.rose.color) }
-            HStack {
-                Button("取消", action: close).buttonStyle(.hubSecondary)
-                Spacer()
-                if phase == .ready {
-                    Button(saving ? "保存中…" : "保存", action: save).buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction)
-                        .disabled(saving || plans.contains { $0.name.trimmingCharacters(in: .whitespaces).isEmpty || $0.totalBytes <= 0 })
-                }
-            }
-        }
-        .padding(20)
-        .frame(width: 400)
-        .background(Palette.card)
-        .task { await load() }
-    }
-
-    private func note(_ text: String) -> some View {
-        Text(text).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).lineSpacing(3)
-            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
-    }
-
-    private func row(_ plan: Binding<NetPlan>) -> some View {
-        let total = Binding(get: { plan.wrappedValue.totalBytes / Self.gb }, set: { plan.wrappedValue.totalBytes = max(0, $0) * Self.gb })
-        let expires = Binding(get: { HubFormat.day(plan.wrappedValue.expiresOn) },
-                              set: { plan.wrappedValue.expiresOn = $0.map { ReviewText.dayKey($0) } })
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                TextField("名称", text: plan.name).textFieldStyle(.plain).font(Typo.sans(13, .semibold))
-                Button { plans.removeAll { $0.id == plan.wrappedValue.id } } label: {
-                    Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(Palette.ink3)
-                }
-                .buttonStyle(.plain).help("删除这个套餐")
-            }
-            HStack(spacing: 14) {
-                field("总量") {
-                    TextField("", value: total, format: .number.precision(.fractionLength(0...1))).textFieldStyle(.plain)
-                        .font(Typo.sans(13)).monospacedDigit().frame(width: 60)
-                    Text("GB").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                }
-                field("每月") {
-                    ForEach([-1, 1], id: \.self) { step in
-                        let next = plan.wrappedValue.resetDay + step
-                        Button { plan.wrappedValue.resetDay = next } label: {
-                            Image(systemName: step < 0 ? "minus" : "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.ink2)
-                                .frame(width: 20, height: 22).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain).disabled(!(1...28).contains(next))
-                        if step < 0 { Text(verbatim: "\(plan.wrappedValue.resetDay) 日重置").font(Typo.sans(12.5)).monospacedDigit().frame(minWidth: 58) }
-                    }
-                }
-            }
-            HStack(spacing: 8) {
-                Text("到期").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                ExpiryButton(date: expires)
-                if expires.wrappedValue != nil {
-                    Button("不设到期") { expires.wrappedValue = nil }.buttonStyle(.plain).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                }
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.sunk))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.line2))
-    }
-
-    private func field(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 6) {
-            Text(label).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-            content()
-        }
-        .padding(.horizontal, 10).frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Palette.card))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.line))
-    }
-
-    private func load() async {
-        if let seed { plans = seed; phase = .ready; return }
-        guard state.hub.mode == .hub else { phase = .demo; return }
-        do {
-            if let items = try await state.hub.netPlans() { plans = items; phase = .ready } else { phase = .unsupported }
-        } catch {
-            self.error = error.localizedDescription
-            phase = .unsupported
-        }
-    }
-
-    private func save() {
-        saving = true
-        error = nil
-        Task {
-            defer { saving = false }
-            do {
-                plans = try await state.hub.saveNetPlans(plans.map { var p = $0; p.name = p.name.trimmingCharacters(in: .whitespaces); return p })
-                close()
-            } catch { self.error = error.localizedDescription }
-        }
-    }
-}
-
-private struct ExpiryButton: View {
-    @Binding var date: Date?
-    @ViewState private var open = false
-    @ViewState private var day = Date()
-    @ViewState private var month = Date()
-
-    var body: some View {
-        Button { open = true } label: {
-            Chip(text: date.map { ReviewText.dayKey($0) } ?? "长期有效 · 设置到期日", tone: date == nil ? nil : .sky, systemImage: "calendar")
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $open, arrowEdge: .bottom) {
-            VStack(spacing: 14) {
-                MonthCalendar(day: $day, month: $month, today: Calendar.hub.startOfDay(for: HubFormat.current()))
-                HStack {
-                    Button("取消") { open = false }.buttonStyle(.hubSecondary)
-                    Spacer()
-                    Button("确定") { date = day; open = false }.buttonStyle(.hubPrimary).keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding(18).frame(width: 340).background(Palette.card)
-            .onAppear {
-                day = date ?? Calendar.hub.date(byAdding: .month, value: 1, to: HubFormat.current())!
-                month = day
-            }
-        }
-    }
-}
-
 // MARK: - 订阅
 
 struct SubsModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
+    @ViewState private var editing = false
 
     var body: some View {
-        HubGate(envelope: state.hub.data.subs, unconfigured: "订阅清单尚未接入\n在 hub 的偏好里登记后显示") { s in
+        HubGate(envelope: state.hub.data.subs, unconfigured: "独立订阅服务尚未接入") { s in
             let items = (s.items ?? []).sorted { (Self.daysUntil($0) ?? .max) < (Self.daysUntil($1) ?? .max) }
             let soon = items.filter { (Self.daysUntil($0) ?? .max) <= 7 }.count
             if size == .compact {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let m = s.monthlyTotal { Hero(value: m, prefix: "¥", unit: "/ 月") } else { Hero.empty("/ 月") }
+                    monthly(s)
                     Text("\(items.count) 项订阅 · 7 天内续费 \(soon) 项").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+                    HStack { Spacer(); Button("管理") { editing = true }.buttonStyle(.plain).font(Typo.sans(11)) }
                     Spacer(minLength: 6)
                     ForEach(items.prefix(2)) { sub in
                         HStack(spacing: 8) {
@@ -1170,17 +1010,18 @@ struct SubsModule: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .lastTextBaseline) {
-                        if let m = s.monthlyTotal { Hero(value: m, prefix: "¥", unit: "/ 月合计") } else { Hero.empty("/ 月合计") }
+                        monthly(s)
                         Spacer()
-                        Text("年付已折算为月").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                        Button("管理") { editing = true }.buttonStyle(.plain).font(Typo.sans(11))
                     }
                     .padding(.bottom, 10)
                     ForEach(Array(items.enumerated()), id: \.1.id) { i, sub in
                         HStack(spacing: 12) {
                             SubLogo(name: sub.name, size: 30)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(sub.name).font(Typo.sans(13))
+                                Text(sub.name + ((sub.accountLabel ?? "").isEmpty ? "" : " · " + (sub.accountLabel ?? ""))).font(Typo.sans(13))
                                 Text(Self.priceText(sub)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
+                                if let quota = sub.quota { Text(Self.quotaText(quota)).font(Typo.sans(10)).foregroundStyle(Palette.ink3) }
                             }
                             Spacer()
                             RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
@@ -1192,6 +1033,32 @@ struct SubsModule: View {
                 }
             }
         }
+        .popover(isPresented: $editing) { SubscriptionManager { editing = false }.environment(state) }
+    }
+
+    @ViewBuilder private func monthly(_ data: SubsData) -> some View {
+        let totals = data.monthlyByCurrency ?? [:]
+        VStack(alignment: .leading, spacing: 3) {
+            if totals.isEmpty { Hero.empty("个人预计 / 月") }
+            else {
+                ForEach(totals.keys.sorted(), id: \.self) { currency in
+                    Hero(value: totals[currency] ?? 0, prefix: currency + " ", unit: "/ 月")
+                }
+            }
+            if let count = data.unclassifiedPayerCount, count > 0 {
+                Text("\(count) 项付款方待确认，未计入个人费用").font(Typo.sans(10)).foregroundStyle(Palette.ink3)
+            }
+        }
+    }
+
+    static func quotaText(_ quota: SubscriptionQuota) -> String {
+        if quota.status == "error" { return "额度获取失败 · 保留上次读数" }
+        if quota.stale { return "额度读数已过期" }
+        return (quota.reading?.windows ?? []).prefix(3).map { w in
+            if let percent = w.usedPercent { return "\(w.label) 已用 \(Fmt.number(percent, 0))%" }
+            if let remaining = w.remaining { return "\(w.label) 剩余 \(Fmt.number(remaining, 0)) \(w.unit ?? "")" }
+            return w.label + " · 上限未知"
+        }.joined(separator: " · ")
     }
 
     static func daysUntil(_ s: SubsData.Item) -> Int? {
@@ -1211,8 +1078,10 @@ struct SubsModule: View {
 
     static func priceText(_ s: SubsData.Item) -> String {
         let symbol = ["CNY": "¥", "USD": "$", "EUR": "€", "HKD": "HK$", "JPY": "¥"][s.currency ?? "CNY"] ?? (s.currency ?? "")
-        let unit = s.cycle == "year" ? "年" : "月"
-        return s.price.map { "\(symbol)\(Fmt.number($0, $0.rounded() == $0 ? 0 : 2)) / \(unit)" } ?? "—"
+        let unit = ["day": "天", "week": "周", "month": "月", "year": "年", "one_time": "一次性"][s.cycle ?? ""] ?? "周期未设置"
+        let frequency = (s.frequency ?? 1) > 1 ? String(s.frequency ?? 1) : ""
+        let payer = ["self": "个人", "company": "公司", "other": "其他付款方", "none": "无需付费", "unknown": "付款方待确认"][s.payer ?? "unknown"] ?? ""
+        return (s.price.map { $0 == 0 ? "免费" : "\(symbol)\(Fmt.number($0, $0.rounded() == $0 ? 0 : 2)) / \(frequency)\(unit)" } ?? "金额未知") + " · " + payer
     }
 }
 

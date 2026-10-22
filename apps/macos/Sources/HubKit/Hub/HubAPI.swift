@@ -215,25 +215,28 @@ public struct HubAPI: Sendable {
         return .saved(try decode(RemoteLayout.self, try check(data, response)).version)
     }
 
-    // MARK: Network plans
+    // MARK: Subscriptions
 
-    /// nil while hub-api has no plan endpoint yet (404).
-    public func netPlans() async throws -> [NetPlan]? {
-        let (data, response) = try await exchange(request("/api/v1/net/plans"))
-        if response.statusCode == 404 { return nil }
-        return try decode(NetPlans.self, try check(data, response)).items
+    func subscriptionPage<T: Decodable>(_ type: T.Type, offset: Int) async throws -> T {
+        try decode(type, try await get("/api/v1/subscriptions/records", query: ["offset": String(offset), "limit": "200"]))
     }
 
-    public func putNetPlans(_ items: [NetPlan]) async throws -> [NetPlan] {
-        let body: [String: Any] = ["items": items.map { p -> [String: Any] in
-            var item: [String: Any] = ["id": p.id, "name": p.name, "total_bytes": p.totalBytes, "reset_day": p.resetDay]
-            item["expires_on"] = p.expiresOn ?? NSNull()
-            return item
-        }]
-        return try decode(NetPlans.self, try await send(request("/api/v1/net/plans", method: "PUT", body: body))).items
+    public func subscriptionSources() async throws -> SubscriptionSourceCatalog {
+        try decode(SubscriptionSourceCatalog.self, try await get("/api/v1/subscriptions/sources"))
     }
 
-    private struct NetPlans: Decodable { var items: [NetPlan] }
+    public func saveSubscription(_ record: SubscriptionRecord) async throws -> SubscriptionRecord {
+        let isNew = record.version == 0
+        var r = try request("/api/v1/subscriptions/records" + (isNew ? "" : "/" + path(record.id)), method: isNew ? "POST" : "PATCH", body: record.document)
+        if !isNew { r.setValue(String(record.version), forHTTPHeaderField: "If-Match") }
+        return try decode(SubscriptionRecord.self, try await send(r))
+    }
+
+    public func deleteSubscription(_ record: SubscriptionRecord) async throws {
+        var r = try request("/api/v1/subscriptions/records/" + path(record.id), method: "DELETE")
+        r.setValue(String(record.version), forHTTPHeaderField: "If-Match")
+        _ = try await send(r)
+    }
 
     // MARK: Plumbing
 

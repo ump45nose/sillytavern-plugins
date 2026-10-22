@@ -263,24 +263,6 @@ public struct NetData: Codable, Equatable, Sendable {
     public var hourly: [Hour]?
 }
 
-/// A traffic plan the user enters by hand; hub-api turns it into a `NetData.Pool`.
-public struct NetPlan: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var name: String
-    public var totalBytes: Double
-    /// Day of month the quota resets, 1–28.
-    public var resetDay: Int
-    public var expiresOn: String?
-
-    public init(id: String = UUID().uuidString.lowercased(), name: String, totalBytes: Double, resetDay: Int = 1, expiresOn: String? = nil) {
-        self.id = id
-        self.name = name
-        self.totalBytes = totalBytes
-        self.resetDay = resetDay
-        self.expiresOn = expiresOn
-    }
-}
-
 public struct SubsData: Codable, Equatable, Sendable {
     public struct Charge: Codable, Equatable, Sendable { public var date: String; public var amount: Double? }
     public struct Item: Codable, Equatable, Sendable, Identifiable {
@@ -292,9 +274,18 @@ public struct SubsData: Codable, Equatable, Sendable {
         public var nextRenewal: String?
         public var monthlyEquivalent: Double?
         public var lastCharge: Charge?
+        public var version: Int?
+        public var accountLabel: String?
+        public var category: String?
+        public var payer: String?
+        public var frequency: Int?
+        public var active: Bool?
+        public var quota: SubscriptionQuota?
     }
     public var monthlyTotal: Double?
     public var items: [Item]?
+    public var monthlyByCurrency: [String: Double]?
+    public var unclassifiedPayerCount: Int?
 }
 
 public struct MemosData: Codable, Equatable, Sendable {

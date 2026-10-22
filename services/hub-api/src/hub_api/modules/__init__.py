@@ -6,8 +6,8 @@ from .net import assemble as net_module
 MODULE_SOURCES = {
     "health": ["records_health"], "bills": ["records_bills"],
     "crm": ["crm", "plaud"], "media": ["emby", "navidrome", "moviepilot", "qbittorrent"],
-    "token": ["token"], "net": ["usage"], "git": ["github"], "memos": ["memos"],
-    "subs": ["records_subscriptions"], "goals": ["review"], "attention": [],
+    "token": ["token"], "net": ["usage", "subscriptions"], "git": ["github"], "memos": ["memos"],
+    "subs": ["subscriptions"], "goals": ["review"], "attention": [],
 }
 
 
@@ -29,7 +29,7 @@ def envelope(identifier, results, data=None):
 
 
 async def modules(manager, ids, token_range="day"):
-    from ..configuration import preferences, subscriptions, net_plans
+    from ..configuration import preferences
     p = preferences(manager.store)
     source_ids = list(dict.fromkeys(s for m in ids for s in MODULE_SOURCES[m]))
     values = dict(zip(source_ids, await asyncio.gather(*(manager.get(s) for s in source_ids))))
@@ -49,30 +49,17 @@ async def modules(manager, ids, token_range="day"):
                                   "link": manager.media_links[s]} for s in MODULE_SOURCES["media"]]}
         if identifier == "token":
             data = token_module(values["token"]["data"], token_range, manager.now())
-        if identifier == "net" and values["usage"]["data"] is not None:
-            data = net_module(values["usage"]["data"], net_plans(manager.store), manager.now())
+        if identifier == "net":
+            data = net_module(values["usage"]["data"], values["subscriptions"]["data"], manager.now())
         if identifier == "health" and data is not None:
             data = {**data, **{k:p[k] for k in ("step_goal","kcal_goal","exercise_goal")}}
         if identifier == "bills" and data is not None:
             data = {**data, "month_budget":p["month_budget"]}
-        if identifier == "subs":
-            from decimal import Decimal
-            charges = values["records_subscriptions"]["data"]
-            items = [{**item,"monthly_equivalent":float((Decimal(str(item["price"]))/ (12 if item["cycle"]=="year" else 1)).quantize(Decimal("0.01"))),
-                      "last_charge":charges["charges"].get(item["id"]) if charges else None} for item in subscriptions(manager.store)]
-            data = {"items":items,"monthly_total":float(sum((Decimal(str(x["monthly_equivalent"])) for x in items),Decimal(0)))}
         partial = False
         if identifier in ("git","goals") and data is not None:
             partial = data.get("_partial", False)
             data = {k: v for k, v in data.items() if not k.startswith("_")}
         output[identifier] = envelope(identifier, results, data)
-        if identifier == "subs":
-            output[identifier]["data"] = data
-            if not data["items"]:
-                output[identifier]["status"] = "ok"
-            elif values["records_subscriptions"]["status"] in ("error","unconfigured") or (values["records_subscriptions"]["data"] or {}).get("partial"):
-                output[identifier]["status"] = "partial"
-            output[identifier]["updated_at"] = (manager.store.document("subscriptions") or {}).get("updated_at") or manager.now().isoformat()
         if partial and output[identifier]["status"] == "ok":
             output[identifier]["status"] = "partial"
         if identifier == "net" and values["usage"]["data"] and values["usage"]["data"].get("partial") and output[identifier]["status"] == "ok":

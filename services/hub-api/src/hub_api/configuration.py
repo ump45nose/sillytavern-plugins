@@ -22,38 +22,9 @@ class Preferences(BaseModel):
     exercise_goal: Annotated[float, Field(gt=0)] = 45
 
 
-class Subscription(BaseModel):
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False, str_strip_whitespace=True)
-    id: Annotated[str, Field(min_length=1,max_length=128)]
-    name: Annotated[str, Field(min_length=1,max_length=200)]
-    price: Annotated[float, Field(ge=0,le=100000000,multiple_of=0.01)]
-    currency: Literal['CNY'] = 'CNY'
-    cycle: Literal['month','year']
-    next_renewal: date | None = None
-
-
-class NetPlan(BaseModel):
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False, str_strip_whitespace=True)
-    id: Annotated[str, Field(min_length=1, max_length=64)]
-    name: Annotated[str, Field(min_length=1, max_length=100)]
-    total_bytes: Annotated[float, Field(gt=0)]
-    reset_day: Annotated[int, Field(ge=1, le=28)] = 1
-    expires_on: date | None = None
-
-
 def preferences(store):
     row = store.document('preferences')
     return Preferences.model_validate(row['document'] if row else {}).model_dump(mode='json')
-
-
-def subscriptions(store):
-    row = store.document('subscriptions')
-    return row['document']['items'] if row else []
-
-
-def net_plans(store):
-    row = store.document('net_plans')
-    return row['document']['items'] if row else []
 
 
 async def json_body(request, limit=65536):
@@ -70,23 +41,9 @@ async def json_body(request, limit=65536):
 
 def register(app, store, manager, authenticated, now):
     @app.get('/api/v1/net/plans', dependencies=[Depends(authenticated)])
-    def get_net_plans():
-        return {'items': net_plans(store)}
-
     @app.put('/api/v1/net/plans', dependencies=[Depends(authenticated)])
-    async def put_net_plans(request: Request):
-        body = await json_body(request)
-        if set(body) != {'items'} or not isinstance(body['items'], list) or len(body['items']) > 5:
-            raise HTTPException(400)
-        try:
-            items = [NetPlan.model_validate(x).model_dump(mode='json') for x in body['items']]
-        except ValidationError:
-            raise HTTPException(400) from None
-        if len({x['id'] for x in items}) != len(items):
-            raise HTTPException(400)
-        store.put_document('net_plans', {'items': items}, None, now().isoformat())
-        await manager.invalidate('usage')
-        return get_net_plans()
+    async def retired_net_plans():
+        raise HTTPException(410, 'network subscriptions are managed by Personal Subscriptions')
 
     @app.get('/api/v1/layout',dependencies=[Depends(authenticated)])
     def get_layout():
@@ -132,12 +89,5 @@ def register(app, store, manager, authenticated, now):
         return (await modules(manager,['subs']))['subs']['data']
 
     @app.put('/api/v1/subscriptions',dependencies=[Depends(authenticated)])
-    async def put_subscriptions(request:Request):
-        body=await json_body(request)
-        if set(body)!={'items'} or not isinstance(body['items'],list) or len(body['items'])>100: raise HTTPException(400)
-        try: items=[Subscription.model_validate(x).model_dump(mode='json') for x in body['items']]
-        except ValidationError: raise HTTPException(400)
-        if len({x['id'] for x in items})!=len(items): raise HTTPException(400)
-        store.put_document('subscriptions',{'items':items},None,now().isoformat())
-        await manager.invalidate('records_subscriptions')
-        return await get_subscriptions()
+    async def retired_subscriptions():
+        raise HTTPException(410, 'use per-record subscription operations')

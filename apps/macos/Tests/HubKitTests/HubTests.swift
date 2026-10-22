@@ -174,21 +174,6 @@ private func makeSync(_ hub: FakeHub, file: URL? = nil) async -> HubSync {
     #expect(body?["visibility"] as? String == "PRIVATE")
 }
 
-@Test func netPlansAreOptionalUntilHubShipsThem() async throws {
-    let hub = FakeHub()
-    let api = HubAPI(transport: hub, credential: credential)
-    #expect(try await api.netPlans() == nil)
-
-    hub.locked { hub.plans = true }
-    let plans = try #require(try await api.netPlans())
-    #expect(plans == [NetPlan(id: "main", name: "主套餐", totalBytes: 200 * 1_073_741_824)])
-
-    let saved = try await api.putNetPlans([NetPlan(id: "a", name: "机场", totalBytes: 500, resetDay: 15, expiresOn: "2026-12-31")])
-    #expect(saved.first?.resetDay == 15 && saved.first?.expiresOn == "2026-12-31")
-    let item = (hub.locked { hub.bodies.last }?["items"] as? [[String: Any]])?.first
-    #expect(item?["total_bytes"] as? Double == 500)
-    #expect(item?["reset_day"] as? Int == 15)
-}
 
 @Test func pythonTimestampsParse() {
     #expect(HubJSON.parseDate("2026-10-20T17:57:41.512345+08:00") != nil)

@@ -32,7 +32,7 @@ extension ModuleID {
         case .token: ModuleInfo(title: "Token 用量", symbol: "hexagon", tone: .clay, meta: "Token Monitor")
         case .git: ModuleInfo(title: "GitHub", symbol: "arrow.triangle.branch", tone: .olive, meta: "ump45nose · 通知与 PR")
         case .net: ModuleInfo(title: "网络", symbol: "wifi", tone: .sage, meta: "usage-monitor")
-        case .subs: ModuleInfo(title: "订阅", symbol: "repeat", tone: .ochre, meta: "hub 偏好 · 账单识别")
+        case .subs: ModuleInfo(title: "订阅", symbol: "repeat", tone: .ochre, meta: "订阅资料 · 账号额度")
         case .sky: ModuleInfo(title: "电脑历史", symbol: "desktopcomputer", tone: .steel, meta: "skysight-sync")
         case .memos: ModuleInfo(title: "Memos", symbol: "note.text", tone: .sky, meta: "memos · 快速 Memo")
         case .plaud: ModuleInfo(title: "录音", symbol: "waveform", tone: .rose, meta: "Plaud · 转录稿", detailHeight: 560)

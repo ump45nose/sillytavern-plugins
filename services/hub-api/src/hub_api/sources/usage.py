@@ -61,7 +61,7 @@ class Usage:
                     'total': row.get('totalTokens'), 'cost': row.get('costUsd'),
                     'updated_at': local_time(row.get('lastUsedAt'), ZoneInfo('Asia/Shanghai'))})
             return result
-        # Only session titles and usage are retained; no content, project paths, accounts or credentials.
+        # Account display identity is authenticated metadata; no credentials or conversation content.
         return {"today": {"total": today.get("totalTokens"), "cost": today.get("costUsd")},
                 'tools': usage_parts(today.get('clients'), today.get('clientCosts')),
                 'models': usage_parts(today.get('models'), today.get('modelCosts'), models=True),
@@ -69,6 +69,8 @@ class Usage:
                 'sessions': {'day': sessions('today'), 'calendar_month': sessions('month')},
                 "daily": daily,
                 "limits": [{"tool": p["provider"], "plan": p.get("planLabel"),
+                            "id": p.get("webAccountKey") or p.get("accountKey"),
+                            "account": p.get("accountName") or p.get("accountEmail"),
                             "windows": [{"label": w.get("label") or w.get("kind"),
                                 "percent": w.get("usedPercent") if p.get("status") == "ok" and not p.get("stale") else None,
                                 "resets_at": local_time(w.get("resetsAt"), ZoneInfo("Asia/Shanghai"))} for w in p.get("windows", [])]}

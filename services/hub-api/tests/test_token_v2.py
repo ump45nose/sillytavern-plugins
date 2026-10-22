@@ -73,7 +73,7 @@ def test_incomplete_history_keeps_unknown_and_source_failure_isolated(settings):
         return httpx.Response(503, text='SENTINEL-TOKEN') if r.url.path == '/api/history' else handle(r)
     with TestClient(create_app(settings, now=lambda: NOW, transport=httpx.MockTransport(fail))) as client:
         body = client.get('/api/v1/modules?ids=token,subs', headers=auth(settings)).json()['modules']
-        assert body['token']['status'] == 'error' and body['subs']['status'] == 'ok'
+        assert body['token']['status'] == 'error' and body['subs']['status'] == 'unconfigured'
 
 
 def test_sessions_not_faked_for_omitted_details_or_multiple_models(settings):

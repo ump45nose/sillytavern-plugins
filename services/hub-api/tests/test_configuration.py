@@ -39,30 +39,22 @@ def test_documents_conflict_limits_defaults_and_concurrent_writers(settings):
         assert preferences(app.state.store)['step_goal']==9000
 
 
-def test_subscriptions_matching_annual_price_and_goals(settings):
-    settings.records_token=SecretStr('SENTINEL-RECORDS')
+def test_subscriptions_proxy_and_goals(settings):
+    settings.subscriptions_token=SecretStr('SENTINEL-SUBS')
     calls=[]
     def handle(r):
         calls.append(r)
         assert r.method=='GET'
-        return httpx.Response(200,json={'records':[
-            {'id':'1','item':'ChatGPT subscription','occurred_at':'2026-10-19T20:00:00+08:00','amount':'140.00'},
-            {'id':'2','merchant':'ChatGPT','occurred_at':'2026-09-19T20:00:00+08:00','amount':'130.00'}], 'next_offset':None})
+        assert r.headers['authorization']=='Bearer SENTINEL-SUBS'
+        return httpx.Response(200,json={'items':[{'id':'a','name':'Account','price':'20','currency':'USD','cycle':'month','monthly_equivalent':'20.00'}], 'monthly_by_currency':{'USD':'20.00'},'unclassified_payer_count':0})
     app=create_app(settings,now=lambda:NOW,transport=httpx.MockTransport(handle))
     with TestClient(app) as client:
         h=auth(settings)
-        assert client.get('/api/v1/subscriptions',headers=h).json()=={'items':[],'monthly_total':0}
-        assert not calls
-        items=[{'id':'a','name':'chatgpt','price':1680,'currency':'CNY','cycle':'year','next_renewal':'2026-10-24'},
-               {'id':'b','name':'Unknown','price':12,'cycle':'month'}]
-        r=client.put('/api/v1/subscriptions',headers=h,json={'items':items})
-        assert r.status_code==200
-        assert r.json()['monthly_total']==152
-        assert r.json()['items'][0]['last_charge']=={'date':'2026-10-19','amount':140}
-        assert r.json()['items'][1]['last_charge'] is None
-        assert len(calls)==1 and calls[0].url.params['status']=='confirmed'
-        assert client.put('/api/v1/subscriptions',headers=h,json={'items':[items[0],items[0]]}).status_code==400
-        assert client.put('/api/v1/subscriptions',headers=h,json={'items':[{**items[0],'currency':'USD'}]}).status_code==400
+        result=client.get('/api/v1/subscriptions',headers=h).json()
+        assert result['monthly_total'] is None and result['monthly_by_currency']=={'USD':20}
+        assert result['items'][0]['price']==20
+        assert client.put('/api/v1/subscriptions',headers=h,json={'items':[]}).status_code==410
+        assert app.state.store.document('subscriptions') is None
     # Goals are assembled after source caching; changing preferences never needs a source refetch.
     async def health(): return {'steps':123}
     async def bills(): return {'today_total':10}
