@@ -1,0 +1,23 @@
+schema_version: 1
+id: personal-subscriptions
+name: Personal Subscriptions
+deployment_mode: existing
+command: [personal-subscriptions, serve]
+public_url: https://subscriptions-home.172906573.xyz:28443
+host_port: 18192
+port: 18192
+bind_address: 192.168.31.201
+user: '1000:1001'
+environment:
+  HOST: 192.168.31.201
+  PORT: '18192'
+  SUBSCRIPTIONS_DATABASE: /vol2/1000/Docker/personal-subscriptions/data/subscriptions.sqlite
+  OAUTH_STORAGE_PATH: /vol2/1000/Docker/personal-subscriptions/data/oauth
+  MCP_DEVELOPMENT_NO_AUTH: 'false'
+required_env: [OIDC_CLIENT_SECRET, OAUTH_JWT_SIGNING_KEY, OAUTH_STORAGE_ENCRYPTION_KEY, OIDC_AUTHORIZED_USERNAMES, SUBSCRIPTIONS_API_READ_TOKEN_FILE, SUBSCRIPTIONS_API_WRITE_TOKEN_FILE]
+auth:
+  client_id: personal-subscriptions
+  discovery_url: https://authelia-home.172906573.xyz:28443/.well-known/openid-configuration
+expected_tools: [list_subscriptions, get_subscription, create_subscription, update_subscription, delete_subscription, list_subscription_sources, summarize_subscriptions]
+backup_command: [personal-subscriptions, backup, --destination, '{backup_path}']
+integrity_command: [personal-subscriptions, status]
