@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect subscription quotas every five minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/5:00
+AccuracySec=15s
+Persistent=true
+Unit=personal-subscriptions-collect.service
+
+[Install]
+WantedBy=timers.target
