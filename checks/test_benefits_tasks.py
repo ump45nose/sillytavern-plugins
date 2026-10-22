@@ -30,6 +30,15 @@ summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 
 class JobTests(unittest.TestCase):
+    def setUp(self):
+        # These production entrypoints run separately and both own a common package.
+        modules = patch.dict(sys.modules)
+        modules.start()
+        self.addCleanup(modules.stop)
+        for name in list(sys.modules):
+            if name == "common" or name.startswith("common."):
+                sys.modules.pop(name)
+
     def test_international_activity_summary_preserves_unknown_reward_and_observed_balance(self):
         text = summary.describe("workbuddy", {"execution_status": "ok",
             "business": {"activity": "complete", "reward": "unknown", "balance": "complete"},
