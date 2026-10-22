@@ -69,6 +69,8 @@ APP 签到在正式 `full` 入口使用独立的 `app-checkin-journal.json` 记�
 
 搜索提交后遇到真实登录或验证码条件时保留具体原因并停止后续动作。导航超时或浏览器错误先只读核对额度，不重复同一次提交；完整回执保留各阶段的诊断条目。
 
+积分 flyout 查询遇到传输失败或临时 HTTP 跳转时，最多请求原 URL 两次，不跟随跳转、不重发搜索。指向已知登录域时立即报告登录阻塞；持续跳转明确失败，并记录 HTTP 状态与脱敏路由分类，不保存 Location 或授权参数。
+
 验证码 iframe 的识别只检查解析后的主机名和路径，不把 URL 查询参数中的 OAuth PKCE `code_challenge` 当作验证码。`#captcha` 标记和真正的 captcha/challenge iframe 仍会停止任务。仅凭 iframe URL 中出现单词 challenge 不足以确认验证码。
 
 当前页面的活动提交使用 `/earn`，携带从当前页面读取的 `X-Deployment-Id`、action ID 和任务 hash；时区偏移取实际浏览器或已有显式配置，以字符串发送。缺少部署身份时停止提交，不自动重放 POST。2026-10-09 的实际浏览器请求及原生适配提交均已读回确认。
