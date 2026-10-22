@@ -196,6 +196,8 @@ public struct TokenData: Codable, Equatable, Sendable {
         public var tool: String
         public var plan: String?
         public var windows: [Window]
+        /// Which login the quota belongs to when one tool has several (email or nickname).
+        public var account: String? = nil
     }
     public struct Today: Codable, Equatable, Sendable { public var total: Double?; public var cost: Double? }
     public var range: TokenRange

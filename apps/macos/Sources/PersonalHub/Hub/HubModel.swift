@@ -21,8 +21,13 @@ final class HubModel {
     /// Bumped when a cover finishes loading so posters re-render.
     private(set) var imageGeneration = 0
     /// Computer history comes from the local skysight archive, independent of hub.
-    private(set) var sky: [SkyWindowItem] = []
+    private(set) var sky: [SkyWindowItem] = [] { didSet { if !skyLive { seedSkyDays() } } }
     private(set) var skyLive = false
+    /// Every local day the archive has, newest first, and the windows of the days opened so far.
+    private(set) var skyDays: [Date] = []
+    private(set) var skyByDay: [Date: [SkyWindowItem]] = [:]
+    @ObservationIgnored private var skyFiles: [SkyFile] = []
+    @ObservationIgnored private var skyLoading: Set<Date> = []
 
     @ObservationIgnored private var sync = HubSync(seed: HubData())
     @ObservationIgnored private var api: HubAPI?
@@ -104,11 +109,40 @@ final class HubModel {
 
     private func loadSky() {
         Task {
-            let windows = await Task.detached(priority: .utility) { SkyArchive.load() }.value
+            let (files, windows) = await Task.detached(priority: .utility) { () -> ([SkyFile], [SkyWindowItem]) in
+                let files = SkyArchive.index()
+                return (files, SkyArchive.load())
+            }.value
             guard !windows.isEmpty else { return }
-            if windows != sky { sky = windows }
             skyLive = true
+            if files.count != skyFiles.count {
+                skyFiles = files
+                skyDays = SkyArchive.days(files)
+                skyByDay = [:]
+            }
+            if windows != sky { sky = windows }
         }
+    }
+
+    /// The windows of one day; loads it from the archive the first time it is asked for.
+    func skyWindows(_ day: Date) -> [SkyWindowItem]? {
+        let key = Calendar.hub.startOfDay(for: day)
+        if let hit = skyByDay[key] { return hit }
+        guard skyLive, !skyLoading.contains(key) else { return nil }
+        skyLoading.insert(key)
+        let files = skyFiles
+        Task {
+            let windows = await Task.detached(priority: .userInitiated) { SkyArchive.load(files, day: key) }.value
+            skyLoading.remove(key)
+            skyByDay[key] = windows
+        }
+        return nil
+    }
+
+    private func seedSkyDays() {
+        let grouped = Dictionary(grouping: sky) { Calendar.hub.startOfDay(for: $0.start) }
+        skyByDay = grouped
+        skyDays = grouped.keys.sorted(by: >)
     }
 
     // MARK: Account

@@ -59,14 +59,35 @@ struct ModuleCard: View {
                 .foregroundStyle(info.tone.color)
                 .frame(width: 26, height: 26)
                 .background(RoundedRectangle(cornerRadius: 8).fill(info.tone.tint))
-            Text(info.title).font(Typo.sans(13, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-            if !compact && !state.editing { Text(info.meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
-            if !state.editing, let stamp = state.stamp(item.module) { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
-            if let status = state.hubStatus(item.module) { HubBadge(status: status) }
-            Spacer(minLength: 0)
-            tools
+            let stamp = state.editing ? nil : state.stamp(item.module)
+            let status = state.hubStatus(item.module)
+            ViewThatFits(in: .horizontal) {
+                titleLine(meta: !compact && !state.editing, stamp: stamp, status: status)
+                titleLine(meta: false, stamp: stamp, status: status)
+                titleLine(meta: false, stamp: nil, status: status)
+                titleLine(meta: false, stamp: nil, status: nil)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if state.editing { tools }
         }
         .frame(minHeight: 24)
+        .overlay(alignment: .trailing) {
+            if !state.editing {
+                tools.padding(.leading, 10)
+                    .background(LinearGradient(stops: [.init(color: Palette.card.opacity(0), location: 0), .init(color: Palette.card, location: 0.25)],
+                                               startPoint: .leading, endPoint: .trailing))
+            }
+        }
+    }
+
+    private func titleLine(meta: Bool, stamp: String?, status: HubStatus?) -> some View {
+        HStack(spacing: 9) {
+            Text(info.title).font(Typo.sans(13, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                .fixedSize(horizontal: stamp != nil || status != nil, vertical: false)
+            if meta { Text(info.meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1).fixedSize() }
+            if let stamp { Text(stamp).font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit().lineLimit(1).fixedSize() }
+            if let status { HubBadge(status: status) }
+        }
     }
 
     private var tools: some View {

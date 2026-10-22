@@ -25,7 +25,9 @@ final class AppState {
     var editing = false
     var tokenRange: TokenRange = .week
     var focusedModule: ModuleID?
-    var skySelection = 0
+    var skyDay: Date?
+    var skyWindow: String?
+    var skyDevice: String?
 
     var memosURL: String { didSet { UserDefaults.standard.set(memosURL, forKey: Keys.memosURL) } }
     var userName: String { didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) } }

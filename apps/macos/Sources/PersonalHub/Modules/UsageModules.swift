@@ -5,20 +5,17 @@ import SwiftUI
 // MARK: - Token 用量
 
 enum TokenTone {
-    static func of(_ key: String) -> Tone {
-        switch key.lowercased() {
-        case let k where k.contains("claude"): .clay
-        case let k where k.contains("codex"): .steel
-        case let k where k.contains("cursor"): .ink
-        case let k where k.contains("hermes"): .plum
-        case let k where k.contains("gemini"): .sky
-        default: HubFormat.tone(for: key)
-        }
-    }
+    static func name(_ tool: String) -> String { Vendor.tool(tool).label }
 
-    static func name(_ tool: String) -> String {
-        let known = ["claude": "Claude Code", "codex": "Codex", "cursor": "Cursor", "copilot": "Copilot", "antigravity": "Antigravity", "gemini": "Gemini"]
-        return known[tool.lowercased()] ?? (tool.prefix(1).uppercased() + tool.dropFirst())
+    /// What tells two quotas of the same tool apart: the hub's account, else the plan, else a number.
+    static func subtitle(_ l: TokenData.Limit, in all: [TokenData.Limit]) -> String? {
+        let plan = l.plan.flatMap { $0.isEmpty ? nil : $0 }
+        if let account = l.account, !account.isEmpty { return [account, plan].compactMap { $0 }.joined(separator: " · ") }
+        let same = all.filter { Vendor.tool($0.tool).id == Vendor.tool(l.tool).id }
+        guard same.count > 1 else { return plan }
+        if let plan, same.filter({ $0.plan == plan }).count == 1 { return plan }
+        let n = (same.firstIndex(of: l) ?? 0) + 1
+        return [plan, "账号 \(n)"].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Tools with at least one known percentage, duplicates dropped, busiest first; windows busiest first.
@@ -27,7 +24,7 @@ enum TokenTone {
         return limits.compactMap { l -> TokenData.Limit? in
             var l = l
             l.windows = l.windows.filter { $0.percent != nil }.sorted { $0.percent! > $1.percent! }
-            let key = l.tool.lowercased() + "|" + (l.plan ?? "") + "|" + l.windows.map { "\($0.label)=\($0.percent!)" }.joined(separator: ",")
+            let key = l.tool.lowercased() + "|" + (l.plan ?? "") + "|" + (l.account ?? "") + "|" + l.windows.map { "\($0.label)=\($0.percent!)" }.joined(separator: ",")
             guard !l.windows.isEmpty, seen.insert(key).inserted else { return nil }
             return l
         }
@@ -58,8 +55,13 @@ struct TokenModule: View {
 
     private func compact(_ t: TokenData) -> some View {
         let total = (t.today?.total ?? t.total).map { $0 / 1_000_000 }, cost = t.today?.cost ?? t.cost
-        let windows = TokenTone.visible(t.limits ?? []).flatMap { l in l.windows.map { ("\(TokenTone.name(l.tool)) · \($0.label)", $0.percent ?? 0, TokenTone.of(l.tool)) } }
-            .sorted { $0.1 > $1.1 }.prefix(2)
+        let visible = TokenTone.visible(t.limits ?? [])
+        let windows = visible.flatMap { l in
+            l.windows.map { w in
+                ([TokenTone.name(l.tool), TokenTone.subtitle(l, in: visible), w.label].compactMap { $0 }.joined(separator: " · "), w.percent ?? 0, Vendor.tool(l.tool))
+            }
+        }
+        .sorted { $0.1 > $1.1 }.prefix(2)
         return VStack(alignment: .leading, spacing: 0) {
             if let total {
                 let big = total >= 1000
@@ -69,15 +71,16 @@ struct TokenModule: View {
                 Hero.empty("M tokens")
             }
             Spacer(minLength: 6)
-            ForEach(Array(windows), id: \.0) { label, v, tone in
+            ForEach(Array(windows), id: \.0) { label, v, vendor in
                 VStack(spacing: 5) {
-                    HStack {
+                    HStack(spacing: 6) {
+                        VendorMark(vendor: vendor, size: 12)
                         Text(label).foregroundStyle(Palette.ink2).lineLimit(1)
                         Spacer()
                         Text("\(Int(v))%").monospacedDigit()
                     }
                     .font(Typo.sans(11.5))
-                    Track(value: v, color: tone.color, height: 4)
+                    Track(value: v, color: vendor.color, height: 4)
                 }
                 .padding(.top, 8)
             }
@@ -98,6 +101,7 @@ private struct TokenDetail: View {
         let range = state.tokenRange == .year ? .month : state.tokenRange
         VStack(alignment: .leading, spacing: 0) {
             allTime
+            limits.padding(.top, 10)
             HStack(spacing: 12) {
                 Segmented(options: Self.ranges.map { ($0, $0.label) }, selection: $state.tokenRange)
                 if let s = state.hub.token(range) { rangeLine(s) }
@@ -106,15 +110,12 @@ private struct TokenDetail: View {
             .padding(.top, 26)
             if let s = state.hub.token(range) {
                 AdaptiveRow(threshold: 900, spacing: 28, stackSpacing: 6) {
-                    limits
-                    VStack(alignment: .leading, spacing: 0) {
-                        parts("工具", s.tools, tinted: true)
-                        parts("设备", s.devices, tinted: false)
-                    }
-                    parts("模型", s.models, tinted: false, cost: true, limit: 8)
+                    parts("工具", s.tools, .tool)
+                    parts("模型", s.models, .model, limit: 8)
+                    parts("设备", s.devices, .device)
                 }
                 .id(range)
-                sessions(s.sessions)
+                sessions(s.sessions, range: range)
             } else {
                 HubGate(envelope: state.hub.data.token[range]) { _ in EmptyView() }.frame(minHeight: 200)
             }
@@ -202,14 +203,15 @@ private struct TokenDetail: View {
         return (main + (delta ?? Text(""))).font(Typo.sans(12.5)).foregroundStyle(Palette.ink2).monospacedDigit().lineLimit(1)
     }
 
-    private func parts(_ title: String, _ parts: [TokenRangeSummary.Part]?, tinted: Bool, cost: Bool = false, limit: Int = 6) -> some View {
+    enum PartKind { case tool, model, device }
+
+    private func parts(_ title: String, _ parts: [TokenRangeSummary.Part]?, _ kind: PartKind, limit: Int = 6) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionTitle(title)
             if let parts, !parts.isEmpty {
                 let top = parts.compactMap(\.total).max() ?? 1
                 ForEach(Array(TokenRangeSummary.Part.top(parts, limit).enumerated()), id: \.1.id) { i, p in
-                    barRow(p.name, p.total, (p.total ?? 0) / max(top, 0.000_001) * 100,
-                           p.id == "_other" ? Palette.ink4 : tinted ? TokenTone.of(p.id).color : Palette.ink2, i, cost: cost ? .some(p.cost) : nil)
+                    partRow(p, kind, (p.total ?? 0) / max(top, 0.000_001) * 100, i)
                 }
             } else {
                 note("hub 还没提供这一区间的\(title)分布")
@@ -218,10 +220,56 @@ private struct TokenDetail: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder private func sessions(_ list: [TokenData.Session]?) -> some View {
+    private func partRow(_ p: TokenRangeSummary.Part, _ kind: PartKind, _ pct: Double, _ i: Int) -> some View {
+        let other = p.id == "_other"
+        let vendor: Vendor? = switch kind {
+        case _ where other: nil
+        case .tool: Vendor.tool(p.id)
+        case .model: Vendor.model(p.name) ?? Vendor.model(p.id)
+        case .device: nil
+        }
+        let color: Color = switch kind {
+        case _ where other: Palette.ink4
+        case .tool: Vendor.tool(p.id).color
+        case .model: Vendor.modelColor(p.name)
+        case .device: Palette.ink2
+        }
+        return HStack(spacing: 8) {
+            Group {
+                if kind == .device && !other {
+                    Image(systemName: Self.deviceSymbol(p.name)).font(.system(size: 11)).foregroundStyle(Palette.ink3)
+                } else {
+                    VendorMark(vendor: vendor, color: other ? Palette.ink4 : color, size: 14)
+                }
+            }
+            .frame(width: 16)
+            Text(p.name).font(Typo.sans(12)).lineLimit(1).truncationMode(.middle).frame(width: kind == .model ? 128 : 92, alignment: .leading)
+                .help(p.name)
+            Track(value: pct, color: color, delay: Double(i) * 80)
+            Text(p.total.map(TokenFormat.short) ?? "—").font(Typo.sans(12)).foregroundStyle(Palette.ink3).monospacedDigit().frame(width: 50, alignment: .trailing)
+            if kind != .device {
+                Text(p.cost.map { "$" + Fmt.number($0, $0 >= 100 ? 0 : 2) } ?? "—").font(Typo.sans(12)).foregroundStyle(Palette.ink2).monospacedDigit()
+                    .frame(width: 56, alignment: .trailing)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    static func deviceSymbol(_ name: String) -> String {
+        let n = name.lowercased()
+        if n.contains("nas") || n.contains("server") { return "server.rack" }
+        if n.contains("air") || n.contains("book") { return "laptopcomputer" }
+        if n.contains("phone") || n.contains("android") { return "iphone" }
+        return "desktopcomputer"
+    }
+
+    @ViewBuilder private func sessions(_ list: [TokenData.Session]?, range: TokenRange) -> some View {
         SectionTitle("会话 · 用量最高")
         if let list, !list.isEmpty {
             let shown = allSessions ? list : Array(list.prefix(8))
+            if list.allSatisfy({ ($0.title ?? "").isEmpty }) {
+                note("hub 还没提供会话标题，暂显示模型和会话编号")
+            }
             VStack(spacing: 0) {
                 ForEach(Array(shown.enumerated()), id: \.1.id) { i, x in
                     sessionRow(x)
@@ -235,17 +283,25 @@ private struct TokenDetail: View {
                 .buttonStyle(.plain).padding(.top, 8)
             }
         } else {
-            note("hub 还没提供会话数据")
+            note(range == .day ? "hub 还没提供会话数据" : "hub 目前只提供「日」的会话，周和月还没有")
         }
     }
 
     private func sessionRow(_ x: TokenData.Session) -> some View {
-        let tone = TokenTone.of(x.tool ?? "")
-        return HStack(spacing: 12) {
-            Circle().fill(tone.color).frame(width: 7, height: 7)
-            Text(x.title ?? "未命名会话").font(Typo.sans(12.5)).lineLimit(1).layoutPriority(1)
+        let vendor = x.tool.map(Vendor.tool)
+        let title = x.title.flatMap { $0.isEmpty ? nil : $0 }
+        return HStack(spacing: 10) {
+            VendorMark(vendor: vendor, size: 14).frame(width: 16)
+            Group {
+                if let title {
+                    Text(title).foregroundStyle(Palette.ink)
+                } else {
+                    Text("\(x.model ?? "会话") · \(String(x.id.suffix(6)))").foregroundStyle(Palette.ink3)
+                }
+            }
+            .font(Typo.sans(12.5)).lineLimit(1).layoutPriority(1).help(title ?? x.id)
             Spacer(minLength: 8)
-            Text([x.tool.map(TokenTone.name), x.model, x.device].compactMap { $0 }.joined(separator: " · "))
+            Text([vendor?.label, title == nil ? nil : x.model, x.device].compactMap { $0 }.joined(separator: " · "))
                 .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1)
             Text(x.total.map(TokenFormat.short) ?? "—").font(Typo.sans(12)).monospacedDigit().frame(width: 58, alignment: .trailing)
             Text(x.cost.map { "$" + Fmt.number($0, $0 >= 100 ? 0 : 2) } ?? "—").font(Typo.sans(12)).foregroundStyle(Palette.ink2).monospacedDigit()
@@ -259,65 +315,76 @@ private struct TokenDetail: View {
         Text(text).font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
     }
 
-    private func barRow(_ name: String, _ v: Double?, _ pct: Double, _ color: Color, _ i: Int, cost: Double?? = nil) -> some View {
-        HStack(spacing: 10) {
-            Text(name).font(Typo.sans(12)).lineLimit(1).frame(width: 96, alignment: .leading)
-            Track(value: pct, color: color, delay: Double(i) * 80)
-            Text(v.map(TokenFormat.short) ?? "—").font(Typo.sans(12)).foregroundStyle(Palette.ink3).monospacedDigit().frame(width: 50, alignment: .trailing)
-            if let cost {
-                Text(cost.map { "$" + Fmt.number($0, $0 >= 100 ? 0 : 2) } ?? "—").font(Typo.sans(12)).foregroundStyle(Palette.ink2).monospacedDigit()
-                    .frame(width: 56, alignment: .trailing)
-            }
-        }
-        .padding(.vertical, 5)
-    }
-
     private var limits: some View {
         let all = TokenTone.visible(state.hub.data.token[.day]?.data?.limits ?? [])
-        let limits = Array(all.prefix(4))
-        let hidden = all.count - limits.count + limits.reduce(0) { $0 + max(0, $1.windows.count - 3) }
-        return VStack(alignment: .leading, spacing: 10) {
-            SectionTitle("额度 · 实时").padding(.bottom, -10)
-            if limits.isEmpty { note("来源暂无额度信息") }
-            ForEach(Array(limits.enumerated()), id: \.offset) { k, l in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(TokenTone.name(l.tool)).font(Typo.sans(12.5, .semibold))
-                        Spacer()
-                        if let plan = l.plan, !plan.isEmpty { Chip(text: plan) }
-                    }
-                    ForEach(Array(l.windows.prefix(3).indices), id: \.self) { i in
-                        let w = l.windows[i]
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(w.label).font(Typo.sans(12.5)).lineLimit(1)
-                                Spacer()
-                                Text(w.percent.map { "\(Int($0))% 已用" } ?? "—").font(Typo.serif(13)).monospacedDigit()
-                            }
-                            Track(value: w.percent ?? 0, color: TokenTone.of(l.tool).color, height: 8, delay: Double(k * 2 + i) * 90)
-                            if let r = TokenTone.resets(w.resetsAt) { Text(r).font(Typo.sans(11)).foregroundStyle(Palette.ink3) }
-                        }
-                        .padding(.top, i > 0 ? 6 : 0)
+        return VStack(alignment: .leading, spacing: 0) {
+            SectionTitle("额度 · 实时")
+            if all.isEmpty {
+                note("来源暂无额度信息")
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 236), spacing: 10, alignment: .top)], alignment: .leading, spacing: 10) {
+                    ForEach(Array(all.enumerated()), id: \.offset) { i, l in
+                        LimitTile(limit: l, subtitle: TokenTone.subtitle(l, in: all), index: i)
                     }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: Metrics.innerRadius).fill(Palette.sunk))
             }
-            if hidden > 0 { note("另有 \(hidden) 个额度窗口用量较低") }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// GitHub-style year of days: Monday-first weeks as columns, square cells up to 16pt.
-private struct HistoryHeatmap: View {
+/// One quota: the tool's mark and account, its two busiest windows, and when the busiest resets.
+private struct LimitTile: View {
+    var limit: TokenData.Limit
+    var subtitle: String?
+    var index: Int
+
+    var body: some View {
+        let vendor = Vendor.tool(limit.tool)
+        let windows = Array(limit.windows.prefix(2))
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                VendorMark(vendor: vendor, size: 15)
+                Text(vendor.label).font(Typo.sans(12.5, .semibold)).lineLimit(1).fixedSize()
+                if let subtitle { Text(subtitle).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1).truncationMode(.middle) }
+                Spacer(minLength: 0)
+            }
+            ForEach(Array(windows.enumerated()), id: \.offset) { i, w in
+                let pct = w.percent ?? 0
+                HStack(spacing: 8) {
+                    Text(w.label).font(Typo.sans(11.5)).foregroundStyle(Palette.ink2).lineLimit(1).frame(width: 82, alignment: .leading)
+                    Track(value: pct, color: vendor.color, height: 5, delay: Double(index * 2 + i) * 70)
+                    Text("\(Int(pct))%").font(Typo.sans(11.5, .medium)).monospacedDigit()
+                        .foregroundStyle(pct >= 85 ? Tone.rose.color : Palette.ink)
+                        .frame(width: 34, alignment: .trailing)
+                }
+                .help(TokenTone.resets(w.resetsAt) ?? w.label)
+            }
+            let more = limit.windows.count - windows.count
+            Text([TokenTone.resets(windows.first?.resetsAt), more > 0 ? "另 \(more) 个窗口" : nil].compactMap { $0 }.joined(separator: " · "))
+                .font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).lineLimit(1)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Metrics.innerRadius).fill(Palette.sunk))
+    }
+}
+
+/// GitHub-style year of days: Monday-first weeks as columns, square cells up to 20pt.
+struct HistoryHeatmap: View {
     var year: TokenHistory.Year
     var maxValue: Double
     @ViewState private var hovered: (week: Int, day: Int)?
+
+    init(year: TokenHistory.Year, maxValue: Double, hovered: (week: Int, day: Int)? = nil) {
+        self.year = year
+        self.maxValue = maxValue
+        _hovered = ViewState(initialValue: hovered)
+    }
     @ViewState private var shown: CGFloat = AppState.isQA ? 1 : 0
     @ViewState private var width: CGFloat = 0
 
-    private let gap: CGFloat = 3, labelWidth: CGFloat = 20
+    private let gap: CGFloat = 3, labelWidth: CGFloat = 20, monthHeight: CGFloat = 16
     private static let rows = ["一", "", "三", "", "五", "", "日"]
 
     private func cell(_ width: CGFloat) -> CGFloat {
@@ -325,17 +392,23 @@ private struct HistoryHeatmap: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let c = cell(geo.size.width), step = c + gap
+        let c = cell(width), step = c + gap
+        let gridWidth = CGFloat(year.weeks.count) * step - gap, gridHeight = 7 * step - gap
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topLeading) {
                 ForEach(year.months, id: \.week) { m in
                     Text("\(m.month)月").font(Typo.sans(10)).foregroundStyle(Palette.ink4).fixedSize()
                         .offset(x: labelWidth + CGFloat(m.week) * step)
                 }
-                ForEach(Self.rows.indices, id: \.self) { r in
-                    Text(Self.rows[r]).font(Typo.sans(10)).foregroundStyle(Palette.ink4)
-                        .frame(height: c).offset(y: 16 + CGFloat(r) * step)
+            }
+            .frame(height: monthHeight, alignment: .topLeading)
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: gap) {
+                    ForEach(Self.rows.indices, id: \.self) { r in
+                        Text(Self.rows[r]).font(Typo.sans(10)).foregroundStyle(Palette.ink4).frame(height: c)
+                    }
                 }
+                .frame(width: labelWidth, alignment: .leading)
                 Canvas { ctx, _ in
                     for (w, week) in year.weeks.enumerated() {
                         for (d, cellData) in week.enumerated() {
@@ -347,23 +420,29 @@ private struct HistoryHeatmap: View {
                             } else {
                                 ctx.stroke(path, with: .color(Palette.line.opacity(0.7)), lineWidth: 0.8)
                             }
+                            if let h = hovered, h.week == w, h.day == d {
+                                ctx.stroke(Path(roundedRect: rect.insetBy(dx: -1, dy: -1), cornerRadius: min(4, c / 3)), with: .color(Palette.ink.opacity(0.7)), lineWidth: 1.2)
+                            }
                         }
                     }
                 }
-                .frame(width: CGFloat(year.weeks.count) * step - gap, height: 7 * step - gap)
-                .offset(x: labelWidth, y: 16)
-                .onContinuousHover { phase in
+                .frame(width: gridWidth, height: gridHeight)
+                .contentShape(Rectangle())
+                .onContinuousHover(coordinateSpace: .local) { phase in
                     switch phase {
                     case .active(let p):
                         let w = Int(p.x / step), d = Int(p.y / step)
-                        hovered = year.weeks.indices.contains(w) && (0..<7).contains(d) ? (w, d) : nil
+                        let inside = year.weeks.indices.contains(w) && (0..<7).contains(d) && p.x - CGFloat(w) * step <= c && p.y - CGFloat(d) * step <= c
+                        if inside { hovered = (w, d) } else if !(year.weeks.indices.contains(w) && (0..<7).contains(d)) { hovered = nil }
                     case .ended: hovered = nil
                     }
                 }
-                if let h = hovered { tooltip(h, step: step, c: c, width: geo.size.width) }
+                .overlay {
+                    if let h = hovered { tooltip(h, step: step, c: c, gridWidth: gridWidth) }
+                }
             }
         }
-        .frame(height: 16 + 7 * cell(width) + 6 * gap)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { width = $0 }
         .onAppear { withAnimation(.easeOut(duration: 0.6)) { shown = 1 } }
     }
@@ -379,16 +458,21 @@ private struct HistoryHeatmap: View {
         }
     }
 
-    @ViewBuilder private func tooltip(_ h: (week: Int, day: Int), step: CGFloat, c: CGFloat, width: CGFloat) -> some View {
+    /// Sits above the hovered cell (below it on the top rows) so it never covers the pointer.
+    @ViewBuilder private func tooltip(_ h: (week: Int, day: Int), step: CGFloat, c: CGFloat, gridWidth: CGFloat) -> some View {
         let cellData = year.weeks[h.week][h.day]
         let date = "\(HubFormat.md(cellData.date)) \(HubFormat.weekday(cellData.date))"
         let text = cellData.day.map { d in
             [date, d.total.map(TokenFormat.short) ?? "无记录", d.cost.map { "$" + Fmt.number($0, $0 >= 100 ? 0 : 2) }].compactMap { $0 }.joined(separator: " · ")
         } ?? date + " · 未接入"
+        let below = h.day < 2
+        let x = CGFloat(h.week) * step + c / 2
+        let estimated = CGFloat(text.count) * 6.2 + 18
+        let center = min(max(x, estimated / 2), gridWidth - estimated / 2)
         Text(text).font(Typo.sans(11)).foregroundStyle(.white).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(RoundedRectangle(cornerRadius: 6).fill(Palette.ink))
-            .position(x: min(max(labelWidth + CGFloat(h.week) * step + c / 2, 80), width - 80), y: 16 + CGFloat(h.day) * step - 12)
+            .position(x: center, y: below ? CGFloat(h.day) * step + c + 19 : CGFloat(h.day) * step - 19)
             .allowsHitTesting(false)
     }
 }

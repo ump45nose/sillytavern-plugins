@@ -16,6 +16,14 @@ public struct SkySummary: Sendable, Equatable, Identifiable {
     public var end: Date { start.addingTimeInterval(span == .sixHours ? 6 * 3600 : 600) }
 }
 
+public struct SkyFile: Sendable, Equatable {
+    public var device: String
+    public var url: URL
+    public var span: SkySummary.Span
+    public var start: Date
+    public var id: String
+}
+
 /// A 6-hour window with the 10-minute segments inside it.
 public struct SkyWindowItem: Sendable, Equatable, Identifiable {
     public var id: String
@@ -45,17 +53,25 @@ public enum SkyArchive {
         return object["device_id"] as? String
     }
 
-    /// Windows from the two most recent local days that have data, newest first. This Mac's live
+    /// Windows from the most recent local days that have data, newest first. This Mac's live
     /// summaries are merged in, so today shows up before the daily sync has run.
     public static func load(root: URL = root, live: URL? = live, liveDevice: String? = localDevice(),
                             calendar: Calendar = .hub, days: Int = 2) -> [SkyWindowItem] {
+        let files = index(root: root, live: live, liveDevice: liveDevice)
+        guard let oldest = self.days(files, calendar: calendar).prefix(days).last else { return [] }
+        return windows(parse(files.filter { $0.start >= oldest.addingTimeInterval(-6 * 3600) }))
+            .filter { $0.start >= oldest || $0.end > oldest }
+    }
+
+    /// Every summary file, from names alone; contents are read per day with `load(_:day:)`.
+    public static func index(root: URL = root, live: URL? = live, liveDevice: String? = localDevice()) -> [SkyFile] {
         let fm = FileManager.default
-        var files: [(device: String, url: URL, span: SkySummary.Span, start: Date, id: String)] = []
+        var files: [SkyFile] = []
         var seen = Set<String>()
         func add(_ device: String, _ url: URL) {
             guard url.pathExtension == "md", let (start, span, id) = parseName(url.lastPathComponent),
                   seen.insert(device + "/" + id).inserted else { return }
-            files.append((device, url, span, start, id))
+            files.append(SkyFile(device: device, url: url, span: span, start: start, id: id))
         }
         for device in (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [] where !device.lastPathComponent.hasPrefix(".") {
             guard let e = fm.enumerator(at: device.appendingPathComponent("objects"), includingPropertiesForKeys: nil) else { continue }
@@ -64,13 +80,26 @@ public enum SkyArchive {
         if let live, let liveDevice {
             for url in (try? fm.contentsOfDirectory(at: live, includingPropertiesForKeys: nil)) ?? [] { add(liveDevice, url) }
         }
-        let dayKeys = Set(files.map { calendar.startOfDay(for: $0.start) }).sorted(by: >).prefix(days)
-        guard let oldest = dayKeys.last else { return [] }
-        let summaries = files.filter { $0.start >= oldest }.compactMap { f -> SkySummary? in
+        return files
+    }
+
+    /// Local days that have at least one summary, newest first.
+    public static func days(_ files: [SkyFile], calendar: Calendar = .hub) -> [Date] {
+        Set(files.map { calendar.startOfDay(for: $0.start) }).sorted(by: >)
+    }
+
+    /// The windows that start on `day`, with their segments (a window from the evening before can spill in).
+    public static func load(_ files: [SkyFile], day: Date, calendar: Calendar = .hub) -> [SkyWindowItem] {
+        let start = calendar.startOfDay(for: day), end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let picked = files.filter { $0.start >= start.addingTimeInterval(-6 * 3600) && $0.start < end }
+        return windows(parse(picked)).filter { calendar.isDate($0.start, inSameDayAs: start) }
+    }
+
+    static func parse(_ files: [SkyFile]) -> [SkySummary] {
+        files.compactMap { f in
             guard let text = try? String(contentsOf: f.url, encoding: .utf8) else { return nil }
             return parse(text, id: f.device + "/" + f.id, device: f.device, span: f.span, start: f.start)
         }
-        return windows(summaries)
     }
 
     public static func windows(_ summaries: [SkySummary]) -> [SkyWindowItem] {

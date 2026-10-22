@@ -12,6 +12,10 @@ struct ModuleInfo {
     var autoHeight = false
     /// The detail body scrolls its own columns, so the card keeps this height unless a preset overrides it.
     var detailHeight: CGFloat?
+    /// In the single-column menu the compact size grows with its content (long mainlines wrap).
+    var growsInTray = false
+
+    var trayAutoHeight: Bool { autoHeight || growsInTray }
 }
 
 extension ModuleID {
@@ -19,7 +23,7 @@ extension ModuleID {
         switch self {
         case .brief: ModuleInfo(title: "今日简报", symbol: "sun.max", tone: .clay, meta: "汇总所有模块", bare: true)
         case .agenda: ModuleInfo(title: "日程与任务", symbol: "calendar", tone: .sky, meta: "Google 日历 · Tasks")
-        case .goals: ModuleInfo(title: "主线与复盘", symbol: "scope", tone: .clay, meta: "personal-review · Memos")
+        case .goals: ModuleInfo(title: "主线与复盘", symbol: "scope", tone: .clay, meta: "personal-review · Memos", growsInTray: true)
         case .attention: ModuleInfo(title: "需要注意", symbol: "bell", tone: .ochre, meta: "跨模块提醒", autoHeight: true)
         case .health: ModuleInfo(title: "健康", symbol: "heart", tone: .olive, meta: "personal-records")
         case .bills: ModuleInfo(title: "账单", symbol: "creditcard", tone: .kraft, meta: "personal-records · AutoAccounting")

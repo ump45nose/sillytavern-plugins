@@ -79,6 +79,12 @@ import Testing
         let windows = SkyArchive.load(root: root, live: nil, calendar: calendar)
         #expect(windows.map(\.title) == ["latest", "day before"])
         #expect(SkyArchive.load(root: root.appendingPathComponent("missing"), live: nil).isEmpty)
+
+        let files = SkyArchive.index(root: root, live: nil)
+        #expect(files.count == 3)
+        let days = SkyArchive.days(files, calendar: calendar)
+        #expect(days.count == 3)
+        #expect(SkyArchive.load(files, day: days[2], calendar: calendar).map(\.title) == ["old"], "older days load on demand")
     }
 
     @Test func liveSummariesFillInTodayForThisMac() throws {

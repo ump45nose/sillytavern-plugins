@@ -418,7 +418,7 @@ private struct TrayModuleCard: View {
                 Image(systemName: info.symbol).font(.system(size: 11.5, weight: .medium)).foregroundStyle(info.tone.color)
                     .frame(width: 22, height: 22).background(RoundedRectangle(cornerRadius: 7).fill(info.tone.tint))
                 Text(info.title).font(Typo.sans(12.5, .semibold)).lineLimit(1)
-                if let stamp = state.stamp(module) { Text(stamp).font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).monospacedDigit() }
+                if let stamp = state.stamp(module) { Text(stamp).font(Typo.sans(10.5)).foregroundStyle(Palette.ink4).monospacedDigit().fixedSize() }
                 if let status = state.hubStatus(module) { HubBadge(status: status) }
                 Spacer(minLength: 0)
                 Button { state.openMainWindow(nil); state.focus(module) } label: {
@@ -429,10 +429,10 @@ private struct TrayModuleCard: View {
             }
             .padding(.bottom, 10)
             ModuleBody(id: module, size: .compact)
-                .frame(maxWidth: .infinity, maxHeight: info.autoHeight ? nil : .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: info.trayAutoHeight ? nil : .infinity, alignment: .topLeading)
         }
         .padding(14)
-        .frame(height: info.autoHeight ? nil : Metrics.compactHeight - 8)
+        .frame(height: info.trayAutoHeight ? nil : Metrics.compactHeight - 8)
         .background(RoundedRectangle(cornerRadius: 14).fill(Palette.bg.opacity(0.6)))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.line2))
         .environment(\.moduleTone, info.tone)

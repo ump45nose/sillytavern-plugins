@@ -52,6 +52,7 @@ struct HubBadge: View {
         Text(text).font(Typo.sans(10, .semibold)).foregroundStyle(tone.color)
             .padding(.horizontal, 6).padding(.vertical, 1.5)
             .background(Capsule().fill(tone.tint))
+            .lineLimit(1).fixedSize()
     }
 }
 

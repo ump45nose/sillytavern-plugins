@@ -112,11 +112,20 @@ enum QARender {
             NetPlan(id: "b", name: "备用", totalBytes: 100 * 1_073_741_824, resetDay: 15),
         ]))
         await shot("net-detail", width: 640, ModuleCard(item: LayoutItem(.net, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        await shot("compact-narrow", width: 760, HStack(alignment: .top, spacing: 14) {
+            ForEach([ModuleID.git, .net, .bills], id: \.self) { m in ModuleCard(item: LayoutItem(m, .compact), index: 0, count: 1).frame(width: 230) }
+        }.padding(20).background(Palette.bg))
         await shot("plaud-compact", width: 340, ModuleCard(item: LayoutItem(.plaud, .compact), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("plaud-detail", width: 1100, ModuleCard(item: LayoutItem(.plaud, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
         await shot("due-picker", width: 372, DuePickerPanel(picked: .constant(PickedDue(day: state.agenda.now, time: DateComponents(hour: 15, minute: 0))), now: state.agenda.now) {})
         if let history = state.hub.tokenHistory() {
+            if let y = history.years().last.map({ history.year($0) }) {
+                await shot("token-hover", width: 1000, VStack(spacing: 30) {
+                    HistoryHeatmap(year: y, maxValue: history.maxValue, hovered: (y.weeks.count - 3, 4))
+                    HistoryHeatmap(year: y, maxValue: history.maxValue, hovered: (1, 0))
+                }.padding(20).background(Palette.card))
+            }
             await shot("token-trend", width: 1200, TokenTrend(history: history).frame(height: 168).padding(20).background(Palette.card))
         }
         for range in [TokenRange.day, .week, .month] {
