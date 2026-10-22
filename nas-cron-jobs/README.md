@@ -115,8 +115,15 @@ schedules, paused state, report facts and confirmation protocols. Prior prompts
 are backed up in the private profile; rerunning is idempotent. Companion photos
 already use a single sentence and keep their image delivery contract.
 
-Run the notification regression checks with the existing Hermes Python runtime:
-`PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks`.
+Run the benefits job and notification checks in separate Python processes with
+the existing Hermes runtime. The independent benefits executor and report
+dispatcher both own a top-level `common` package; collecting both suites in one
+interpreter can load the wrong package, unlike the deployed subprocess boundary.
+
+```sh
+PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks -p test_benefits_tasks.py
+PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks -p test_notifications.py
+```
 
 Hermes restricts executable cron paths to each profile's `scripts/` directory.
 The installer preserves that boundary with small Python/Bash entrypoints which

@@ -312,7 +312,8 @@ async function run(chromium, state, device, options = {}, deps = common) {
     });
     return {
       execution: "failed",
-      reason: error.details?.code || "search_unconfirmed",
+      reason: error.details?.code || (["flyout_request_failed", "flyout_unavailable", "flyout_redirect_unavailable"].includes(error.message)
+        ? error.message : "search_unconfirmed"),
       business,
       details: details(),
     };
