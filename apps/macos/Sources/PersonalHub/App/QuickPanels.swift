@@ -363,7 +363,7 @@ enum QuickDrafts {
             try h.seekToEnd()
             try h.write(contentsOf: line + Data("\n".utf8))
         } catch {
-            NSLog("Personal Hub: draft save failed: \(error.localizedDescription)")
+            NSLog("Nook: draft save failed: \(error.localizedDescription)")
         }
     }
 }

@@ -183,7 +183,7 @@ public final class LoopbackReceiver: @unchecked Sendable {
 
     public enum Failure: Error, Sendable { case denied, timeout, listener }
 
-    public init(state: String, success: String = "Personal Hub 已连接 Google") throws {
+    public init(state: String, success: String = "Nook 已连接 Google") throws {
         self.state = state
         self.success = success
         let parameters = NWParameters.tcp
@@ -227,7 +227,7 @@ public final class LoopbackReceiver: @unchecked Sendable {
             let code = matches ? values["code"] : nil
             let page = code != nil
                 ? "<h3>\(success)</h3><p>可以关闭此页面，回到应用。</p>"
-                : "<h3>授权没有完成</h3><p>请回到 Personal Hub 重试。</p>"
+                : "<h3>授权没有完成</h3><p>请回到 Nook 重试。</p>"
             let body = Data("<!doctype html><meta charset=utf-8><body style=\"font:15px -apple-system;padding:40px\">\(page)".utf8)
             let header = "HTTP/1.1 \(code != nil ? "200 OK" : "400 Bad Request")\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
             connection.send(content: Data(header.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })

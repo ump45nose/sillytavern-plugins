@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Builds, bundles and signs dist/Personal Hub.app. Usage: scripts/build.sh [--install]
+# Builds, bundles and signs dist/Nook.app. Usage: scripts/build.sh [--install]
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-app="$root/dist/Personal Hub.app"
+app="$root/dist/Nook.app"
 cd "$root"
 
 swift build -c release

@@ -73,7 +73,7 @@ struct PopoverView: View {
                 Button { state.openMainWindow(nil) } label: {
                     HStack(spacing: 6) {
                         LogoMark().frame(width: 14, height: 14)
-                        Text("打开 Personal Hub")
+                        Text("打开 Nook")
                     }
                 }
                 .buttonStyle(.plain)

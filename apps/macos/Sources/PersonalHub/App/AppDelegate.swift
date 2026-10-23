@@ -137,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             w.titlebarAppearsTransparent = true
             w.titleVisibility = .hidden
             w.isReleasedWhenClosed = false
-            w.title = "Personal Hub"
+            w.title = "Nook"
             w.backgroundColor = NSColor(Palette.bg)
             w.contentView = NSHostingView(rootView: TypefaceScope { MainView() }.environment(state))
             w.minSize = NSSize(width: 1100, height: 720)
@@ -260,14 +260,14 @@ enum MainMenu {
         let main = NSMenu()
 
         let app = NSMenu()
-        app.addItem(withTitle: "关于 Personal Hub", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "关于 Nook", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         app.addItem(item("设置…", #selector(AppDelegate.showSettings), ",", target))
         app.addItem(.separator())
-        app.addItem(withTitle: "隐藏 Personal Hub", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "隐藏 Nook", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         app.addItem(.separator())
-        app.addItem(withTitle: "退出 Personal Hub", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        main.addItem(submenu(app, "Personal Hub"))
+        app.addItem(withTitle: "退出 Nook", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(submenu(app, "Nook"))
 
         let edit = NSMenu(title: "编辑")
         edit.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")

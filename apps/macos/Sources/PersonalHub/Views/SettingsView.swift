@@ -226,7 +226,7 @@ private struct AccountSettings: View {
                     Button(state.syncing ? "同步中…" : "立即同步") { agenda.refresh() }.disabled(state.syncing)
                 }
             }
-            SettingRow(title: "Personal Hub 后端", note: state.hub.mode == .hub ? state.hub.baseURL?.host() : "健康、账单等模块的数据来源，在「数据」里连接") {
+            SettingRow(title: "Nook 后端", note: state.hub.mode == .hub ? state.hub.baseURL?.host() : "健康、账单等模块的数据来源，在「数据」里连接") {
                 Chip(text: state.hub.mode == .hub ? "已连接" : "未连接", tone: state.hub.mode == .hub ? .olive : .ochre)
             }
         }
@@ -517,7 +517,7 @@ private struct AboutSettings: View {
     var body: some View {
         VStack(spacing: 12) {
             LogoMark(animated: true).frame(width: 88, height: 88)
-            Text("Personal Hub").font(Typo.serif(24))
+            Text("Nook").font(Typo.serif(24))
             Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · 阶段 5 · 主线与复盘")
                 .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
             Text("汇聚，然后看清方向").font(Typo.serif(14)).foregroundStyle(Palette.ink2)

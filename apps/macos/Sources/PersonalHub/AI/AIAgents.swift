@@ -74,7 +74,7 @@ enum AIAgent: String, CaseIterable, Identifiable {
 
     static func system(now: Date = Date()) -> String {
         """
-        你在 Personal Hub 的 ⌘K 面板里回答用户（\(NSFullUserName())）。现在是 \(HubMCP.stamp(now))。
+        你在 Nook 的 ⌘K 面板里回答用户（\(NSFullUserName())）。现在是 \(HubMCP.stamp(now))。
         数据只来自 personal_hub MCP 工具：先调用 get_overview 或相关工具，再回答。不要读写本机文件，也不要执行命令。
         需要新建任务、日程、Memo 或完成任务时调用 propose_* 工具；它们只会生成待确认项，请提醒用户在面板里确认。
         用简洁的中文 Markdown 回答，金额用美元或原币种，不要编造数据。

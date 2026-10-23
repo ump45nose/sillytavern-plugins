@@ -67,7 +67,7 @@ private struct Sidebar: View {
             HStack(spacing: 10) {
                 LogoMark(animated: true).frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Personal Hub").font(Typo.serif(16, .medium))
+                    Text("Nook").font(Typo.serif(16, .medium))
                     Text("个人信息中心").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3)
                 }
             }
@@ -287,7 +287,7 @@ private struct Toolbar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            (Text("Personal Hub / ").foregroundColor(Palette.ink3) + Text(state.page.title).fontWeight(.semibold).foregroundColor(Palette.ink))
+            (Text("Nook / ").foregroundColor(Palette.ink3) + Text(state.page.title).fontWeight(.semibold).foregroundColor(Palette.ink))
                 .font(Typo.sans(12))
             Spacer()
             Button { withAnimation(Motion.fast) { state.paletteOpen = true } } label: {

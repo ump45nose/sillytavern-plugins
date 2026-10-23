@@ -160,7 +160,7 @@ final class ReviewDesk {
             try JSONEncoder().encode(drafts).write(to: file, options: [.atomic])
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch {
-            NSLog("Personal Hub: review draft save failed")
+            NSLog("Nook: review draft save failed")
         }
     }
 

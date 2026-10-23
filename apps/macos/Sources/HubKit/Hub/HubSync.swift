@@ -122,7 +122,7 @@ public actor HubSync {
             try HubJSON.encoder.encode(data).write(to: file, options: [.atomic])
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch {
-            NSLog("Personal Hub: hub cache save failed")
+            NSLog("Nook: hub cache save failed")
         }
     }
 }

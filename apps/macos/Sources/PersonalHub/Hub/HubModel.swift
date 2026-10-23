@@ -180,7 +180,7 @@ final class HubModel {
             defer { signingIn = nil }
             do {
                 let state = UUID().uuidString, pkce = OAuth.PKCE.make()
-                let receiver = try LoopbackReceiver(state: state, success: "Personal Hub 已登录 hub")
+                let receiver = try LoopbackReceiver(state: state, success: "Nook 已登录 hub")
                 let name = Host.current().localizedName ?? "Mac"
                 let code = try await receiver.code { uri in
                     guard let url = HubSignIn.startURL(base: base, deviceName: name, redirect: uri + "/callback", pkce: pkce, state: state) else { return }
