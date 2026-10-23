@@ -54,7 +54,7 @@ mcp==2.3.0
     # via media-download-mcp (apps/media-download-mcp/pyproject.toml)
 mcp-types==2.3.0
     # via mcp
-media-capabilities==0.3.3
+media-capabilities==0.4.0
     # via media-download-mcp (apps/media-download-mcp/pyproject.toml)
 opentelemetry-api==1.45.0
     # via mcp

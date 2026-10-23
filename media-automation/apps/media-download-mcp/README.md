@@ -19,7 +19,7 @@ python3 -m venv .venv
 
 复制 `config.example.json` 为 `config.json`，配置 MoviePilot 地址和 API 令牌文件。
 HTTP 模式另外需要本服务访问令牌文件；文件权限必须为 `0600`，不提交到 Git。
-MoviePilot 必须安装共享包 0.3.3、MediaCapabilities 0.1.2 并启用公共宿主。
+MoviePilot 必须安装共享包 0.4.0、MediaCapabilities 0.1.3 并启用公共宿主。
 无需安装或更新 FilmWatchlist；站点、浏览器和 115 设置由公共宿主独立管理。
 
 ```sh

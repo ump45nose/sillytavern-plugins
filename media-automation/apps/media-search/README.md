@@ -3,7 +3,7 @@
 独立的聚合查询网页，前端 Vue 3，API 为 Python/FastAPI。支持 M-Team、Mini4K，
 媒体消歧、分站结果、分页、三种策略和指定资源下载。只负责下载提交及回执。
 公共边界、安装前提与下载规则见 [获取能力设计](../../docs/media-acquisition.md)。
-MoviePilot 只需安装共享包 0.3.3 和 MediaCapabilities 0.1.2 并启用公共宿主；
+MoviePilot 只需安装共享包 0.4.0 和 MediaCapabilities 0.1.3 并启用公共宿主；
 无需安装或更新 FilmWatchlist。站点、浏览器和 115 设置均在公共宿主中配置。
 
 Mini4K 使用 NAS 持久浏览器。首次登录或会话失效后，在 NAS 终端运行

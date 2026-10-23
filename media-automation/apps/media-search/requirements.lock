@@ -33,7 +33,7 @@ idna==3.20
     # via
     #   anyio
     #   httpx
-media-capabilities==0.3.3
+media-capabilities==0.4.0
     # via media-search (apps/media-search/pyproject.toml)
 opentelemetry-api==1.45.0
     # via fastapi
