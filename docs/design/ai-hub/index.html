@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>公益 AI 资源中枢 · 可交互设计稿 (Anthropic 风格)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 顶部设计导览条：一键切换 5 大核心体验场景 -->
+  <header class="design-bar">
+    <div class="design-brand">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9.5" stroke="#181715" stroke-width="1.6" stroke-dasharray="14 4"/>
+        <circle cx="12" cy="12" r="4.2" fill="#D97757"/>
+        <circle cx="12" cy="2.5" r="1.8" fill="#181715"/>
+      </svg>
+      <strong>公益 AI 资源中枢</strong>
+      <span class="design-tag">WebUI 可交互设计稿 · Anthropic 视觉风格</span>
+    </div>
+    <span class="muted" style="font-size:12px">少逛后台 · 少做重复维护 · 一眼看清资源、模型选型依据、后台检查与待办异常</span>
+
+    <nav class="scenario-nav" aria-label="核心体验快速切换">
+      <span class="lbl">核心体验直达：</span>
+      <button class="on" data-scen="resources">3 · 查看资源与选模型</button>
+      <button data-scen="equity">4 · 权益利用与限时 Cron</button>
+      <button data-scen="scan">2 · 渠道扫描与任务验证</button>
+      <button data-scen="sources">1 · 来源接入与数据同步</button>
+      <button data-scen="maint">5 · 人工维护 (补Key/合并)</button>
+    </nav>
+  </header>
+
+  <!-- 主应用工作台窗口 -->
+  <div class="app-stage">
+    <div class="app-win">
+
+      <!-- 左侧导航与实时状态栏 -->
+      <aside class="sidebar">
+        <div class="brand-lockup">
+          <div class="brand-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-title">AI Resource Hub</div>
+            <div class="brand-sub">个人公益渠道与模型调度中心</div>
+          </div>
+        </div>
+
+        <!-- 当日优先额度与聚合站点速览 -->
+        <div class="side-pulse" id="sidePulse"></div>
+
+        <div class="nav-group-lbl">核心工作流</div>
+        <nav class="side-nav" id="sideNav"></nav>
+
+        <!-- 底部：三类接入来源实时状态 -->
+        <div class="side-sources" id="sideSources"></div>
+      </aside>
+
+      <!-- 右侧主内容区 -->
+      <main class="main-area">
+
+        <!-- 全局顶栏：快速检索 + 系统正在检查什么 + 快捷触发 -->
+        <div class="top-CommandBar">
+          <label class="search-trigger" for="globalSearchInput">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+              <circle cx="9" cy="9" r="5.8"/><path d="M13.5 13.5L17 17" stroke-linecap="round"/>
+            </svg>
+            <input id="globalSearchInput" type="text" placeholder="搜索站点、网址、账号或模型 (如 opus / gpt-5 / linuxdo)..." />
+            <span class="kbd">⌘K</span>
+          </label>
+
+          <!-- 系统正在检查什么 (直接可见) -->
+          <div class="sys-activity-pill" id="sysActivityPill" title="点击查看渠道扫描与任务验证队列"></div>
+
+          <div class="top-actions">
+            <button class="btn" id="topScanBtn">批量扫描 / 验证</button>
+            <button class="btn pri" id="topSyncBtn">同步来源 (19:26)</button>
+          </div>
+        </div>
+
+        <!-- 哪些问题需要自己处理：异常与人工维护直通条 (无问题时自动收起) -->
+        <section class="triage-strip" id="triageStrip" aria-label="需要你处理的事项"></section>
+
+        <!-- 动态工作流视图容器 -->
+        <div class="view-page" id="viewPage"></div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- 弹窗挂载点（补 Key / 编辑站点 / 合并重复站点） -->
+  <div id="modalRoot"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
