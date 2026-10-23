@@ -2,7 +2,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+
+from .brands import BRANDS
 
 
 class NotFound(Exception): pass
@@ -23,6 +25,9 @@ class Binding(Model):
 
 class Subscription(Model):
     name: Annotated[str, Field(min_length=1, max_length=200)]
+    service_key: Annotated[str, Field(min_length=1, max_length=80)] | None = None
+    theme_color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
+    subscription_url: Annotated[HttpUrl, Field(max_length=2048)] | None = None
     account_label: Annotated[str, Field(max_length=200)] = ""
     category: Literal["ai", "network", "membership", "other"] = "other"
     plan: Annotated[str, Field(max_length=200)] = ""
@@ -37,6 +42,25 @@ class Subscription(Model):
     active: bool = True
     note: Annotated[str, Field(max_length=4000)] = ""
     binding: Binding | None = None
+
+    @field_validator("service_key")
+    @classmethod
+    def known_brand(cls, value):
+        if value is not None and value not in BRANDS:
+            raise ValueError("unknown subscription brand")
+        return value
+
+    @field_validator("theme_color")
+    @classmethod
+    def normalize_color(cls, value):
+        return value.upper() if value is not None else None
+
+    @field_validator("subscription_url")
+    @classmethod
+    def website_without_credentials(cls, value):
+        if value is not None and (value.username is not None or value.password is not None):
+            raise ValueError("subscription URL must not contain credentials")
+        return value
 
     @model_validator(mode="after")
     def valid_binding(self):

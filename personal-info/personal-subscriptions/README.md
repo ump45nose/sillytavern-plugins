@@ -13,11 +13,17 @@ AI 额度复用 Token Monitor 的鉴权 HTTP 接口；网络套餐读取 SubBoos
 - `/api/v1/subscriptions`：GET offset/limit/category（默认50，最多200）；POST 创建。
 - `/api/v1/subscriptions/{id}`：GET 详情；PATCH 部分更新；DELETE 删除。修改和删除需要 `If-Match: <version>`，陈旧版本409，缺版本428。
 - `/api/v1/sources`：最近采集发现的非秘密来源账号，供绑定；查询不访问供应商。
-- `/healthz`：SQLite检查；`/mcp`：七个对应的业务读写工具。
+- `/healthz`：SQLite检查；`/mcp`：八个对应的业务读写工具。
 
 额度只保留最新成功读数；失败更新状态但不覆盖读数。observed_at 为来源实际观察时间，last_success_at 是本服务成功处理时间，两者不能替代。优先采用来源刷新周期／过期标记；没有规则时900秒过期。重绑或停用清理旧额度，采集中删除／重绑不会被旧请求恢复。
 
 HTTP 使用不同的 SUBSCRIPTIONS_API_READ_TOKEN / SUBSCRIPTIONS_API_WRITE_TOKEN（支持 _FILE）；MCP 复用 mcp-platform OAuth 及读写授权。凭据、SQLite、备份及 OAuth 状态不进入 Git。
+
+## 品牌与购买入口
+
+`service_key` 选择独立于额度绑定的品牌；`theme_color` 为可空的 `#RRGGBB`，留空使用品牌默认色；`subscription_url` 是可空的 HTTP(S) 购买／续费页面地址，不接受 URL 用户名和密码。不会抓取用户填入的网址。`icon_url` 是只读的同源 PNG 资源路径。旧记录读取时自动补齐空字段，无数据库迁移。
+
+`GET /api/v1/subscriptions/brands` 和 MCP `list_subscription_brands` 返回内置品牌目录。`GET /api/v1/subscriptions/icons/{service_key}.png` 使用现有 HTTP 读鉴权，Hub 通过设备鉴权转发同一路径。25 个品牌图标随服务打包，无运行时图床依赖；素材来源、散列和许可证在包内 `assets/`。88VIP 使用文字标识，购买入口未确认时保持为空。
 
 ## 运行
 

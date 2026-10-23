@@ -4,13 +4,14 @@ import sqlite3
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from mcp_platform import authorize, create_http_app, create_server
 from pydantic import ValidationError
 
 from .models import Conflict, NotFound, Subscription
 from .settings import Settings
 from .store import Store
+from .brands import BRANDS, ICON_DIRECTORY, catalog
 
 
 def create_app(settings=None, store=None):
@@ -48,6 +49,11 @@ def create_app(settings=None, store=None):
     def list_subscription_sources() -> dict:
         """读取最近采集发现的来源账号，供明确关联；不包含凭据。"""
         return store.catalog()
+
+    @server.tool(auth=read_auth)
+    def list_subscription_brands() -> dict:
+        """列出可选品牌、内置图标、默认主题色及官网；品牌与额度采集互相独立。"""
+        return catalog()
 
     @server.tool(auth=read_auth)
     def summarize_subscriptions() -> dict:
@@ -107,6 +113,15 @@ def create_app(settings=None, store=None):
 
     @app.get("/api/v1/subscriptions/summary", dependencies=[Depends(read)])
     def summary(): return store.summary()
+
+    @app.get("/api/v1/subscriptions/brands", dependencies=[Depends(read)])
+    def brands(): return catalog()
+
+    @app.get("/api/v1/subscriptions/icons/{service_key}.png", dependencies=[Depends(read)])
+    def icon(service_key: str):
+        if service_key not in BRANDS: raise HTTPException(404)
+        return FileResponse(ICON_DIRECTORY / (service_key + ".png"), media_type="image/png",
+                            headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
 
     @app.get("/api/v1/subscriptions/{identifier}", dependencies=[Depends(read)])
     def detail(identifier: str): return store.get(identifier)
