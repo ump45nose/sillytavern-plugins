@@ -216,6 +216,23 @@ enum Subs {
         return nil
     }
 
+    /// Every window, except that network subscriptions show only the ones measured against a limit (traffic, not upload/download).
+    static func windows(_ s: SubsData.Item) -> [SubscriptionQuota.Window] {
+        let all = s.quota?.reading?.windows ?? []
+        guard s.category == "network" else { return all }
+        let limited = all.filter { percent($0) != nil }
+        return limited.isEmpty ? Array(all.prefix(1)) : limited
+    }
+
+    /// "/ 月", "/ 3 月"; "一次性" stands on its own.
+    static func per(_ s: SubsData.Item) -> String? {
+        guard let cycle = s.cycle, let price = s.price, price > 0 else { return nil }
+        if cycle == "one_time" { return "一次性" }
+        let unit = cycles.first { $0.0 == cycle }?.1 ?? cycle
+        let every = s.frequency ?? 1
+        return every > 1 ? "/ \(every) \(unit)" : "/ \(unit)"
+    }
+
     static func quotaTone(_ percent: Double) -> Tone { percent >= 90 ? .rose : percent >= 75 ? .ochre : .clay }
 
     /// The fullest fresh quota window across all subscriptions.
@@ -255,6 +272,9 @@ private struct SubsDetail: View {
     @ViewState private var editing: String?
     @ViewState private var folded: Set<String> = []
     @ViewState private var width: CGFloat = 1000
+    /// Prefill for the new subscription, when it starts from an unbound quota source.
+    @ViewState private var template: SubscriptionRecord?
+    @ViewState private var sources = SubsCatalog.accounts
 
     private var items: [SubsData.Item] { data.items ?? [] }
     private var narrow: Bool { width < 900 }
@@ -280,7 +300,8 @@ private struct SubsDetail: View {
             }
             .padding(.top, 14).padding(.bottom, 4)
             if editing == "" {
-                SubEditCard(item: nil, close: { withAnimation(Motion.spring) { editing = nil } })
+                SubEditCard(item: nil, template: template, close: { withAnimation(Motion.spring) { editing = nil; template = nil } })
+                    .id(template?.binding.map { $0.collector + $0.provider + $0.account } ?? "new")
                     .padding(.vertical, 8)
                     .transition(.opacity.combined(with: .offset(y: -6)))
             }
@@ -307,9 +328,48 @@ private struct SubsDetail: View {
                 Text(items.isEmpty ? "还没有订阅，点「新增订阅」记下第一项" : "这个分类下没有订阅").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3)
                     .frame(maxWidth: .infinity).padding(.vertical, 24)
             }
+            unbound
         }
         .environment(\.subsNarrow, narrow)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .task {
+            await SubsCatalog.load(state)
+            sources = SubsCatalog.accounts
+        }
+    }
+
+    /// Quota-source accounts no subscription is bound to; each opens a new subscription bound to it.
+    @ViewBuilder private var unbound: some View {
+        let bound = Set(items.compactMap { $0.binding.map { $0.collector + ":" + $0.provider + ":" + $0.account } })
+        let open = sources.filter { a in
+            !bound.contains(a.id) && (category == nil || category == (a.collector == "subboost" ? "network" : "ai")) && !unknownOnly
+        }
+        if !open.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("这些额度来源还没对应订阅，点一下新建并绑定").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+                HStack(spacing: 6) {
+                    ForEach(open) { a in
+                        let t = SubEditCard.template(for: a, items: items, brands: SubsCatalog.brands)
+                        Button {
+                            withAnimation(Motion.spring) { template = t; editing = "" }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.ink3)
+                                Text(t.name).font(Typo.sans(11.5, .medium)).foregroundStyle(Palette.ink)
+                                if !t.accountLabel.isEmpty { Text(t.accountLabel).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3) }
+                            }
+                            .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 10).frame(height: 26)
+                            .background(Capsule().strokeBorder(Palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help("新建「\(t.name)」订阅并绑定 \(a.collector == "subboost" ? "SubBoost" : "Token Monitor") · \(a.label)")
+                    }
+                }
+            }
+            .padding(.horizontal, 12).padding(.top, 16)
+        }
     }
 
     @ViewBuilder private func account(_ s: SubsData.Item, nested: Bool) -> some View {
@@ -395,7 +455,7 @@ private struct SubsDetail: View {
             .font(Typo.sans(11)).monospacedDigit()
         }
         .frame(width: 210)
-        let add = Button { withAnimation(Motion.spring) { editing = "" } } label: { Label("新增订阅", systemImage: "plus") }
+        let add = Button { withAnimation(Motion.spring) { template = nil; editing = "" } } label: { Label("新增订阅", systemImage: "plus") }
             .buttonStyle(.hubSecondary)
             .disabled(editing == "")
         return Group {
@@ -492,11 +552,11 @@ private struct ProductRow: View {
                     let v = items.compactMap { $0.priceConverted?[c] }
                     if v.count == items.count { out[c] = v.reduce(0, +) }
                 }
-                SubMoney(main: Subs.money(sum, lead.currency ?? "CNY"),
-                         sub: ([Subs.cycleText(lead)] + [Subs.converted(converted, from: lead.currency)]).compactMap { $0 }.joined(separator: " · "))
+                SubMoney(main: Subs.money(sum, lead.currency ?? "CNY"), per: sum > 0 ? Subs.per(lead) : nil,
+                         sub: lead.cycle == nil ? "周期未设置" : Subs.converted(converted, from: lead.currency))
             } else {
                 let v = items.compactMap { $0.monthlyConverted?[target] }.reduce(0, +)
-                SubMoney(main: Subs.approx(v, target), sub: "每月 · 折合")
+                SubMoney(main: Subs.approx(v, target), per: "/ 月", sub: "折合")
             }
             SubWhen(item: next)
             Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.ink3)
@@ -510,17 +570,25 @@ private struct ProductRow: View {
     }
 }
 
-/// The original amount large, its cycle and the conversion small.
+/// The original amount large with its cycle after it, the conversion small below.
 private struct SubMoney: View {
     var main: String
-    var sub: String
+    var per: String?
+    var sub: String?
     var size: CGFloat = 16
     @Environment(\.subsNarrow) private var narrow
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(main).font(Typo.serif(size)).monospacedDigit().lineLimit(1)
-            Text(sub).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.85)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(main).font(Typo.serif(size)).monospacedDigit().contentTransition(.numericText())
+                if let per { Text(per).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3) }
+            }
+            .lineLimit(1).minimumScaleFactor(0.8)
+            .animation(Motion.spring, value: main)
+            if let sub {
+                Text(sub).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.85)
+            }
         }
         .frame(width: narrow ? 124 : 150, alignment: .trailing)
     }
@@ -630,8 +698,8 @@ private struct SubRow: View {
                     .frame(width: 250, alignment: .leading)
                 quotas.frame(maxWidth: .infinity, alignment: .leading)
             }
-            SubMoney(main: Subs.priceText(item),
-                     sub: ([Subs.cycleText(item)] + [Subs.converted(item.priceConverted, from: item.currency)]).compactMap { $0 }.joined(separator: " · "),
+            SubMoney(main: Subs.priceText(item), per: Subs.per(item),
+                     sub: item.cycle == nil && (item.price ?? 0) > 0 ? "周期未设置" : Subs.converted(item.priceConverted, from: item.currency),
                      size: nested ? 15 : 16)
             SubWhen(item: item)
             Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink3).frame(width: 20)
@@ -643,12 +711,13 @@ private struct SubRow: View {
     }
 
     @ViewBuilder private var quotas: some View {
-        let windows = Array((item.quota?.reading?.windows ?? []).prefix(2))
-        VStack(alignment: .leading, spacing: 7) {
-            if windows.isEmpty, let note = quotaNote {
-                Text(note).font(Typo.sans(12)).foregroundStyle(Palette.ink4).lineLimit(2)
+        let windows = Subs.windows(item)
+        if windows.isEmpty, let note = quotaNote {
+            Text(note).font(Typo.sans(12)).foregroundStyle(Palette.ink4).lineLimit(2)
+        } else {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 7) {
+                ForEach(windows) { w in quota(w) }
             }
-            ForEach(windows) { w in quota(w) }
         }
     }
 
@@ -696,8 +765,8 @@ private struct SubRow: View {
         }()
         let tail = stale ? Subs.ago(w.observedAt) : Subs.resets(w.resetsAt)
         let tone = item.category == "network" && (pct ?? 0) < 75 ? Tone.olive : Subs.quotaTone(pct ?? 0)
-        return HStack(spacing: 10) {
-            Text(w.label).font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1).frame(width: 64, alignment: .leading)
+        return GridRow {
+            Text(w.label).font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1).fixedSize()
             Track(value: pct ?? 0, color: stale ? Palette.ink4 : tone.color, height: 6)
                 .frame(minWidth: 80, maxWidth: 240)
             Text(value + (tail.map { " · " + $0 } ?? "")).font(Typo.sans(12, .medium)).foregroundStyle(stale ? Palette.ink4 : Palette.ink)
@@ -726,12 +795,13 @@ struct SubEditCard: View {
     @ViewState private var busy = false
     @ViewState private var confirmDelete = false
 
-    init(item: SubsData.Item?, category: String = "other", close: @escaping () -> Void) {
+    /// `template` prefills a new subscription.
+    init(item: SubsData.Item?, category: String = "other", template: SubscriptionRecord? = nil, close: @escaping () -> Void) {
         self.item = item
         self.category = category
         self.close = close
-        var r = item.map(Self.record) ?? SubscriptionRecord()
-        if item == nil { r.category = category }
+        var r = item.map(Self.record) ?? template ?? SubscriptionRecord()
+        if item == nil, template == nil { r.category = category }
         _draft = ViewState(initialValue: r)
         _initial = ViewState(initialValue: r)
     }
@@ -1089,6 +1159,26 @@ struct SubEditCard: View {
         r.binding = s.binding
         r.quota = s.quota
         r.note = s.note ?? ""
+        return r
+    }
+
+    /// A new subscription bound to `account`: the brand, category and billing cycle of another subscription from the
+    /// same provider when there is one, so the two show as accounts of one product.
+    static func template(for account: SubscriptionSourceCatalog.Source.Account, items: [SubsData.Item],
+                         brands: [SubscriptionBrandCatalog.Brand]) -> SubscriptionRecord {
+        var r = SubscriptionRecord()
+        if let sibling = items.first(where: { $0.binding?.collector == account.collector && $0.binding?.provider == account.provider }) {
+            let s = record(sibling)
+            r.name = s.name; r.serviceKey = s.serviceKey; r.iconUrl = s.iconUrl; r.themeColor = s.themeColor
+            r.subscriptionUrl = s.subscriptionUrl; r.category = s.category; r.currency = s.currency; r.cycle = s.cycle; r.frequency = s.frequency
+        } else {
+            let brand = brands.first { $0.serviceKey == account.provider }
+            r.name = brand?.name ?? account.provider.capitalized
+            r.serviceKey = brand?.serviceKey; r.iconUrl = brand?.iconUrl; r.themeColor = brand?.themeColor; r.subscriptionUrl = brand?.subscriptionUrl
+            r.category = account.collector == "subboost" ? "network" : "ai"
+        }
+        r.accountLabel = account.accountEmail.flatMap { $0.isEmpty ? nil : $0 } ?? account.profile ?? ""
+        r.binding = account.binding
         return r
     }
 }

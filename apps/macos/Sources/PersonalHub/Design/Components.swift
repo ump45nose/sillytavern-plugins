@@ -330,12 +330,18 @@ struct Segmented<T: Hashable>: View {
     @Binding var selection: T
     var small = false
     @Namespace private var ns
+    /// What the pill shows; `@AppStorage` bindings drop the animation transaction, so the pill moves on its own.
+    @ViewState private var shown: T?
 
     var body: some View {
+        let current = shown ?? selection
         HStack(spacing: 2) {
             ForEach(options, id: \.0) { value, label in
-                let on = value == selection
-                Button { withAnimation(Motion.spring) { selection = value } } label: {
+                let on = value == current
+                Button {
+                    withAnimation(Motion.spring) { shown = value }
+                    selection = value
+                } label: {
                     Text(label).font(Typo.sans(small ? 11 : 12.5, on ? .semibold : .regular))
                         .foregroundStyle(on ? Palette.ink : Palette.ink3)
                         .lineLimit(1).fixedSize(horizontal: small, vertical: false)
@@ -354,6 +360,9 @@ struct Segmented<T: Hashable>: View {
         }
         .padding(small ? 2 : 3)
         .background(RoundedRectangle(cornerRadius: small ? 7 : 10).fill(Palette.sunk))
+        .onChange(of: selection) { _, value in
+            if value != shown { withAnimation(Motion.spring) { shown = value } }
+        }
     }
 }
 

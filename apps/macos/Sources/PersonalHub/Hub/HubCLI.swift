@@ -156,6 +156,43 @@ enum HubCLI {
         return 0
     }
 
+    /// `--hub-subs-quota`: each subscription's binding and quota window labels, then the bindable source accounts.
+    /// Accounts show only their email domain.
+    static func subsQuota() async -> Int32 {
+        guard let credential = try? CredentialStore.load().hub else {
+            print("FAIL credentials: hub not connected")
+            return 2
+        }
+        let api = HubAPI(transport: URLSessionTransport(), credential: credential)
+        func domain(_ s: String?) -> String { s.flatMap { t in t.firstIndex(of: "@").map { String(t[$0...]) } } ?? "-" }
+        do {
+            let records = try await api.subscriptionRecords()
+            for r in records.sorted(by: { ($0.category, $0.name) < ($1.category, $1.name) }) {
+                let b = r.binding.map { "\($0.collector)/\($0.provider) \(domain($0.accountEmail))" } ?? "unbound"
+                func age(_ d: Date?) -> String { d.map { "\(Int(Date().timeIntervalSince($0) / 3600))h" } ?? "-" }
+                let q = r.quota.map {
+                    "\($0.status)\($0.stale ? " stale" : "")\($0.error == nil ? "" : " error") · read \(age($0.reading?.observedAt)) ago · success \(age($0.lastSuccessAt)) ago"
+                } ?? "no quota"
+                print("\(r.category) · \(r.name) · account \(domain(r.accountLabel)) · \(b) · \(q)")
+                for w in r.quota?.reading?.windows ?? [] {
+                    let parts = [w.usedPercent.map { _ in "pct" }, w.used.map { _ in "used" }, w.limit.map { _ in "limit" }, w.remaining.map { _ in "left" }].compactMap { $0 }
+                    print("    \(w.id) | \(w.label) | \(w.unit ?? "-") | \(parts.joined(separator: ","))")
+                }
+            }
+            let bound = Set(records.compactMap { $0.binding.map { "\($0.collector):\($0.provider):\($0.account)" } })
+            for s in try await api.subscriptionSources().sources {
+                for a in s.accounts { print("source \(a.collector)/\(a.provider) \(domain(a.accountEmail)) \(bound.contains(a.id) ? "bound" : "unbound")") }
+            }
+            return 0
+        } catch let e as HubError {
+            print("FAIL \(describe(e))")
+            return 1
+        } catch {
+            print("FAIL \(type(of: error))")
+            return 1
+        }
+    }
+
     /// `--hub-smoke`: reads every endpoint the app uses with the stored credential.
     static func smoke() async -> Int32 {
         guard let credential = try? CredentialStore.load().hub else {

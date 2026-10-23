@@ -58,6 +58,11 @@ if CommandLine.arguments.contains("--hub-smoke") {
     Task.detached { exit(await HubCLI.smoke()) }
     app.run()
 }
+if CommandLine.arguments.contains("--hub-subs-quota") {
+    app.setActivationPolicy(.prohibited)
+    Task.detached { exit(await HubCLI.subsQuota()) }
+    app.run()
+}
 // `PersonalHub --hub-probe PATH [k=v ...]` prints the response's key paths and counts, never values.
 if let i = CommandLine.arguments.firstIndex(of: "--hub-probe"), CommandLine.arguments.indices.contains(i + 1) {
     app.setActivationPolicy(.prohibited)

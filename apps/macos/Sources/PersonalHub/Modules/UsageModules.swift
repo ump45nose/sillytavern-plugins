@@ -907,14 +907,11 @@ struct NetModule: View {
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
                     ArcGauge(value: p.pct, color: usageTone(p.pct).color)
-                    VStack(spacing: 0) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            if let used = p.used { CountUp(value: used).font(Typo.serif(24)) } else { Text("—").font(Typo.serif(24)) }
-                            Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-                        }
-                        Text("已用").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3)
-                    }
+                    Group { if let used = p.used { CountUp(value: used) } else { Text("—") } }
+                        .font(Typo.serif(26)).monospacedDigit().padding(.bottom, -3)
                 }
+                Text("已用 / \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
+                    .padding(.top, 6)
                 Spacer(minLength: 4)
                 Text("\(p.name)\(p.remaining.map { " · 剩 \(HubFormat.gb($0 * 1_073_741_824, 0)) GB" } ?? "")\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1)
