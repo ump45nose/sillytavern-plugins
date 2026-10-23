@@ -1,0 +1,59 @@
+{
+  "snapshot_date": "2026-10-14",
+  "source_revision": "2197eccc7f9c4678325aa72551ed3967087ba258",
+  "files": [
+    {
+      "source": "AGENTS.md",
+      "stored_at": "root/AGENTS.md",
+      "sha256": "498bca14dc13673907ba3a8b91bece6ababffe306846f7ea1145b823351b8062",
+      "source_sha256": "b37b551fcb6e8af12cb7b49d9d4cd82116ff7cc8101b76809a4683752a907d41",
+      "redacted": true
+    },
+    {
+      "source": "README.md",
+      "stored_at": "root/README.md",
+      "sha256": "4cc6e7ed9f258ce54141fed2d7f3673d421e2d34cda69c42d32259bc20b48693",
+      "source_sha256": "4cc6e7ed9f258ce54141fed2d7f3673d421e2d34cda69c42d32259bc20b48693",
+      "redacted": false
+    },
+    {
+      "source": ".gitignore",
+      "stored_at": "root/.gitignore",
+      "sha256": "67b6a7a92c6877d0cb9939fd7b351d3061555a32d700c8509c1e1de8cef9fcbb",
+      "source_sha256": "67b6a7a92c6877d0cb9939fd7b351d3061555a32d700c8509c1e1de8cef9fcbb",
+      "redacted": false
+    },
+    {
+      "source": ".gitmodules",
+      "stored_at": "root/.gitmodules",
+      "sha256": "e99754aec93708a1c8f348a342d3c08e1c18d541eb1216966627f6c5af93721b",
+      "source_sha256": "6a21f31bcfbba895469552ccc2157851f4778ecfd9336b575e8396631e348be4",
+      "redacted": true
+    },
+    {
+      "source": ".codex/environments/environment.toml",
+      "stored_at": "root/.codex/environments/environment.toml",
+      "sha256": "d00a90e34a9d8da5d6d650f51397b0d7e6329687956e6c65e8b01f848df8bd48",
+      "source_sha256": "d00a90e34a9d8da5d6d650f51397b0d7e6329687956e6c65e8b01f848df8bd48",
+      "redacted": false
+    },
+    {
+      "source": "scripts/max-git.py",
+      "stored_at": "root/scripts/max-git.py",
+      "sha256": "07dc8a6d1cc8da741f4f40f0b0cd3795d3cfe90bd74b2efacac3b726c1f251cc",
+      "source_sha256": "07dc8a6d1cc8da741f4f40f0b0cd3795d3cfe90bd74b2efacac3b726c1f251cc",
+      "redacted": false
+    },
+    {
+      "source": "tests/test_max_git.py",
+      "stored_at": "root/tests/test_max_git.py",
+      "sha256": "f785244d5bd008b4a555bae467280409ac937b634eefff1479c2e8034582e2ff",
+      "source_sha256": "f785244d5bd008b4a555bae467280409ac937b634eefff1479c2e8034582e2ff",
+      "redacted": false
+    }
+  ],
+  "notes": [
+    "Only workspace configuration and tooling are archived; child repository source and Git metadata are excluded.",
+    "Private Git and Jenkins hosts are replaced with example.invalid placeholders."
+  ]
+}

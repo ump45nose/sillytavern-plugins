@@ -1,0 +1,33 @@
+version = 1
+name = "Max 跨仓开发"
+
+[setup]
+script = "python3 scripts/max-git.py setup"
+
+[cleanup]
+script = "python3 scripts/max-git.py cleanup"
+
+[[actions]]
+name = "跨仓状态"
+icon = "tool"
+command = "python3 scripts/max-git.py status"
+
+[[actions]]
+name = "跨仓差异"
+icon = "debug"
+command = "python3 scripts/max-git.py diff"
+
+[[actions]]
+name = "提交任务改动"
+icon = "tool"
+command = "printf '提交说明: '; IFS= read -r max_commit_message; python3 scripts/max-git.py commit -m \"$max_commit_message\""
+
+[[actions]]
+name = "合并任务"
+icon = "tool"
+command = "python3 scripts/max-git.py merge"
+
+[[actions]]
+name = "清理已合并任务"
+icon = "tool"
+command = "python3 scripts/max-git.py clean"

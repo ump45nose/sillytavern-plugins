@@ -29,3 +29,9 @@ Git 历史、原仓库索引与 worktree 元数据保留在 NAS 本机公共 Git
 `face-baseline` 和 `hermes-authoring` 当前没有 GitHub 远端，依赖本机保存的源码及原 Git。迁到其他主机时按实际来源更新 `projects.json`。秘密与正式部署入口继续在仓库外维护。
 
 更新本配置时，从当前聚合根同步对应文件并更新 `snapshot.json`，然后只拆分和推送 `app-configs` 项目。
+
+## 规则分发与迁移时机
+
+此处保存的是 fn 聚合仓库的环境快照。分发通用规则时，保留项目地图、subtree/worktree 约束、正式部署入口和数据边界；不将本快照整份覆盖到其他环境。
+
+主工作区按后续开发任务需要再迁移。迁移某项目时，检查已提交与未提交修改、原项目来源、旧 Git 归档和联调依赖；普通 clone 不包含本机 `project-origins` 和已有 worktree 元数据。

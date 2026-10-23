@@ -1,0 +1,9 @@
+.DS_Store
+/repomix-arch.xml
+/.worktrees/
+
+# Existing worktrees share Git history with the registered projects.
+/mermaid-upstream-2026-10-10/
+/official-toolkit-upstream-2026-10-10/
+/orca-upstream-2026-10-10/
+/sandking-upstream-2026-10-10/

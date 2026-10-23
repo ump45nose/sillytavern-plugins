@@ -1,0 +1,27 @@
+[submodule "aide-detective"]
+	path = aide-detective
+	url = https://git.example.invalid/your-group/aide-detective.git
+[submodule "beluga"]
+	path = beluga
+	url = https://git.example.invalid/your-group/beluga.git
+[submodule "magic-code-server"]
+	path = magic-code-server
+	url = https://git.example.invalid/your-group/magic-code-server.git
+[submodule "magic-link"]
+	path = magic-link
+	url = https://git.example.invalid/your-group/magic-link.git
+[submodule "magic-workspace"]
+	path = magic-workspace
+	url = https://git.example.invalid/your-group/magic-workspace.git
+[submodule "mermaid"]
+	path = mermaid
+	url = https://git.example.invalid/your-group/mermaid.git
+[submodule "official-toolkit"]
+	path = official-toolkit
+	url = https://git.example.invalid/your-group/official-toolkit.git
+[submodule "orca"]
+	path = orca
+	url = https://git.example.invalid/your-group/orca.git
+[submodule "sandking"]
+	path = sandking
+	url = https://git.example.invalid/your-group/sandking.git
