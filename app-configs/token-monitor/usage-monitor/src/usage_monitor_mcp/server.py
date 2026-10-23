@@ -11,6 +11,7 @@ from fastmcp.exceptions import ToolError
 from . import __version__
 from .config import Settings
 from .daily_events import DailyUsageProducer
+from .http_read import attach_read_routes
 from .reports import ReportStore, build_report, report_page, summary
 
 
@@ -136,6 +137,7 @@ def build_application(settings=None, runtime_config=None, extra_producers=None):
             except PermissionError:
                 raise ToolError("forbidden") from None
 
+    attach_read_routes(server, settings)
     return create_http_app(server, config, events=events)
 
 

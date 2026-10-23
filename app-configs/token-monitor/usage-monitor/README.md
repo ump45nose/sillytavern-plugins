@@ -59,7 +59,7 @@ mcp.app.yaml 是部署唯一清单，明确使用 deployment_mode: existing。�
 
 ## 构建和验证
 
-当前固定公共运行时 mcp-platform 0.1.5（提交 3084004d1011687f1b029003dcd073c078735b68），包含 MCP 2.0 必需的 cache 字段修复；钉钉事件包保持 0.1.1。公共运行时升级时同时更新业务 wheel 的精确依赖，再校验 pip check。
+当前固定公共运行时 mcp-platform 0.1.6（提交 dea309a5d83b6365a57937bc6e11affe692bfcaf），包含 MCP 2.0 必需的 cache 字段修复；钉钉事件包保持 0.1.1。公共运行时升级时同时更新业务 wheel 的精确依赖，再校验 pip check。
 
 生产使用 Python 3.12。由宿主机取得并构建固定提交的 mcp-platform、usage-monitor-mcp、dingtalk-events 三个 wheel；容器构建使用本项目 Dockerfile，从已有、已核验的认证运行时镜像离线安装。这样私有 Git 依赖在宿主机完成，不进入镜像内的依赖安装步骤。
 
@@ -75,3 +75,18 @@ build-record.json 与构建目录不加入 Git。每次构建目录必须是新�
 部署后核对健康、匿名 initialize 拒绝、OAuth 发现、授权工具列表、MCP Events 发现及真实订阅状态。入队、服务器投递成功与客户端显示通知是三个状态，不能互相替代。
 
 升级只更换本服务镜像并保留 /data、OAuth 密钥与签名配置。回滚只恢复前一个镜像，不回退报告、事件状态或上游业务数据。
+
+
+## Hub HTTP 只读接入
+
+`USAGE_HTTP_READ_TOKEN_FILE` 指向仓库外 `/run/secrets/hub-http-read-token`。
+固定来源所属人的独立随机 Bearer 只读令牌只用于 `/api/v1/net`、`/api/v1/limits`；
+缺省未配置返回 503，匿名或错误令牌返回 401。MCP OAuth、事件生产和数据归属保持。
+
+`net` 返回 `{data: {pools, today, month_bytes, hourly}, updated_at, gaps}`。SQLite
+使用原只读挂载、同一事务，按本地小时在库内聚合；缺失和未来小时返回 null。
+流量库没有订阅配额/有效期，Mihomo 本次 21 个 provider 也都无 subscriptionInfo。
+因此 `pools` 为 null，不能把机场/机房等路由分类当成订阅，或以本月流量冒充套餐已用量。
+`limits` 复用原已鉴权 Token Monitor API 与额度去重/过期逻辑，不暴露来源凭据。
+Hub 自己读取 stats 时可直接使用其额度，避免同时再请求 limits 导致重复 I/O。
+HTTP 不生成报告、不发布事件、不写业务数据库，不自动重试写操作。
