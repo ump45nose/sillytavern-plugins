@@ -2,7 +2,7 @@
 
 独立订阅业务：采集 → SQLite → HTTP / MCP。管理同一服务的多个账号、个人／公司付款和免费资源；Hub 是消费者，不保存订阅主记录。
 
-AI 额度复用 Token Monitor 的鉴权 HTTP 接口；网络套餐读取 SubBoost 的所有者限定只读元数据接口，逐个原始来源提供总量／上下行／到期。缺失字段保持未知，本地 ShellCrash 流量不参与计算。普通会员只管理资料与周期。Muse、Manus、Hark 自动采集暂缓，不安装 CodexBar。
+AI 额度复用 Token Monitor 的鉴权 HTTP 接口；网络套餐读取 SubBoost 的所有者限定只读元数据接口，逐个原始来源提供总量／上下行／到期。缺失字段保持未知，本地 ShellCrash 流量不参与计算。网络订阅也可直接填入机场／Clash 订阅链接读取额度响应头。普通会员只管理资料与周期。Muse、Manus、Hark 自动采集暂缓，不安装 CodexBar。
 
 ## 数据与接口
 
@@ -37,3 +37,13 @@ personal-subscriptions backup --destination /private/subscriptions.sqlite
 ```
 
 采集由 NAS systemd timer 每5分钟调用，文件锁阻止重叠。HTTP/MCP 与采集共用同一数据库和业务模型，无内部后台调度。备份通过 SQLite backup API，另备份私有配置及 OAuth 状态；恢复须停止写入。
+
+## 订阅链接额度
+
+网络记录在原创建／PATCH body 增加可选 `quota_url`（HTTP(S)），有值时优先于原 SubBoost 绑定；省略保留、null 清除并恢复原有绑定。`subscription_url` 仍是购买／续费页面。链接仅保存在本服务私有 SQLite，不在详情、列表、汇总、MCP 返回或日志回显；输出新增 `quota_url_configured` 和 `quota_source`（subscription_url / 原 collector / null）。旧客户端编辑时省略 quota_url 即可保留。
+
+POST `/api/v1/subscriptions/quota-preview`（写令牌）接受 `{"quota_url":"https://supplier.example/sub?token=..."}`，仅请求响应头并返回 `{status, stale, error, reading}`；不保存链接和节点内容、不创建记录。Hub 设备接口为 POST `/api/v1/net/quota-preview`。成功 reading 沿用原额度结构：traffic 窗口以 bytes 返回 used/limit/remaining/used_percent，另有 upload、download 窗口及 expires_at。缺字段保持 null，不从节点内容估算。无 Subscription-Userinfo 时 error=quota_header_missing；网络错误、超时、无效头、受限地址等返回脱敏错误码。
+
+保存后由既有每5分钟采集任务更新，无新增定时任务；同次采集的相同链接只读取一次，失败保留上次成功读数。换链接、重绑、停用清除旧读数，慢请求不能覆盖后续编辑。GET 列表／汇总仍不联网。Hub `/api/v1/modules/net` 的 pools 继续提供 total_bytes、used_bytes、expires_on，另加 remaining_bytes；读数不可用时数值为空。
+
+采集使用流式 GET，只读 `Subscription-Userinfo` 响应头，不读取订阅正文，不转发 Hub／来源凭据或浏览器 Cookie。限制重定向并逐跳校验、固定 DNS 结果同时保留 Host/TLS 校验，禁止跳到私有、环回与链路本地地址；仅私有 collectors 配置中已登记的 SubBoost 同源地址可使用内网。

@@ -7,6 +7,7 @@ import httpx
 
 from .models import Reading, Window
 from .exchange import refresh
+from .network_quota import QuotaError, fetch_userinfo
 
 
 class CollectionError(Exception): pass
@@ -74,6 +75,16 @@ def network_reading(binding, raw):
                    stale=bool(row.get("stale")), valid_for_seconds=row.get("valid_for_seconds", 900))
 
 
+def quota_reading(url, config):
+    try:
+        row = fetch_userinfo(url, trusted_base=(config.get('subboost') or {}).get('url'))
+        return network_reading({'account': 'subscription_url'}, {'items': [row]})
+    except QuotaError as exc:
+        raise CollectionError(str(exc)) from None
+    except (ValueError, TypeError, OverflowError, OSError):
+        raise CollectionError('invalid_quota_header') from None
+
+
 def collect(store, config):
     lock_path = Path(store.database + ".collect.lock")
     with lock_path.open("a") as lock:
@@ -110,11 +121,21 @@ def collect(store, config):
         summary = {"updated": 0, "failed": 0, "sources": {s: errors.get(s, "ok") for s in ("token_monitor", "subboost")}}
         summary["exchange_rates"] = refresh(store)
         offset = 0
+        direct = {}
         while True:
-            page = store.list(offset, 200)
+            page = store.list(offset, 200, include_private=True)
             for item in page["items"]:
                 binding = item["binding"]
-                if not binding or not item["active"]: continue
+                quota_url = item['quota_url']
+                if not item["active"] or not (binding or quota_url): continue
+                if quota_url:
+                    if quota_url not in direct:
+                        try: direct[quota_url] = (quota_reading(quota_url, config), None)
+                        except CollectionError as exc: direct[quota_url] = (None, str(exc))
+                    reading, error = direct[quota_url]
+                    if store.observe(item['id'], binding, reading, error, quota_url=quota_url):
+                        summary['failed' if error else 'updated'] += 1
+                    continue
                 reading, error = None, errors.get(binding["collector"])
                 if error is None:
                     try:

@@ -1,17 +1,22 @@
 import re
 
+import httpx
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from .configuration import json_body
 
 
 def register(app, source, settings, manager, authenticated):
-    async def proxy(method, path, body=None, version=None):
+    async def proxy(method, path, body=None, version=None, timeout=None):
         write = method != 'GET'
         if not (settings.subscriptions_write_token if write else settings.subscriptions_token): raise HTTPException(503)
         options = {'json': body} if body is not None else {}
         if version is not None: options['headers'] = {'If-Match': version}
-        response = await source.request(method, path, write=write, **options)
+        if timeout is not None: options['timeout'] = timeout
+        try:
+            response = await source.request(method, path, write=write, **options)
+        except httpx.RequestError:
+            raise HTTPException(502) from None
         if response.status_code >= 400:
             raise HTTPException(response.status_code if response.status_code in (400,404,409,413,422,428,429) else 502)
         if write: await manager.invalidate('subscriptions')
@@ -19,6 +24,10 @@ def register(app, source, settings, manager, authenticated):
 
     @app.get('/api/v1/subscriptions/sources', dependencies=[Depends(authenticated)])
     async def sources(): return await proxy('GET', 'sources')
+
+    @app.post('/api/v1/net/quota-preview', dependencies=[Depends(authenticated)])
+    async def preview_quota(request: Request):
+        return await proxy('POST', 'subscriptions/quota-preview', await json_body(request), timeout=45)
 
     @app.get('/api/v1/subscriptions/brands', dependencies=[Depends(authenticated)])
     async def brands(): return await proxy('GET', 'subscriptions/brands')

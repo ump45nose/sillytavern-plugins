@@ -379,3 +379,7 @@ See `docs/plans/2026-10-21-hub-v2-execution.md` at the repository root for evide
 GET /api/v1/subscriptions/records、GET /api/v1/subscriptions/sources；POST /api/v1/subscriptions/records；GET/PATCH/DELETE /api/v1/subscriptions/records/{id}。修改／删除透传 If-Match 版本，冲突409。旧 PUT /api/v1/subscriptions 及 GET/PUT /api/v1/net/plans 返回410。没有 Hub 订阅业务库或整表替换写入。原生客户端的订阅／网络入口统一使用来源单条操作。
 
 订阅品牌、主题色和购买入口由独立订阅服务维护。Hub 透传 `service_key`、`theme_color`、`subscription_url`、`icon_url`，设备鉴权下的 `/api/v1/subscriptions/brands` 与 `/api/v1/subscriptions/icons/{service_key}.png` 代理固定来源，不抓取任意外链。图标为 PNG，使用私有缓存。
+
+## 网络订阅链接额度
+
+POST `/api/v1/net/quota-preview` 接受 `{quota_url}`，经设备认证和订阅来源写令牌代理到独立服务，返回标准 quota `{status, stale, error, reading}`，不持久化输入或读取节点正文。创建／PATCH `/api/v1/subscriptions/records` 可传网络记录的 `quota_url`；省略保留、null 清除。详情与汇总只返回 `quota_url_configured` / `quota_source`，完整链接不回显。保存后既有每5分钟采集刷新，网络 pools 返回供应商 total_bytes / used_bytes / remaining_bytes / expires_on，继续与本地路由器统计分离。客户端可先预览，再保存链接；不会自动保存预览或创建业务测试记录。

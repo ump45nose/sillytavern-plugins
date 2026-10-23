@@ -10,6 +10,7 @@ def assemble(source, subscriptions, now):
         pools.append({'id': item['id'], 'name': item['name'],
             'total_bytes': window.get('limit') if valid else None,
             'used_bytes': window.get('used') if valid else None,
+            'remaining_bytes': window.get('remaining') if valid else None,
             'period_start': None, 'period_end': None,
             'expires_on': (reading.get('expires_at') or item.get('expires_on') or '')[:10] or None,
             'source': 'supplier', 'status': quota.get('status', 'unknown'), 'observed_at': reading.get('observed_at')})
