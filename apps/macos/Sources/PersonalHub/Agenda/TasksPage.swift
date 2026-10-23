@@ -446,12 +446,13 @@ private struct ColumnBoard<Content: View>: View {
 
     var body: some View {
         GeometryReader { g in
-            HubScroll(.horizontal) {
+            let height = max(g.size.height - HubScroller.barHeight, 120)
+            HubScroll(.horizontal, bar: true) {
                 HStack(alignment: .top, spacing: 14) { content }
                     .padding(.bottom, 2)
+                    .frame(height: height, alignment: .top)
             }
-            .scrollIndicators(.never)
-            .environment(\.columnHeight, g.size.height - 2)
+            .environment(\.columnHeight, height - 2)
         }
     }
 }
@@ -561,23 +562,31 @@ struct DaySchedule: View {
     @Environment(AppState.self) private var state
 
     private enum Stop: Identifiable {
-        case event(AgendaEvent), now(Date)
+        case event(AgendaEvent), task(AgendaTask, Date), now(Date)
         var id: String {
             switch self {
             case .event(let e): e.id
+            case .task(let t, _): "task:" + t.id
             case .now: "now"
+            }
+        }
+        var start: Date {
+            switch self {
+            case .event(let e): e.start
+            case .task(_, let at): at
+            case .now(let at): at
             }
         }
     }
 
     var body: some View {
         let agenda = state.agenda, now = agenda.now
-        let events = agenda.view.events(on: day), timed = events.filter { !$0.allDay }, allDay = events.filter(\.allDay)
+        let events = agenda.view.events(on: day), allDay = events.filter(\.allDay)
+        let tasks = agenda.view.timedTasks(on: day)
+        let timed = (events.filter { !$0.allDay }.map(Stop.event) + tasks.map { Stop.task($0.task, $0.at) }).sorted { $0.start < $1.start }
         let isToday = Calendar.hub.isDate(day, inSameDayAs: now)
         let split = timed.firstIndex { $0.start > now } ?? timed.count
-        let stops: [Stop] = isToday && !timed.isEmpty
-            ? timed.prefix(split).map(Stop.event) + [.now(now)] + timed.dropFirst(split).map(Stop.event)
-            : timed.map(Stop.event)
+        let stops: [Stop] = isToday && !timed.isEmpty ? Array(timed.prefix(split)) + [.now(now)] + timed.dropFirst(split) : timed
         VStack(alignment: .leading, spacing: 0) {
             if !allDay.isEmpty {
                 Flow(spacing: 6) { ForEach(allDay) { EventPill(event: $0) } }.padding(.bottom, 12)
@@ -594,10 +603,37 @@ struct DaySchedule: View {
                                   timeColor: isToday && e.end <= now ? Palette.ink4 : Palette.ink3, timeWidth: 40, timeSize: 14, gap: 16) {
                         EventLine(event: e, past: isToday && e.end <= now)
                     }
+                case .task(let t, let at):
+                    let past = t.completed || (isToday && at <= now)
+                    TimelineEntry(time: Agenda.clock(at), first: i == 0, last: i == stops.count - 1, dot: Tone.olive.color.opacity(0.8),
+                                  timeColor: past ? Palette.ink4 : Palette.ink3, timeWidth: 40, timeSize: 14, gap: 16) {
+                        ScheduledTask(task: t)
+                    }
                 }
             }
-            if events.isEmpty {
+            if events.isEmpty && tasks.isEmpty {
                 Text(isToday ? "今天没有日程" : "没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
+            }
+        }
+    }
+}
+
+/// A timed task inside the schedule: tick it off where it stands.
+private struct ScheduledTask: View {
+    var task: AgendaTask
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button { withAnimation(Motion.spring) { state.agenda.toggle(task) } } label: {
+                Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13)).foregroundStyle(task.completed ? Tone.olive.color : Palette.ink3)
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title).font(Typo.sans(13)).foregroundStyle(task.completed ? Palette.ink3 : Palette.ink)
+                    .strikethrough(task.completed, color: Palette.ink4).lineLimit(2)
+                Text("任务 · " + task.listTitle).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
             }
         }
     }
@@ -611,12 +647,12 @@ private struct ScheduleColumn: View {
 
     var body: some View {
         let agenda = state.agenda, now = agenda.now
-        let events = agenda.view.events(on: day)
+        let count = agenda.view.events(on: day).count + agenda.view.timedTasks(on: day).count
         let isToday = Calendar.hub.isDate(day, inSameDayAs: now)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(isToday ? "今天的日程" : "日程").font(Typo.sans(13.5, .semibold))
-                if !events.isEmpty { Text("\(events.count)").font(Typo.sans(12)).foregroundStyle(Palette.ink4).monospacedDigit() }
+                if count > 0 { Text("\(count)").font(Typo.sans(12)).foregroundStyle(Palette.ink4).monospacedDigit() }
                 Spacer()
                 if agenda.writableCalendar != nil {
                     Button { newEvent = true } label: {

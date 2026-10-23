@@ -39,6 +39,22 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     #expect(title(at(20, 21)) == "3")
 }
 
+@Test func timedTasksJoinTheSchedule() {
+    let now = at(20, 9)
+    let v = Agenda.build(AgendaSample.store(now: now, calendar: cal), now: now, calendar: cal)
+    let timed = v.timedTasks(on: now, calendar: cal)
+    #expect(timed.map(\.task.title) == ["给妈妈打电话"])
+    #expect(timed.first?.at == at(20, 18, 30))
+    func scheduled(_ notes: String?, due: Date? = at(20, 0)) -> Date? {
+        AgendaTask(id: "t", listID: "l", listTitle: "", title: "t", notes: notes, due: due, completed: false,
+                   parentID: nil, subtasks: [], link: nil, overdueDays: 0).scheduled(calendar: cal)
+    }
+    #expect(scheduled("备注\n时间 9：05") == at(20, 9, 5))
+    #expect(scheduled("时间 24:00") == nil)
+    #expect(scheduled("会议时间 10:00") == nil)
+    #expect(scheduled("时间 10:00", due: nil) == nil)
+}
+
 @Test func subtasksNestUnderParents() {
     var s = AgendaStore()
     s.lists = [TaskListRecord(id: "l", title: "工作")]

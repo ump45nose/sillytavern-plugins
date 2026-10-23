@@ -132,6 +132,11 @@ public struct HubAPI: Sendable {
         _ = try await send(request("/api/v1/memos/\(path(id))", method: "DELETE"))
     }
 
+    /// Raw GET for the shape probe; callers must not print the body.
+    public func probe(_ path: String, query: [String: String] = [:]) async throws -> Data {
+        try await get(path, query: query)
+    }
+
     /// Read-only proxy for a memo's own attachment.
     public func memoAttachment(memo id: String, name: String) async throws -> Data {
         let memo = id.split(separator: "/").last.map(String.init) ?? id

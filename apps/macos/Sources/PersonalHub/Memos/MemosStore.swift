@@ -28,6 +28,8 @@ final class MemosStore {
     private(set) var activityPartial = false
     var query = ""
     @ObservationIgnored private var generation = 0
+    /// hub answered `has_attachments` with 501; filter on the client until the next launch.
+    @ObservationIgnored private var attachmentsLocal = false
 
     private(set) var thumbnails: [String: NSImage] = [:]
     private(set) var missing: Set<String> = []
@@ -160,11 +162,31 @@ final class MemosStore {
         var errorDescription: String? { message }
     }
 
+    /// One page as the current view sees it. While hub answers `has_attachments` with 501, the attachments view walks
+    /// the plain list instead, a few pages at a time, until it has enough matches to show.
     private func fetch(_ api: HubAPI, token: String?) async throws -> MemoPage? {
-        try await api.memos(pageToken: token, tag: tag, query: query.trimmingCharacters(in: .whitespaces),
-                            pinned: filter == .pinned, hasAttachments: filter == .attachments,
-                            state: filter == .archived ? "ARCHIVED" : nil)
+        let q = query.trimmingCharacters(in: .whitespaces), state = filter == .archived ? "ARCHIVED" : nil
+        if filter == .attachments, !attachmentsLocal {
+            do {
+                return try await api.memos(pageToken: token, tag: tag, query: q, hasAttachments: true)
+            } catch HubError.http(501) {
+                attachmentsLocal = true
+            }
+        }
+        guard filter == .attachments else {
+            return try await api.memos(pageToken: token, tag: tag, query: q, pinned: filter == .pinned, state: state)
+        }
+        var token = token, found: [Memo] = []
+        for _ in 0..<Self.scanPages {
+            guard let page = try await api.memos(pageSize: 50, pageToken: token, tag: tag, query: q) else { return nil }
+            found += page.items.filter { !($0.attachments ?? []).isEmpty }
+            token = page.nextPageToken
+            if token == nil || found.count >= Self.scanTarget { break }
+        }
+        return MemoPage(items: found, nextPageToken: token)
     }
+
+    private static let scanPages = 8, scanTarget = 20
 
     /// The view filter again on the client, for hubs that ignore it.
     private func keep(_ list: [Memo]) -> [Memo] {

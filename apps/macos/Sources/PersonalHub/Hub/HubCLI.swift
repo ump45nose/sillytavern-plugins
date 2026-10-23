@@ -35,6 +35,63 @@ enum HubCLI {
         return 0
     }
 
+    /// Enum-like fields whose distinct values are safe to show.
+    private static let enums: Set<String> = ["state", "status", "currency", "cycle", "category", "payer", "type", "visibility",
+                                             "region", "kind", "collector", "provider", "unit", "source", "pinned", "stale", "active"]
+
+    /// `--hub-probe PATH [k=v …]`: the response's shape as key paths with types and counts; values only for `enums`.
+    static func probe(_ path: String, query: [String: String]) async -> Int32 {
+        guard let credential = try? CredentialStore.load().hub else {
+            print("FAIL credentials: hub not connected")
+            return 2
+        }
+        let data: Data
+        do {
+            data = try await HubAPI(transport: URLSessionTransport(), credential: credential).probe(path, query: query)
+        } catch let e as HubError {
+            print("FAIL \(path) — \(describe(e))")
+            return 1
+        } catch {
+            print("FAIL \(path) — \(type(of: error))")
+            return 1
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) else {
+            print("PASS \(path) — \(data.count) bytes, not JSON")
+            return 0
+        }
+        var shape: [String: (types: Set<String>, count: Int, values: [String: Int])] = [:]
+        func walk(_ v: Any, _ p: String) {
+            func note(_ type: String, value: String? = nil) {
+                var e = shape[p] ?? ([], 0, [:])
+                e.types.insert(type)
+                e.count += 1
+                if let value, enums.contains(String(p.split(separator: ".").last ?? "")) { e.values[value, default: 0] += 1 }
+                shape[p] = e
+            }
+            switch v {
+            case let d as [String: Any]:
+                note("object")
+                for (k, x) in d { walk(x, p.isEmpty ? k : p + "." + k) }
+            case let a as [Any]:
+                note("array[\(a.count)]")
+                for x in a { walk(x, p + "[]") }
+            case let n as NSNumber:
+                note(CFGetTypeID(n) == CFBooleanGetTypeID() ? "bool" : "number", value: n.stringValue)
+            case let s as String: note("string", value: s.count <= 32 ? s : nil)
+            case is NSNull: note("null")
+            default: note("?")
+            }
+        }
+        walk(json, "")
+        print("PASS \(path) \(query.isEmpty ? "" : "\(query) ")— \(data.count) bytes")
+        for (p, e) in shape.sorted(by: { $0.key < $1.key }) where !p.isEmpty {
+            let types = e.types.count > 3 ? "array[…]" : e.types.sorted().joined(separator: "|")
+            let values = e.values.isEmpty ? "" : "  " + e.values.sorted { $0.key < $1.key }.map { "\($0.key)×\($0.value)" }.joined(separator: " ")
+            print("  \(p): \(types) ×\(e.count)\(values)")
+        }
+        return 0
+    }
+
     /// `--hub-smoke`: reads every endpoint the app uses with the stored credential.
     static func smoke() async -> Int32 {
         guard let credential = try? CredentialStore.load().hub else {

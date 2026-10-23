@@ -16,6 +16,16 @@ public struct AgendaTask: Sendable, Identifiable, Hashable {
     public var completedAt: Date? = nil
     /// Google's manual order within the list; sorts lexically.
     public var position: String? = nil
+
+    /// Google Tasks keeps only the date; a time typed without a time block is saved as a
+    /// "时间 15:00" line in the notes.
+    public func scheduled(calendar: Calendar = .hub) -> Date? {
+        guard let due, let notes,
+              let r = notes.range(of: #"(?m)^时间\s*([01]?\d|2[0-3])[:：]([0-5]\d)\s*$"#, options: .regularExpression) else { return nil }
+        let digits = notes[r].dropFirst(2).trimmingCharacters(in: .whitespaces).split(whereSeparator: { $0 == ":" || $0 == "：" })
+        guard digits.count == 2, let h = Int(digits[0]), let m = Int(digits[1]) else { return nil }
+        return calendar.date(bySettingHour: h, minute: m, second: 0, of: calendar.startOfDay(for: due))
+    }
 }
 
 public struct AgendaEvent: Sendable, Identifiable, Hashable {
@@ -92,6 +102,11 @@ public struct AgendaView: Sendable {
         return (open + completed.filter { !seen.contains($0.id) })
             .filter { $0.due.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
             .sorted { $0.completed != $1.completed ? !$0.completed : ($0.position ?? "~") < ($1.position ?? "~") }
+    }
+
+    /// Tasks due on a day that carry a time, for the day's schedule.
+    public func timedTasks(on day: Date, calendar: Calendar = .hub) -> [(task: AgendaTask, at: Date)] {
+        tasks(on: day, calendar: calendar).compactMap { t in t.scheduled(calendar: calendar).map { (t, $0) } }.sorted { $0.at < $1.at }
     }
 
     public func events(on day: Date, calendar: Calendar = .hub) -> [AgendaEvent] {

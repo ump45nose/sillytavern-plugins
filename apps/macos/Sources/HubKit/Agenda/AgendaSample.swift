@@ -13,7 +13,7 @@ public enum AgendaSample {
                    TaskListRecord(id: "project", title: "个人项目"), TaskListRecord(id: "review", title: "复盘")]
         s.tasks = [
             TaskRecord(id: "s1", listID: "work", title: "提交 Q4 迁移方案", due: day(-1), position: "1"),
-            TaskRecord(id: "s2", listID: "personal", title: "给妈妈打电话", due: day(0), position: "1"),
+            TaskRecord(id: "s2", listID: "personal", title: "给妈妈打电话", notes: "时间 18:30", due: day(0), position: "1"),
             TaskRecord(id: "s3", listID: "personal", title: "续费域名", due: day(0), position: "2"),
             TaskRecord(id: "s4", listID: "project", title: "整理 brainstorm 文档", due: day(0), completed: true,
                        completedAt: GoogleDate.string(at(11)), position: "1"),
