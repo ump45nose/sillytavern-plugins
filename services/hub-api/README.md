@@ -309,26 +309,51 @@ joins also use metadata-only source reads.
 
 ## Hub v2 Memos CRUD
 
-GET `/api/v1/memos` accepts `page_size` (1–100, default 20), opaque `page_token`, `tag`
-and `q`. Filtering is performed by Memos' official CEL filter: an always-bound creator,
-exact tag membership and content.contains with JSON-escaped literals; Hub never scans
-all memo bodies. Responses return `{items, next_page_token}` and the shared full Memo
-shape with timestamps, content, tags, visibility, pinned, public link and attachment
-metadata. The module's recent items and POST results use that same shape.
+GET `/api/v1/memos` accepts `page_size` (1–100, default 20), opaque `page_token`,
+`tag`, `q`, `pinned=true|false` and `state=NORMAL|ARCHIVED` (default NORMAL).
+Creator, tag, content and pinned filters use Memos' official CEL API; Hub never scans
+memo bodies. Every full Memo response, including module, detail, create and PATCH,
+includes `state`. PATCH accepts supplied content/visibility/pinned/attachments fields
+and `state: "NORMAL"` for restoration; `state: "ARCHIVED"` is rejected with 422.
+DELETE still archives through a single PATCH rather than permanently deleting.
 
-GET/PATCH/DELETE `/api/v1/memos/{id}` only accepts safe bounded resource IDs and checks
-current creator even when the existing token has administrator privileges. PATCH
-accepts only supplied content/visibility/pinned fields, preserving false. DELETE
-forwards exactly one PATCH with state=ARCHIVED; restoration remains available in
-Memos. Writes never retry and invalidate the module cache after success or uncertain
-outcomes. Production validation is read-only; write/ownership/error cases use fakes.
+Memos 0.30 has no official attachment-presence filter. By user decision the Memos
+service is unchanged: supplying `has_attachments` returns 501 with a short explanation.
+Mac must retain its existing client-side attachment view until upstream support is added.
+This is the only deferred part of the attachment/filter request.
 
-GET `/api/v1/memos/{id}/attachments/{name}` accepts an attachment ID or its
-`attachments/{id}` resource name. It rechecks own-Memo membership, then streams local
-image attachments from Memos' fixed file route with no-store/nosniff. External links,
-active HTML/SVG, arbitrary URLs and attachments from other memos are rejected.
-Filter/update-mask behavior follows the deployed Memos 0.30
-[official schema](https://github.com/usememos/memos/blob/v0.30.0/internal/filter/schema.go)
+POST `/api/v1/memos/attachments` accepts one multipart `file` and returns 201
+`{name, filename, type, size}`; the upload is initially unlinked. Hub reads the current
+instance upload limit (30 MB at inspection; 32 MiB if Memos configures zero), rejects
+oversize uploads with 413 `{"detail":"文件超过 N MB"}`, and forwards unmodified bytes
+as protobuf JSON base64. MIME and returned size come from Memos. Hub does not convert
+or compress; Memos itself may strip image EXIF metadata according to its native behavior.
+The upload parser bounds memory and avoids spilling into the container's 16 MiB /tmp.
+
+POST and PATCH `/api/v1/memos` accept `attachments: ["attachments/id"]`; PATCH replaces
+all attachments, an empty list clears them, and omission preserves them. Names are
+validated against Memos' creator-scoped ListAttachments API (filename-filtered with
+pagination), because GetAttachment allows administrators to read foreign files and
+returns no creator. Foreign/missing/invalid names return 422. Memos' native replacement
+removes omitted attachment records; clients should not reuse those removed names.
+DELETE `/api/v1/memos/attachments/{name}` accepts the full resource name or last segment
+and returns 204 only for the user's own unlinked file; foreign or linked files return 409.
+Unlinked uploads are not automatically expired by Memos 0.30 or by Hub; clients should
+call DELETE for cancelled uploads. Hub does not run a cleanup timer.
+
+GET `/api/v1/memos/{id}/attachments/{name}` checks the owning Memo and membership,
+then streams bytes and Content-Type from Memos' fixed file route with no-store/nosniff.
+Non-image and active formats are downloaded with Content-Disposition: attachment.
+External links and attachments from other memos are rejected. `thumbnail=1` maps to
+Memos' thumbnail API, which returns supported thumbnails or the original file.
+All writes forward once, never retry, and invalidate the Memos module cache even after
+an uncertain result. Device Bearer authentication and redacted/no-access logging remain.
+Production checks only read; upload, mutation, ownership and failure checks use fakes.
+
+The implementation was checked against the exact running Memos 0.30.0 source commit
+`2036c1ffc1b0a1e1fa6a473738c2a5ef520df67f`, its
+[filter schema](https://github.com/usememos/memos/blob/v0.30.0/internal/filter/schema.go),
+[attachment service](https://github.com/usememos/memos/blob/v0.30.0/server/router/api/v1/attachment_service.go)
 and [Memo API](https://github.com/usememos/memos/blob/v0.30.0/proto/api/v1/memo_service.proto).
 
 ## Android layout compatibility
