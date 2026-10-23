@@ -73,7 +73,7 @@ def serve(cfg):
                 except ValueError:
                     self.send_json(400, {"error": "invalid_query"})
                     return
-                from .companion_materials import list_materials
+                from .companion_store import list_materials
                 self.send_json(200, list_materials(store.db, cursor, limit))
                 return
             if not self.authenticated():

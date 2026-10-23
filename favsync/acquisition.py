@@ -13,8 +13,9 @@ def collect_source(cfg, store, guard, spec, section, adapter):
     """Return scan success, or None when the source has no download phase."""
     source, account = spec.name, section["account"]
     state = store.source(source, account)
-    if hasattr(adapter, "sync_metadata"):
+    if spec.metadata:
         store.update(source, account, scan_status="scanning", error=None)
+        guard.validate_scan(spec, account, adapter)
         adapter.sync_metadata(store, source, account)
         return None
     configured_date = (section.get("start_date", "") if spec.date_section == source else

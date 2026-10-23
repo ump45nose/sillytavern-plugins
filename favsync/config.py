@@ -106,6 +106,11 @@ def load(path, *, mode="sync", source=None):
                 start_timestamp(section["start_date"], cfg["timezone"])
     if active("x") and cfg["x_bookmarks"]["enabled"] and cfg["x_likes"]["enabled"] and cfg["x_bookmarks"]["account"] != cfg["x_likes"]["account"]:
         raise ValueError("X bookmarks and likes must use the same account label")
+    if active("xhs"):
+        accounts = {cfg[spec.name]["account"] for spec in REGISTRY.values()
+                    if spec.adapter == "xhs" and cfg[spec.name]["enabled"]}
+        if len(accounts) > 1:
+            raise ValueError("Xiaohongshu sources must use the same account label")
     cfg["telegram_notice"].setdefault("chat", "@yuwk_notice_bot")
     if active("telegram"):
         notice = cfg["telegram_notice"]

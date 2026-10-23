@@ -130,6 +130,27 @@ class XhsAdapter:
         self._bundle_remaining -= 1
         return True
 
+    @property
+    def detail_remaining(self):
+        return self._detail_remaining
+
+    def reserve_detail(self):
+        if self._detail_remaining <= 0:
+            raise SyncError("deferred_request_budget")
+        self._detail_remaining -= 1
+        self.observe("detail_requests")
+
+    def request(self, *args, timeout=None):
+        self._pace()
+        payload = _json_command([self.cfg["xhs"]["cli_binary"], *args, "--json"],
+                                timeout or self.cfg["command_timeout_seconds"], self._env())
+        self.check_response(payload)
+        return payload.get("data", payload)
+
+    def sync_metadata(self, store, source, account):
+        from .companion_materials import sync_creators
+        sync_creators(self, store, self.cfg[source])
+
     def _env(self):
         env = os.environ.copy()
         home = Path(self.cfg["state_dir"]) / "xhs-home"
@@ -253,22 +274,11 @@ class XhsAdapter:
         for _page in range(self.cfg["xhs"]["max_pages_per_run"]):
             if self._discover_remaining <= 0:
                 return result("request_budget")
-            argv = [self.cfg["xhs"]["cli_binary"], kind, "--json"]
+            args = [kind]
             if cursor_value:
-                argv += ["--cursor", cursor_value]
-            self._pace()
-            payload = _json_command(argv, self.cfg["command_timeout_seconds"], self._env())
+                args += ["--cursor", cursor_value]
+            data = self.request(*args)
             self.observe("scan_pages")
-            if not payload.get("ok"):
-                code = str((payload.get("error") or {}).get("code", "scan_incomplete")).lower()
-                if code in ("not_authenticated", "unauthenticated", "login_required", "auth_required", "session_expired"):
-                    raise SyncError("auth_required")
-                if code in ("verification_required", "captcha_required", "ip_blocked", "461", "471"):
-                    raise SyncError("verification_required")
-                if code in ("rate_limited", "too_many_requests", "429"):
-                    raise SyncError("rate_limited")
-                raise SyncError("scan_incomplete")
-            data = payload.get("data") or {}
             page_by_id = {r["id"]: r for r in (self._note(n) for n in data.get("notes", []))}
             page_records = list(page_by_id.values())
             digest = hashlib.sha256((digest + json.dumps(list(page_by_id))).encode()).hexdigest()
@@ -335,11 +345,8 @@ class XhsAdapter:
         data = self.store.xhs_detail(item["account"], item["item_id"],
                                      self.cfg["xhs"]["detail_cache_ttl_seconds"])
         if data is None:
-            if self._detail_remaining <= 0:
-                raise SyncError("deferred_request_budget")
-            self._detail_remaining -= 1
+            self.reserve_detail()
             self._pace()
-            self.observe("detail_requests")
             body = {"url": locator["url"], "download": False, "cookie": cookie,
                     "proxy": None, "check_record": False}
             try:
