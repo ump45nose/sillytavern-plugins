@@ -15,6 +15,9 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
     for item in store.pending(source, account):
         if item_ids is not None and item['item_id'] not in item_ids:
             continue
+        bundle_key = (item["platform"], account, item["item_id"], "bundle")
+        if bundle_key in attempted:
+            continue
         text_path = paths(cfg, item)
         folder = text_path.parent
         folder.mkdir(parents=True, exist_ok=True)
@@ -30,6 +33,7 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
                 success = False
                 continue
             try:
+                attempted.add(bundle_key)
                 artifacts = adapter.download_bundle(item, staging)
                 if not artifacts:
                     raise SyncError("download_missing_file")
@@ -39,6 +43,7 @@ def drain_queue(cfg, store, source, account, adapter, *, attempted, disk_ready, 
                 log.info("%s: item=%s bundle downloaded", source, item["item_id"])
             except SyncError as exc:
                 if exc.code == "deferred_request_budget":
+                    attempted.discard(bundle_key)
                     log.info("%s: detail request budget exhausted; remaining items deferred", source)
                     break
                 if item["platform"] == "xhs" and hasattr(adapter, "observe"):

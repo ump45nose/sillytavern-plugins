@@ -12,6 +12,7 @@ class SourceSpec:
     date_section: str = ""
     baseline: bool = False
     markdown: bool = False
+    metadata: bool = False
 
 
 SOURCE_SPECS = (
@@ -20,7 +21,7 @@ SOURCE_SPECS = (
     SourceSpec("x_bookmarks", "x", "x", "X 书签", "x_bookmarks", markdown=True),
     SourceSpec("x_likes", "x", "x", "X 点赞", baseline=True),
     SourceSpec("eh_favorites", "eh", "eh", "EH 收藏", baseline=True),
-    SourceSpec("xhs_creators", "xhs", "xhs", "陪伴作者素材"),
+    SourceSpec("xhs_creators", "xhs", "xhs", "陪伴作者素材", metadata=True),
     SourceSpec("xhs_favorites", "xhs", "xhs", "小红书收藏", markdown=True),
     SourceSpec("xhs_likes", "xhs", "xhs", "小红书点赞"),
     SourceSpec("pixiv_art_public", "pixiv", "pixiv", "Pixiv 公开图片", "pixiv", baseline=True),
@@ -28,7 +29,7 @@ SOURCE_SPECS = (
     SourceSpec("pixiv_novel_public", "pixiv", "pixiv", "Pixiv 公开小说", "pixiv", baseline=True),
     SourceSpec("pixiv_novel_private", "pixiv", "pixiv", "Pixiv 私密小说", "pixiv", baseline=True),
     SourceSpec("wallabag_entries", "wallabag", "wallabag", "Wallabag"),
-    SourceSpec("film_watchlist", "film", "films", "B 站影视片单"),
+    SourceSpec("film_watchlist", "film", "films", "B 站影视片单", metadata=True),
 )
 REGISTRY = {spec.name: spec for spec in SOURCE_SPECS}
 SOURCES = tuple(REGISTRY)
