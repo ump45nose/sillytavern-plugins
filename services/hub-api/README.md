@@ -352,3 +352,5 @@ See `docs/plans/2026-10-21-hub-v2-execution.md` at the repository root for evide
 订阅及网络套餐主记录归 Personal Subscriptions，Hub 只代理。配置 HUB_SUBSCRIPTIONS_URL、HUB_SUBSCRIPTIONS_TOKEN、HUB_SUBSCRIPTIONS_WRITE_TOKEN。订阅模块保留原币种与账号／付款方，并显示来源最新额度；个人预计月费由来源计算，不做隐式换汇。网络模块同时读取本地流量与供应商独立套餐，后者按原来源展示，不用路由器月流量推算套餐余额。
 
 GET /api/v1/subscriptions/records、GET /api/v1/subscriptions/sources；POST /api/v1/subscriptions/records；GET/PATCH/DELETE /api/v1/subscriptions/records/{id}。修改／删除透传 If-Match 版本，冲突409。旧 PUT /api/v1/subscriptions 及 GET/PUT /api/v1/net/plans 返回410。没有 Hub 订阅业务库或整表替换写入。原生客户端的订阅／网络入口统一使用来源单条操作。
+
+订阅品牌、主题色和购买入口由独立订阅服务维护。Hub 透传 `service_key`、`theme_color`、`subscription_url`、`icon_url`，设备鉴权下的 `/api/v1/subscriptions/brands` 与 `/api/v1/subscriptions/icons/{service_key}.png` 代理固定来源，不抓取任意外链。图标为 PNG，使用私有缓存。

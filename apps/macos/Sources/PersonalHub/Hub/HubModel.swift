@@ -307,6 +307,21 @@ final class HubModel {
         return nil
     }
 
+    func subscriptionIcon(_ path: String?) -> NSImage? {
+        guard let path, let api else { return nil }
+        let key = "subscription:" + path
+        if let hit = images[key] { return hit }
+        guard !loading.contains(key) else { return nil }
+        loading.insert(key)
+        Task {
+            defer { loading.remove(key) }
+            guard let bytes = try? await api.subscriptionIcon(path), let image = NSImage(data: bytes) else { return }
+            images[key] = image
+            imageGeneration += 1
+        }
+        return nil
+    }
+
     func player(recording id: String) -> AVPlayer? {
         guard let api, let request = try? api.audioRequest(recording: id), let url = request.url else { return nil }
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": request.allHTTPHeaderFields ?? [:]])

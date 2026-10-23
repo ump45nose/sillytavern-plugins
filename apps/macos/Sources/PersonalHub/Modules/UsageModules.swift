@@ -1001,12 +1001,12 @@ struct SubsModule: View {
             if size == .compact {
                 VStack(alignment: .leading, spacing: 0) {
                     monthly(s)
-                    Text("\(items.count) 项订阅 · 7 天内续费 \(soon) 项").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
+                    Text("\(items.count) 项订阅 · 7 天内续费／到期 \(soon) 项").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
                     HStack { Spacer(); Button("管理") { editing = true }.buttonStyle(.plain).font(Typo.sans(11)) }
                     Spacer(minLength: 6)
                     ForEach(items.prefix(2)) { sub in
                         HStack(spacing: 8) {
-                            SubLogo(name: sub.name, size: 20)
+                            SubLogo(name: sub.name, size: 20, iconURL: sub.iconUrl, themeColor: sub.themeColor)
                             Text(sub.name).font(Typo.sans(12.5))
                             Spacer()
                             RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
@@ -1024,13 +1024,17 @@ struct SubsModule: View {
                     .padding(.bottom, 10)
                     ForEach(Array(items.enumerated()), id: \.1.id) { i, sub in
                         HStack(spacing: 12) {
-                            SubLogo(name: sub.name, size: 30)
+                            SubLogo(name: sub.name, size: 30, iconURL: sub.iconUrl, themeColor: sub.themeColor)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(sub.name + ((sub.accountLabel ?? "").isEmpty ? "" : " · " + (sub.accountLabel ?? ""))).font(Typo.sans(13))
                                 Text(Self.priceText(sub)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
                                 if let quota = sub.quota { Text(Self.quotaText(quota)).font(Typo.sans(10)).foregroundStyle(Palette.ink3) }
                             }
                             Spacer()
+                            if let raw = sub.subscriptionUrl, let url = URL(string: raw), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
+                                Link(destination: url) { Image(systemName: "arrow.up.right.square") }
+                                    .buttonStyle(.plain).foregroundStyle(Palette.ink3).help("购买订阅")
+                            }
                             RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
                         }
                         .padding(.vertical, 9)
@@ -1069,15 +1073,18 @@ struct SubsModule: View {
     }
 
     static func daysUntil(_ s: SubsData.Item) -> Int? {
-        HubFormat.day(s.nextRenewal).flatMap { Calendar.hub.dateComponents([.day], from: Calendar.hub.startOfDay(for: HubFormat.current()), to: $0).day }
+        HubFormat.day(s.nextRenewal ?? s.expiresOn).flatMap { Calendar.hub.dateComponents([.day], from: Calendar.hub.startOfDay(for: HubFormat.current()), to: $0).day }
     }
 
     static func renewText(_ s: SubsData.Item) -> String {
-        guard let d = daysUntil(s), let date = HubFormat.day(s.nextRenewal) else { return "—" }
+        guard let d = daysUntil(s), let date = HubFormat.day(s.nextRenewal ?? s.expiresOn) else {
+            return s.cycle == "one_time" && s.expiresOn == nil ? (s.plan == "永久会员" ? "永久" : "一次性") : "—"
+        }
+        let action = s.nextRenewal == nil ? "到期" : "续费"
         switch d {
         case ..<0: return "已过期"
-        case 0: return "今天续费"
-        case 1: return "明天续费"
+        case 0: return "今天" + action
+        case 1: return "明天" + action
         case ...7: return "\(d) 天后"
         default: return "\(Calendar.hub.component(.month, from: date))/\(Calendar.hub.component(.day, from: date))"
         }
@@ -1095,11 +1102,22 @@ struct SubsModule: View {
 struct SubLogo: View {
     var name: String
     var size: CGFloat
+    var iconURL: String? = nil
+    var themeColor: String? = nil
+    @Environment(AppState.self) private var state
 
     var body: some View {
-        Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.48, .bold)).foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(RoundedRectangle(cornerRadius: size * 0.3).fill(HubFormat.tone(for: name).color))
+        let _ = state.hub.imageGeneration
+        let color = themeColor.map { Color(hex: $0) } ?? HubFormat.tone(for: name).color
+        Group {
+            if let image = state.hub.subscriptionIcon(iconURL) {
+                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).padding(size * 0.12)
+            } else {
+                Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.48, .bold)).foregroundStyle(color)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color.opacity(0.12)))
     }
 }
 

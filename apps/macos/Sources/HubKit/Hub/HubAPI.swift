@@ -225,6 +225,18 @@ public struct HubAPI: Sendable {
         try decode(SubscriptionSourceCatalog.self, try await get("/api/v1/subscriptions/sources"))
     }
 
+    public func subscriptionBrands() async throws -> SubscriptionBrandCatalog {
+        try decode(SubscriptionBrandCatalog.self, try await get("/api/v1/subscriptions/brands"))
+    }
+
+    /// Icons are same-origin resources; never send device credentials to a supplied external URL.
+    public func subscriptionIcon(_ path: String) async throws -> Data {
+        guard path.range(of: #"^/api/v1/subscriptions/icons/[a-z0-9][a-z0-9-]{0,79}\.png$"#, options: .regularExpression) != nil else {
+            throw HubError.invalidResponse
+        }
+        return try await get(path)
+    }
+
     public func saveSubscription(_ record: SubscriptionRecord) async throws -> SubscriptionRecord {
         let isNew = record.version == 0
         var r = try request("/api/v1/subscriptions/records" + (isNew ? "" : "/" + path(record.id)), method: isNew ? "POST" : "PATCH", body: record.document)

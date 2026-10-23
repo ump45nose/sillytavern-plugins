@@ -281,6 +281,12 @@ public struct SubsData: Codable, Equatable, Sendable {
         public var frequency: Int?
         public var active: Bool?
         public var quota: SubscriptionQuota?
+        public var serviceKey: String?
+        public var iconUrl: String?
+        public var themeColor: String?
+        public var subscriptionUrl: String?
+        public var expiresOn: String?
+        public var plan: String?
     }
     public var monthlyTotal: Double?
     public var items: [Item]?

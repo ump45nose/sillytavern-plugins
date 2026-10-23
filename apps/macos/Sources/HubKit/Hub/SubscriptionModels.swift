@@ -32,6 +32,10 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
     public var id: String = ""
     public var version: Int = 0
     public var name: String = ""
+    public var serviceKey: String?
+    public var iconUrl: String?
+    public var themeColor: String?
+    public var subscriptionUrl: String?
     public var accountLabel: String = ""
     public var category: String = "other"
     public var plan: String = ""
@@ -51,7 +55,9 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
     public init() {}
 
     public var document: [String: Any] {
-        var result: [String: Any] = ["name": name, "account_label": accountLabel, "category": category,
+        var result: [String: Any] = ["name": name,
+            "service_key": serviceKey as Any? ?? NSNull(), "theme_color": themeColor as Any? ?? NSNull(),
+            "subscription_url": subscriptionUrl as Any? ?? NSNull(), "account_label": accountLabel, "category": category,
             "plan": plan, "price": price as Any? ?? NSNull(), "currency": currency,
             "cycle": cycle as Any? ?? NSNull(), "frequency": frequency,
             "next_renewal": nextRenewal as Any? ?? NSNull(), "expires_on": expiresOn as Any? ?? NSNull(),
@@ -62,6 +68,18 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
         } else { result["binding"] = NSNull() }
         return result
     }
+}
+
+public struct SubscriptionBrandCatalog: Decodable, Sendable {
+    public struct Brand: Decodable, Sendable, Identifiable {
+        public var serviceKey: String
+        public var name: String
+        public var iconUrl: String
+        public var themeColor: String
+        public var subscriptionUrl: String?
+        public var id: String { serviceKey }
+    }
+    public var items: [Brand]
 }
 
 public struct SubscriptionSourceCatalog: Decodable, Sendable {

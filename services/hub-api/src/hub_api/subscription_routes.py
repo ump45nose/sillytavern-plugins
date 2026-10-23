@@ -1,4 +1,7 @@
+import re
+
 from fastapi import Depends, Header, HTTPException, Request
+from fastapi.responses import Response
 from .configuration import json_body
 
 
@@ -16,6 +19,20 @@ def register(app, source, settings, manager, authenticated):
 
     @app.get('/api/v1/subscriptions/sources', dependencies=[Depends(authenticated)])
     async def sources(): return await proxy('GET', 'sources')
+
+    @app.get('/api/v1/subscriptions/brands', dependencies=[Depends(authenticated)])
+    async def brands(): return await proxy('GET', 'subscriptions/brands')
+
+    @app.get('/api/v1/subscriptions/icons/{service_key}.png', dependencies=[Depends(authenticated)])
+    async def icon(service_key: str):
+        if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', service_key): raise HTTPException(404)
+        if not settings.subscriptions_token: raise HTTPException(503)
+        response = await source.request('GET', 'subscriptions/icons/'+service_key+'.png')
+        if response.status_code == 404: raise HTTPException(404)
+        if response.status_code != 200 or not response.content.startswith(b'\x89PNG\r\n\x1a\n') or len(response.content) > 262144:
+            raise HTTPException(502)
+        return Response(response.content, media_type='image/png',
+                        headers={'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff'})
 
     @app.get('/api/v1/subscriptions/records', dependencies=[Depends(authenticated)])
     async def listing(offset: int = 0, limit: int = 50):

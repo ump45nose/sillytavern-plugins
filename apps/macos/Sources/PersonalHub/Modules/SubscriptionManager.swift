@@ -21,6 +21,7 @@ struct SubscriptionManager: View {
             if busy { ProgressView() }
             List(records) { record in
                 HStack {
+                    SubLogo(name: record.name, size: 28, iconURL: record.iconUrl, themeColor: record.themeColor)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(record.name + (record.accountLabel.isEmpty ? "" : " · " + record.accountLabel))
                         Text(payer(record.payer) + " · " + (record.plan.isEmpty ? record.category : record.plan)).font(.caption).foregroundStyle(.secondary)
@@ -68,6 +69,7 @@ private struct SubscriptionEditor: View {
     @Environment(AppState.self) private var state
     @ViewState private var draft: SubscriptionRecord
     @ViewState private var accounts: [SubscriptionSourceCatalog.Source.Account] = []
+    @ViewState private var brands: [SubscriptionBrandCatalog.Brand] = []
     @ViewState private var error: String?
     @ViewState private var busy = false
 
@@ -82,6 +84,25 @@ private struct SubscriptionEditor: View {
             ScrollView {
                 Form {
                     TextField("名称", text: $draft.name)
+                    Picker("品牌图标", selection: Binding(get: { draft.serviceKey ?? "" }, set: { key in
+                        let previous = brands.first { $0.serviceKey == draft.serviceKey }
+                        let brand = brands.first { $0.serviceKey == key }
+                        draft.serviceKey = key.isEmpty ? nil : key
+                        draft.iconUrl = brand?.iconUrl
+                        if draft.themeColor == nil || draft.themeColor == previous?.themeColor { draft.themeColor = brand?.themeColor }
+                        if draft.subscriptionUrl == nil || draft.subscriptionUrl == previous?.subscriptionUrl { draft.subscriptionUrl = brand?.subscriptionUrl }
+                    })) {
+                        Text("自定义／名称首字").tag("")
+                        ForEach(brands) { brand in Text(brand.name).tag(brand.serviceKey) }
+                        if let key = draft.serviceKey, !brands.contains(where: { $0.serviceKey == key }) {
+                            Text("原品牌（暂不可用）").tag(key)
+                        }
+                    }
+                    HStack {
+                        SubLogo(name: draft.name, size: 24, iconURL: draft.iconUrl, themeColor: draft.themeColor)
+                        TextField("主题色，例如 #4285F4", text: optional(\SubscriptionRecord.themeColor))
+                    }
+                    TextField("购买订阅的网址", text: optional(\SubscriptionRecord.subscriptionUrl))
                     TextField("账号别名", text: $draft.accountLabel)
                     Picker("类别", selection: $draft.category) {
                         Text("AI").tag("ai"); Text("网络").tag("network")
@@ -129,6 +150,8 @@ private struct SubscriptionEditor: View {
         }
         .padding(18).frame(width: 570, height: 650)
         .task {
+            do { brands = try await state.hub.review(demo: { [] }, live: { try await $0.subscriptionBrands().items }) }
+            catch { self.error = "品牌目录暂时无法读取；已有图标与主题色会保留" }
             do { accounts = try await state.hub.review(demo: { [] }, live: { try await $0.subscriptionSources().sources.flatMap(\.accounts) }) }
             catch { self.error = "来源账号暂时无法读取；已有绑定会保留" }
         }
