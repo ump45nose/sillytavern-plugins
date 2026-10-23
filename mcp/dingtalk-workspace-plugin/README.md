@@ -1,6 +1,6 @@
 # 钉钉
 
-连接钉钉办公数据，处理文档与知识库、组织通讯录、日历会议、个人待办、工作日志和周报、审批流程、在线表格与 AI 表，以及群聊和机器人消息。适用于“查我今天的日程和待办”“创建会议并邀请同事”“汇总或提交本周工作日志”“读取并更新钉钉表格”“查询审批进度”“整理项目文档”“向指定钉钉群发送通知”。支持文档创建与模板、日程查询和维护、待办及子任务、日志查询和提交、审批查询与处理、表格数据读写和 AI 表记录/视图/仪表盘管理。具体操作受当前账号和企业授权范围限制；没有提供考勤查询或打卡能力。
+连接钉钉官方办公能力，以本人身份处理私聊与群消息、会话历史和搜索，维护文档与批注、钉盘和知识库、通讯录、日历、待办、日志、审批、在线表格与 AI 表，读取听记和个人考勤，并处理钉钉邮箱。当前日常清单保留 245 个工具；实际可用性取决于对应服务授权和当前账号权限。
 
 ## 示例场景
 
@@ -37,9 +37,35 @@
 
 ## 文档评论现状
 
-官方独立的[钉钉文档互动服务](https://aihub.dingtalk.com/#/mcp-market/detail?mcpId=9784&detailType=marketMcpDetail)（`doc-comment`）提供评论读取工具。2026-10-10 经 MCPHub 完成授权后，用户实测两份文档均返回 `CLI_ORG_NOT_AUTHORIZED`，提示组织尚未开启 CLI 调用权限。这项组织检查也适用于直接 MCP 调用；同一组织改用 CLI 仍需管理员开启权限。评论尚未读到，不能判断内容或数量；正文中的批注锚点也不等于完整评论。
+官方独立的[钉钉文档互动服务](https://aihub.dingtalk.com/#/mcp-market/detail?mcpId=9784&detailType=marketMcpDetail)（`doc-comment`）已通过现有 MCPHub 接入。2026-10-10 曾因 `CLI_ORG_NOT_AUTHORIZED` 移除；2026-10-15 组织开启 CLI 调用权限、用户重新授权后，列表、详情和回复接口均已实测成功。
 
-已按要求移除新增的 `dingtalk-doc-comment` 服务及本地接入配置。原十个钉钉服务、北向 OAuth 和 App 身份保留。
+`mcphub/doc-comment.json` 保存非秘密接入配置，通过 MCPHub 原生管理 API 管理 `dingtalk-doc-comment`。最初仅启用三个读取工具；按后续补齐 dws 场景的要求，接入阶段曾开放上游全部 14 个评论工具；2026-10-21 日常清单保留其中 10 个，具体开关以 `mcphub/daily-profile.json` 为准。仅对列表、详情和回复做过只读业务验证，没有执行评论写入。使用官方 Streamable HTTP OAuth 地址，回调沿用现有公网入口的 `/oauth/callback`；客户端与令牌仅保存在现有 `/opt/mcphub/data`。需要重新授权时，从 MCPHub 取得当前授权链接；已使用或失败的旧回调链接不能再次用来完成授权。原十个钉钉服务、北向 OAuth 和 App 身份保留。
+
+读取时先分页取得评论列表和真实 `commentKey`，再按 `topicId` 与 `commentKey` 查询详情及直接回复。本次上游列表未返回 `topicId`：对文档 JSONML 中的划词批注，可用引用文字匹配 `comment.contentId` 作为候选话题 ID，并以详情查询返回 `found=true` 确认；它不是 `commentKey`。不能唯一匹配或详情未确认时，不推断回复已读完。列表 `hasMore=true` 时继续传 `nextToken`；回复 `complete=false` 时继续传 `nextPageToken` 为 `pageToken`，需要完整回复链时再展开子回复。
+
+2026-10-15 验证：「aide 快速进入需求」返回 4 条未解决评论，4 条详情均包含正文、引用、作者 ID 和时间；逐条回复查询均为 `complete=true`、`stopReason=END`，没有回复。「接口语义确认」在当前账号下返回空评论列表且 `hasMore=false`。本次样本没有多页结果或多层回复，尚未实测这些场景。
+
+## dws 与现有 MCP
+
+官方 [dws 架构](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/main/docs/architecture.md)以 MCP 调用为主要业务执行路径；本机完整 Schema 用于逐产品核对，不将多个 CLI 组合命令当作多个独立 MCP 工具。2026-10-15 已完成 dws 登录及组织 CLI 检查，CLI 个人/群聊会话列表只读查询成功。dws 仅用于取得官方接入地址及核对行为，日常请求仍由现有 MCPHub 直接转发官方服务。
+
+完整业务场景接入清单、授权状态和已知上游差异见 [MCP 能力清单](mcphub/README.md)。`mcphub/additional-servers.json` 保存 25 个新增服务的非秘密配置。原服务不替换；AI 表格已定向刷新并补回 4 个角色管理工具。新增工具的可用性仍受个人授权、组织角色和具体业务开通状态限制，不能以工具发现成功代替业务验收。
+
+2026-10-15 全部 OAuth（含独立个人考勤端点）已完成，共 36 个服务连接，公网根入口发现 1046 个工具。个人消息搜索及读取、群历史、AI 找人、AI 表格补充能力、个人合同、文档操作权限检查，以及个人考勤记录、员工班次和考勤规则已完成只读实测。完全重复的考勤上游及建群工具副本已合并；角色不足、组织未开通及 PAT 授权上下文错误见能力清单。
+
+dws 的本地 HTML/Markdown 转换、文件下载落盘、组合命令和 Stream 事件消费属于客户端运行能力，不通过新增同名远程工具重复包装。本次没有启动持续监听、自动发送或其他后台任务。
+
+## 当前日常清单与私聊验收
+
+2026-10-21 按用户确认保留钉钉邮箱，将公网目录精简为 245 个工具：日常 177 个，加邮箱全部 68 个。启用 18 个服务，停用其余 18 个；保留 OAuth、连接配置和业务数据。已接入的完整上游目录是历史接入资料，当前可用范围以 [日常工具清单](mcphub/daily-profile.md) 和对应 JSON 为准；新增上游工具需重新对照该清单，不自动扩充日常范围。
+
+本人发送入口在 `dingtalk-chat`：`send_direct_message_as_user`、`send_personal_message`、`send_message_as_user`。`dingtalk-robot.search_bots` 只解析机器人收件人，不承担本人发送。不能从“名下没有机器人”推断本人私聊不可用。
+
+本次实际用户插件为 [原生钉钉连接](https://chatgpt.com/plugins/plugin_asdk_app_6ac287394cdc819192509b34e64e6557)，其 App ID 为 `asdk_app_6ac287394cdc819192509b34e64e6557`。上述早期插件包与 `.app.json` 引用历史包装 App，不能用上传包装包替代刷新这个原生连接，也不新建身份。
+
+工具目录更新后，在原生连接详情执行 Refresh，确认出现本人发送入口，然后新开会话测试。故障会话原先只有旧的 411 个工具，缺 chat/im；2026-10-21 用户刷新后确认新会话已能看到本人发送工具，目录同步按用户反馈验收通过。官方流程见 [连接与测试](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt/)。
+
+用户明确确认测试消息后，已通过既有公网 MCP 调用 `send_personal_message` 向“小虾米”投递一次文本私聊，发送状态返回 `SUCCESS`；按消息 ID 回读确认发送类型为 `user`、发送人为当前账号，正文及消息/会话标识一致。本次本人文本私聊实测通过，没有通过客户端或本地 dws 发送；群消息、附件及其他消息类型未在本轮测试。
 
 ## NAS Tunnel 接入
 
