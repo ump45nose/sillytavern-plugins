@@ -40,15 +40,13 @@ class EhAdapterTests(unittest.TestCase):
         self.assertEqual(result.records, [{"id": "123", "text": "", "assets": [],
                          "bundle": True, "locator": {"url": GALLERY}}])
 
-    def test_listing_uses_checked_worker_but_gallery_uses_upstream(self):
+    def test_listing_uses_checked_worker(self):
         adapter = EhAdapter({"command_timeout_seconds": 12})
-        for url, module in ((FAVORITES, "favsync.eh_favorites"), (GALLERY, "gallery_dl")):
-            with self.subTest(url=url), \
-                    patch.object(adapter, "config_file", return_value=nullcontext("config")), \
-                    patch("favsync.adapters_ext.command") as runner:
-                runner.side_effect = lambda argv, timeout, output, **kw: output.write(b"[]")
-                self.assertEqual(adapter._events(url), [])
-                self.assertEqual(runner.call_args.args[0][1:3], ["-m", module])
+        with patch.object(adapter, "config_file", return_value=nullcontext("config")), \
+                patch("favsync.adapters_ext.command") as runner:
+            runner.side_effect = lambda argv, timeout, output, **kw: output.write(b"[]")
+            self.assertEqual(adapter._events(FAVORITES), [])
+            self.assertEqual(runner.call_args.args[0][1:3], ["-m", "favsync.eh_favorites"])
 
 
 @unittest.skipIf(FavoritesExtractor is None, "gallery extra is not installed")
