@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Personal Hub · v4 设计稿（待确认）：字体、找回的细节、订阅</title>
+<style>
+  /* Anthropic 字体只从本机读取（Claude.app 自带 + 用户字体目录），不复制进仓库。 */
+  @font-face { font-family:"A Sans"; font-weight:300 800; src:local("Anthropic Sans"), url("file:///Applications/Claude.app/Contents/Resources/fonts/AnthropicSans-Romans-Variable-25x258.ttf"); }
+  @font-face { font-family:"A Serif"; font-weight:300 800; src:local("Anthropic Serif"), url("file:///Applications/Claude.app/Contents/Resources/fonts/AnthropicSerif-Romans-Variable-25x258.ttf"); }
+  @font-face { font-family:"A Serif CJK"; src:local("Anthropic Serif Text"), local("AnthropicSerifText-Light"); unicode-range:U+4E00-9FFF, U+3400-4DBF; }
+
+  :root {
+    --canvas:#E7E2D6; --bg:#F4F1EA; --side:#ECE8DE; --card:#FFFDF8; --sunk:#F6F3EC;
+    --line:#E6E0D3; --line2:#EFEAE0; --ink:#1F1E1B; --ink2:#5E5D59; --ink3:#93918A; --ink4:#B9B6AD;
+    --clay:#D97757; --clayT:#F7E4DA; --olive:#7D8F5E; --oliveT:#E7EBDD; --sky:#6A9BCC; --skyT:#E2EBF4;
+    --plum:#9C7BA0; --plumT:#EFE6EF; --rose:#C97B84; --roseT:#F5E3E5; --steel:#5F7A99; --steelT:#E3E9F0;
+    --ochre:#C9A23F; --ochreT:#F5ECD3; --kraft:#C99A6E; --dot:#CFCAC0;
+    --old-serif:"New York","Songti SC",Georgia,serif; --old-sans:-apple-system,"PingFang SC",sans-serif;
+    --serif:"A Serif","A Serif CJK","Songti SC",Georgia,serif; --sans:"A Sans","PingFang SC",-apple-system,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); font-family:var(--sans); color:var(--ink); font-size:13px; -webkit-font-smoothing:antialiased; font-optical-sizing:auto; }
+  .doc { max-width:1240px; margin:0 auto; padding:40px 32px 80px; }
+  h1 { font-family:var(--serif); font-weight:400; font-size:36px; letter-spacing:-.01em; margin:0 0 6px; }
+  .lead { color:var(--ink2); margin:0 0 26px; line-height:1.7; max-width:920px; }
+  nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:34px; }
+  nav a { text-decoration:none; color:var(--ink2); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:999px; }
+  section { margin-bottom:68px; }
+  .sh { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+  .sh h2 { font-family:var(--serif); font-weight:400; font-size:28px; letter-spacing:-.01em; margin:0; }
+  h3.fig { font-family:var(--serif); font-weight:400; font-size:18px; margin:30px 0 4px; }
+  .tag { font-size:11px; color:var(--clay); background:var(--clayT); padding:2px 8px; border-radius:999px; }
+  .note { color:var(--ink3); font-size:12px; margin:0 0 16px; line-height:1.75; max-width:920px; }
+  .ask { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--clay); border-radius:10px; padding:14px 18px; margin-top:22px; }
+  .ask ol { margin:6px 0 0; padding-left:20px; color:var(--ink2); line-height:1.85; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .sp { flex:1; }
+  .meta { color:var(--ink3); font-size:11px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:2px 8px; border-radius:999px; background:var(--sunk); border:1px solid var(--line2); color:var(--ink2); white-space:nowrap; }
+  .chip.on { background:var(--ink); color:#fff; border-color:transparent; font-weight:500; }
+  .chip.sky { background:var(--skyT); color:var(--steel); border-color:transparent; }
+  .chip.clay { background:var(--clayT); color:var(--clay); border-color:transparent; }
+  .chip.ochre { background:var(--ochreT); color:#9C7B22; border-color:transparent; }
+  .chip.rose { background:var(--roseT); color:var(--rose); border-color:transparent; }
+  .chip.olive { background:var(--oliveT); color:var(--olive); border-color:transparent; }
+  .btn { display:inline-flex; align-items:center; gap:6px; background:var(--ink); color:#fff; font-weight:550; font-size:12px; padding:6px 13px; border-radius:8px; white-space:nowrap; }
+  .btn.sec { background:var(--sunk); color:var(--ink); font-weight:400; border:1px solid var(--line); }
+  .bar { height:5px; border-radius:5px; background:#EEE8DC; overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:5px; }
+  code { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; background:var(--sunk); padding:1px 5px; border-radius:4px; }
+  .pin { width:20px; height:20px; border-radius:50%; background:var(--clay); color:#fff; font-size:11px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 3px rgba(217,119,87,.22); }
+  .anno { position:relative; } .anno > .pin { position:absolute; z-index:5; }
+  .legend { display:grid; grid-template-columns:22px 1fr; gap:6px 8px; margin-top:16px; color:var(--ink2); line-height:1.65; font-size:12.5px; max-width:980px; }
+  table.t { border-collapse:collapse; width:100%; font-size:12.5px; }
+  table.t th, table.t td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line2); vertical-align:top; }
+  table.t th { color:var(--ink3); font-weight:500; font-size:11px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .lab { font-size:11px; color:var(--ink3); letter-spacing:.04em; margin-bottom:8px; }
+
+  /* Typography specimens */
+  .old { font-family:var(--old-sans); }
+  .old .s { font-family:var(--old-serif); }
+  .new .s { font-family:var(--serif); }
+  .spec .title { font-size:34px; line-height:1.15; }
+  .old .title { font-weight:400; }
+  .new .title { font-weight:400; letter-spacing:-.015em; font-variation-settings:"opsz" 40; }
+  .spec .sub { font-size:12.5px; color:var(--ink2); margin-top:6px; }
+  .spec .hero { font-size:40px; line-height:1; }
+  .new .hero { letter-spacing:-.02em; font-variation-settings:"opsz" 48; font-feature-settings:"tnum" 0, "lnum" 1; }
+  .spec .ct { font-size:13.5px; font-weight:600; }
+  .new .ct { font-weight:550; }
+  .spec .task { display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--line2); }
+  .spec .ck { width:15px; height:15px; border-radius:50%; border:1.5px solid var(--ink4); margin-top:2px; flex:none; }
+  .spec .tx { font-size:13px; line-height:1.45; }
+  .spec .tx small { display:block; font-size:11px; color:var(--ink3); }
+  .new .tx small { letter-spacing:.01em; }
+  .spec .body { font-size:15px; line-height:1.75; color:var(--ink2); }
+  .new .body { font-family:var(--serif); font-weight:350; font-variation-settings:"opsz" 16; }
+  .old .body { font-family:var(--old-serif); }
+  .num { font-variant-numeric:tabular-nums; }
+
+  /* Subscriptions */
+  .logo { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:#fff; font-weight:600; font-size:13px; flex:none; }
+  .logo.sm { width:22px; height:22px; border-radius:6px; font-size:10.5px; }
+  .money { font-family:var(--serif); font-size:17px; letter-spacing:-.01em; text-align:right; }
+  .money small { display:block; font-family:var(--sans); font-size:10.5px; color:var(--ink3); letter-spacing:0; margin-top:2px; }
+  .eq { color:var(--ink3); font-size:11px; text-align:right; font-variant-numeric:tabular-nums; }
+  .prod { display:grid; grid-template-columns:30px 1fr 250px 150px 70px 18px; gap:14px; align-items:center; padding:12px 6px; border-top:1px solid var(--line2); }
+  .acct { display:grid; grid-template-columns:30px 1fr 250px 150px 70px 18px; gap:14px; align-items:center; padding:8px 6px; }
+  .acct .who { display:flex; align-items:center; gap:8px; font-size:12.5px; }
+  .acct .who::before { content:""; width:14px; height:14px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); border-radius:0 0 0 6px; margin:-10px 0 0 10px; flex:none; }
+  .qrow { display:grid; grid-template-columns:52px 1fr 78px; gap:8px; align-items:center; font-size:11px; color:var(--ink3); }
+  .when { text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .when small { display:block; font-size:10.5px; color:var(--ink3); }
+  .grp { color:var(--ink3); font-size:11px; letter-spacing:.04em; padding:14px 6px 6px; }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field label { font-size:11px; color:var(--ink3); }
+  .input { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12.5px; min-height:32px; display:flex; align-items:center; gap:8px; }
+  .input.muted { color:var(--ink4); }
+  .seg { display:inline-flex; gap:2px; padding:3px; background:var(--sunk); border-radius:9px; border:1px solid var(--line2); }
+  .seg b { font-weight:400; color:var(--ink3); padding:3px 10px; border-radius:6px; font-size:11.5px; }
+  .seg b.on { background:var(--card); color:var(--ink); font-weight:550; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+  .drop { border:1.5px dashed var(--line); border-radius:12px; padding:14px; display:flex; gap:12px; align-items:center; background:var(--sunk); }
+  .ok { color:var(--olive); } .warn { color:#9C7B22; } .bad { color:var(--rose); }
+
+  /* Lost details */
+  .mini { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; position:relative; overflow:hidden; }
+  .fade-b::after { content:""; position:absolute; left:0; right:0; bottom:0; height:30px; background:linear-gradient(rgba(255,253,248,0),var(--card)); }
+  .fade-r { position:relative; }
+  .fade-r::after { content:""; position:absolute; top:0; right:0; bottom:0; width:60px; background:linear-gradient(90deg,rgba(244,241,234,0),var(--bg)); }
+  .ev { display:flex; gap:8px; padding:5px 0; font-size:12.5px; }
+  .ev .bl { width:3px; border-radius:3px; flex:none; }
+  .ev .tm { color:var(--ink3); font-size:11px; font-variant-numeric:tabular-nums; }
+  .ring { width:15px; height:15px; border-radius:50%; border:1.5px solid var(--ink4); flex:none; margin-top:2px; }
+  .ring.late { border-color:var(--rose); } .ring.timed { border-color:var(--ochre); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>v4 设计稿 · 待确认</h1>
+  <p class="lead">本轮已直接完成的：任务列横向滚动条（常驻、带浅色轨道）、有具体时间的今天任务加入日程、Memos「有附件」筛选（hub 对 <code>has_attachments</code> 返回 501，客户端翻页兜底）、Memos 附件上传（📎 选择 / 拖入 / 粘贴截图）。下面三块需要你先确认再动手。</p>
+  <nav><a href="#type">字体</a><a href="#lost">找回设计稿里的细节</a><a href="#subs">订阅重做</a></nav>
+
+  <!-- ============ Typography ============ -->
+  <section id="type">
+    <div class="sh"><h2>字体 · 参考 Anthropic</h2><span class="tag">需确认来源与授权</span></div>
+    <p class="note">本机已有 Anthropic 的品牌字体：Claude.app 自带 <b>Anthropic Sans</b> 与 <b>Anthropic Serif</b>（可变字体，字重 300–800，视觉字号 16–48，只有拉丁字符）；用户字体目录里还有 <b>Anthropic Serif Text CJK</b>（单一 Light 字重，含汉字但缺中文标点）。方案是 App 启动时从这两个位置<b>按进程注册</b>字体，不复制、不打包进 App 和仓库；找不到就退回现在的 New York + 宋体 / 系统字体。这些字体归 Anthropic 所有，只适合在你自己的机器上用，App 不能分发给别人。</p>
+
+    <div class="two">
+      <div class="card spec old">
+        <div class="lab">现在 · New York + 宋体 / 系统字体</div>
+        <div class="s title">今天</div>
+        <div class="sub">10 月 21 日 周三 · 2 项待办 · 3 个日程</div>
+        <div style="height:18px"></div>
+        <div class="row"><span class="ct">订阅</span><span class="meta">13 项</span></div>
+        <div class="s hero" style="margin-top:8px">¥486<span style="font-size:13px;color:var(--ink3)"> / 月</span></div>
+        <div style="height:14px"></div>
+        <div class="task"><span class="ck"></span><div class="tx">给妈妈打电话<small>个人 · 18:30</small></div></div>
+        <div class="task"><span class="ck"></span><div class="tx">Review Q4 migration plan<small>工作 · 明天</small></div></div>
+        <div style="height:14px"></div>
+        <div class="body">下午主要在 Xcode 里改任务页的分栏布局，中途用 Claude 讨论日历视图的交互；16 点前定位到 Google Tasks 同步时子任务顺序错乱的原因。</div>
+      </div>
+      <div class="card spec new">
+        <div class="lab">提议 · Anthropic Serif / Sans</div>
+        <div class="s title">今天</div>
+        <div class="sub">10 月 21 日 周三 · 2 项待办 · 3 个日程</div>
+        <div style="height:18px"></div>
+        <div class="row"><span class="ct">订阅</span><span class="meta">13 项</span></div>
+        <div class="s hero" style="margin-top:8px">¥486<span style="font-family:var(--sans);font-size:13px;color:var(--ink3)"> / 月</span></div>
+        <div style="height:14px"></div>
+        <div class="task"><span class="ck"></span><div class="tx">给妈妈打电话<small>个人 · 18:30</small></div></div>
+        <div class="task"><span class="ck"></span><div class="tx">Review Q4 migration plan<small>工作 · 明天</small></div></div>
+        <div style="height:14px"></div>
+        <div class="body">下午主要在 Xcode 里改任务页的分栏布局，中途用 Claude 讨论日历视图的交互；16 点前定位到 Google Tasks 同步时子任务顺序错乱的原因。</div>
+      </div>
+    </div>
+
+    <h3 class="fig">字号与角色</h3>
+    <p class="note">Anthropic 的风格要点：标题和大数字用衬线、字重偏轻（400 而不是 600）、大字号收紧字距；界面文字用无衬线、正文行距宽松；强调靠字重 550 和颜色深浅，而不是加粗到 700。中文跟随同一套：衬线位置用 Anthropic Serif Text 汉字（缺的标点落到宋体），无衬线位置用苹方。</p>
+    <table class="t card" style="padding:0">
+      <tr><th>角色</th><th>字体</th><th>字号 / 行高</th><th>字重 · 字距</th><th>用在</th></tr>
+      <tr><td>页面标题</td><td>Serif · 视觉字号 40</td><td>32 / 1.15</td><td>400 · −1.5%</td><td>页头「今天」「电脑历史」</td></tr>
+      <tr><td>大数字</td><td>Serif · 视觉字号 48</td><td>36–40 / 1</td><td>400 · −2%，等高数字</td><td>卡片主数值、订阅月费</td></tr>
+      <tr><td>区块标题</td><td>Serif</td><td>22 / 1.25</td><td>400 · −1%</td><td>Memos 日期分组、阅读区标题</td></tr>
+      <tr><td>卡片标题</td><td>Sans</td><td>13.5 / 1.3</td><td>550</td><td>卡片头、任务列头</td></tr>
+      <tr><td>界面正文</td><td>Sans</td><td>13 / 1.45</td><td>400</td><td>任务、列表行、按钮</td></tr>
+      <tr><td>阅读正文</td><td>Serif · 视觉字号 16</td><td>15 / 1.75</td><td>350</td><td>Memo 正文、电脑历史阅读区、复盘</td></tr>
+      <tr><td>说明 / 时间</td><td>Sans · 等宽数字</td><td>11–11.5 / 1.4</td><td>400 · +1%</td><td>副标题、时间、计数</td></tr>
+      <tr><td>小标签</td><td>Sans</td><td>10.5–11</td><td>500 · +4%</td><td>「付款方」「未来 30 天续费」</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">实现：<code>Typo.serif / sans</code> 改为先查注册后的 Anthropic 字体（按字重设 <code>wght</code> 轴、按字号设 <code>opsz</code> 轴），级联中文字体；所有调用点不变，只调整少量 <code>.semibold</code> → 550。设置里加一个「界面字体：Anthropic / 系统」开关，方便对比和回退。</p>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>可以接受运行时读取 <code>/Applications/Claude.app</code> 和 <code>~/Library/Fonts</code> 里的字体吗？（Claude 更新后字体文件名变化时会自动退回系统字体。）</li>
+      <li>中文衬线用 Anthropic Serif Text（只有 Light，偏细，见上面阅读正文）还是继续用宋体？</li>
+      <li>界面无衬线的中文继续用苹方，可以吗？</li>
+    </ol></div>
+  </section>
+
+  <!-- ============ Lost details ============ -->
+  <section id="lost">
+    <div class="sh"><h2>找回 v3 设计稿里的细节</h2><span class="tag">对照设计稿与 App 截图</span></div>
+    <p class="note">逐页对照 v3 设计稿和当前 App 的渲染。电脑历史的进行中标记、片段描述、「显示其余 N 个片段」、无前台活动窗口在代码里都有，只是示例数据没触发，不算丢失。下面是真正没做到的。</p>
+
+    <div class="two">
+      <div>
+        <div class="lab">任务页</div>
+        <div class="mini fade-b" style="height:210px">
+          <div class="row" style="margin-bottom:8px"><b style="font-weight:550">今天到期</b><span class="meta">4</span></div>
+          <div class="row" style="align-items:flex-start;padding:6px 0"><span class="ring late"></span><div class="tx">提交 Q4 迁移方案<div class="meta" style="color:var(--rose)">逾期 1 天 · 10/20</div></div></div>
+          <div class="row" style="align-items:flex-start;padding:6px 0"><span class="ring timed"></span><div class="tx">给妈妈打电话<div class="meta">个人 · <span style="color:#9C7B22">18:30</span></div></div></div>
+          <div class="row" style="align-items:flex-start;padding:6px 0"><span class="ring"></span><div class="tx">安卓布局兼容<div class="meta">个人项目 · 0/2 个子任务</div></div></div>
+          <div class="row" style="align-items:flex-start;padding:6px 0"><span class="ring"></span><div class="tx">续费域名<div class="meta">个人</div></div></div>
+          <div class="row" style="align-items:flex-start;padding:6px 0"><span class="ring"></span><div class="tx">回复安全组邮件</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="lab">即将 · 列内日程 &nbsp;/&nbsp; 菜单栏 · 紧凑日程</div>
+        <div class="row" style="align-items:stretch;gap:14px">
+          <div class="mini" style="flex:1">
+            <div class="row" style="margin-bottom:6px"><b style="font-weight:550">明天</b><span class="meta">周四 · 3</span></div>
+            <div class="ev"><span class="bl" style="background:var(--sky)"></span><div><div class="tm">09:30 – 10:30</div>和 Lin 对齐方案</div></div>
+            <div class="row" style="padding:6px 0"><span class="ring"></span><span>迁移方案评审纪要</span></div>
+            <div class="row" style="padding:6px 0"><span class="ring"></span><span>发周报</span></div>
+          </div>
+          <div class="mini" style="flex:1">
+            <div class="lab" style="margin-bottom:4px">日程</div>
+            <div class="ev"><span class="bl" style="background:var(--sky)"></span><span class="tm">10:00</span><span>周会</span><span class="meta">进行中</span></div>
+            <div class="ev"><span class="bl" style="background:var(--steel)"></span><span class="tm">14:00</span><span>迁移方案评审</span></div>
+            <div class="ev"><span class="bl" style="background:var(--olive)"></span><span class="tm">18:30</span><span>给妈妈打电话</span><span class="meta">任务</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <table class="t card" style="padding:0;margin-top:18px">
+      <tr><th style="width:26px">#</th><th>细节</th><th>设计稿</th><th>现在</th><th>改法</th></tr>
+      <tr><td>1</td><td>列内还有内容的提示</td><td>列底部渐隐</td><td>硬切</td><td>列内滚动区底部 28pt 渐隐，滚到底消失</td></tr>
+      <tr><td>2</td><td>右边还有列的提示</td><td>横向列右缘渐隐</td><td>最后一列被硬切（已加滚动条）</td><td>右缘 60pt 渐隐，滚到最右消失</td></tr>
+      <tr><td>3</td><td>任务圆圈颜色</td><td>逾期玫红、有具体时间赭黄</td><td>全部灰色</td><td><code>CheckCircle</code> 加 tone；Google Tasks 没有优先级，只用这两种状态</td></tr>
+      <tr><td>4</td><td>副标题里的时间</td><td>「工作 · 15:00」</td><td>显示原始备注「时间 18:30」</td><td>识别出的时间单独显示，备注里那一行不再当摘要</td></tr>
+      <tr><td>5</td><td>子任务进度</td><td>「+ 2 个子任务」</td><td>只在所有任务视图有「0/2 子任务」</td><td>所有视图统一「0/2 个子任务」</td></tr>
+      <tr><td>6</td><td>逾期写法</td><td>行内红字「逾期 3 天 · 10/18」</td><td>右侧红色日期胶囊</td><td>逾期视图改行内红字；其他视图保留胶囊</td></tr>
+      <tr><td>7</td><td>即将列里的日程</td><td>左色条 + 时间 + 标题的小块</td><td>胶囊挤在列顶</td><td>改成左色条小块，按时间排在任务前面</td></tr>
+      <tr><td>8</td><td>菜单栏日程</td><td>一行一个：色条、时间、标题</td><td>两个大色块，占约 110pt</td><td>改紧凑行（约 24pt / 行），省下的高度给任务区；有时间的任务也进来</td></tr>
+      <tr><td>9</td><td>列底添加行</td><td>「添加到今天 / 添加到工作」</td><td>「添加任务」</td><td>按列写明目标</td></tr>
+      <tr><td>10</td><td>订阅品牌标识</td><td>品牌色实底白字</td><td>浅色底彩色字母</td><td>并入下面的订阅重做：优先用 hub 的品牌图标，没有时用 <code>theme_color</code> 实底</td></tr>
+    </table>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>以上 1–9 是否都要补？有没有我漏掉、你印象里设计稿更好的地方（比如 Memos 热力图的密度、主页卡片）？</li>
+      <li>第 8 条：菜单栏日程改紧凑行之后，是否也显示今天剩下的全部日程（现在只显示当前 / 下一个）？</li>
+    </ol></div>
+  </section>
+
+  <!-- ============ Subscriptions ============ -->
+  <section id="subs">
+    <div class="sh"><h2>订阅 · 按 fn 的新接口重做</h2><span class="tag">付费区域 · 原币种 + 等价 ¥/$ · 一个产品多账号 · 网络订阅链接</span></div>
+    <p class="note">只读探测了新接口的字段（只看键名和计数）：每条记录多了 <code>billing_region</code>（自由文本，如「美国」「印度」「玻利维亚」）、<code>price_converted</code> / <code>monthly_converted</code>（CNY、USD 两种等价金额）、<code>exchange_rate_date</code> / <code>exchange_rate_stale</code>、<code>binding</code>（额度来源账号：collector、provider、account、account_email）、<code>quota_url_configured</code>、<code>service_key</code> / <code>icon_url</code> / <code>theme_color</code>。汇总里有 <code>monthly_by_currency</code>、<code>monthly_converted</code>、<code>unconverted_currencies</code>，以及完整汇率表。现在 13 条记录，4 种货币（CNY、USD、INR、BOB），周期有月、年和一次性。</p>
+
+    <h3 class="fig">详细卡（用量页）</h3>
+    <div class="card anno" style="padding:20px 22px">
+      <span class="pin" style="left:-10px;top:18px">1</span>
+      <div class="row" style="align-items:flex-end;gap:28px">
+        <div>
+          <div class="lab">每月 · 折合</div>
+          <div style="font-family:var(--serif);font-size:40px;letter-spacing:-.02em;line-height:1">¥612<span style="font-family:var(--sans);font-size:12px;color:var(--ink3)"> / 月</span></div>
+          <div class="meta" style="margin-top:6px">≈ $85 · 个人付 ¥486 · 公司付 ¥126</div>
+        </div>
+        <div>
+          <div class="lab">按原币种</div>
+          <div class="row" style="gap:6px;flex-wrap:wrap"><span class="chip">¥ 318</span><span class="chip">$ 40</span><span class="chip">₹ 162.5</span><span class="chip">Bs 70</span></div>
+          <div class="meta" style="margin-top:6px">汇率 10/23 · <span class="seg" style="vertical-align:middle;padding:1px"><b class="on">¥</b><b>$</b></span> 折合币种</div>
+        </div>
+        <div class="sp"></div>
+        <div>
+          <div class="lab">付款方</div>
+          <div class="row" style="gap:3px;width:200px"><i style="height:6px;flex:5;background:var(--ink2);border-radius:3px"></i><i style="height:6px;flex:1;background:var(--sage,#7FA394);border-radius:3px"></i><i style="height:6px;flex:7;background:var(--ochre);border-radius:3px"></i></div>
+          <div class="meta" style="margin-top:6px">个人 5 · 免费 1 · <span class="warn">待确认 7</span></div>
+        </div>
+        <span class="btn">＋ 新增订阅</span>
+      </div>
+
+      <div class="row" style="margin-top:20px;gap:6px">
+        <span class="chip on">全部 13</span><span class="chip">AI 5</span><span class="chip">网络 3</span><span class="chip">会员 5</span>
+        <span class="sp"></span><span class="meta">按下次续费 ▾</span>
+      </div>
+
+      <div class="grp">AI · 5</div>
+      <div class="prod anno">
+        <span class="pin" style="left:-34px;top:14px">2</span>
+        <span class="logo" style="background:#D97757">C</span>
+        <div><div class="row" style="gap:8px"><b style="font-weight:550;font-size:13.5px">Claude</b><span class="chip">2 个账号</span></div><div class="meta">Max 5× · Pro</div></div>
+        <div class="meta">合计额度见各账号</div>
+        <div class="money">$120<small>每月 · ≈ ¥855</small></div>
+        <div class="when">10/24<small>3 天后</small></div><span class="meta">⌄</span>
+      </div>
+      <div class="acct">
+        <span></span>
+        <div class="who"><span>个人账号</span><span class="chip">Max 5×</span><span class="chip sky">公司付</span><span class="chip">美国</span></div>
+        <div><div class="qrow"><span>5 小时</span><div class="bar"><i style="width:34%;background:var(--clay)"></i></div><span>34% · 2:10</span></div>
+             <div class="qrow" style="margin-top:4px"><span>本周</span><div class="bar"><i style="width:61%;background:var(--clay)"></i></div><span>61% · 4 天</span></div></div>
+        <div class="money" style="font-size:15px">$100<small>每月 · ≈ ¥713</small></div>
+        <div class="when">10/24<small>3 天后</small></div><span class="meta">⋯</span>
+      </div>
+      <div class="acct">
+        <span></span>
+        <div class="who"><span>工作邮箱</span><span class="chip">Pro</span><span class="chip">美国</span></div>
+        <div><div class="qrow"><span>本周</span><div class="bar"><i style="width:12%;background:var(--clay)"></i></div><span>12% · 6 天</span></div></div>
+        <div class="money" style="font-size:15px">$20<small>每月 · ≈ ¥142</small></div>
+        <div class="when">11/15<small>25 天后</small></div><span class="meta">⋯</span>
+      </div>
+      <div class="prod anno">
+        <span class="pin" style="left:-34px;top:14px">3</span>
+        <span class="logo" style="background:#10A37F">G</span>
+        <div><div class="row" style="gap:8px"><b style="font-weight:550;font-size:13.5px">ChatGPT Plus</b><span class="chip">印度</span></div><div class="meta">个人账号 · 自动续费关</div></div>
+        <div class="meta">没有绑定额度来源</div>
+        <div class="money">₹1,950<small>每年 · ≈ ¥167 · $23</small></div>
+        <div class="when">2027/3/2<small>130 天后</small></div><span class="meta">⋯</span>
+      </div>
+
+      <div class="grp">网络 · 3</div>
+      <div class="prod anno">
+        <span class="pin" style="left:-34px;top:14px">4</span>
+        <span class="logo" style="background:#7D8F5E">S</span>
+        <div><div class="row" style="gap:8px"><b style="font-weight:550;font-size:13.5px">主力机场</b><span class="chip olive">订阅链接已解析</span></div><div class="meta">SubBoost · 标准套餐</div></div>
+        <div><div class="qrow"><span>本期流量</span><div class="bar"><i style="width:47%;background:var(--olive)"></i></div><span>94 / 200 GB</span></div></div>
+        <div class="money">¥25<small>每月</small></div>
+        <div class="when">11/3<small>13 天后</small></div><span class="meta">⋯</span>
+      </div>
+      <div class="prod">
+        <span class="logo" style="background:#5F7A99">V</span>
+        <div><div class="row" style="gap:8px"><b style="font-weight:550;font-size:13.5px">备用机场</b><span class="chip ochre">未配置订阅链接</span></div><div class="meta">一次性 · 到期 12/31</div></div>
+        <div class="meta">配置订阅链接后自动读取流量和到期</div>
+        <div class="money">Bs 70<small>一次性 · ≈ ¥72</small></div>
+        <div class="when">12/31<small>到期</small></div><span class="meta">⋯</span>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="pin">1</span><span>顶部改成「折合」为主：用 hub 给的 <code>monthly_converted</code>，¥ / $ 可切换（记住选择）；旁边按原币种列出 <code>monthly_by_currency</code>，带汇率日期；<code>exchange_rate_stale</code> 时日期变黄并提示「汇率可能过期」；<code>unconverted_currencies</code> 非空时提示哪些货币没算进去。一次性付款不计入月均。</span>
+      <span class="pin">2</span><span>一个产品多账号：同一 <code>service_key</code>（没有时按名称）的记录合成一个产品行，显示「N 个账号」、合计折合月费、最近一次续费；点开列出每个账号：账号标签、套餐、付款方、付费区域、各自的额度条和续费。只有一个账号的产品不出现分组。</span>
+      <span class="pin">3</span><span>金额：大字写原币种和原周期（₹1,950 / 每年），小字写折合（≈ ¥167 · $23，取 <code>price_converted</code>）；原币种就是人民币或美元时只写另一种。付费区域作为小标签放在名称旁。</span>
+      <span class="pin">4</span><span>网络订阅：已配置链接的显示解析出的流量和到期；未配置的显示黄色提示，点开在原地编辑里粘贴或上传链接。</span>
+    </div>
+
+    <h3 class="fig">原地编辑：付费区域、币种、网络订阅链接</h3>
+    <div class="card" style="max-width:860px;padding:20px 22px">
+      <div class="row" style="margin-bottom:14px"><span class="logo" style="background:#7D8F5E">S</span><div><b style="font-weight:550">主力机场</b><div class="meta">上次修改 10/12 · 版本 4</div></div><span class="sp"></span><span class="seg"><b>AI</b><b class="on">网络</b><b>会员</b><b>其他</b></span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="field"><label>账号标签</label><div class="input">个人账号</div></div>
+        <div class="field"><label>套餐</label><div class="input">标准套餐 200 GB</div></div>
+        <div class="field"><label>金额</label><div class="input"><span class="chip">CNY ▾</span>25.00<span class="sp"></span><span class="meta">≈ $3.5</span></div></div>
+        <div class="field"><label>付费区域</label><div class="input">中国<span class="sp"></span><span class="meta">▾ 美国 · 印度 · 土耳其 · 尼日利亚…</span></div></div>
+        <div class="field"><label>付款方</label><div class="seg" style="align-self:flex-start"><b class="on">个人</b><b>公司</b><b>其他</b><b>免费</b><b>待确认</b></div></div>
+        <div class="field"><label>周期</label><div class="input">每 1 月 · 下次 11/3 · ✓ 自动续费</div></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>订阅链接（只写入，保存后不再显示原文）</label>
+        <div class="drop">
+          <div style="flex:1">
+            <div class="input muted">粘贴 https://… 订阅链接，或把含链接的文本 / 配置文件拖到这里</div>
+            <div class="meta" style="margin-top:8px"><span class="ok">● 解析成功</span> · 已用 94 GB / 200 GB · 到期 11/3 · 来自响应头 subscription-userinfo</div>
+          </div>
+          <span class="btn sec">解析</span>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>额度来源</label><div class="input"><span class="logo sm" style="background:#7D8F5E">S</span>SubBoost · network · 个人账号<span class="sp"></span><span class="meta">当前 94 / 200 GB</span></div></div>
+      <div class="row" style="margin-top:18px"><span class="bad" style="font-size:12px">删除订阅</span><span class="meta" style="margin-left:12px">停用（保留记录、不计入月均）</span><span class="sp"></span><span class="btn sec">取消</span><span class="btn">保存 ⌘↩</span></div>
+    </div>
+    <p class="note" style="margin-top:12px">付费区域是自由文本，下拉给出已用过的区域和几个常见低价区；币种下拉按常用排序（CNY、USD、已用过的，再到全部）。订阅链接只写不读：保存后只显示「已配置 · 上次解析时间 · 结果」，可以「替换」或「移除」。</p>
+
+    <h3 class="fig">简略卡（主页）</h3>
+    <div class="card" style="width:330px">
+      <div class="row"><span class="logo sm" style="background:var(--ochreT);color:#9C7B22">⇄</span><b style="font-weight:550">订阅</b><span class="meta">13 项</span><span class="sp"></span><span class="meta">＋</span></div>
+      <div style="font-family:var(--serif);font-size:36px;letter-spacing:-.02em;margin-top:10px">¥612<span style="font-family:var(--sans);font-size:12px;color:var(--ink3)"> / 月 · 折合</span></div>
+      <div class="meta">≈ $85 · 4 种货币 · 汇率 10/23</div>
+      <div class="row" style="margin-top:12px"><span class="logo sm" style="background:#D97757">C</span><span>Claude · 个人账号</span><span class="sp"></span><span class="chip ochre">3 天后 · $100</span></div>
+      <div class="qrow" style="margin-top:8px;grid-template-columns:70px 1fr 40px"><span>主力机场</span><div class="bar"><i style="width:47%;background:var(--olive)"></i></div><span>47%</span></div>
+      <div class="meta warn" style="margin-top:8px">7 项付款方待确认</div>
+    </div>
+
+    <div class="ask"><b>需要确认（含要问 fn 的）</b><ol>
+      <li>顶部主数字用「折合人民币」、可切到美元，原币种列在旁边，可以吗？个人 / 公司拆分沿用现在的付款方。</li>
+      <li>多账号合并的依据：同一 <code>service_key</code>，没有时按名称完全相同。可以吗？还是希望手动指定「同一产品」？</li>
+      <li>订阅链接的写入接口我没探到（只看到 <code>quota_url_configured</code>，现在 13 条都是 false）。需要 fn 确认：字段名（<code>quota_url</code>？）、是否在 POST / PATCH 记录里一起传、有没有「只解析不保存」的预览接口、解析失败的错误形状、「上传」是指上传配置文件还是只粘贴链接。</li>
+      <li>付费区域要不要和币种联动（选「印度」时默认 INR）？</li>
+    </ol></div>
+  </section>
+</div>
+</body>
+</html>
