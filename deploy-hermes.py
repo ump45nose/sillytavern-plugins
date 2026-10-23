@@ -39,9 +39,9 @@ def main():
     parser.add_argument("--runtime", type=Path, default=Path("/home/yuwk/cron"))
     parser.add_argument("--profile-home", type=Path, default=Path("/home/hermes/.hermes/profiles/lingjun"))
     parser.add_argument("--agent-root", type=Path, default=Path("/home/hermes/.hermes/hermes-agent"))
-    parser.add_argument("--review-root", type=Path, default=Path("/vol2/1000/Docker/personal-review"))
     parser.add_argument("--only", action="append", default=[], metavar="REPO_FILE",
                         help="Install only these exact source files and their manifest wrappers; repeatable")
+    parser.add_argument("--check", action="store_true", help="Validate source inputs without changing runtime")
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
     selected = {Path(p).as_posix() for p in args.only}
@@ -50,6 +50,16 @@ def main():
         if not path.is_relative_to(source) or not path.is_file() or Path(relative).parts[0] not in {"hermes", "model", "retired"}:
             parser.error(f"invalid selected source file: {relative}")
     manifest = json.loads((source / "hermes/manifest.json").read_text())
+    for group in manifest.values():
+        for relative in group.values():
+            if not (source / relative).is_file():
+                parser.error(f"missing manifest source: {relative}")
+    for name in ("login.py", "qr-login.py", "prepare.py"):
+        if not (source / "steam-asf" / name).is_file():
+            parser.error(f"missing Steam helper: {name}")
+    if args.check:
+        print("Hermes source manifest validated")
+        return
     local_config = args.runtime / "env/hermes.local.json"
     if local_config.exists():
         # Host deploy resets env/ to 0700; restore only this read boundary.
@@ -73,9 +83,7 @@ def main():
         atomic_write(args.runtime / "scripts/steam-asf" / name,
                      (source / "steam-asf" / name).read_text(), 0o755)
     for kind, base in (("profile_scripts", args.profile_home / "scripts"),
-                       ("agent_scripts", args.agent_root / "scripts"),
-                       ("review_scripts", args.review_root / "scripts"),
-                       ("review_sources", args.review_root / "review/sources")):
+                       ("agent_scripts", args.agent_root / "scripts")):
         for name, relative in manifest.get(kind, {}).items():
             if selected and relative not in selected:
                 continue
@@ -86,11 +94,6 @@ def main():
                 shutil.copy2(old, saved)
                 saved.chmod(0o600)
             content = wrapper(args.runtime / relative)
-            if kind == "review_sources":
-                content = ("from pathlib import Path\nimport runpy\nimport sys\n"
-                           f"target = Path({str(args.runtime / relative)!r})\n"
-                           "sys.path.insert(0, str(target.parent))\n"
-                           "globals().update(runpy.run_path(str(target), run_name=__name__))\n")
             atomic_write(old, content, 0o755)
     print(f"Hermes cron source installed in {args.runtime}; entrypoint backups: {backup}")
 

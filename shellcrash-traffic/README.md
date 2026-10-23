@@ -23,10 +23,10 @@ in the traffic database or AI JSON.
 
 ## Commands
 
-月报入口由本仓库的 `shellcrash-traffic-report` 符号链接维护，指向同目录
-`shellcrash_traffic.py`。NAS 的 `/home/yuwk/cron/scripts/shellcrash-traffic-report`
-应直接链接到该入口。脚本按启动文件名选择月报模式；不要将月报入口包装为
-`python3 shellcrash_traffic.py`，否则会进入采集模式并拒绝 `--html`。
+采集与 AI 导出源码在本目录维护。部署将月报入口
+`/home/yuwk/cron/scripts/shellcrash-traffic-report` 链接到同目录的
+`shellcrash-traffic`。脚本按启动文件名选择月报模式，不能用
+`python3 shellcrash_traffic.py` 替代月报入口。
 
 ```bash
 /home/yuwk/cron/scripts/shellcrash-traffic-report --month 2026-10 --group host --top 50

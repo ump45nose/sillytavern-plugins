@@ -11,20 +11,12 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-CONFIG = Path(os.environ.get("HERMES_HOME", "/home/hermes/.hermes/profiles/lingjun")) / "benefits-deployment.json"
-
-
-def bounded(path, limit=65536):
-    with Path(path).open("rb") as stream:
-        raw = stream.read(limit + 1)
-    if len(raw) > limit:
-        raise ValueError("deployment_input_limit")
-    return json.loads(raw)
+from benefits_results import CONFIG, bounded, load_deployment
 
 
 def main(task_id):
     started_at, started = datetime.now(timezone.utc).isoformat(), time.monotonic()
-    cfg = bounded(CONFIG)
+    cfg = load_deployment(CONFIG)
     task = cfg["tasks"][task_id]
     platform = task.get("platform", task_id)
     if task.get("enabled", True) is False:
