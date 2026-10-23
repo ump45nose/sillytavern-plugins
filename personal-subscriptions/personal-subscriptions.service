@@ -1,0 +1,24 @@
+[Unit]
+Description=Personal Subscriptions HTTP and MCP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yuwk
+Group=Users
+WorkingDirectory=/home/yuwk/src/personal-subscriptions
+EnvironmentFile=/home/yuwk/.config/personal-subscriptions/service.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/yuwk/src/personal-subscriptions/.venv/bin/personal-subscriptions serve
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/vol2/1000/Docker/personal-subscriptions/data
+
+[Install]
+WantedBy=multi-user.target
