@@ -1,0 +1,77 @@
+schema_version: 1
+id: usage-monitor-mcp
+name: 用量统计
+deployment_mode: existing
+command:
+- usage-monitor-mcp
+public_url: https://usage-home.172906573.xyz
+port: 8080
+host_port: 18103
+bind_address: 192.168.31.201
+compose_project: mcp
+compose_service: app
+user: 1000:1001
+volumes:
+- name: usage-data
+  mount: /data
+  external: true
+bind_mounts:
+- source: /vol2/1000/Docker/token-monitor/hub-data
+  mount: /sources/token-monitor
+  read_only: true
+- source: /var/lib/shellcrash-traffic
+  mount: /sources/shellcrash
+  read_only: true
+- source: /vol2/1000/Docker/stacks/mcp-platform/runtime/usage-monitor-mcp/secrets
+  mount: /run/secrets
+  read_only: true
+environment:
+  HOST: 0.0.0.0
+  PORT: '8080'
+  USAGE_DATA_DIR: /data
+  USAGE_TIMEZONE: Asia/Taipei
+  SHELLCRASH_TIMEZONE: Asia/Shanghai
+  USAGE_DAILY_HOUR: '23'
+  USAGE_DAILY_MINUTE: '0'
+  TOKEN_MONITOR_STATS_URL: http://192.168.31.201:17321/api/stats
+  TOKEN_MONITOR_SECRET_FILE: /run/secrets/token-monitor-secret
+  DINGTALK_EVENTS_CONFIG: /run/secrets/dingtalk-events.json
+  OAUTH_STORAGE_PATH: /data/oauth
+  MCP_DEVELOPMENT_NO_AUTH: 'false'
+required_env:
+- OIDC_CLIENT_SECRET
+- OAUTH_JWT_SIGNING_KEY
+- OAUTH_STORAGE_ENCRYPTION_KEY
+- OIDC_AUTHORIZED_USERNAMES
+- USAGE_EVENT_SUBJECT
+auth:
+  client_id: usage-monitor-mcp
+  discovery_url: https://authelia-home.172906573.xyz/.well-known/openid-configuration
+expected_tools:
+- get_daily_usage
+- list_usage_reports
+- get_usage_report
+- get_usage_event_status
+plugin:
+  name: usage-monitor-mcp
+  version: 0.1.0
+  display_name: 用量统计
+  app_id: asdk_app_6ac33f40ad208191a08fbcfe6894796d
+  logo: assets/plugin/token-monitor-web.png
+  description: 汇总多设备 Token Monitor 和 ShellCrash 流量。按日期查询 Token、模型、工具、设备、估算成本、订阅配置、网络上传下载及采集缺口；每天推送当日数据摘要与可分页读取的报告。可接收已配置的钉钉待办与审批事件，查看事件详情。
+  short_description: 每日汇总 AI 用量和网络流量，接收钉钉事件
+  brand_color: '#315EFB'
+  keywords:
+  - Token Monitor
+  - ShellCrash
+  - 用量
+  - 流量
+  - 日报
+  - 钉钉事件
+cap_drop:
+- ALL
+security_opt:
+- no-new-privileges:true
+external_networks:
+- usage-monitor-mcp_default
+container_name: usage-monitor-mcp-app-1

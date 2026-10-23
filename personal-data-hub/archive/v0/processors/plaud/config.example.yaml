@@ -1,0 +1,14 @@
+schema_version: 1
+base_config: /home/yuwk/.config/personal-data-hub/plaud-processing-base.yaml
+data_root: /vol1/1000/plaud-daily/daily-v3
+timezone: Asia/Shanghai
+scope: full_recordings
+fusion_mode: auto_validated
+plaud_token_file: /home/hermes/.plaud/tokens-mcp.json
+groq_key_file: /home/hermes/.hermes/secrets/plaud-daily/groq.key
+cpa_url: http://127.0.0.1:8317/v1/chat/completions
+gemini_model: REPLACE_WITH_AVAILABLE_AUDIO_MODEL
+gemini_transport: native
+fusion_model: REPLACE_WITH_EXISTING_FUSION_MODEL
+summary_model: REPLACE_WITH_EXISTING_SUMMARY_MODEL
+max_input_bytes: 750000

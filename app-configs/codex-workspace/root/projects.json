@@ -82,5 +82,11 @@
     "path": "personal-info/personal-crm",
     "remote_url": "https://github.com/ump45nose/personal-crm.git",
     "branch": "main"
+  },
+  {
+    "name": "personal-data-hub",
+    "path": "personal-data-hub",
+    "remote_url": "https://github.com/ump45nose/personal-data-hub.git",
+    "branch": "main"
   }
 ]

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CHATLOG_EXECUTABLE</key>
+		<string>/Users/yuwk/Library/Application Support/personal-crm/bin/chatlog-keeper-v0.3.6-preview</string>
+		<key>CHATLOG_EXPECTED_SHA256</key>
+		<string>8b5e6521ed288f9aaab1e9531c985a6c27be334a2f01e10579266992edf86dfa</string>
+		<key>CHATLOG_SCOPES</key>
+		<string>/Users/yuwk/Library/Application Support/personal-crm/wechat/whitelist-scopes.json</string>
+		<key>CRM_CHECKPOINT</key>
+		<string>/Users/yuwk/Library/Application Support/personal-crm/checkpoint.json</string>
+		<key>CRM_CLIENT_ID</key>
+		<string>macbook-pro</string>
+		<key>CRM_ENV_FILE</key>
+		<string>/Users/yuwk/Library/Application Support/personal-crm/connector.env</string>
+		<key>PYTHONPATH</key>
+		<string>/Users/yuwk/WorkSpace/Code/github/personal-data-hub/apps/crm/src</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.personal-crm.wechat</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/yuwk/WorkSpace/Code/github/personal-data-hub/apps/crm/.venv/bin/python</string>
+		<string>-c</string>
+		<string>from personal_crm.connector.cli import main; main()</string>
+		<string>--watch</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/yuwk/Library/Application Support/personal-crm/logs/wechat.error.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/yuwk/Library/Application Support/personal-crm/logs/wechat.log</string>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/yuwk/WorkSpace/Code/github/personal-data-hub/apps/crm</string>
+</dict>
+</plist>

@@ -6,6 +6,7 @@
 
 | 目录 | 作用 |
 | --- | --- |
+| `personal-data-hub/` | 新版 Personal Hub：macOS 客户端与 hub-api 薄聚合后端；旧版封存在 `archive/personal-data-hub-v1-20261023` Git 标签。 |
 | `personal-info/personal-records/` | 独立健康与账单 Webhook、SQLite 业务数据、HTTP / MCP。 |
 | `personal-info/` | 独立 CRM、健康/账单、Plaud 与个人复盘；应用各自存储并提供接口，复盘直接读取各来源。 |
 | `personal-info/plaud-archive/` | 独立 Plaud 采集、三源转录、Markdown 与音频归档及 HTTP/MCP CRUD。 |

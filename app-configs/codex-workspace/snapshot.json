@@ -1,12 +1,12 @@
 {
-  "snapshot_date": "2026-10-19",
+  "snapshot_date": "2026-10-23",
   "workspace_path": "/home/yuwk/code",
-  "source_revision": "c4afa7cfcaca3021383ba21c44dba17ffac10c43",
+  "source_revision": "fcf6155947f912781df71c302c4d792a712a4680",
   "files": [
     {
       "source": "AGENTS.md",
       "stored_at": "root/AGENTS.md",
-      "sha256": "5ff607abc52dbdad29197cfeb91dc56979466f00bcd3b15fa80e0624c0641851"
+      "sha256": "34593881784f76c5080022a64620db5f142360a9b297be069b68cd523690277d"
     },
     {
       "source": "README.md",
@@ -21,7 +21,7 @@
     {
       "source": "projects.json",
       "stored_at": "root/projects.json",
-      "sha256": "79581e645e33e4080de01123c034c9316a27756783b048259a429f212327b688"
+      "sha256": "b50751f5f9ad894b59d64486e9e3fb28a9b68200157db3db8b5043cc71210ee5"
     },
     {
       "source": "scripts/project.py",

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.personal-crm.wechat</string>
+  <key>ProgramArguments</key><array><string>/ABS/PATH/.venv/bin/personal-crm-wechat</string><string>--watch</string></array>
+  <key>WorkingDirectory</key><string>/ABS/PATH/personal-crm</string>
+  <key>EnvironmentVariables</key><dict><key>CRM_ENV_FILE</key><string>/ABS/PATH/connector.env</string></dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/personal-crm-wechat.log</string>
+  <key>StandardErrorPath</key><string>/tmp/personal-crm-wechat.error.log</string>
+</dict></plist>

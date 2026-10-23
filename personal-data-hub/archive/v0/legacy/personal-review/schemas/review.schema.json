@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-review.local/schemas/review.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sources", "evidence", "daily", "weekly", "stages", "retention", "projections", "attachments", "memos", "health"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "sources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["skysight", "memos", "email", "health", "finance", "git", "crm", "mem0", "google_tasks", "google_calendar", "email_accounts", "email_body_budget", "email_filter", "google_calendar_max_results", "google_tasks_max_results", "aggregation", "priority"],
+      "properties": {
+        "skysight": {"type": "boolean"}, "memos": {"type": "boolean"}, "email": {"type": "boolean"},
+        "health": {"type": "boolean"}, "finance": {"type": "boolean"}, "git": {"type": "boolean"}, "crm": {"type": "boolean"}, "mem0": {"type": "boolean"}, "google_tasks": {"type": "boolean"}, "google_calendar": {"type": "boolean"},
+        "email_accounts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "email_body_budget": {"type": "integer", "minimum": 0, "maximum": 50},
+        "email_filter": {
+          "type": "object", "additionalProperties": false,
+          "required": ["useful_patterns", "automated_allow_patterns", "automated_sender_patterns", "sensitive_patterns", "noise_patterns", "blocker_patterns"],
+          "properties": {
+            "useful_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "automated_allow_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "automated_sender_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "sensitive_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "noise_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "blocker_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        "google_calendar_max_results": {"type": "integer", "minimum": 1, "maximum": 2500},
+        "google_tasks_max_results": {"type": "integer", "minimum": 1, "maximum": 100},
+        "aggregation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["github_sender_patterns", "github_subject_patterns", "github_max_subjects", "google_tasks_max_titles"],
+          "properties": {
+            "github_sender_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "github_subject_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "github_max_subjects": {"type": "integer", "minimum": 1, "maximum": 20},
+            "google_tasks_max_titles": {"type": "integer", "minimum": 1, "maximum": 20}
+          }
+        },
+        "priority": {"type": "array", "minItems": 10, "maxItems": 10, "uniqueItems": true, "items": {"enum": ["memos", "skysight", "email", "google_calendar", "google_tasks", "crm", "git", "finance", "health", "mem0"]}}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["admitted_kinds", "excluded_patterns", "dedupe_window_minutes"],
+      "properties": {
+        "admitted_kinds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["delivery", "decision", "blocker", "external_feedback", "relationship", "health_change", "finance_change", "git_activity"]}},
+        "excluded_patterns": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "dedupe_window_minutes": {"type": "integer", "minimum": 1, "maximum": 1440}
+      }
+    },
+    "daily": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cutoff", "skysight_cutoff", "draft_expiry_hours", "max_unresolved", "summary_max_chars", "summary_max_list_separators", "moment_min_chars", "moment_forbidden_patterns", "moment_scene_patterns", "comment_max_chars", "research_topics", "action_options", "guidance", "final_edit", "emotion_words", "fields"],
+      "properties": {
+        "cutoff": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "skysight_cutoff": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "draft_expiry_hours": {"type": "integer", "minimum": 1, "maximum": 168},
+        "max_unresolved": {"const": 2},
+        "summary_max_chars": {"type": "integer", "minimum": 10, "maximum": 80},
+        "summary_max_list_separators": {"type": "integer", "minimum": 0, "maximum": 2},
+        "moment_min_chars": {"type": "integer", "minimum": 1, "maximum": 40},
+        "moment_forbidden_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "moment_scene_patterns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "comment_max_chars": {"type": "integer", "minimum": 1, "maximum": 300},
+        "research_topics": {"type": "integer", "minimum": 0, "maximum": 1},
+        "action_options": {"type": "integer", "minimum": 0, "maximum": 3},
+        "guidance": {
+          "type": "object", "additionalProperties": false,
+          "required": ["context_sources", "question_targets", "action_targets", "focus_policy", "action_option_mode", "excluded_action_domains", "forbid_review_procedure", "respect_operational_gates"],
+          "properties": {
+            "context_sources": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["candidate_facts", "user_profile"]}},
+            "question_targets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["tradeoff", "validation", "stop_condition"]}},
+            "action_targets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["current_goal", "concrete_next_step", "resource_allocation"]}},
+            "focus_policy": {"const": "primary_storyline"},
+            "action_option_mode": {"const": "alternative_resource_decisions"},
+            "excluded_action_domains": {"type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true, "items": {"const": "personal_review_operations"}},
+            "forbid_review_procedure": {"const": true},
+            "respect_operational_gates": {"const": true}
+          }
+        },
+        "final_edit": {
+          "type": "object", "additionalProperties": false,
+          "required": ["mode", "preserve", "remove", "semantic_change_requires_reconfirmation"],
+          "properties": {
+            "mode": {"const": "light_compression"},
+            "preserve": {
+              "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+              "items": {"enum": ["facts", "first_person_voice", "uncertainty"]}
+            },
+            "remove": {
+              "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+              "items": {"enum": ["repetition", "filler", "meta_instructions"]}
+            },
+            "semantic_change_requires_reconfirmation": {"const": true}
+          }
+        },
+        "emotion_words": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "fields": {"type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": {"enum": ["情绪", "健康", "财务", "留痕", "未解", "明天唯一重点", "瞬间"]}}
+      }
+    },
+    "weekly": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schedule", "expiry", "repetition_threshold", "fields"],
+      "properties": {
+        "schedule": {"type": "string", "pattern": "^(?:MON|TUE|WED|THU|FRI|SAT|SUN) (?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "expiry": {"const": "next_weekly_run"}, "repetition_threshold": {"type": "integer", "minimum": 3},
+        "fields": {"type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": {"enum": ["可验证变化", "重复模式", "沉淀", "状态", "阶段性目标", "下周资源分配", "决定日志"]}}
+      }
+    },
+    "stages": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mainline_domain", "domains", "cycle_days", "max_active_goals", "preclose_days", "missing_close_policy", "allowed_terminal_states"],
+      "properties": {
+        "mainline_domain": {"const": "总主线"},
+        "domains": {"type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["关系", "身体", "财务", "生活", "事业"]}},
+        "cycle_days": {"const": 42}, "max_active_goals": {"const": 5}, "preclose_days": {"const": 1},
+        "missing_close_policy": {"const": "freeze"},
+        "allowed_terminal_states": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": {"enum": ["成功", "失败", "停止"]}}
+      }
+    },
+    "retention": {
+      "type": "object", "additionalProperties": false,
+      "required": ["skysight_raw_days", "attachment_pending_days", "quarantine_days", "derived_until_annual"],
+      "properties": {"skysight_raw_days": {"type": "integer", "minimum": 1}, "attachment_pending_days": {"type": "integer", "minimum": 1}, "quarantine_days": {"type": "integer", "minimum": 1}, "derived_until_annual": {"type": "boolean"}}
+    },
+    "projections": {
+      "type": "object", "additionalProperties": false,
+      "required": ["retry_max", "retry_backoff_minutes"],
+      "properties": {"retry_max": {"type": "integer", "minimum": 1, "maximum": 20}, "retry_backoff_minutes": {"type": "integer", "minimum": 1, "maximum": 1440}}
+    },
+    "attachments": {
+      "type": "object", "additionalProperties": false,
+      "required": ["retry_max", "worker_batch", "max_bytes", "allowed_mime_types"],
+      "properties": {
+        "retry_max": {"type": "integer", "minimum": 1, "maximum": 20},
+        "worker_batch": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_bytes": {"type": "integer", "minimum": 1024, "maximum": 104857600},
+        "allowed_mime_types": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"]}}
+      }
+    },
+    "memos": {
+      "type": "object", "additionalProperties": false,
+      "required": ["visibility", "tags", "request_timeout_seconds", "read_retries", "retry_backoff_seconds"],
+      "properties": {
+        "visibility": {"enum": ["PRIVATE", "PROTECTED", "PUBLIC"]},
+        "tags": {"type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": {"enum": ["日报", "周报", "主线", "阶段目标", "阶段总结", "年度总结"]}},
+        "request_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 60},
+        "read_retries": {"type": "integer", "minimum": 1, "maximum": 5},
+        "retry_backoff_seconds": {"type": "number", "minimum": 0, "maximum": 10}
+      }
+    },
+    "health": {
+      "type": "object", "additionalProperties": false,
+      "required": ["daily_metrics", "weekly_metrics"],
+      "properties": {
+        "daily_metrics": {"type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": {"enum": ["steps", "sleep", "heart_rate", "resting_heart_rate", "active_calories", "oxygen_saturation", "exercise"]}},
+        "weekly_metrics": {"type": "array", "minItems": 8, "maxItems": 8, "uniqueItems": true, "items": {"enum": ["steps", "sleep", "resting_heart_rate", "heart_rate", "oxygen_saturation", "active_calories", "total_calories", "exercise"]}}
+      }
+    }
+  }
+}
