@@ -7,7 +7,7 @@ import time
 from .common import SyncError, process_lock
 from .film_store import init_schema
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def connect(state, *, readonly=False):
@@ -109,5 +109,20 @@ def _upgrade(db):
     source_columns = {r[1] for r in db.execute("PRAGMA table_info(sources)")}
     if "scan_reason" not in source_columns:
         db.execute("ALTER TABLE sources ADD COLUMN scan_reason TEXT")
-    db.execute("PRAGMA user_version=2")
+    export_columns = {r[1] for r in db.execute("PRAGMA table_info(wallabag_exports)")}
+    if "attachment_reason" not in export_columns:
+        db.execute("ALTER TABLE wallabag_exports ADD COLUMN attachment_reason TEXT")
+    # Deleted X media and missing images in a valid text EPUB are terminal
+    # skips. Preserve errors/attempt counts and local files for inspection.
+    db.execute("""UPDATE assets SET status='skipped_unavailable'
+                  WHERE platform='x' AND status='failed' AND error='content_unavailable'""")
+    db.execute("""UPDATE items SET text_done=1 WHERE platform='x'
+                  AND EXISTS(SELECT 1 FROM assets a WHERE a.platform=items.platform
+                    AND a.account=items.account AND a.item_id=items.item_id)
+                  AND NOT EXISTS(SELECT 1 FROM assets a WHERE a.platform=items.platform
+                    AND a.account=items.account AND a.item_id=items.item_id
+                    AND a.status NOT IN ('done','skipped_unavailable'))""")
+    db.execute("""UPDATE wallabag_exports SET attachment_status='skipped_unavailable',
+                  attachment_reason='images_not_embedded' WHERE attachment_status='incomplete'""")
+    db.execute("PRAGMA user_version=3")
     db.commit()

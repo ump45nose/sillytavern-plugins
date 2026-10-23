@@ -9,7 +9,7 @@ from .accounts import ACCOUNT_ERRORS, XHS_FUSE_ERRORS, AccountGuard
 from .acquisition import collect_source
 from .downloads import drain_queue
 from .adapters import TelegramAdapter
-from .common import SyncError, process_lock
+from .common import SyncError, process_lock, TERMINAL_ASSET_STATES
 from .config import telegram_accounts, telegram_config
 from .database import migrate
 from .sources import SOURCE_SPECS, make_adapter
@@ -206,9 +206,9 @@ class Engine:
                         raise OSError("media_missing")
                 else:
                     assets = self.store.assets(item)
-                    if any(asset["status"] != "done" for asset in assets):
+                    if any(asset["status"] not in TERMINAL_ASSET_STATES for asset in assets):
                         continue
-                    media = [paths(self.cfg, item, asset) for asset in assets]
+                    media = [paths(self.cfg, item, asset) for asset in assets if asset["status"] == "done"]
                     stem = None
                 target = write_item_markdown(self.cfg, item, media, stem=stem)
                 self.store.markdown_result(source, account, item["item_id"],

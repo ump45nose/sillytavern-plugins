@@ -480,8 +480,12 @@ class WallabagAdapter:
             self._fallback_epub(item, partial)
         attachment_status = self._validate_epub(
             partial, self.cfg["wallabag"]["min_content_chars"], int(locator.get("image_count") or 0))
+        attachment_reason = None
+        if attachment_status == "incomplete":
+            attachment_status = "skipped_unavailable"
+            attachment_reason = "images_not_embedded"
         final = output / filename
         os.replace(partial, final)
-        self.store.wallabag_export_result(item["account"], item["item_id"], locator["fingerprint"], attachment_status)
+        self.store.wallabag_export_result(item["account"], item["item_id"], locator["fingerprint"], attachment_status, attachment_reason)
         shutil.rmtree(staging, ignore_errors=True)
         return [final]
