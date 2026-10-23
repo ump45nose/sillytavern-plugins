@@ -37,3 +37,5 @@ async function clean(folder) {
 }
 await clean(directory);
 console.log(`Built ${result.outputFiles.length} assets into extension/dist`);
+
+await build({entryPoints: ["src/rp-entry.ts"],outfile: "extension-resource-center/index.js",bundle:true,format:"esm",target:"es2022",minify:true,sourcemap:true});
