@@ -28,12 +28,28 @@ CHECKOUT_WAIT_SECONDS = 150
 PROMOTIONS = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
 ALLOWED = {"store.epicgames.com", "www.epicgames.com", "accounts.epicgames.com"}
 PURCHASE_NAMES = re.compile(
-    r"^(Get|Free|Add to cart|Buy now|In library|In your library|获取|免费|加入购物车)$",
+    r"^(Get|Free|Add to cart|Buy now|In library|In your library|获取|免费|加入购物车|已在库中)$",
     re.I,
 )
 DIRECT_PURCHASE_NAMES = re.compile(
-    r"^(Get|Free|Buy now|In library|In your library|获取|免费)$", re.I)
+    r"^(Get|Free|Buy now|In library|In your library|获取|免费|已在库中)$", re.I)
 CART_PURCHASE_NAMES = re.compile(r"^(Add to cart|加入购物车)$", re.I)
+
+
+def _challenge_frame(container):
+    """A rendered challenge frame counts even when its checkbox iframe is invisible."""
+    frames = list(getattr(container, "frames", []) or [])
+    if not frames:
+        frames = [container, *list(getattr(container, "child_frames", []) or [])]
+    for frame in frames:
+        url = getattr(frame, "url", "") or ""
+        host = urlsplit(url).hostname or ""
+        if host == "challenges.cloudflare.com":
+            return True
+        if host == "hcaptcha.com" or host.endswith(".hcaptcha.com"):
+            if "frame=challenge" in url:
+                return True
+    return False
 
 
 def clean_target(url, *, checkout=False):
@@ -382,7 +398,7 @@ class BrowserDriver:
             container.locator(
                 'iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"]'
             )
-        ) or any(
+        ) or _challenge_frame(container) or any(
             marker in text
             for marker in (
                 "verify you are human",
@@ -698,7 +714,7 @@ class BrowserDriver:
                 except Exception:
                     continue
             locator = container.get_by_role(
-                "button", name=re.compile(r"^(Place Order|Add to library)$", re.I)
+                "button", name=re.compile(r"^(Place Order|Add to library|添加到库)$", re.I)
             )
             count = await locator.count()
             if count > 8:
@@ -726,7 +742,7 @@ class BrowserDriver:
             return "unknown"
         text = await self._text(container)
         label = (await button.inner_text()).strip().casefold()
-        if not zero_total(text, add_to_library=label == "add to library"):
+        if not zero_total(text, add_to_library=label in {"add to library", "添加到库"}):
             return "unknown"
         self.checkout, self.checkout_button = container, button
         return "explicit_zero"

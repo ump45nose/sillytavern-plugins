@@ -1,4 +1,4 @@
-"""One-shot Linux task launcher, using only the Python standard library."""
+"""One-shot task launcher, using only the Python standard library."""
 
 import argparse
 from contextlib import ExitStack
@@ -130,7 +130,7 @@ def run(task: Task):
                     deadline = time.monotonic() + a.timeout
                     for attempt in range(2 if task.browser and task.browser_recovery_reasons else 1):
                         with ExitStack() as process_stack:
-                            if task.browser:
+                            if task.browser and sys.platform != "darwin":
                                 scope = process_stack.enter_context(
                                     BrowserScope(
                                         runtime / "locks/browser-cleanup.json",

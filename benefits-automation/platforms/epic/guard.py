@@ -6,9 +6,13 @@ from decimal import Decimal
 
 def zero_total(text, add_to_library=False):
     amounts = re.findall(r"(?im)^\s*[A-Z]{3}\s+([0-9]+[.,][0-9]{2})\s*$", text)
+    free_library = (
+        "This is free. Add it to your library to get started." in text
+        or "这是免费内容。添加到库即可开始体验。" in text
+    )
     if (
         not re.search(r"(?im)^\s*(?:total|order total)\b", text)
-        and "This is free. Add it to your library to get started." in text
+        and free_library
         and amounts
         and add_to_library
     ):
