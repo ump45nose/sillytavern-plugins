@@ -86,8 +86,8 @@ def create_app(settings: Settings | None = None, service: Service | None = None)
     def sources(): return service.store.source_status()
 
     @app.get("/api/v1/health/summary", dependencies=[Depends(read)])
-    def health_summary(start_date: str, end_date: str, metrics: list[str] | None = Query(default=None)):
-        return service.health_summary(start_date, end_date, metrics)
+    def health_summary(start_date: str, end_date: str, metrics: list[str] | None = Query(default=None), group_by: str | None = None):
+        return service.health_summary(start_date, end_date, metrics, group_by)
 
     @app.get("/api/v1/health/days", dependencies=[Depends(read)])
     def health_days(start_date: str | None = None, end_date: str | None = None, offset: int = 0, limit: int = 50):

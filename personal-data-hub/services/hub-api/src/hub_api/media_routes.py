@@ -1,7 +1,6 @@
 import httpx
 from fastapi import Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
+from .proxy import stream_response
 
 
 def register(app, settings, media, authenticated):
@@ -27,11 +26,5 @@ def register(app, settings, media, authenticated):
             code = 404 if response.status_code == 404 else 502
             await response.aclose()
             raise HTTPException(code)
-        async def chunks():
-            try:
-                async for part in response.aiter_raw():
-                    yield part
-            finally:
-                await response.aclose()
-        return StreamingResponse(chunks(), media_type=response.headers["content-type"],
-                                 headers={"Cache-Control": "private, max-age=300"}, background=BackgroundTask(response.aclose))
+        return stream_response(response, media_type=response.headers["content-type"],
+                               headers={"Cache-Control": "private, max-age=300"})

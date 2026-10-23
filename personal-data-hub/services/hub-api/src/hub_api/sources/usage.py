@@ -23,8 +23,8 @@ def history_day(row):
 
 
 class Usage:
-    def __init__(self, client, settings):
-        self.client, self.settings = client, settings
+    def __init__(self, client, settings, now):
+        self.client, self.settings, self.now = client, settings, now
 
     async def token(self):
         async def read(path):
@@ -62,7 +62,9 @@ class Usage:
                     'updated_at': local_time(row.get('lastUsedAt'), ZoneInfo('Asia/Shanghai'))})
             return result
         # Account display identity is authenticated metadata; no credentials or conversation content.
-        return {"today": {"total": today.get("totalTokens"), "cost": today.get("costUsd")},
+        return {"date": (local_time(raw.get("updatedAt"), ZoneInfo("Asia/Shanghai")) or self.now().isoformat())[:10],
+                "limits_complete": all(p.get("status") == "ok" and not p.get("stale") for p in raw.get("limits", {}).get("providers", [])),
+                "today": {"total": today.get("totalTokens"), "cost": today.get("costUsd")},
                 'tools': usage_parts(today.get('clients'), today.get('clientCosts')),
                 'models': usage_parts(today.get('models'), today.get('modelCosts'), models=True),
                 'devices': devices, 'device_daily': histories,

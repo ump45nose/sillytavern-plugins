@@ -1,47 +1,29 @@
 """Read-only Personal Records adapter. Never uses webhook or write credentials."""
 import asyncio
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from .base import Adapter
 
 
-def union_seconds(intervals):
-    pairs = sorted((datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp(),
-                    datetime.fromisoformat(e.replace("Z", "+00:00")).timestamp()) for s, e in intervals)
-    end = float("-inf")
-    total = 0
-    for start, stop in pairs:
-        total += max(0, stop - max(start, end))
-        end = max(end, stop)
-    return total
-
-
-def intervals(samples):
-    return [(s["start"], s["end"]) for s in samples]
-
-
 def health_day(record):
-    sleep = record.get("sleep")
-    asleep = [s for s in sleep or [] if s["stage"] in ("sleeping", "light", "deep", "rem")]
-    awake = [s for s in sleep or [] if s["stage"] in ("awake", "awake_in_bed", "out_of_bed")]
-    duration = (union_seconds(intervals(asleep + awake)) - union_seconds(intervals(awake))) / 60 if asleep else None
-    stages = []
-    for target, names in {"deep": ("deep",), "core": ("light",), "rem": ("rem",),
-                          "awake": ("awake", "awake_in_bed", "out_of_bed")}.items():
-        samples = [s for s in sleep or [] if s["stage"] in names]
-        if samples:
-            stages.append({"stage": target, "minutes": round(union_seconds(intervals(samples)) / 60, 2)})
+    """Convert source-owned daily metrics to the existing card contract."""
+    metrics = record.get("metrics", {})
+    sleep = metrics.get("sleep", {})
+    stages = sleep.get("stages_seconds", {})
+    def minutes(value):
+        return round(value / 60, 2) if value is not None else None
     def latest(field, value):
-        samples = record.get(field) or []
-        return max(samples, key=lambda s: s["time"])[value] if samples else None
-    exercise = record.get("exercise")
-    return {"date": record["date"], "steps": record.get("steps"),
-            "active_kcal": record.get("active_calories_kcal"),
-            "exercise_minutes": round(union_seconds(intervals(exercise)) / 60, 2) if exercise else None,
-            "sleep_minutes": round(duration, 2) if duration is not None else None,
-            "sleep_stages": stages if sleep else None,
+        return (metrics.get(field, {}).get("latest") or {}).get(value)
+    return {"date": record["date"], "steps": metrics.get("steps", {}).get("total"),
+            "active_kcal": metrics.get("active_calories_kcal", {}).get("total"),
+            "exercise_minutes": minutes(metrics.get("exercise", {}).get("duration_seconds")),
+            "sleep_minutes": minutes(sleep.get("duration_seconds")),
+            "sleep_stages": ([{"stage": target, "minutes": minutes(value)}
+                for target, value in (("deep", stages.get("deep")), ("core", stages.get("light")),
+                                      ("rem", stages.get("rem")), ("awake", sleep.get("awake_seconds")))
+                if value is not None] if sleep.get("sample_count") else None),
             "resting_hr": latest("resting_heart_rate", "bpm"), "spo2": latest("oxygen_saturation", "percentage")}
 
 
@@ -62,12 +44,12 @@ class Records:
     async def health(self):
         today = self.now().date()
         days = [today - timedelta(days=d) for d in reversed(range(14))]
-        # The source list endpoint contains scalar values and sample counts only.
-        # Fetch the 14 known day keys, bounded to four simultaneous requests.
-        records = await asyncio.gather(*(self.get("health/days/" + d.isoformat(), missing=True) for d in days))
-        normalized = [health_day(r or {"date": d.isoformat()}) for d, r in zip(days, records)]
+        summary = await self.get("health/summary", {"start_date": days[0].isoformat(),
+            "end_date": today.isoformat(), "group_by": "date"})
+        records = {row["date"]: row for row in summary["days"]}
+        normalized = [health_day(records.get(d.isoformat(), {"date": d.isoformat()})) for d in days]
         current = normalized[-1]
-        return {**current, "step_goal": 8600, "kcal_goal": 520, "exercise_goal": 45,
+        return {**current,
                 "days": [{k: day[k] for k in ("date", "steps", "resting_hr", "sleep_minutes")} for day in normalized]}
 
     async def bills(self):

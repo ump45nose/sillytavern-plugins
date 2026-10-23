@@ -1,10 +1,12 @@
 from datetime import date, timedelta
 
 
-def assemble(source, period, now):
+def assemble(source, period, now, sampled_at=None):
     if source is None:
         return None
     today = now.date()
+    snapshot_day = date.fromisoformat((source.get("date") or sampled_at or now.isoformat())[:10])
+    current = snapshot_day == today
     length = {"day": 1, "week": 7, "month": 30, "year": 371}[period]
     start = today - timedelta(days=length - 1)
     if period == "year":
@@ -12,7 +14,7 @@ def assemble(source, period, now):
     def value(day, field):
         if day > today:
             return None
-        if day == today:
+        if day == snapshot_day:
             return source["today"].get(field)
         return source["daily"].get(day.isoformat(), {}).get(field)
     def total(first, last, field):
@@ -24,29 +26,29 @@ def assemble(source, period, now):
     days = [start+timedelta(days=i) for i in range(actual_length)]
     def parts(field):
         if period == 'day':
-            return source.get(field)
-        rows = [source.get(field) if day == today else source['daily'].get(day.isoformat(), {}).get(field) for day in days]
+            return source.get(field) if current else None
+        rows = [source.get(field) if day == snapshot_day else source['daily'].get(day.isoformat(), {}).get(field) for day in days]
         if any(row is None for row in rows):
             return None
         merged = {}
         for row in rows:
             for item in row:
-                current = merged.setdefault(item['id'], {**item, 'total': 0, 'cost': 0})
+                aggregate = merged.setdefault(item['id'], {**item, 'total': 0, 'cost': 0})
                 for key in ('total', 'cost'):
-                    current[key] = current[key]+item[key] if current[key] is not None and item.get(key) is not None else None
+                    aggregate[key] = aggregate[key]+item[key] if aggregate[key] is not None and item.get(key) is not None else None
         return list(merged.values())
     def ordered(rows):
         return sorted(rows, key=lambda r: (r.get('total') is None, -(r.get('total') or 0), r['id'])) if rows is not None else None
     tools = ordered(parts('tools'))
     models = ordered(parts('models'))
-    devices = source['devices']
+    devices = source['devices'] if current or period != 'day' else None
     if period != 'day':
         histories = source.get('device_daily', {})
         interval_devices = []
         for device in devices:
             row = {**device}
             for field in ('total', 'cost'):
-                values = [device.get(field) if day == today else
+                values = [device.get(field) if day == snapshot_day else
                           histories.get(device['id'], {}).get(day.isoformat(), {}).get(field) for day in days]
                 row[field] = sum(values) if all(v is not None for v in values) else None
             interval_devices.append(row)
@@ -65,9 +67,9 @@ def assemble(source, period, now):
               "previous": total(previous_start, previous_end, "total"), "tools": tools, "devices": devices,
               'models': models,
               'history': [{'date': day, 'total': row.get('total'), 'cost': row.get('cost')} for day, row in sorted(source['daily'].items()) if day <= today.isoformat()],
-              'sessions': source.get('sessions', {}).get('day') if period == 'day' else
-                          source.get('sessions', {}).get('calendar_month') if start == today.replace(day=1) else None,
-              "buckets": buckets, "limits": source["limits"], "today": {**source["today"], "cost": round(source["today"]["cost"], 2) if source["today"].get("cost") is not None else None}}
+              'sessions': source.get('sessions', {}).get('day') if period == 'day' and current else
+                          source.get('sessions', {}).get('calendar_month') if period != 'day' and current and start == today.replace(day=1) else None,
+              "buckets": buckets, "limits": source["limits"], "today": {**source["today"], "cost": round(source["today"]["cost"], 2) if source["today"].get("cost") is not None else None} if current else {"total": None, "cost": None}}
     if result["cost"] is not None:
         result["cost"] = round(result["cost"], 2)
     return result

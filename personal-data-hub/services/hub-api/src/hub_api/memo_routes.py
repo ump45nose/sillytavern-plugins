@@ -5,11 +5,11 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator, model_validator
-from starlette.background import BackgroundTask
 
 from .configuration import json_body
+from .proxy import mutation, stream_response
 from .memo_upload import read_upload, too_large
 from .sources.memos import NotOwnAttachment, NotOwnMemo
 
@@ -77,11 +77,8 @@ def register(app, settings, memos, authenticated, manager):
 
     async def write(method, path, payload, params=None):
         async def forward():
-            try:
+            async with mutation(manager, 'memos'):
                 return await memos.personal.request('memos', path, method=method, body=payload, params=params)
-            finally:
-                # A timeout/5xx may follow a successful write; never keep the old module cache.
-                await manager.invalidate('memos')
         return await invoke(forward)
 
     @app.get('/api/v1/memos', dependencies=[Depends(authenticated)])
@@ -182,15 +179,8 @@ def register(app, settings, memos, authenticated, manager):
             status = upstream.status_code
             await upstream.aclose()
             raise HTTPException(404 if status == 404 else 502)
-        async def chunks():
-            try:
-                async for chunk in upstream.aiter_raw():
-                    yield chunk
-            finally:
-                await upstream.aclose()
         media_type = upstream.headers.get('content-type', media_type)
         headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Accel-Buffering': 'no'}
         if media_type.split(';', 1)[0] not in ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif'):
             headers['Content-Disposition'] = "attachment; filename*=UTF-8''"+quote(filename, safe='')
-        return StreamingResponse(chunks(), headers={**headers, 'Content-Type': media_type},
-            background=BackgroundTask(upstream.aclose))
+        return stream_response(upstream, headers={**headers, 'Content-Type': media_type})

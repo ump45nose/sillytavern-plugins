@@ -3,6 +3,8 @@ import time
 from collections import OrderedDict
 from datetime import timedelta
 
+import httpx
+
 from .modules.crm import overlap_score
 from .sources.personal import local_time
 
@@ -13,6 +15,10 @@ class RecordingDays:
         self.lock = asyncio.Lock()
         self.cache = OrderedDict()
 
+    async def invalidate(self):
+        async with self.lock:
+            self.cache.clear()
+
     async def get(self, before, limit):
         key = (before, limit)
         async with self.lock:
@@ -22,6 +28,17 @@ class RecordingDays:
                 return cached[1]
             async with asyncio.timeout(self.personal.settings.source_timeout_seconds):
                 result = await self.fetch(before, limit)
+            if result['days']:
+                status = 'unconfigured'
+                if self.personal.settings.crm_token:
+                    try:
+                        async with asyncio.timeout(self.personal.settings.source_timeout_seconds):
+                            await self.enrich(result['days'])
+                        status = 'ok'
+                    except (httpx.HTTPError, TimeoutError, ValueError, KeyError, TypeError, AttributeError):
+                        status = 'error'
+                for day in result['days']:
+                    day['people_status'] = status
             self.cache[key] = (time.monotonic(), result)
             self.cache.move_to_end(key)
             while len(self.cache) > 32:
@@ -52,24 +69,26 @@ class RecordingDays:
             if recordings:
                 days.append({'date': day, 'recordings': recordings,
                              'has_transcript': detail['has_transcript'], 'people': []})
-        if days and p.settings.crm_token:
-            names = {}
-            async for people in p.pages('people'):
-                names.update((person['id'], person.get('name')) for person in people)
-                if len(names) > 10000:
-                    raise ValueError('contact list exceeds supported bound')
-            count = 0
-            by_date = {d['date']: d for d in days}
-            matches = {d['date']: set() for d in days}
-            async for items in p.pages('interactions', start=min(by_date), end=max(by_date)):
-                count += len(items)
-                if count > 10000:
-                    raise ValueError('interaction list exceeds supported bound')
-                for item in items:
-                    day = by_date.get(item['date'])
-                    if day and any(overlap_score(item, r, p.now().tzinfo) is not None for r in day['recordings']):
-                        matches[day['date']].update(names[pid] for pid in item['person_ids'] if names.get(pid))
-            for day in days:
-                day['people'] = sorted(matches[day['date']])
         return {'days': sorted(days, key=lambda d: d['date'], reverse=True),
                 'next_before': selected[-1]['date'] if len(rows) > limit else None}
+
+    async def enrich(self, days):
+        p = self.personal
+        names = {}
+        async for people in p.pages('people'):
+            names.update((person['id'], person.get('name')) for person in people)
+            if len(names) > 10000:
+                raise ValueError('contact list exceeds supported bound')
+        count = 0
+        by_date = {d['date']: d for d in days}
+        matches = {d['date']: set() for d in days}
+        async for items in p.pages('interactions', start=min(by_date), end=max(by_date)):
+            count += len(items)
+            if count > 10000:
+                raise ValueError('interaction list exceeds supported bound')
+            for item in items:
+                day = by_date.get(item['date'])
+                if day and any(overlap_score(item, r, p.now().tzinfo) is not None for r in day['recordings']):
+                    matches[day['date']].update(names[pid] for pid in item['person_ids'] if names.get(pid))
+        for day in days:
+            day['people'] = sorted(matches[day['date']])

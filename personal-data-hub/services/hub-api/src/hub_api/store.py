@@ -90,12 +90,12 @@ class Store:
                        (name,version+1,now,encoded))
         return True, {'version':version+1,'updated_at':now,'document':document}
 
-    def observe_attention(self, active, scopes, now):
+    def observe_attention(self, active, scopes, now, resolved=()):
         """Resolve only conditions whose source was observed; failed reads are not recovery."""
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
             for row in db.execute('SELECT id FROM attention_state').fetchall():
-                if row['id'].split(':',1)[0] in scopes and row['id'] not in active:
+                if (row['id'].split(':',1)[0] in scopes or row['id'] in resolved) and row['id'] not in active:
                     db.execute('DELETE FROM attention_state WHERE id=?',(row['id'],))
             for identifier, since in active.items():
                 db.execute('INSERT OR IGNORE INTO attention_state(id,since) VALUES (?,?)',(identifier,since or now))

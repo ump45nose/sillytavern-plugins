@@ -61,36 +61,32 @@ class Service:
                 "sample_counts": {key: len(data[key]) for key in SERIES if key in data}})
         return {"records": records, "next_offset": offset+limit if len(rows) > limit else None}
 
-    def health_summary(self, start_date: str, end_date: str, metrics: list[str] | None = None):
-        date_window(start_date, end_date)
-        selected = HEALTH_FIELDS if metrics is None else tuple(metrics)
-        if not selected or not set(selected) <= set(HEALTH_FIELDS):
-            raise ValueError("unknown or empty health metrics")
+    @staticmethod
+    def health_metrics(rows, selected):
         scalars = {key: {"total": 0, "days": 0} for key in SCALARS if key in selected}
         points = {key: {"sample_count": 0, "sum": 0, "min": None, "max": None, "latest": None} for key in POINTS if key in selected}
         intervals = {key: [] for key in ("sleep", "exercise") if key in selected}
         # Stream the requested days; time-series arrays are never loaded for the entire archive.
         covered = 0
-        with self.store.connection() as db:
-            for row in db.execute("SELECT data FROM health_days WHERE date>=? AND date<=? ORDER BY date", (start_date, end_date)):
-                covered += 1
-                data = json.loads(row["data"])
-                for key in scalars:
-                    if key in data:
-                        scalars[key]["total"] += data[key]
-                        scalars[key]["days"] += 1
-                for key in points:
-                    stats = points[key]
-                    for sample in data.get(key, []):
-                        value = sample[POINTS[key]]
-                        stats["sample_count"] += 1
-                        stats["sum"] += value
-                        stats["min"] = value if stats["min"] is None else min(stats["min"], value)
-                        stats["max"] = value if stats["max"] is None else max(stats["max"], value)
-                        if stats["latest"] is None or sample["time"] >= stats["latest"]["time"]:
-                            stats["latest"] = sample
-                for key in intervals:
-                    intervals[key].extend(data.get(key, []))
+        for row in rows:
+            covered += 1
+            data = json.loads(row["data"])
+            for key in scalars:
+                if key in data:
+                    scalars[key]["total"] += data[key]
+                    scalars[key]["days"] += 1
+            for key in points:
+                stats = points[key]
+                for sample in data.get(key, []):
+                    value = sample[POINTS[key]]
+                    stats["sample_count"] += 1
+                    stats["sum"] += value
+                    stats["min"] = value if stats["min"] is None else min(stats["min"], value)
+                    stats["max"] = value if stats["max"] is None else max(stats["max"], value)
+                    if stats["latest"] is None or sample["time"] >= stats["latest"]["time"]:
+                        stats["latest"] = sample
+            for key in intervals:
+                intervals[key].extend(data.get(key, []))
         result = {}
         for key, value in scalars.items():
             result[key] = {"total": value["total"] if value["days"] else None, "days": value["days"]}
@@ -102,6 +98,7 @@ class Service:
             if key == "sleep":
                 asleep = [s for s in samples if s["stage"] in ASLEEP]
                 awake = [s for s in samples if s["stage"] in ("awake", "awake_in_bed", "out_of_bed")]
+                item["awake_seconds"] = union_seconds((s["start"], s["end"]) for s in awake) if awake else None
                 item["session_seconds"] = item["duration_seconds"]
                 # Sources can send a broad sleeping interval alongside detailed stages.
                 # |asleep union awake| - |awake| removes every overlapping awake period.
@@ -112,6 +109,21 @@ class Service:
                 )
                 item["stages_seconds"] = {stage: union_seconds((s["start"], s["end"]) for s in samples if s["stage"] == stage) for stage in sorted({s["stage"] for s in samples})}
             result[key] = item
+        return result, covered
+
+    def health_summary(self, start_date: str, end_date: str, metrics: list[str] | None = None, group_by: str | None = None):
+        date_window(start_date, end_date)
+        selected = HEALTH_FIELDS if metrics is None else tuple(metrics)
+        if not selected or not set(selected) <= set(HEALTH_FIELDS):
+            raise ValueError("unknown or empty health metrics")
+        if group_by not in (None, "date"):
+            raise ValueError("unknown health grouping")
+        with self.store.connection() as db:
+            rows = db.execute("SELECT date,data FROM health_days WHERE date>=? AND date<=? ORDER BY date", (start_date, end_date))
+            if group_by == "date":
+                return {"start_date": start_date, "end_date": end_date, "timezone": "Asia/Shanghai",
+                        "days": [{"date": row["date"], "metrics": self.health_metrics([row], selected)[0]} for row in rows]}
+            result, covered = self.health_metrics(rows, selected)
         return {"start_date": start_date, "end_date": end_date, "timezone": "Asia/Shanghai",
             "days": covered, "expected_days": (date.fromisoformat(end_date)-date.fromisoformat(start_date)).days+1, "metrics": result}
 

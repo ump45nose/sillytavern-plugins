@@ -1,7 +1,7 @@
 # hub-api
 
 Python 3.12 thin backend. Source business records remain in their owning applications.
-Only devices, preferences/layout, subscriptions, manual network plans and attention handling are durable;
+Only devices, temporary login state, preferences/layout and attention handling are durable;
 normalized source responses are cached in memory for their TTL and for at most 24 hours on failure.
 
 ```sh
@@ -17,11 +17,10 @@ The application and server must not log request URLs, headers, bodies or source 
 
 ## Health and bills
 
-Live adapters use the existing read credential. Health pulls exactly 14 local calendar
-days (at most four requests in flight); the source list API does not expose per-day
-sleep/heart-rate measurements. Absent days and absent measurements remain null.
-Sleep duration follows the source's interval-union rule, subtracting awake intervals;
-`light` maps to `core`. Resting heart rate/SpO2 use the latest sample of the day.
+Live adapters use the existing read credential. Health requests one 14-day summary
+with `group_by=date` from Personal Records. Interval union, awake subtraction and
+latest-sample selection belong to that service. Hub maps units and stage names only;
+missing days/measurements remain null, while a source-confirmed zero remains zero.
 
 Bills use confirmed `expense` records in CNY. Income, transfers, refunds, pending
 records and other source business types are excluded; currencies are not converted.
@@ -99,8 +98,7 @@ cells null. History is only an in-memory source cache; Hub creates no durable ar
 
 Usage Monitor GET `/api/v1/net` reads existing ShellCrash SQLite through a read-only
 transaction and grouped SQL queries. Missing/future hours remain null. Observed bytes
-may omit collection gaps, so net remains partial. Provider quotas/expiry are entered
-in Hub's manual plans below; route classes are never treated as subscription usage.
+may omit collection gaps, so net remains partial. Provider quotas/expiry come from Personal Subscriptions; route classes are never treated as subscription usage.
 
 ## Media
 
@@ -160,15 +158,9 @@ fields. Goals/budget are applied after cache reads. Cycle start selects one 42-d
 window; today's interactions/recordings are still read when outside that window.
 Changing cycle/config waits for affected in-flight reads before discarding their cache.
 
-Subscriptions replace `{items: [...]}`, at most 100 unique IDs. Amounts are CNY with
-cent precision; no currency conversion is implied. Annual prices divide by twelve,
-rounded to cents; monthly total sums the displayed equivalents. Last charge uses
-case-insensitive subscription-name substring matching in confirmed CNY expense item,
-merchant or note. One newest-first paginated stream covers the last 400 days, stops
-once every item matches and retains only matching date/amount. It is bounded to 10,000
-rows and the usual source deadline; truncation or unavailable source marks subs
-partial, while local subscription configuration remains available. Unmatched charges
-are null. Empty subscription configuration never queries bill history.
+Subscription records and billing rules belong to Personal Subscriptions; see the
+current per-record API below. Hub does not store a subscription document or match
+charges against bill history.
 
 Attention evaluates all seven NAS rules exclusively from available source caches and
 local configuration. Source data older than 24 hours is excluded. `source_down` uses
@@ -269,18 +261,10 @@ App archival; actual Memos writes and Telegram delivery remain unverified. No pr
 test archive, comment, goal/cycle or test message was created. Full execution/rollback
 evidence is in docs/plans/2026-10-21-phase5-nas-execution.md at the repository root.
 
-## Hub v2 network plans
+## Retired network plans
 
-GET/PUT `/api/v1/net/plans` stores up to five unique manual plans as the `net_plans`
-configuration document. Successful replacement invalidates the usage cache. Billing
-periods include both `period_start` and `period_end`; reset days are limited to 1–28.
-A reset on day 1 uses the observed `month_bytes`. The current Usage Monitor HTTP API
-only exposes a natural-month total and today's hours, so other reset days return
-`used_bytes: null`; usage is never estimated. Every plan uses the same router counter
-(for the same period, usage is identical); traffic cannot be assigned to individual
-providers. Existing traffic remaining/expiry preferences apply to these manual pools. Manual
-expiry reminders remain available even without a usable router snapshot.
-Collection gaps still leave the net module partial. An empty plan list produces `pools: []`.
+GET/PUT `/api/v1/net/plans` returns 410. Supplier pools come from Personal
+Subscriptions, independently of local router traffic; see the current API below.
 
 ## Hub v2 recording days and public playback
 
@@ -383,3 +367,24 @@ GET /api/v1/subscriptions/records、GET /api/v1/subscriptions/sources；POST /ap
 ## 网络订阅链接额度
 
 POST `/api/v1/net/quota-preview` 接受 `{quota_url}`，经设备认证和订阅来源写令牌代理到独立服务，返回标准 quota `{status, stale, error, reading}`，不持久化输入或读取节点正文。创建／PATCH `/api/v1/subscriptions/records` 可传网络记录的 `quota_url`；省略保留、null 清除。详情与汇总只返回 `quota_url_configured` / `quota_source`，完整链接不回显。保存后既有每5分钟采集刷新，网络 pools 返回供应商 total_bytes / used_bytes / remaining_bytes / expires_on，继续与本地路由器统计分离。客户端可先预览，再保存链接；不会自动保存预览或创建业务测试记录。
+
+## Aggregation and failure boundaries
+
+`HubContext` owns module configuration and Hub state; `SourceManager` owns source
+fetching, snapshots and invalidation. Ordinary module reads do not calculate or
+persist attention. Git reads observe only Git rules; attention requests isolate
+rules by source and report partial results when inputs fail. Unknown/stale quotas
+cannot resolve an existing reminder or clear dismissal/snooze state.
+
+Token snapshots retain their calendar date. After midnight an old snapshot supplies
+only its original day's observations; new-day totals and attribution remain null
+until that day is observed. Failed projections affect only their own module.
+
+All mutation proxies invalidate affected caches after an attempted write, including
+uncertain timeout/error outcomes, and wait for in-flight reads. Previews and dry runs
+do not invalidate. CRM writes also invalidate recording/contact joins. Streaming
+proxies share response cleanup while retaining each source's headers and checks.
+
+Recording days retain their `people` list and add `people_status` (`ok`, `error`, or
+`unconfigured`). Optional CRM enrichment has its own bounded deadline; a CRM failure
+preserves available Plaud recordings with an empty people list and error status.
