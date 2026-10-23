@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import Conflict, NotFound, Reading, Subscription
+from .brands import BRANDS, icon_url
 
 
 def utcnow(): return datetime.now(timezone.utc).isoformat()
@@ -41,7 +42,10 @@ class Store:
     def unpack(self, row, db):
         if row is None: raise NotFound("subscription not found")
         item = dict(row)
-        item.update(json.loads(item.pop("document")))
+        item.update(Subscription.model_validate_json(item.pop("document")).model_dump(mode="json"))
+        item["icon_url"] = icon_url(item["service_key"])
+        if item["theme_color"] is None and item["service_key"] in BRANDS:
+            item["theme_color"] = BRANDS[item["service_key"]][1]
         monthly = None
         if item["price"] is not None and item["cycle"] in ("day", "week", "month", "year"):
             factors = {"day": Decimal(365)/12, "week": Decimal(52)/12, "month": Decimal(1), "year": Decimal(1)/12}
