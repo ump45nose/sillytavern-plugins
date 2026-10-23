@@ -73,3 +73,7 @@ python3 subboost/verify.py /vol2/1000/Docker/subboost/backups/android-tailscale-
 - [固定版本的 SubBoost 订阅输出](https://github.com/SubBoost/subboost/blob/4a69b494b46d095c965be58cf425fe35a2c1e524/local/app/api/subscriptions/%5Bid%5D/config.yaml/route.ts)
 
 本方案的服务端验证与手机端体验分开记录。服务端配置生成、真实订阅差异和核心解析可在 NAS 检查；Android VPN 路由、首次登录、后台保活和移动数据下的最终分流必须在手机上验证。
+
+## 订阅元数据读取
+
+2026-10-22 增加 GET /api/integrations/subscriptions，使用独立 SUBSCRIPTIONS_READ_TOKEN Bearer 与 SUBSCRIPTIONS_OWNER_ID 限定所有者；只读缓存，不触发刷新。逐来源返回稳定 ID、名称、供应商上下行／总量／到期、观察时间和过期状态，不返回 URL、节点或凭据。仅保留到期信息的来源不补齐用量。镜像 local/subboost:2.8.1-subscriptions-v1；保留现有 Android Tailnet 适配、身份、数据库与调度。11项原测试、Next构建／TypeScript及真实鉴权读取通过。

@@ -36,6 +36,9 @@ def prepare(destination):
 
     for filename in ("android-tailscale.ts", "android-tailscale.json", "android-tailscale.test.ts"):
         shutil.copy2(HERE / filename, destination / "local/src/lib" / filename)
+    metadata = destination / "local/app/api/integrations/subscriptions/route.ts"
+    metadata.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(HERE / "subscriptions-metadata-route.ts", metadata)
     route = destination / "local/app/api/subscriptions/[id]/config.yaml/route.ts"
     replace_once(route, 'import { apiError } from "@local/lib/http";',
                  'import { apiError } from "@local/lib/http";\n'
