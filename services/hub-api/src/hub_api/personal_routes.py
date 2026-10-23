@@ -1,15 +1,13 @@
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Literal
-from urllib.parse import quote
 
 import httpx
 from fastapi import Depends, Header, HTTPException
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
-from starlette.background import BackgroundTask
-from .sources.personal import local_time
 from .recording_days import RecordingDays
+from .proxy import mutation, stream_response
 
 
 class InteractionInput(BaseModel):
@@ -62,10 +60,13 @@ def register(app, settings, personal, authenticated, now, manager):
                 raise HTTPException(409)
             person_id = matches[0]["id"]
         time = body.occurred_at or now()
-        value = await invoke("crm", "/api/v1/crm/interactions", method="POST", write=True,
-            body={"person_ids": [person_id], "channel": body.channel, "content": body.summary,
-                  "date": time.astimezone(now().tzinfo).date().isoformat(), "started_at": time.isoformat(), "type": "other", "source": "manual"})
-        manager.states.pop("crm", None)
+        async with mutation(manager, "crm"):
+            try:
+                value = await invoke("crm", "/api/v1/crm/interactions", method="POST", write=True,
+                    body={"person_ids": [person_id], "channel": body.channel, "content": body.summary,
+                          "date": time.astimezone(now().tzinfo).date().isoformat(), "started_at": time.isoformat(), "type": "other", "source": "manual"})
+            finally:
+                await recording_days.invalidate()
         return {"id": value["id"]}
 
     def recording(identifier):
@@ -102,13 +103,7 @@ def register(app, settings, personal, authenticated, now, manager):
         response = await upstream(source, base + ("/audio/" + audio_id if source == "plaud" else "/content"), range)
         headers = {k: v for k, v in response.headers.items() if k.lower() in ("content-type", "content-length", "content-range", "accept-ranges")}
         headers.update({'Cache-Control': 'private, no-store', 'X-Accel-Buffering': 'no'})
-        async def chunks():
-            try:
-                async for chunk in response.aiter_raw():
-                    yield chunk
-            finally:
-                await response.aclose()
-        return StreamingResponse(chunks(), status_code=response.status_code, headers=headers, background=BackgroundTask(response.aclose))
+        return stream_response(response, headers=headers)
 
     @app.get("/api/v1/recordings/{identifier}/transcript", dependencies=[Depends(authenticated)])
     async def transcript(identifier: str):

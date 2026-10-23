@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -28,6 +28,7 @@ from .memo_routes import register as memo_routes
 from .sources.memos import Memos
 from .auth import register as auth_routes
 from .store import Store
+from .context import HubContext
 from .configuration import register as configuration_routes, preferences
 from .attention import register as attention_routes
 
@@ -75,12 +76,13 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     memos = Memos(personal)
     review = Review(client, settings)
     subscription_source = Subscriptions(client, settings)
-    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings).adapters() + [Adapter("memos", "Memos", 60, memos.module if settings.memos_token else None)] + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter(),subscription_source.adapter()]}
+    defaults = {a.id: a for a in Records(client, settings, now).adapters() + personal.adapters() + Usage(client, settings, now).adapters() + [Adapter("memos", "Memos", 60, memos.module if settings.memos_token else None)] + media.adapters() + [GitHub(client, settings, now).adapter(),review.adapter(),subscription_source.adapter()]}
     for identifier in dict.fromkeys(s for ids in MODULE_SOURCES.values() for s in ids):
         defaults.setdefault(identifier, Adapter(identifier, identifier, 120 if identifier == "github" else 30))
     manager = SourceManager(adapters if adapters is not None else list(defaults.values()), now, settings.source_timeout_seconds)
-    manager.store, manager.module_sources = store, MODULE_SOURCES
-    manager.media_links = {s: getattr(settings, s + "_public_url") for s in ("emby", "navidrome", "moviepilot", "qbittorrent")}
+    context = HubContext(manager, store, MODULE_SOURCES,
+        {s: getattr(settings, s + "_public_url") for s in ("emby", "navidrome", "moviepilot", "qbittorrent")})
+    app.state.hub = context
     app.state.store, app.state.sources, app.state.client = store, manager, client
 
     def error(status):
@@ -125,7 +127,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         selected = list(dict.fromkeys(ids.split(","))) if ids else list(MODULE_SOURCES)
         if any(s not in MODULE_SOURCES for s in selected):
             raise HTTPException(400)
-        return {"modules": await modules(manager, selected)}
+        return {"modules": await modules(context, selected)}
 
     @app.get("/api/v1/modules/{identifier}", dependencies=[Depends(authenticated)])
     async def module(identifier: str, range: str = "day"):
@@ -133,7 +135,7 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             raise HTTPException(400)
         if identifier not in MODULE_SOURCES:
             raise HTTPException(404)
-        return (await modules(manager, [identifier], token_range=range))[identifier]
+        return (await modules(context, [identifier], token_range=range))[identifier]
 
     @app.get("/api/v1/devices", dependencies=[Depends(authenticated)])
     def devices():
@@ -147,9 +149,9 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         return Response(status_code=204)
 
     auth_routes(app, settings, store, client, now)
-    configuration_routes(app, store, manager, authenticated, now)
+    configuration_routes(app, store, context, authenticated, now)
     subscription_routes(app, subscription_source, settings, manager, authenticated)
-    attention_routes(app, manager, authenticated, now)
+    attention_routes(app, context, authenticated, now)
     personal_routes(app, settings, personal, authenticated, now, manager)
     memo_routes(app, settings, memos, authenticated, manager)
     review_routes(app, review, settings, manager, authenticated)

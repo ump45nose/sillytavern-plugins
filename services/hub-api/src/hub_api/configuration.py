@@ -1,9 +1,9 @@
 import json
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Preferences(BaseModel):
@@ -39,7 +39,8 @@ async def json_body(request, limit=65536):
     return value
 
 
-def register(app, store, manager, authenticated, now):
+def register(app, store, context, authenticated, now):
+    manager = context.sources
     @app.get('/api/v1/net/plans', dependencies=[Depends(authenticated)])
     @app.put('/api/v1/net/plans', dependencies=[Depends(authenticated)])
     async def retired_net_plans():
@@ -86,7 +87,7 @@ def register(app, store, manager, authenticated, now):
     @app.get('/api/v1/subscriptions',dependencies=[Depends(authenticated)])
     async def get_subscriptions():
         from .modules import modules
-        return (await modules(manager,['subs']))['subs']['data']
+        return (await modules(context,['subs']))['subs']['data']
 
     @app.put('/api/v1/subscriptions',dependencies=[Depends(authenticated)])
     async def retired_subscriptions():

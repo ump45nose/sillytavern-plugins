@@ -14,12 +14,9 @@ NOW = datetime(2026, 10, 20, 12, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def test_sleep_overlap_and_missing():
-    samples = [
-        {"start": "2026-10-19T23:00:00+08:00", "end": "2026-10-20T07:00:00+08:00", "stage": "sleeping"},
-        {"start": "2026-10-20T01:00:00+08:00", "end": "2026-10-20T03:00:00+08:00", "stage": "deep"},
-        {"start": "2026-10-20T02:00:00+08:00", "end": "2026-10-20T02:30:00+08:00", "stage": "awake"},
-    ]
-    result = health_day({"date": "2026-10-20", "sleep": samples})
+    result = health_day({"date": "2026-10-20", "metrics": {"sleep": {
+        "sample_count": 3, "duration_seconds": 27000,
+        "stages_seconds": {"deep": 7200}, "awake_seconds": 1800}}})
     assert result["sleep_minutes"] == 450
     assert result["resting_hr"] is None
     assert health_day({"date": "2026-10-20"})["sleep_minutes"] is None
@@ -36,11 +33,10 @@ def test_live_shapes_pagination_timezone_and_failure_isolation(settings, caplog)
         if "/health/" in path:
             if health_fails[0]:
                 return httpx.Response(500, text="SENTINEL-RECORDS-SECRET")
-            day = path.split("/")[-1]
-            if day == "2026-10-20":
-                return httpx.Response(200, json={"date": day, "steps": 7420, "active_calories_kcal": 412,
-                    "resting_heart_rate": [{"time": "2026-10-20T01:00:00Z", "bpm": 58}]})
-            return httpx.Response(404)
+            assert path.endswith('/health/summary') and request.url.params['group_by'] == 'date'
+            return httpx.Response(200, json={"days": [{"date": "2026-10-20", "metrics": {
+                "steps": {"total": 7420}, "active_calories_kcal": {"total": 412},
+                "resting_heart_rate": {"latest": {"time": "2026-10-20T01:00:00Z", "bpm": 58}}}}]})
         assert request.url.params["currency"] == "CNY"
         assert request.url.params["type"] == "expense"
         assert request.url.params["status"] == "confirmed"

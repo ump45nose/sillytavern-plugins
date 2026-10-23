@@ -28,47 +28,57 @@ def envelope(identifier, results, data=None):
             "sources": [{k: r[k] for k in ("id", "status", "updated_at")} for r in results], "data": data}
 
 
-async def modules(manager, ids, token_range="day"):
+async def modules(context, ids, token_range="day"):
+    manager = context.sources
     from ..configuration import preferences
-    p = preferences(manager.store)
+    p = preferences(context.store)
     source_ids = list(dict.fromkeys(s for m in ids for s in MODULE_SOURCES[m]))
     values = dict(zip(source_ids, await asyncio.gather(*(manager.get(s) for s in source_ids))))
     output = {}
     for identifier in ids:
         results = [values[s] for s in MODULE_SOURCES[identifier]]
-        data = results[0]["data"] if len(results) == 1 else None
-        if identifier == "crm":
-            data = crm_module(values["crm"]["data"], values["plaud"]["data"], manager.now(), p["stale_contact_days"], p["cycle_start"])
-        if identifier == "media":
-            def part(source, field):
-                value = values[source]["data"]
-                return value.get(field) if value is not None else None
-            data = {"continue_watching": part("emby", "continue_watching"), "latest": part("emby", "latest"),
-                    "recent_albums": part("navidrome", "recent_albums"), "downloads": part("qbittorrent", "downloads"),
-                    "services": [{"id": s, "status": "ok" if values[s]["status"] == "ok" else "error",
-                                  "link": manager.media_links[s]} for s in MODULE_SOURCES["media"]]}
-        if identifier == "token":
-            data = token_module(values["token"]["data"], token_range, manager.now())
-        if identifier == "net":
-            data = net_module(values["usage"]["data"], values["subscriptions"]["data"], manager.now())
-        if identifier == "health" and data is not None:
-            data = {**data, **{k:p[k] for k in ("step_goal","kcal_goal","exercise_goal")}}
-        if identifier == "bills" and data is not None:
-            data = {**data, "month_budget":p["month_budget"]}
-        partial = False
-        if identifier in ("git","goals") and data is not None:
-            partial = data.get("_partial", False)
-            data = {k: v for k, v in data.items() if not k.startswith("_")}
-        output[identifier] = envelope(identifier, results, data)
-        if partial and output[identifier]["status"] == "ok":
-            output[identifier]["status"] = "partial"
-        if identifier == "net" and values["usage"]["data"] and values["usage"]["data"].get("partial") and output[identifier]["status"] == "ok":
-            output[identifier]["status"] = "partial"
+        try:
+            data = results[0]["data"] if len(results) == 1 else None
+            if identifier == "crm":
+                data = crm_module(values["crm"]["data"], values["plaud"]["data"], manager.now(), p["stale_contact_days"], p["cycle_start"])
+            if identifier == "media":
+                def part(source, field):
+                    value = values[source]["data"]
+                    return value.get(field) if value is not None else None
+                data = {"continue_watching": part("emby", "continue_watching"), "latest": part("emby", "latest"),
+                        "recent_albums": part("navidrome", "recent_albums"), "downloads": part("qbittorrent", "downloads"),
+                        "services": [{"id": s, "status": "ok" if values[s]["status"] == "ok" else "error",
+                                      "link": context.media_links[s]} for s in MODULE_SOURCES["media"]]}
+            if identifier == "token":
+                data = token_module(values["token"]["data"], token_range, manager.now(), values["token"]["updated_at"])
+            if identifier == "net":
+                data = net_module(values["usage"]["data"], values["subscriptions"]["data"], manager.now())
+            if identifier == "health" and data is not None:
+                data = {**data, **{k:p[k] for k in ("step_goal","kcal_goal","exercise_goal")}}
+            if identifier == "bills" and data is not None:
+                data = {**data, "month_budget":p["month_budget"]}
+            partial = False
+            if identifier == "git" and data is not None:
+                for field in ("waiting", "blocked"):
+                    if not isinstance(data[field], list) or any(not isinstance(row["id"], str) for row in data[field]):
+                        raise ValueError("invalid GitHub rows")
+            if identifier in ("git","goals") and data is not None:
+                partial = data.get("_partial", False)
+                data = {k: v for k, v in data.items() if not k.startswith("_")}
+            output[identifier] = envelope(identifier, results, data)
+            if partial and output[identifier]["status"] == "ok":
+                output[identifier]["status"] = "partial"
+            if identifier == "net" and values["usage"]["data"] and values["usage"]["data"].get("partial") and output[identifier]["status"] == "ok":
+                output[identifier]["status"] = "partial"
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            output[identifier] = {**envelope(identifier, results), "status": "error", "data": None}
     from ..attention import calculate, visible
-    attention, states = calculate(manager)
+    attention, states, attention_partial = [], {}, False
+    if {"attention", "git"} & set(ids):
+        attention, states, attention_partial = calculate(context, None if "attention" in ids else {"github"})
     if "git" in output and output["git"]["data"]:
         git = output["git"]["data"]
-        output["git"]["data"] = {**git, **{f:[x for x in git[f] if visible(states[x["id"]],manager.now())] for f in ("waiting","blocked")}}
+        output["git"]["data"] = {**git, **{f:[x for x in git[f] if visible(states.get(x["id"]),manager.now())] for f in ("waiting","blocked")}}
     if "attention" in output:
-        output["attention"] = {"module":"attention","status":"ok","updated_at":manager.now().isoformat(),"sources":[],"data":{"items":attention}}
+        output["attention"] = {"module":"attention","status":"partial" if attention_partial else "ok","updated_at":manager.now().isoformat(),"sources":[],"data":{"items":attention}}
     return output

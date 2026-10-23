@@ -34,6 +34,20 @@ class SourceManager:
                 self.cache.pop(identifier, None)
                 self.states.pop(identifier, None)
 
+    def snapshot(self, identifier):
+        """Read a usable cached snapshot without fetching or mutating source state."""
+        cached = self.cache.get(identifier)
+        if cached and (self.now() - datetime.fromisoformat(cached["updated_at"])).total_seconds() <= 86400:
+            return {**cached, "status": self.states.get(identifier, {}).get("status", "stale")}
+        return None
+
+    def observations(self):
+        return [{"id": identifier, "name": adapter.name,
+                 "failed_since": self.states.get(identifier, {}).get("failed_since"),
+                 "last_success": self.states.get(identifier, {}).get("last_success"),
+                 "snapshot": self.snapshot(identifier)}
+                for identifier, adapter in self.adapters.items() if adapter.fetch is not None]
+
     def status(self, identifier):
         adapter = self.adapters[identifier]
         state = self.states.get(identifier, {})

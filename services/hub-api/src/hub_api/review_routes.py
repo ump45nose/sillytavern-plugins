@@ -4,6 +4,7 @@ import httpx
 from fastapi import Depends, HTTPException, Request
 
 from .configuration import json_body
+from .proxy import mutation
 
 
 def register(app,review,settings,manager,authenticated):
@@ -16,13 +17,11 @@ def register(app,review,settings,manager,authenticated):
     async def invoke(method,path,mutate=False,**kwargs):
         if not settings.review_token: raise HTTPException(503)
         try:
-            response=await review.request(method,path,**kwargs)
-            payload=response.json()
+            async with mutation(manager, 'review', enabled=mutate):
+                response=await review.request(method,path,**kwargs)
+                payload=response.json()
         except (httpx.RequestError,ValueError):
-            if mutate: await manager.invalidate('review')
             raise HTTPException(502) from None
-        if mutate and (response.is_success or response.status_code>=500):
-            await manager.invalidate('review')
         if response.is_success:
             return response_class(payload,status_code=response.status_code)
         if response.status_code in (400,404,409,422) and isinstance(payload,dict):

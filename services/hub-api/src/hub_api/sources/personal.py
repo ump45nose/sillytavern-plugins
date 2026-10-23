@@ -24,7 +24,7 @@ class Personal:
             response = await self.client.request(method, getattr(self.settings, source + "_url").rstrip("/") + path,
                 headers={"Authorization": "Bearer " + token.get_secret_value()}, params=params, json=body)
         response.raise_for_status()
-        return response.json()
+        return response.json() if response.content else {}
 
     async def pages(self, path, **params):
         cursor = None
