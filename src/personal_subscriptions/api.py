@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from mcp_platform import authorize, create_http_app, create_server
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from .models import Conflict, NotFound, Subscription
 from .settings import Settings
@@ -122,6 +123,20 @@ def create_app(settings=None, store=None):
         if service_key not in BRANDS: raise HTTPException(404)
         return FileResponse(ICON_DIRECTORY / (service_key + ".png"), media_type="image/png",
                             headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
+
+    @app.post('/api/v1/subscriptions/quota-preview', dependencies=[Depends(write)])
+    async def preview_quota(request: Request):
+        from .collection import CollectionError, quota_reading
+        from .settings import collection_config
+        payload = await body(request)
+        if set(payload) != {'quota_url'} or payload['quota_url'] is None:
+            raise ValueError('quota URL required')
+        record = Subscription(name='preview', category='network', quota_url=payload['quota_url'])
+        try:
+            reading = await run_in_threadpool(quota_reading, str(record.quota_url), collection_config())
+            return {'status': 'ok', 'stale': False, 'error': None, 'reading': reading.model_dump(mode='json')}
+        except CollectionError as exc:
+            return {'status': 'error', 'stale': True, 'error': str(exc), 'reading': None}
 
     @app.get("/api/v1/subscriptions/{identifier}", dependencies=[Depends(read)])
     def detail(identifier: str): return store.get(identifier)

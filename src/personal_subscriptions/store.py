@@ -43,10 +43,14 @@ class Store:
             with db: yield db
         finally: db.close()
 
-    def unpack(self, row, db):
+    def unpack(self, row, db, *, include_private=False):
         if row is None: raise NotFound("subscription not found")
         item = dict(row)
         item.update(Subscription.model_validate_json(item.pop("document")).model_dump(mode="json"))
+        item["quota_url_configured"] = bool(item["quota_url"])
+        item["quota_source"] = "subscription_url" if item["quota_url"] else (item["binding"] or {}).get("collector")
+        if not include_private:
+            item.pop("quota_url")
         if item["active"] and item["auto_renew"] and item["renewal_day"] is not None:
             today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
             year, month = today.year, today.month
@@ -89,14 +93,14 @@ class Store:
         with self.connect() as db:
             return self.unpack(db.execute("SELECT * FROM subscriptions WHERE id=?", (identifier,)).fetchone(), db)
 
-    def list(self, offset=0, limit=50, category=None):
+    def list(self, offset=0, limit=50, category=None, *, include_private=False):
         if not 0 <= offset or not 1 <= limit <= 200: raise ValueError("invalid pagination")
         if category and category not in ("ai", "network", "membership", "other"): raise ValueError("invalid category")
         with self.connect() as db:
             condition, params = (" WHERE json_extract(document,'$.category')=?", [category]) if category else ("", [])
             total = db.execute("SELECT count(*) FROM subscriptions" + condition, params).fetchone()[0]
             rows = db.execute("SELECT * FROM subscriptions" + condition + " ORDER BY created_at,id LIMIT ? OFFSET ?", params+[limit, offset]).fetchall()
-            return {"items": [self.unpack(r, db) for r in rows], "total": total,
+            return {"items": [self.unpack(r, db, include_private=include_private) for r in rows], "total": total,
                     "next_offset": offset+len(rows) if offset+len(rows) < total else None}
 
     def create(self, record, identifier=None):
@@ -119,7 +123,7 @@ class Store:
             previous = json.loads(row["document"])
             updated = Subscription.model_validate({**previous, **patch}).model_dump(mode="json")
             db.execute("UPDATE subscriptions SET document=?, version=version+1, updated_at=? WHERE id=?", (json.dumps(updated), utcnow(), identifier))
-            if updated["binding"] != previous["binding"] or not updated["active"]:
+            if updated["binding"] != previous["binding"] or updated["quota_url"] != previous.get("quota_url") or not updated["active"]:
                 db.execute("DELETE FROM observations WHERE subscription_id=?", (identifier,))
         return self.get(identifier)
 
@@ -133,14 +137,14 @@ class Store:
             db.execute("DELETE FROM subscriptions WHERE id=?", (identifier,))
         return {"deleted": True, "id": identifier}
 
-    def observe(self, identifier, binding, reading=None, error=None):
+    def observe(self, identifier, binding, reading=None, error=None, *, quota_url=None):
         if reading is not None: reading = Reading.model_validate(reading).model_dump_json()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT document FROM subscriptions WHERE id=?", (identifier,)).fetchone()
             # A slow collection must not reattach data after an edit or resurrect a deleted record.
             current = json.loads(row[0]) if row else None
-            if not current or current["binding"] != binding or not current["active"]: return False
+            if not current or current["binding"] != binding or current.get("quota_url") != quota_url or not current["active"]: return False
             attempted = utcnow()
             if reading is not None:
                 db.execute("INSERT INTO observations VALUES (?,?,?,?,NULL) ON CONFLICT(subscription_id) DO UPDATE SET reading=excluded.reading,last_success_at=excluded.last_success_at,last_attempt_at=excluded.last_attempt_at,error=NULL", (identifier, reading, attempted, attempted))

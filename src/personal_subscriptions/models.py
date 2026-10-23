@@ -28,6 +28,7 @@ class Subscription(Model):
     service_key: Annotated[str, Field(min_length=1, max_length=80)] | None = None
     theme_color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
     subscription_url: Annotated[HttpUrl, Field(max_length=2048)] | None = None
+    quota_url: Annotated[HttpUrl, Field(max_length=4096)] | None = Field(default=None, repr=False)
     account_label: Annotated[str, Field(max_length=200)] = ""
     category: Literal["ai", "network", "membership", "other"] = "other"
     plan: Annotated[str, Field(max_length=200)] = ""
@@ -57,7 +58,7 @@ class Subscription(Model):
     def normalize_color(cls, value):
         return value.upper() if value is not None else None
 
-    @field_validator("subscription_url")
+    @field_validator("subscription_url", "quota_url")
     @classmethod
     def website_without_credentials(cls, value):
         if value is not None and (value.username is not None or value.password is not None):
@@ -70,6 +71,8 @@ class Subscription(Model):
             raise ValueError("renewal day requires a monthly subscription")
         if self.cycle == "one_time" and (self.auto_renew or self.next_renewal is not None):
             raise ValueError("one-time payments cannot renew")
+        if self.quota_url is not None and (self.category != "network" or self.quota_url.fragment is not None):
+            raise ValueError("quota URLs require a network subscription without a URL fragment")
         if self.binding:
             if self.category not in ("ai", "network"):
                 raise ValueError("only AI and network records collect quotas")
