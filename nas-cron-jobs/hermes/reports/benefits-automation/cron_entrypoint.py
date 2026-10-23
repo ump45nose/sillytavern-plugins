@@ -12,4 +12,4 @@ sys.argv = [
     "dispatch_report.py", "--topic", "benefits-automation",
     "--report", "benefits-automation/daily_report.py",
 ]
-runpy.run_path(str(ROOT / "common/dispatch_report.py"), run_name="__main__")
+runpy.run_path(str(ROOT / "cron_reports/dispatch_report.py"), run_name="__main__")

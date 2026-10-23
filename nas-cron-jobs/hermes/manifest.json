@@ -64,12 +64,5 @@
   "agent_scripts": {
     "episode_daily.py": "model/episode_daily.py",
     "learning_candidates.py": "model/learning_candidates.py"
-  },
-  "review_scripts": {
-    "work_email_full_day_input.py": "hermes/personal-review-email-input.py",
-    "daily_delivery_ack.py": "hermes/personal-review-daily-ack.py",
-    "daily_dry_run.py": "hermes/personal-review-daily-dry-run.py",
-    "weekly_dry_run.py": "hermes/personal-review-weekly-dry-run.py",
-    "work_google_daily_input.py": "hermes/personal-review-google-input.py"
   }
 }

@@ -39,12 +39,9 @@ def main():
                 errors.append(f"- {name}：容器缺失")
                 continue
             if data["State"]["Status"] != "running" and args.mode == "repair":
-                if any(not boot["ready"](dependency) for dependency in dependencies):
-                    errors.append(f"- {name}：依赖服务不可用")
-                    continue
-                result = boot["run"]("docker", "start", name, timeout=30)
-                if not result or result.returncode:
-                    errors.append(f"- {name}：启动失败")
+                _, error = boot["ensure_started"](name, dependencies, start_timeout=30, dependency_timeout=0)
+                if error:
+                    errors.append(f"- {name}：{error}")
                     continue
                 deadline = time.monotonic() + 30
                 while not boot["ready"](name) and time.monotonic() < deadline:
