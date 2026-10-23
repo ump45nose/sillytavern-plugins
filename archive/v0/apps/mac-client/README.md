@@ -7,7 +7,8 @@
 - Mac 直连 Google 官方 API 管理任务、清单和个人日程；NAS 仍使用原只读凭据定期归档。
 - 全局 ⌃⌥Space 呼出任务浮窗；应用内 ⌘N / ⌘⇧N 新增任务 / 日程，⌘F 搜索，⌘1 / 2 / 3 切换概览。全局组合在设置中修改，冲突会提示。
 - 联系人资料及交流时间线、健康图表、阅读式正文和录音播放；原始 JSON 折叠，完整导出和附件校验保留。
-- 日报入口读取归档库中的 Memos `#日报 YYYY-MM-DD` 正文；Hermes 定时任务日志单列为执行记录，源日志没有正文时不当作完整日报。
+- Memos 笔记、日报和执行记录从类型化阅读接口进入；日报使用服务端 `daily_review/business_date`，全文阅读可按来源筛选、搜索完整正文并定位命中。
+- Markdown 正文按固定阅读版本逐页拼接，支持标题、列表、引用和链接；超过 50 块仍可读到末尾。等待整理、过期、失败、空正文和未知格式各自提示，编辑或删除后清理旧正文、摘要、附件及依据。阅读窗口每 30 秒及应用重新激活时核对状态。
 - 切页、刷新、分页、详情和附件提供加载反馈；请求代次保护防止较早请求覆盖新页面。主窗口打开时显示 Dock 和完整应用菜单；⌘W 或关闭按钮关闭主窗口后移除 Dock 图标，继续驻留菜单栏，可通过菜单栏重新打开。最小化保留 Dock。
 - 查看现有微信与电脑活动 Agent 状态、交付水位；请求现有 launchd 实例立即同步电脑活动。
 - 关闭窗口后驻留菜单栏。退出客户端不影响现有采集；开机启动可在设置中开关。
@@ -22,6 +23,14 @@ open "$HOME/Applications/Personal Data Hub.app" --args --show
 ```
 
 构建使用本机 Xcode 的 `swift build -c release`，使用长期复用的本机证书签名 `.app`，安装到 `~/Applications`，并通过 macOS `SMAppService` 注册登录启动。构建产物为 `apps/mac-client/dist/Personal Data Hub.app` 和安装成功后生成的 `Personal Data Hub.zip`。当前安装流程迁移本机已有的两个采集任务，保留既有私有配置。未授权时先完成应用安装，原采集任务保持原状；新 Mac 的设备连接配置仍需先完成。
+
+已有应用只更新查看端时使用：
+
+```bash
+python3 apps/mac-client/install.py --viewer-only
+```
+
+此模式优先更新已有 `/Applications/Personal Data Hub.app`，否则使用 `~/Applications`；可用 `--destination` 指定已有应用。构建验证原应用与本机固定证书一致，复制原签名资源，仅替换查看端、版本及图标后重新签名；保留原采集运行包和 OAuth 应用配置，不调用采集组件迁移或登录项注册。启动参数 `--viewer-only` 跳过自动采集启用。单独构建为 `bash apps/mac-client/build.sh --viewer-only '/Applications/Personal Data Hub.app'`，仍使用原 `.build` 与 `dist`。全量打包继续要求私有 Google Desktop 配置，此模式要求已经安装且签名有效的应用。
 
 应用图标使用蓝色归档盒与资料卡。`swift apps/mac-client/create-icon.swift` 通过原生矢量绘制生成 `Resources/AppIcon.png` 和包含 16–1024 像素尺寸的 `AppIcon.icns`；构建直接使用保存的 ICNS。
 
@@ -46,3 +55,5 @@ NAS 私有配置的 `hub_viewer_token_file` 指向单独凭据，允许来源、
 列表不传输原始 AX 事件、长正文或附件。长内容和原始数据界面预览最多 50,000 字符，导出保留完整数据。事件时间缺失显示“时间未提供”，不会用归档时间冒充发生时间。
 
 接口、数据口径及验收见 [展示说明](../../docs/mac-display.md) 与 [验证记录](../../docs/mac-display-validation.md)。
+
+M1 阅读契约见 [客户端需求](../../docs/client-requirements/m1-document-reading.md)，自动化与真实服务验证见 [M1 Mac 阅读验证](../../docs/client-requirements/m1-mac-validation.md)。

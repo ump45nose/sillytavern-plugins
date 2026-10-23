@@ -25,7 +25,11 @@ Google 使用 Mac 官方 REST API 适配层，与 NAS 只读采集凭据隔离�
 
 客户端 0.3.4 在主窗口打开时提供 Dock 和标准应用/文件/编辑/显示/窗口菜单，支持隐藏、最小化、缩放、关闭和重新打开窗口；⌘W 或关闭按钮关闭主窗口后移除 Dock 图标，继续驻留菜单栏，最小化保留 Dock。退出查看端不停止采集。更新安装先按准确路径正常退出旧查看端，确认退出后才替换应用，避免旧进程访问已替换资源时出现签名校验失败。切页、刷新、分页、正文读取、音频和附件下载均提供加载状态，页面切换不展示其他模块的旧指标，错误时可重试。
 
-日报独立入口从现有只读归档 API 读取 Memos `#日报 YYYY-MM-DD` 原始记录，打开详情读取完整 `normalized.content`，不使用列表摘要代替正文，不重复生成日报。Hermes cron 日志另列“执行记录”。未改服务端模型、来源或采集规则；Plaud 转录先核对现有完整转录、官方摘要和分段实验资料，不自动触发 ASR。
+客户端 0.4.0 的 Memos 笔记、日报、执行记录和全文阅读使用 `GET /api/v1/contents`。日报按服务端 `variant=daily_review` 与 `business_date` 展示，执行记录按 `variant=execution_log` 单列，普通笔记按 `source=memos&variant=note`。列表的 content ID 与归档 record ID 分开使用，筛选变化清空不透明游标，追加页按 content ID 去重。
+
+阅读窗口按详情 revision 请求 `/blocks`，依赖 `next_after` 继续分页，先原样拼接已有块再统一解析 Markdown；没有旧详情的 50,000 字截断。使用 [Apple Foundation 的 Markdown 块语义](https://developer.apple.com/documentation/foundation/nspresentationintent) 展示标题、列表、引用、段落与链接，搜索根据目标分块及原文位置定位和高亮。摘要只在服务端明确提供时显示。来源记录与原件版本使用 `/evidence`，归档附件继续认证下载与 SHA-256 校验。
+
+仅已整理且有支持的正文版本进入阅读。409 清空旧块、摘要和依据并重新读取，404 清空所有阅读数据并刷新列表；网络核对失败保留屏幕并明确标注未核对当前状态。阅读期间每 30 秒及应用激活时核对头；正文不新增永久缓存。采集状态中的内容整理独立读取 `/api/v1/processing/status`。接口及验收见 [M1 需求](client-requirements/m1-document-reading.md)。Plaud 转录继续使用现有专用接口，不自动触发 ASR。
 
 验证入口：
 

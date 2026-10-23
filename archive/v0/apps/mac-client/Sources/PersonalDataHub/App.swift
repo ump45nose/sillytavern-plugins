@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self.model.hotkeyError = self.hotkey?.register(code: prefs.hotkeyCode, modifiers: prefs.hotkeyModifiers) == true ? nil : "快捷键已被占用，请在设置中更换。"
         }
         if !CommandLine.arguments.contains("--ui-smoke") { model.start() }
-        if !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--interaction-smoke") {
+        if !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--interaction-smoke") && !CommandLine.arguments.contains("--viewer-only") {
             Task {
                 await model.configureCollection()
             }
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let sectionIndex = CommandLine.arguments.firstIndex(of: "--qa-section"), CommandLine.arguments.count > sectionIndex+1 {
             let section = CommandLine.arguments[sectionIndex+1]
             if ["trends", "recent"].contains(section) { model.overviewMode = section }
-            else { model.section = section; await model.loadDisplay() }
+            else { model.section = section; await model.loadCurrentPage() }
         }
         await model.refreshGoogle()
         await model.loadDisplay()
@@ -423,15 +423,45 @@ enum Main {
             SecKeychainSetUserInteractionAllowed(false)
             Task {
                 do {
-                    let model = HubModel()
-                    await model.loadDailyReports()
-                    guard let report = model.dailyReports.first else { throw HubError.response }
-                    let complete = model.dailyReports.first { $0.preview.count >= 500 } ?? report
-                    await model.select(complete.id)
-                    guard let detail = model.detail,
-                          let body = detail.fields.first(where: { $0.id == "content" })?.value, !body.isEmpty,
-                          body.hasPrefix("#日报") else { throw HubError.response }
-                    print("reading_smoke_ok archived_daily_reports=\(model.dailyReports.count) latest_day=\(report.dailyReportDate ?? "unknown") body_characters=\(body.count) original_record=true")
+                    let api = HubAPI(Connection.load())
+                    for variant in ["note", "daily_review", "execution_log"] {
+                        let page: DocumentPage = try await api.get("api/v1/contents", query: DocumentFilter(variant: variant).parameters())
+                        var longest: DocumentContent?
+                        for item in page.items where item.ready {
+                            let detail: DocumentContent = try await api.get("api/v1/contents/" + item.id)
+                            if detail.readable && (longest == nil || (detail.metadata?.body_chars ?? 0) > (longest?.metadata?.body_chars ?? 0)) { longest = detail }
+                        }
+                        guard let document = longest else {
+                            print("reading_smoke_pending variant=\(variant) listed=\(page.items.count)"); continue
+                        }
+                        let reader = DocumentReader()
+                        await reader.open(DocumentSelection(item: document, query: ""), api: api)
+                        while reader.nextAfter != nil && reader.error == nil { await reader.loadNext() }
+                        await reader.loadEvidence()
+                        guard reader.complete, let input = reader.evidence?.inputs.first, input.current_matches else { throw HubError.response }
+                        let original = try await api.record(input.record_id)
+                        let object = try JSONSerialization.jsonObject(with: Data(original.rawJSON.utf8)) as? [String: Any]
+                        let normalized = object?["normalized"] as? [String: Any], raw = object?["raw"] as? [String: Any]
+                        guard let sourceBody = normalized?["content"] as? String ?? raw?["content"] as? String else { throw HubError.response }
+                        let expected = reader.header?.warnings.contains("nul_replaced_in_reading_copy") == true ? sourceBody.replacingOccurrences(of: "\u{0000}", with: "�") : sourceBody
+                        guard reader.body == expected else { throw HubError.response }
+                        if expected.unicodeScalars.count > 500 {
+                            let term = String(expected.suffix(40)).trimmingCharacters(in: .whitespacesAndNewlines)
+                            let search: DocumentPage = try await api.get("api/v1/contents", query: DocumentFilter(variant: variant, query: term).parameters())
+                            guard let hit = search.items.first(where: { $0.id == document.id && $0.match != nil }) else { throw HubError.response }
+                            let located = DocumentReader()
+                            await located.open(DocumentSelection(item: hit, query: term), api: api)
+                            guard located.matchResolved, let offset = located.matchOffset, offset > 500 else { throw HubError.response }
+                            print("reading_smoke_search_ok variant=\(variant) body_offset=\(offset) beyond_preview=true")
+                        }
+                        if let asset = document.assets?.first(where: { $0.size < 1_000_000 }) {
+                            let file = try await api.download(asset)
+                            defer { try? FileManager.default.removeItem(at: file) }
+                            try asset.verifyFile(file)
+                            print("reading_smoke_asset_ok variant=\(variant) sha256=ok")
+                        }
+                        print("reading_smoke_ok variant=\(variant) listed=\(page.items.count) blocks=\(reader.blocks.count) body_characters=\(reader.body.count) original_body=equal evidence=current")
+                    }
                     exit(0)
                 } catch { fputs("reading_smoke_failed: \(error.localizedDescription)\n", stderr); exit(1) }
             }
