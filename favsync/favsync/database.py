@@ -90,7 +90,7 @@ def _upgrade(db):
       PRIMARY KEY(source,account,item_id));
     """)
     init_schema(db)
-    from .companion_materials import init_schema as init_companion_schema
+    from .companion_store import init_schema as init_companion_schema
     init_companion_schema(db)
     columns = {r[1] for r in db.execute("PRAGMA table_info(items)")}
     if "bundle_status" not in columns:

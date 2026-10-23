@@ -18,6 +18,9 @@ gallery = [
 xhs = [
   "xiaohongshu-cli @ git+https://github.com/jackwener/xiaohongshu-cli.git@4d63f3c0c85ccd9054fa8e96d7f761aaf2507449"
 ]
+ocr = [
+  "rapidocr==3.9.2", "onnxruntime==1.24.3", "opencv-python==4.13.0.92"
+]
 all = [
   "rapidocr==3.9.2", "onnxruntime==1.24.3", "opencv-python==4.13.0.92",
   "gallery-dl @ git+https://codeberg.org/mikf/gallery-dl.git@74a5aaf276df69f493ca8f68ebb478afe31a45ad",

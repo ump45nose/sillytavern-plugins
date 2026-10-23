@@ -69,7 +69,7 @@ class RefactorContracts(unittest.TestCase):
         project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
         self.assertFalse(any("gallery-dl" in dep or "xiaohongshu" in dep for dep in project["dependencies"]))
         extras = project["optional-dependencies"]
-        self.assertEqual(set(extras["all"]), set(extras["gallery"] + extras["xhs"]))
+        self.assertEqual(set(extras["all"]), set(extras["gallery"] + extras["xhs"] + extras["ocr"]))
         self.assertIn('"optional-dependencies"]["all"]', (root / "Dockerfile").read_text())
 
     def test_wallabag_session_reused_and_explicitly_closed(self):
