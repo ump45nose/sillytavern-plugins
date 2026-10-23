@@ -51,6 +51,16 @@ def create_app(settings=None, store=None):
         """读取最近采集发现的来源账号，供明确关联；不包含凭据。"""
         return store.catalog()
 
+    @server.tool(auth=write_auth)
+    def refresh_subscription_sources() -> dict:
+        """刷新 Token Monitor 已同步的账号和额度；不登录供应商，不刷新网络或汇率。skipped 表示采集中，稍后重试。"""
+        return refresh_sources()
+
+    def refresh_sources():
+        from .collection import collect
+        from .settings import collection_config
+        return collect(store, collection_config(), sources=("token_monitor",), refresh_exchange=False)
+
     @server.tool(auth=read_auth)
     def list_subscription_brands() -> dict:
         """列出可选品牌、内置图标、默认主题色及官网；品牌与额度采集互相独立。"""
@@ -108,6 +118,16 @@ def create_app(settings=None, store=None):
 
     @app.get("/api/v1/sources", dependencies=[Depends(read)])
     def sources(): return store.catalog()
+
+    @app.post("/api/v1/sources/refresh", dependencies=[Depends(write)])
+    async def refresh_source_accounts(request: Request):
+        payload = await body(request)
+        if set(payload) - {"collector"} or payload.get("collector", "token_monitor") != "token_monitor":
+            raise ValueError("only token_monitor can be refreshed")
+        result = await run_in_threadpool(refresh_sources)
+        if result.get("skipped"):
+            return JSONResponse(result, status_code=429, headers={"Retry-After": "2"})
+        return result
 
     @app.get("/api/v1/subscriptions", dependencies=[Depends(read)])
     def listing(offset: int = 0, limit: int = 50, category: str | None = None): return store.list(offset, limit, category)

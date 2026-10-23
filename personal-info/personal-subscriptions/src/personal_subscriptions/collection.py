@@ -85,7 +85,9 @@ def quota_reading(url, config):
         raise CollectionError('invalid_quota_header') from None
 
 
-def collect(store, config):
+def collect(store, config, *, sources=("token_monitor", "subboost"), refresh_exchange=True):
+    if not sources or set(sources) - {"token_monitor", "subboost"}:
+        raise ValueError("unsupported collector")
     lock_path = Path(store.database + ".collect.lock")
     with lock_path.open("a") as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -93,6 +95,7 @@ def collect(store, config):
         payloads, errors = {}, {}
         with httpx.Client(timeout=20, follow_redirects=False, trust_env=False) as client:
             for source, path in (("token_monitor", "/api/stats"), ("subboost", "/api/integrations/subscriptions")):
+                if source not in sources: continue
                 settings = config.get(source) or {}
                 if not settings.get("url") or not settings.get("token"):
                     errors[source] = "unconfigured"
@@ -103,7 +106,10 @@ def collect(store, config):
                     raw = response.json()
                     catalog = []
                     if source == "token_monitor":
-                        for p in (raw.get("limits") or {}).get("providers", []):
+                        providers = raw["limits"]["providers"]
+                        if not isinstance(providers, list) or not all(isinstance(p, dict) for p in providers):
+                            raise ValueError("invalid providers")
+                        for p in providers:
                             if p.get("accountKey"):
                                 catalog.append({"collector": source, "provider": p["provider"], "account": p["accountKey"],
                                     "account_email": p.get("accountEmail") or "", "profile": p.get("accountName") or "",
@@ -117,9 +123,9 @@ def collect(store, config):
                     errors[source] = "authentication" if error.response.status_code in (401, 403) else "source_http_error"
                 except httpx.TimeoutException: errors[source] = "timeout"
                 except httpx.RequestError: errors[source] = "connection"
-                except (ValueError, KeyError, TypeError): errors[source] = "invalid_payload"
-        summary = {"updated": 0, "failed": 0, "sources": {s: errors.get(s, "ok") for s in ("token_monitor", "subboost")}}
-        summary["exchange_rates"] = refresh(store)
+                except (ValueError, KeyError, TypeError, AttributeError): errors[source] = "invalid_payload"
+        summary = {"updated": 0, "failed": 0, "sources": {s: errors.get(s, "ok") for s in sources}}
+        if refresh_exchange: summary["exchange_rates"] = refresh(store)
         offset = 0
         direct = {}
         while True:
@@ -128,6 +134,8 @@ def collect(store, config):
                 binding = item["binding"]
                 quota_url = item['quota_url']
                 if not item["active"] or not (binding or quota_url): continue
+                if quota_url and "subboost" not in sources: continue
+                if not quota_url and binding["collector"] not in sources: continue
                 if quota_url:
                     if quota_url not in direct:
                         try: direct[quota_url] = (quota_reading(quota_url, config), None)

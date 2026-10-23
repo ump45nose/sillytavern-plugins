@@ -13,7 +13,8 @@ AI 额度复用 Token Monitor 的鉴权 HTTP 接口；网络套餐读取 SubBoos
 - `/api/v1/subscriptions`：GET offset/limit/category（默认50，最多200）；POST 创建。
 - `/api/v1/subscriptions/{id}`：GET 详情；PATCH 部分更新；DELETE 删除。修改和删除需要 `If-Match: <version>`，陈旧版本409，缺版本428。
 - `/api/v1/sources`：最近采集发现的非秘密来源账号，供绑定；查询不访问供应商。
-- `/healthz`：SQLite检查；`/mcp`：八个对应的业务读写工具。
+- `POST /api/v1/sources/refresh`：写令牌，接受 `{}` 或 `{"collector":"token_monitor"}`；只读取 Token Monitor Hub 已同步的账号和额度，不登录供应商、不刷新网络或汇率。与定时采集共用锁；忙时429及 Retry-After，来源失败保留旧读数与观察时间，不修改订阅版本和费用。
+- `/healthz`：SQLite检查；`/mcp`：九个对应的业务读写工具，包括写权限 `refresh_subscription_sources`。
 
 额度只保留最新成功读数；失败更新状态但不覆盖读数。observed_at 为来源实际观察时间，last_success_at 是本服务成功处理时间，两者不能替代。优先采用来源刷新周期／过期标记；没有规则时900秒过期。重绑或停用清理旧额度，采集中删除／重绑不会被旧请求恢复。
 

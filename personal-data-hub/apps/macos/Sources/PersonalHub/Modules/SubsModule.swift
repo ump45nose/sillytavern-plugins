@@ -794,6 +794,8 @@ struct SubEditCard: View {
     @ViewState private var conflict = false
     @ViewState private var busy = false
     @ViewState private var confirmDelete = false
+    @ViewState private var connecting = false
+    @ViewState private var connectionNote: String?
 
     /// `template` prefills a new subscription.
     init(item: SubsData.Item?, category: String = "other", template: SubscriptionRecord? = nil, close: @escaping () -> Void) {
@@ -837,6 +839,9 @@ struct SubEditCard: View {
                         Label11("额度来源")
                         HStack(spacing: 10) {
                             bindingMenu
+                            if draft.category == "ai" {
+                                Button("连接账号") { connecting = true }.buttonStyle(.hubSecondary).disabled(busy)
+                            }
                             if let note = quotaPreview { Text(note).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
                         }
                     }
@@ -852,6 +857,7 @@ struct SubEditCard: View {
                 }
             }
             .padding(.top, 14)
+            if let connectionNote { Text(connectionNote).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.top, 8) }
             footer
         }
         .padding(.horizontal, 20).padding(.vertical, 18)
@@ -859,6 +865,11 @@ struct SubEditCard: View {
         .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Color(hex: "#E3D6C4")))
         .shadow(color: Color(hex: "#3C280A").opacity(0.08), radius: 14, y: 6)
         .task { await load() }
+        .sheet(isPresented: $connecting) {
+            AIAccountConnection(initialProvider: draft.serviceKey) { account, sync in
+                await connected(account, sync: sync)
+            }
+        }
         .onChange(of: draft.category) { _, category in
             if let b = draft.binding, (b.collector == "subboost") != (category == "network") || !["ai", "network"].contains(category) { draft.binding = nil }
         }
@@ -1008,7 +1019,7 @@ struct SubEditCard: View {
     private var quotaPreview: String? {
         guard draft.binding != nil, let item, let q = item.quota, item.id == draft.id else { return nil }
         let windows = (q.reading?.windows ?? []).compactMap { w in Subs.percent(w).map { "\(w.label) \(Int($0.rounded()))%" } }
-        return windows.isEmpty ? nil : "当前：" + windows.prefix(3).joined(separator: " · ")
+        return windows.isEmpty ? nil : "当前：" + windows.joined(separator: " · ")
     }
 
     private var footer: some View {
@@ -1097,6 +1108,37 @@ struct SubEditCard: View {
         await write { try await $0.saveSubscription(draft) }
     }
 
+    private func connected(_ account: LocalTokenMonitor.Account, sync: String) async {
+        do {
+            let existing = try await state.hub.review(demo: { [] }, live: { try await $0.subscriptionRecords() })
+            if isNew, let record = existing.first(where: { $0.binding?.collector == account.binding.collector && $0.binding?.provider == account.binding.provider && $0.binding?.account == account.binding.account }) {
+                draft = record; initial = record
+                connectionNote = "该账号已有订阅，已打开原记录。"
+            } else {
+                draft.binding = account.binding
+                if draft.accountLabel.isEmpty { draft.accountLabel = account.label }
+                if draft.plan.isEmpty { draft.plan = account.plan ?? "" }
+                if draft.name.isEmpty { draft.name = account.binding.provider }
+                connectionNote = "账号已连接，保存后登记订阅资料。"
+            }
+        } catch {
+            // Keep the connected account available even while NAS is offline.
+            draft.binding = account.binding
+            if draft.accountLabel.isEmpty { draft.accountLabel = account.label }
+            connectionNote = "账号已连接；NAS 暂时不可达，恢复后保存订阅。"
+        }
+        var refreshed = false
+        for attempt in 0..<3 {
+            do { refreshed = try await state.hub.review(demo: { false }, live: { try await $0.refreshSubscriptionSources() }); break }
+            catch HubError.http(429) { if attempt < 2 { try? await Task.sleep(for: .seconds(2)) } }
+            catch { break }
+        }
+        await SubsCatalog.load(state, force: true)
+        accounts = SubsCatalog.accounts
+        if !refreshed || sync != "synced" { connectionNote = (connectionNote ?? "账号已连接。") + " 等待额度同步。" }
+        state.hub.refresh()
+    }
+
     private func toggleActive() async {
         var record = draft
         record.active.toggle()
@@ -1115,6 +1157,9 @@ struct SubEditCard: View {
         conflict = false
         do {
             _ = try await state.hub.review(demo: { throw HubError.rejected("示例数据不能保存，请先连接 hub", field: nil) }, live: work)
+            if draft.binding?.collector == "token_monitor" {
+                _ = try? await state.hub.review(demo: { false }, live: { try await $0.refreshSubscriptionSources() })
+            }
             state.hub.refresh()
             close()
         } catch let e as HubError {
@@ -1190,8 +1235,8 @@ enum SubsCatalog {
     static var accounts: [SubscriptionSourceCatalog.Source.Account] = []
     private static var fetched: Date?
 
-    static func load(_ state: AppState) async {
-        if let fetched, Date().timeIntervalSince(fetched) < 600, !brands.isEmpty || !accounts.isEmpty { return }
+    static func load(_ state: AppState, force: Bool = false) async {
+        if !force, let fetched, Date().timeIntervalSince(fetched) < 600, !brands.isEmpty || !accounts.isEmpty { return }
         fetched = Date()
         async let b = try? state.hub.review(demo: { [] }, live: { try await $0.subscriptionBrands().items })
         async let a = try? state.hub.review(demo: { [] }, live: { try await $0.subscriptionSources().sources.flatMap(\.accounts) })

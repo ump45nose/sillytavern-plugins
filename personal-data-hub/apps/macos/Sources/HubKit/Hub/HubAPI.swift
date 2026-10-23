@@ -282,6 +282,12 @@ public struct HubAPI: Sendable {
         try decode(SubscriptionSourceCatalog.self, try await get("/api/v1/subscriptions/sources"))
     }
 
+    public func refreshSubscriptionSources() async throws -> Bool {
+        struct Result: Decodable { var sources: [String: String] }
+        let data = try await send(request("/api/v1/subscriptions/sources/refresh", method: "POST", body: ["collector": "token_monitor"]))
+        return try decode(Result.self, data).sources["token_monitor"] == "ok"
+    }
+
     public func subscriptionBrands() async throws -> SubscriptionBrandCatalog {
         try decode(SubscriptionBrandCatalog.self, try await get("/api/v1/subscriptions/brands"))
     }

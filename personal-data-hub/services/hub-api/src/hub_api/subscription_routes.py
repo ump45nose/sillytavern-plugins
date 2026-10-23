@@ -30,6 +30,11 @@ def register(app, source, settings, manager, authenticated):
     @app.get('/api/v1/subscriptions/sources', dependencies=[Depends(authenticated)])
     async def sources(): return await proxy('GET', 'sources')
 
+    @app.post('/api/v1/subscriptions/sources/refresh', dependencies=[Depends(authenticated)])
+    async def refresh_sources(request: Request):
+        async with mutation(manager, 'token'):
+            return await proxy('POST', 'sources/refresh', await json_body(request), timeout=30)
+
     @app.post('/api/v1/net/quota-preview', dependencies=[Depends(authenticated)])
     async def preview_quota(request: Request):
         return await proxy('POST', 'subscriptions/quota-preview', await json_body(request), timeout=45, mutate=False)
