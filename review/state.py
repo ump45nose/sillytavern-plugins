@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import wraps
+import fcntl
+import threading
 from datetime import datetime
 import json
 from pathlib import Path
@@ -131,6 +134,15 @@ CREATE TABLE IF NOT EXISTS attachments (
 """
 
 
+def serialized(method):
+    """Serialize service side effects across the HTTP server and CLI processes."""
+    @wraps(method)
+    def invoke(self, *args, **kwargs):
+        with self.state.operation():
+            return method(self, *args, **kwargs)
+    return invoke
+
+
 class StateRepository:
     """以事务方式管理 checkpoint、会话和投影 outbox。"""
 
@@ -138,6 +150,24 @@ class StateRepository:
         """记录数据库路径，实际连接在每次操作时创建。"""
 
         self.path = Path(path)
+        self._operation_mutex = threading.RLock()
+        self._operation_local = threading.local()
+
+    @contextmanager
+    def operation(self):
+        """Hold one reentrant process-shared lock across Memos and local receipts."""
+        with self._operation_mutex:
+            if getattr(self._operation_local, 'active', False):
+                yield
+                return
+            with self.path.with_suffix('.write.lock').open('a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                self._operation_local.active = True
+                try:
+                    yield
+                finally:
+                    self._operation_local.active = False
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
     def initialize(self) -> None:
         """创建父目录及运行状态表。"""

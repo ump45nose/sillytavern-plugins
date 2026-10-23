@@ -58,7 +58,7 @@ class DailyMaterialGoldenTests(unittest.TestCase):
                             {"label": "公交", "amount": "1.99", "currency": "CNY"},
                             {"label": "饮料", "amount": "3.99", "currency": "CNY"},
                         ],
-                        "totals": {"CNY": {"expense": "5.98", "income": "0", "refund": "0"}},
+                        "totals": [{"currency": "CNY", "type": "expense", "amount": "5.98", "fee": "0", "count": 2}],
                     },
                 ),
                 Evidence(
