@@ -173,6 +173,46 @@ struct SectionTitle: View {
     }
 }
 
+/// One stop on the serif-clock timeline: time on the left, a dot on a hairline, content on the right.
+struct TimelineEntry<Content: View>: View {
+    var time: String
+    var first = false
+    var last = false
+    var dot: Color = Palette.ink4.opacity(0.75)
+    var timeColor: Color = Palette.ink3
+    var timeWidth: CGFloat = 48
+    var timeSize: CGFloat = 15
+    /// Background behind the dot, so the hairline stops short of it.
+    var ring: Color = Palette.card
+    var gap: CGFloat = 20
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, last ? 0 : gap)
+            .padding(.leading, timeWidth + 24)
+            .background(alignment: .topLeading) {
+                HStack(alignment: .top, spacing: 0) {
+                    Text(time).font(Typo.serif(timeSize)).monospacedDigit().foregroundStyle(timeColor).lineLimit(1)
+                        .frame(width: timeWidth, alignment: .trailing)
+                    ZStack(alignment: .top) {
+                        if !(first && last) {
+                            Rectangle().fill(Palette.line).frame(width: 1, height: last ? 9 : nil)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .padding(.top, first ? 9 : 0)
+                        }
+                        Circle().fill(dot).frame(width: 7, height: 7)
+                            .background(Circle().fill(ring).frame(width: 13, height: 13))
+                            .padding(.top, 6)
+                    }
+                    .frame(width: 24)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+            }
+    }
+}
+
 struct Stat: View {
     var label: String
     var value: String

@@ -187,7 +187,7 @@ struct CommandBar: View {
 struct AgendaModule: View {
     var size: ModuleSize
     @Environment(AppState.self) private var state
-    @ViewState private var listFilter: String?
+    @ViewState private var tab = 1
     @ViewState private var newEventAt: Date?
 
     var body: some View {
@@ -211,56 +211,92 @@ struct AgendaModule: View {
         }
     }
 
+    /// Today's schedule on the left, then 逾期 / 今天 / 即将 side by side; narrow cards switch between them with tabs.
     private var detail: some View {
         let v = state.agenda.view
-        let keep = { (t: AgendaTask) in listFilter == nil || t.listID == listFilter }
-        let groups: [(String, [AgendaTask])] = [
-            ("逾期", v.overdue.filter(keep)), ("今天 · \(v.today.filter(keep).count)", v.today.filter(keep)),
-            ("即将", v.upcoming.filter(keep)), ("以后", v.later.filter(keep)), ("无日期", v.undated.filter(keep)),
-        ]
-        return HStack(alignment: .top, spacing: 22) {
-            VStack(alignment: .leading, spacing: 10) {
-                Flow(spacing: 6) {
-                    if let c = state.cycle { Chip(text: "全天 · 阶段第 \(c.day) 天", tone: .clay) }
-                    ForEach(v.allDay) { e in
-                        EventChip(event: e)
-                    }
-                    if state.agenda.writableCalendar != nil {
-                        Button { newEventAt = Self.nextSlot(after: state.agenda.now) } label: { Chip(text: "日程", systemImage: "plus") }
-                            .buttonStyle(.plain)
-                            .help("新建日程；也可以双击时间轴空白处")
-                    }
-                }
-                DayTimeline(events: v.events, now: state.agenda.now,
-                            onCreate: state.agenda.writableCalendar == nil ? nil : { newEventAt = $0 })
-                    .popover(isPresented: Binding(get: { newEventAt != nil }, set: { if !$0 { newEventAt = nil } }), arrowEdge: .trailing) {
-                        if let at = newEventAt {
-                            EventEditor(mode: .create(at)) { newEventAt = nil }.environment(state)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                if let c = state.cycle { Chip(text: "阶段第 \(c.day) 天", tone: .clay) }
+                if state.agenda.writableCalendar != nil {
+                    Button { newEventAt = Self.nextSlot(after: state.agenda.now) } label: { Chip(text: "日程", systemImage: "plus") }
+                        .buttonStyle(.plain).help("新建日程")
+                        .popover(isPresented: Binding(get: { newEventAt != nil }, set: { if !$0 { newEventAt = nil } }), arrowEdge: .bottom) {
+                            if let at = newEventAt { EventEditor(mode: .create(at)) { newEventAt = nil }.environment(state) }
                         }
-                    }
-            }
-            .frame(maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 0) {
-                ListChips(selection: $listFilter).padding(.bottom, 2)
-                SyncNotice().padding(.top, 6)
-                HubScroll {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(groups.filter { !$0.1.isEmpty || $0.0.hasPrefix("今天") }, id: \.0) { title, tasks in
-                            SectionTitle(title)
-                            ForEach(tasks) { TaskRow(task: $0, showList: listFilter == nil) }
-                            if tasks.isEmpty {
-                                Text("今天没有到期的任务").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
-                            }
-                        }
-                    }
-                    .animation(Motion.spring, value: v.allTasks.map(\.completed))
                 }
-                .scrollIndicators(.never)
-                .frame(maxHeight: 360)
-                InlineQuickAdd().padding(.top, 12)
+                Spacer()
+                Button { state.showTasks(v.overdue.isEmpty ? .today : .overdue) } label: {
+                    Text("打开任务页 →").font(Typo.sans(12)).foregroundStyle(Tone.steel.color)
+                }
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
+            SyncNotice()
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 0) {
+                    schedule.frame(width: 240, alignment: .topLeading).padding(.trailing, 4)
+                    if !v.overdue.isEmpty { column(3) }
+                    column(1)
+                    column(2)
+                }
+                .frame(minWidth: v.overdue.isEmpty ? 700 : 900)
+                VStack(alignment: .leading, spacing: 10) {
+                    Segmented(options: [(0, "日程")] + (v.overdue.isEmpty ? [] : [(3, "逾期 \(v.overdue.count)")]) + [(1, "今天"), (2, "即将")],
+                              selection: $tab, small: true).fixedSize()
+                    if tab == 0 { schedule } else { column(v.overdue.isEmpty && tab == 3 ? 1 : tab, divider: false) }
+                }
+            }
+            InlineQuickAdd()
         }
+        .animation(Motion.spring, value: v.allTasks.map(\.completed))
+    }
+
+    private var schedule: some View {
+        HubScroll { DaySchedule(day: state.agenda.now).padding(.top, 4).padding(.bottom, 6) }
+            .scrollIndicators(.never)
+            .frame(maxHeight: 300)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// 1 今天, 2 即将 (tomorrow on, by day), 3 逾期.
+    private func column(_ kind: Int, divider: Bool = true) -> some View {
+        let agenda = state.agenda, v = agenda.view
+        let title = kind == 3 ? "逾期" : kind == 1 ? "今天" : "即将"
+        let count = kind == 3 ? v.overdue.count : kind == 1 ? v.today.filter { !$0.completed }.count : (v.upcoming + v.later).count
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(title).font(Typo.sans(13, .semibold)).foregroundStyle(kind == 3 ? Tone.rose.color : Palette.ink)
+                if count > 0 { Text("\(count)").font(Typo.sans(11.5)).foregroundStyle(Palette.ink4).monospacedDigit() }
+            }
+            HubScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    switch kind {
+                    case 3:
+                        ForEach(v.overdue) { TaskRow(task: $0) }
+                    case 1:
+                        ForEach(v.today) { TaskRow(task: $0, showDue: false) }
+                        if v.today.isEmpty { empty("今天没有到期的任务") }
+                    default:
+                        let days = v.days(from: agenda.now)
+                        ForEach(days.prefix(7), id: \.day) { day, tasks in
+                            Text(TrayTasks.dayTitle(day, now: agenda.now)).font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                                .padding(.top, 8).padding(.bottom, 2)
+                            ForEach(tasks) { TaskRow(task: $0, showDue: false) }
+                        }
+                        if days.isEmpty { empty("明天起没有有日期的任务") }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+            .frame(maxHeight: 300)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, divider ? 16 : 0)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .overlay(alignment: .leading) { if divider { Rectangle().fill(Palette.line2).frame(width: 1) } }
+    }
+
+    private func empty(_ text: String) -> some View {
+        Text(text).font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 8)
     }
 }
 

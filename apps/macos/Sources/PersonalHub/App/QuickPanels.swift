@@ -201,12 +201,14 @@ struct QuickTaskView: View {
     @ViewState private var timeBlock = true
     @ViewState private var added: String?
     @ViewState private var picked: PickedDue?
+    @ViewState private var listID: String?
     @FocusState private var focused: Bool
 
     var body: some View {
         let agenda = state.agenda
         var entry = QuickEntryParser.parse(text, now: agenda.now)
         let _ = picked?.apply(to: &entry)
+        let _ = ListPickerButton.apply(listID, to: &entry, lists: agenda.lists)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(HotKeyCenter.shared.shortcut(for: .quickTask).display)
@@ -229,7 +231,10 @@ struct QuickTaskView: View {
                         withAnimation(Motion.spring) { mode = (mode + 1) % 3 }
                         return .handled
                     }
-                if mode != 1 { DuePickerButton(picked: $picked, now: agenda.now) }
+                if mode != 1 {
+                    ListPickerButton(listID: $listID)
+                    DuePickerButton(picked: $picked, now: agenda.now)
+                }
             }
                 .padding(.top, 14)
                 .padding(.bottom, 12)

@@ -355,7 +355,7 @@ struct PageView: View {
         let page = state.page
         switch page.kind {
         case .sky:
-            VStack(alignment: .leading, spacing: 18) { PageHeader(page: page); SkyPage() }
+            VStack(alignment: .leading, spacing: 18) { PageHeader(page: page, trailing: AnyView(SkyControls())); SkyPage() }
                 .padding(.horizontal, 28).padding(.bottom, 24)
         case .memos:
             VStack(alignment: .leading, spacing: 18) { PageHeader(page: page); MemosPage() }
@@ -400,6 +400,8 @@ struct PageView: View {
 
 private struct PageHeader: View {
     var page: Page
+    /// Page controls in place of the update stamp.
+    var trailing: AnyView? = nil
     @Environment(AppState.self) private var state
     @ViewState private var renaming = false
 
@@ -437,8 +439,12 @@ private struct PageHeader: View {
                 }
             }
             Spacer()
-            Text(([page.kind == .grid ? "\(page.items.count) 个模块" : nil, stamp.map { "更新于 " + $0 }].compactMap { $0 }).joined(separator: " · "))
-                .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            if let trailing {
+                trailing
+            } else {
+                Text(([page.kind == .grid ? "\(page.items.count) 个模块" : nil, stamp.map { "更新于 " + $0 }].compactMap { $0 }).joined(separator: " · "))
+                    .font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            }
         }
     }
 }

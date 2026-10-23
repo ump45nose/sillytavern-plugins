@@ -77,13 +77,30 @@ public enum HubSample {
             today: .init(downBytes: 6.8 * gb, upBytes: 0.9 * gb), monthBytes: 142 * gb,
             hourly: (0..<24).map { .init(hour: at($0, 0), bytes: $0 > hourNow ? nil : hourly[$0] * gb) }))
 
-        func sub(_ id: String, _ name: String, _ price: Double, _ currency: String, _ cycle: String, _ renewIn: Int, _ monthly: Double) -> SubsData.Item {
-            .init(id: id, name: name, price: price, currency: currency, cycle: cycle, nextRenewal: key(renewIn), monthlyEquivalent: monthly)
+        func sub(_ id: String, _ name: String, _ price: Double, _ currency: String, _ cycle: String, _ renewIn: Int, _ monthly: Double,
+                 category: String = "other", payer: String = "self", label: String? = nil, plan: String? = nil,
+                 quota: [SubscriptionQuota.Window]? = nil, active: Bool = true) -> SubsData.Item {
+            .init(id: id, name: name, price: price, currency: currency, cycle: cycle, nextRenewal: key(renewIn), monthlyEquivalent: monthly,
+                  version: 3, accountLabel: label, category: category, payer: payer, frequency: 1, active: active,
+                  quota: quota.map { .init(reading: .init(windows: $0, observedAt: now.addingTimeInterval(-600)), status: "ok", stale: false) },
+                  plan: plan)
+        }
+        func window(_ id: String, _ label: String, _ percent: Double, resetsIn hours: Double) -> SubscriptionQuota.Window {
+            .init(id: id, label: label, usedPercent: percent, resetsAt: now.addingTimeInterval(hours * 3600), observedAt: now.addingTimeInterval(-600))
         }
         out.subs = env("subs", SubsData(monthlyTotal: 1486, items: [
-            sub("claude", "Claude Max", 100, "USD", "month", 8, 712), sub("domain", "域名 ×2", 96, "CNY", "year", 5, 8),
-            sub("chatgpt", "ChatGPT Plus", 20, "USD", "month", 14, 142.4), sub("cursor", "Cursor Pro", 20, "USD", "month", 12, 142.4),
-            sub("google", "Google One 2TB", 68, "CNY", "month", 23, 68), sub("vps", "VPS", 6, "USD", "month", 19, 42.7), sub("proxy", "主力机场", 25, "CNY", "month", 41, 25),
+            sub("claude", "Claude Max", 100, "USD", "month", 3, 712, category: "ai", payer: "company", label: "个人账号", plan: "Max 5×",
+                quota: [window("5h", "5 小时", 34, resetsIn: 2.2), window("week", "本周", 61, resetsIn: 96)]),
+            sub("chatgpt", "ChatGPT Plus", 20, "USD", "month", 25, 142.4, category: "ai", label: "工作邮箱", plan: "Plus",
+                quota: [window("gpt", "GPT-5", 12, resetsIn: 3)]),
+            sub("cursor", "Cursor Pro", 20, "USD", "month", 12, 142.4, category: "ai", payer: "company", plan: "Pro",
+                quota: [window("month", "本月", 82, resetsIn: 300)]),
+            sub("proxy", "主力机场", 25, "CNY", "month", 13, 25, category: "network", label: "SubBoost", plan: "500 GB"),
+            sub("vps", "VPS", 6, "USD", "month", 19, 42.7, category: "network"),
+            sub("google", "Google One 2TB", 68, "CNY", "month", 23, 68, category: "membership", label: "家庭", plan: "2 TB"),
+            sub("icloud", "iCloud+", 21, "CNY", "month", 10, 21, category: "membership", payer: "unknown", plan: "200 GB"),
+            sub("domain", "域名 ×2", 96, "CNY", "year", 5, 8),
+            sub("music", "Apple Music", 11, "CNY", "month", 40, 11, category: "membership", active: false),
         ]))
 
         out.memos = env("memos", MemosData(

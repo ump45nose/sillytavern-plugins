@@ -88,6 +88,16 @@ public enum SkyArchive {
         Set(files.map { calendar.startOfDay(for: $0.start) }).sorted(by: >)
     }
 
+    /// 10-minute segments per local day, from names alone: a cheap activity level for the date picker.
+    public static func activity(_ files: [SkyFile], calendar: Calendar = .hub) -> [Date: Int] {
+        var out: [Date: Int] = [:]
+        var seen = Set<String>()
+        for f in files where f.span == .tenMinutes && seen.insert(f.device + "/" + f.id).inserted {
+            out[calendar.startOfDay(for: f.start), default: 0] += 1
+        }
+        return out
+    }
+
     /// The windows that start on `day`, with their segments (a window from the evening before can spill in).
     public static func load(_ files: [SkyFile], day: Date, calendar: Calendar = .hub) -> [SkyWindowItem] {
         let start = calendar.startOfDay(for: day), end = calendar.date(byAdding: .day, value: 1, to: start)!

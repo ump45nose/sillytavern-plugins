@@ -101,28 +101,42 @@ public struct HubAPI: Sendable {
     }
 
     /// nil while hub-api has no list endpoint yet (404, or 405 beside the existing POST).
-    public func memos(pageSize: Int = 20, pageToken: String? = nil, tag: String? = nil, query: String? = nil) async throws -> MemoPage? {
+    /// `pinned`, `hasAttachments` and `state` are newer filters; an older hub ignores them, so callers re-check the items.
+    public func memos(pageSize: Int = 20, pageToken: String? = nil, tag: String? = nil, query: String? = nil,
+                      pinned: Bool = false, hasAttachments: Bool = false, state: String? = nil) async throws -> MemoPage? {
         var q = ["page_size": String(pageSize)]
         if let pageToken { q["page_token"] = pageToken }
         if let tag, !tag.isEmpty { q["tag"] = tag }
         if let query, !query.isEmpty { q["q"] = query }
+        if pinned { q["pinned"] = "true" }
+        if hasAttachments { q["has_attachments"] = "true" }
+        if let state { q["state"] = state }
         let (data, response) = try await exchange(request("/api/v1/memos", query: q))
         if response.statusCode == 404 || response.statusCode == 405 { return nil }
         return try decode(MemoPage.self, try check(data, response))
     }
 
     /// Only the fields given are sent.
-    public func updateMemo(id: String, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil) async throws -> MemosData.Memo {
+    public func updateMemo(id: String, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil,
+                           state: String? = nil) async throws -> MemosData.Memo {
         var body: [String: Any] = [:]
         if let content { body["content"] = content }
         if let visibility { body["visibility"] = visibility }
         if let pinned { body["pinned"] = pinned }
+        if let state { body["state"] = state }
         return try decode(MemosData.Memo.self, try await send(request("/api/v1/memos/\(path(id))", method: "PATCH", body: body)))
     }
 
     /// hub archives rather than deletes; the memo can be restored in Memos.
     public func archiveMemo(id: String) async throws {
         _ = try await send(request("/api/v1/memos/\(path(id))", method: "DELETE"))
+    }
+
+    /// Read-only proxy for a memo's own attachment.
+    public func memoAttachment(memo id: String, name: String) async throws -> Data {
+        let memo = id.split(separator: "/").last.map(String.init) ?? id
+        let file = name.split(separator: "/").last.map(String.init) ?? name
+        return try await get("/api/v1/memos/\(path(memo))/attachments/\(path(file))")
     }
 
     /// Image references from module data are opaque and signed by hub-api.

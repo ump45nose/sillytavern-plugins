@@ -6,6 +6,8 @@ struct PopoverView: View {
     @Environment(AppState.self) private var state
     @ViewState private var pageID: String
     @ViewState private var editing: Bool
+    @ViewState private var contentHeight: CGFloat = 0
+    @ViewState private var rowsHeight: CGFloat = 0
 
     init(page: String = "today", editing: Bool = false) {
         _pageID = ViewState(initialValue: page)
@@ -54,6 +56,9 @@ struct PopoverView: View {
                     }
                     if editing { TrayAddChips(page: page).transition(.opacity) }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                .onPreferenceChange(TrayTaskRowsHeight.self) { rowsHeight = $0 }
+                .environment(\.trayTaskSpace, contentHeight > 0 ? Self.maxHeight - 16 - (contentHeight - rowsHeight) : nil)
                 .padding(.top, 14).padding(.bottom, 2)
                 .animation(Motion.spring, value: page.items)
             }
@@ -204,17 +209,33 @@ private struct TrayAgenda: View {
     }
 }
 
-/// 今天: due by today, then the lists pinned to 今天 (the first list unless changed).
-/// 所有: one list at a time by chip, or every list in sidebar order. 即将: today onward, one section per day.
+private struct TrayTaskSpaceKey: EnvironmentKey { static let defaultValue: CGFloat? = nil }
+
+extension EnvironmentValues {
+    /// Height the task rows may take so the whole panel fits on screen; nil until measured.
+    var trayTaskSpace: CGFloat? {
+        get { self[TrayTaskSpaceKey.self] }
+        set { self[TrayTaskSpaceKey.self] = newValue }
+    }
+}
+
+struct TrayTaskRowsHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value += nextValue() }
+}
+
+/// 逾期 (only while something is late), 今天: due today plus the lists pinned to 今天, 所有: one list by chip or
+/// every list, 即将: tomorrow onward by day. Rows fill what the screen leaves; the rest folds behind 还有 N 项.
 struct TrayTasks: View {
     @Environment(AppState.self) private var state
+    @Environment(\.trayTaskSpace) private var space
     @ViewState private var tab: Int
     @ViewState private var listID: String?
+    @ViewState private var expanded = false
     @AppStorage("trayTasksByList") private var byList = false
 
+    /// 0 今天, 1 所有, 2 即将, 3 逾期.
     init(tab: Int = 0) { _tab = ViewState(initialValue: tab) }
-
-    private static let limit = 10
 
     struct Section: Identifiable {
         var id: String
@@ -227,44 +248,113 @@ struct TrayTasks: View {
     }
 
     var body: some View {
-        let agenda = state.agenda
+        let agenda = state.agenda, late = agenda.view.overdue.count
+        let current = tab == 3 && late == 0 ? 0 : tab
         let list = listID.flatMap { id in agenda.lists.first { $0.id == id } } ?? agenda.lists.first
-        let all = sections(list: list)
-        let (shown, hidden) = Self.cap(all, Self.limit)
+        let all = sections(current, list: list)
+        let room = (space ?? 300) - (current == 1 ? 34 : 0)
+        let (shown, hidden) = expanded ? (all, 0) : Self.fit(all, height: room)
         VStack(alignment: .leading, spacing: 0) {
-            TrayHeading(title: heading(all)) {
-                Segmented(options: [(0, "今天"), (1, "所有"), (2, "即将")], selection: $tab, small: true)
+            TrayHeading(title: heading(current, all)) {
+                Segmented(options: (late > 0 ? [(3, "逾期 \(late)")] : []) + [(0, "今天"), (1, "所有"), (2, "即将")],
+                          selection: Binding(get: { current }, set: { t in withAnimation(Motion.spring) { tab = t; expanded = false } }), small: true)
             }
-            if tab == 1 { allBar(list) }
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(shown) { s in
-                    if let title = s.title { header(title, count: all.first { $0.id == s.id }?.tasks.count ?? 0, pin: s.pinMenu) }
-                    ForEach(s.tasks) { TaskRow(task: $0, showList: s.showList, showDue: s.showDue) }
-                    if s.tasks.isEmpty, let empty = s.empty {
-                        Text(empty).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                    }
-                }
-                if hidden > 0 {
-                    Button { state.showTasks(scope) } label: {
-                        Text("还有 \(hidden) 项 · 在任务页查看").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
+            if current == 1 { allBar(list) }
+            Group {
+                if expanded {
+                    HubScroll { rows(shown, all: all) }
+                        .scrollIndicators(.automatic)
+                        .frame(maxHeight: max(room - 36, 160))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    rows(shown, all: all)
                 }
             }
-            .animation(Motion.spring, value: all.flatMap { $0.tasks.map(\.completed) })
-            .animation(Motion.spring, value: tab)
-            TrayTaskInput(dueToday: tab == 0, list: tab == 1 && !byList ? list : nil).padding(.top, 8)
+            .background(GeometryReader { g in Color.clear.preference(key: TrayTaskRowsHeight.self, value: g.size.height) })
+            if hidden > 0 || expanded {
+                foldBar(hidden: hidden, scope: scope(current))
+                    .background(GeometryReader { g in Color.clear.preference(key: TrayTaskRowsHeight.self, value: g.size.height) })
+            }
+            TrayTaskInput(dueToday: current == 0, list: current == 1 && !byList ? list : nil).padding(.top, 8)
         }
+        .animation(Motion.spring, value: expanded)
+        .animation(Motion.spring, value: current)
     }
 
-    private var scope: TaskScope {
+    private func rows(_ shown: [Section], all: [Section]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(shown) { s in
+                if let title = s.title { header(title, count: all.first { $0.id == s.id }?.tasks.count ?? 0, pin: s.pinMenu) }
+                ForEach(s.tasks) { TaskRow(task: $0, showList: s.showList, showDue: s.showDue) }
+                if s.tasks.isEmpty, let empty = s.empty {
+                    Text(empty).font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                }
+            }
+        }
+        .animation(Motion.spring, value: all.flatMap { $0.tasks.map(\.completed) })
+    }
+
+    private func foldBar(hidden: Int, scope: TaskScope) -> some View {
+        HStack(spacing: 6) {
+            Button { withAnimation(Motion.spring) { expanded.toggle() } } label: {
+                HStack(spacing: 5) {
+                    Text(expanded ? "收起" : "还有 \(hidden) 项")
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .bold))
+                }
+                .font(Typo.sans(12)).foregroundStyle(Palette.ink2)
+                .frame(maxWidth: .infinity).frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.sunk))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button { state.showTasks(scope) } label: {
+                Text("任务页 →").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    .padding(.horizontal, 10).frame(height: 28)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Palette.sunk))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 6)
+    }
+
+    private func scope(_ tab: Int) -> TaskScope {
         switch tab {
         case 0: .today
         case 2: .upcoming
+        case 3: .overdue
         default: byList ? .all : (listID ?? state.agenda.lists.first?.id).map(TaskScope.list) ?? .all
         }
+    }
+
+    /// Estimated row heights, matching `TaskRow` and `header` in the panel.
+    static func fit(_ sections: [Section], height: CGFloat) -> ([Section], Int) {
+        let fold: CGFloat = 34
+        func cost(_ t: AgendaTask, showList: Bool) -> CGFloat {
+            let meta = (showList && !t.listTitle.isEmpty) || !t.subtasks.isEmpty || t.notes?.isEmpty == false
+            return (meta ? 47 : 34) + CGFloat(t.subtasks.count) * 30
+        }
+        let total = sections.reduce(CGFloat(0)) { sum, s in
+            sum + (s.title == nil ? 0 : 30) + (s.tasks.isEmpty ? 33 : s.tasks.reduce(0) { $0 + cost($1, showList: s.showList) })
+        }
+        if total <= height { return (sections, 0) }
+        var left = max(height - fold, 3 * 34), out: [Section] = [], hidden = 0, shownRows = 0
+        for var s in sections {
+            let head: CGFloat = s.title == nil ? 0 : 30
+            if left < head + 34 && shownRows >= 3 { hidden += s.tasks.count; continue }
+            left -= head
+            var keep: [AgendaTask] = []
+            for t in s.tasks {
+                let c = cost(t, showList: s.showList)
+                if left >= c || shownRows < 3 { keep.append(t); left -= c; shownRows += 1 } else { hidden += 1 }
+            }
+            if s.tasks.isEmpty { left -= 33 }
+            if keep.isEmpty && !s.tasks.isEmpty { left += head; continue }
+            s.tasks = keep
+            out.append(s)
+        }
+        return (out, hidden)
     }
 
     private func allBar(_ list: TaskListRecord?) -> some View {
@@ -299,17 +389,23 @@ struct TrayTasks: View {
         .padding(.top, 10).padding(.bottom, 2)
     }
 
-    private func sections(list: TaskListRecord?) -> [Section] {
+    private func sections(_ tab: Int, list: TaskListRecord?) -> [Section] {
         let agenda = state.agenda, v = agenda.view
         switch tab {
         case 0:
-            return [Section(id: "due", title: "今天到期", tasks: v.dueNow, empty: "今天没有到期的任务", pinMenu: true)]
+            return [Section(id: "due", title: "今天到期", tasks: v.today, showDue: false, empty: "今天没有到期的任务", pinMenu: true)]
                 + agenda.todayExtras.filter { !$0.tasks.isEmpty }
                 .map { Section(id: "list-" + $0.list.id, title: $0.list.title, tasks: $0.tasks, showList: false) }
         case 2:
-            return v.days(from: agenda.now).map { day, tasks in
-                Section(id: "day-\(day.timeIntervalSince1970)", title: Self.dayTitle(day, now: agenda.now), tasks: tasks,
-                        showDue: false, empty: "今天没有到期的任务")
+            let days = v.days(from: agenda.now)
+            if days.isEmpty { return [Section(id: "none", tasks: [], empty: "明天起没有有日期的任务")] }
+            return days.map { day, tasks in
+                Section(id: "day-\(day.timeIntervalSince1970)", title: Self.dayTitle(day, now: agenda.now), tasks: tasks, showDue: false)
+            }
+        case 3:
+            return agenda.lists.compactMap { l in
+                let tasks = v.overdue.filter { $0.listID == l.id }
+                return tasks.isEmpty ? nil : Section(id: "late-" + l.id, title: l.title, tasks: tasks, showList: false)
             }
         default:
             if byList {
@@ -326,24 +422,12 @@ struct TrayTasks: View {
         return ["今天", "明天", "后天"].contains(rel) ? "\(rel) · \(long)" : long
     }
 
-    /// Keeps whole sections in order until `limit` rows are used; returns the rest as a count.
-    static func cap(_ sections: [Section], _ limit: Int) -> ([Section], Int) {
-        var left = limit, out: [Section] = [], hidden = 0
-        for var s in sections {
-            if left <= 0 { hidden += s.tasks.count; continue }
-            hidden += max(0, s.tasks.count - left)
-            s.tasks = Array(s.tasks.prefix(left))
-            left -= max(s.tasks.count, 1)
-            out.append(s)
-        }
-        return (out, hidden)
-    }
-
-    private func heading(_ sections: [Section]) -> String {
-        let open = (tab == 0 ? state.agenda.view.dueNow : sections.flatMap(\.tasks)).filter { !$0.completed }.count
+    private func heading(_ tab: Int, _ sections: [Section]) -> String {
+        let open = (tab == 0 ? state.agenda.view.today : sections.flatMap(\.tasks)).filter { !$0.completed }.count
         switch tab {
         case 0: return open == 0 ? "任务" : "任务 · 今天 \(open) 项"
         case 2: return "任务 · 即将 \(open) 项"
+        case 3: return "任务 · 逾期 \(open) 项"
         default: return "任务 · \(open) 项未完成"
         }
     }
@@ -377,6 +461,7 @@ private struct TrayTaskInput: View {
     @ViewState private var text = ""
     @ViewState private var added: String?
     @ViewState private var picked: PickedDue?
+    @ViewState private var listID: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -388,6 +473,7 @@ private struct TrayTaskInput: View {
                     .textFieldStyle(.plain).font(Typo.sans(12.5))
                     .focused($focused)
                     .onSubmit(submit)
+                ListPickerButton(listID: $listID, fallback: list)
                 DuePickerButton(picked: $picked, now: state.agenda.now)
                 Button { state.showQuickTask() } label: { Kbd(HotKeyCenter.shared.display(.quickTask)) }
                     .buttonStyle(.plain).help("打开快速任务窗口")
@@ -408,13 +494,14 @@ private struct TrayTaskInput: View {
     }
 
     private var placeholder: String {
-        if let list { return "添加到「\(list.title)」…" }
-        return dueToday ? "添加今天的任务，例如「下午3点 开会」" : "添加任务，例如「明天下午3点 开会」"
+        if let list, listID == nil { return "添加到「\(list.title)」…" }
+        return dueToday ? "添加今天的任务…" : "添加任务，可写「明天下午3点」"
     }
 
     private var parsed: QuickEntry {
         var e = QuickEntryParser.parse(text, now: state.agenda.now)
         picked?.apply(to: &e)
+        ListPickerButton.apply(listID, to: &e, lists: state.agenda.lists)
         if dueToday, e.due == nil { e.due = Calendar.hub.startOfDay(for: state.agenda.now) }
         if let list, e.listTag == nil { e.listTag = list.title }
         return e

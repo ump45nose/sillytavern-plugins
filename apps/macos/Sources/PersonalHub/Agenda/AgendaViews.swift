@@ -200,89 +200,6 @@ struct EventEditor: View {
     }
 }
 
-/// Today's timed events on an hour grid that widens to fit early or late events.
-struct DayTimeline: View {
-    var events: [AgendaEvent]
-    var now: Date
-    var height: CGFloat = 440
-    /// Double-clicking empty space proposes a new event at that half hour.
-    var onCreate: ((Date) -> Void)?
-    private let top: CGFloat = 12
-
-    var body: some View {
-        let today = Calendar.hub.startOfDay(for: now)
-        let spans = events.map { e in
-            (e, max(0, e.start.timeIntervalSince(today) / 3600), min(24, e.end.timeIntervalSince(today) / 3600))
-        }
-        let nowHour = Agenda.hour(now)
-        let h0 = min(8, floor(min(spans.map(\.1).min() ?? 8, nowHour)))
-        let h1 = min(24, max(22, ceil(max(spans.map(\.2).max() ?? 22, nowHour + 0.25))))
-        let pph = (height - top - 8) / CGFloat(h1 - h0)
-        let lanes = Self.lanes(spans.map { ($0.1, $0.2) })
-        let ticks = stride(from: Int(h0), through: Int(h1), by: h1 - h0 > 16 ? 3 : 2).map { $0 }
-
-        GeometryReader { geo in
-            let width = geo.size.width - 46 - 12
-            ZStack(alignment: .topLeading) {
-                Color.clear.contentShape(Rectangle())
-                    .onTapGesture(count: 2) { p in
-                        guard let onCreate else { return }
-                        let hour = max(h0, min(h1 - 0.5, h0 + Double((p.y - top) / pph)))
-                        onCreate(today.addingTimeInterval((hour * 2).rounded(.down) / 2 * 3600))
-                    }
-                ForEach(ticks, id: \.self) { h in
-                    HStack(spacing: 8) {
-                        Text(abs(Double(h) - nowHour) < 0.6 ? "" : String(format: "%02d:00", h))
-                            .font(Typo.sans(10)).foregroundStyle(Palette.ink4).monospacedDigit().frame(width: 34, alignment: .trailing)
-                        Rectangle().fill(Palette.line2).frame(height: 1)
-                    }
-                    .offset(y: CGFloat(Double(h) - h0) * pph + top - 6)
-                }
-                ForEach(Array(spans.enumerated()), id: \.1.0.id) { i, span in
-                    let (e, start, end) = span
-                    let lane = lanes[i], w = width / CGFloat(lane.count)
-                    EventBlock(event: e, caption: "\(Agenda.clock(e.start)) – \(Agenda.clock(e.end))")
-                        .frame(width: w - 3, height: max(CGFloat(end - start) * pph - 4, 26), alignment: .top)
-                        .offset(x: 46 + CGFloat(lane.index) * w, y: CGFloat(start - h0) * pph + top + 2)
-                        .rise(i + 2)
-                }
-                if nowHour >= h0, nowHour <= h1 {
-                    HStack(spacing: 4) {
-                        Text(Agenda.clock(now)).font(Typo.sans(10, .semibold)).foregroundStyle(Tone.clay.color).monospacedDigit()
-                            .frame(width: 34, alignment: .trailing)
-                        Dot(color: Tone.clay.color, pulse: true)
-                        Rectangle().fill(Tone.clay.color).frame(height: 1.5)
-                    }
-                    .offset(y: CGFloat(nowHour - h0) * pph + top - 6)
-                }
-            }
-        }
-        .frame(height: height, alignment: .topLeading)
-        .overlay {
-            if events.isEmpty {
-                Text("今天没有日程").font(Typo.serif(15)).foregroundStyle(Palette.ink3)
-            }
-        }
-        .padding(.horizontal, 6)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.sunk.opacity(0.7)))
-    }
-
-    /// Side-by-side columns for overlapping events: each event's lane and its cluster's lane count.
-    static func lanes(_ spans: [(Double, Double)]) -> [(index: Int, count: Int)] {
-        var result = [(index: Int, count: Int)](repeating: (0, 1), count: spans.count)
-        var cluster: [Int] = [], ends: [Double] = [], clusterEnd = -1.0
-        func close() { for i in cluster { result[i].count = ends.count } }
-        for (i, s) in spans.enumerated() {
-            if s.0 >= clusterEnd { close(); cluster = []; ends = [] }
-            if let free = ends.firstIndex(where: { $0 <= s.0 }) { ends[free] = s.1; result[i].index = free } else { ends.append(s.1); result[i].index = ends.count - 1 }
-            cluster.append(i)
-            clusterEnd = max(clusterEnd, s.1)
-        }
-        close()
-        return result
-    }
-}
-
 // MARK: - Tasks
 
 struct CheckCircle: View {
@@ -554,60 +471,6 @@ struct TaskEditor: View {
     }
 }
 
-/// Task list chips: filter, create, rename and delete Google task lists.
-struct ListChips: View {
-    @Binding var selection: String?
-    @Environment(AppState.self) private var state
-    @ViewState private var creating = false
-    @ViewState private var renaming: String?
-    @ViewState private var confirmDelete: TaskListRecord?
-
-    var body: some View {
-        Flow(spacing: 6) {
-            chip("全部", id: nil)
-            ForEach(state.agenda.lists) { list in
-                chip(list.title, id: list.id)
-                    .contextMenu {
-                        Button("重命名…") { renaming = list.id }
-                        Button("删除清单…", role: .destructive) { confirmDelete = list }
-                    }
-                    .popover(isPresented: Binding(get: { renaming == list.id }, set: { if !$0 { renaming = nil } })) {
-                        NameField(title: "重命名清单", initial: list.title) { name in
-                            if let name, name != list.title { state.agenda.renameList(list.id, to: name) }
-                            renaming = nil
-                        }
-                    }
-            }
-            Button { creating = true } label: { Chip(text: "清单", systemImage: "plus") }
-                .buttonStyle(.plain)
-                .popover(isPresented: $creating) {
-                    NameField(title: "新建清单", initial: "") { name in
-                        if let name { selection = state.agenda.createList(name) }
-                        creating = false
-                    }
-                }
-        }
-        .alert("删除清单「\(confirmDelete?.title ?? "")」？", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
-            Button("删除", role: .destructive) {
-                if let list = confirmDelete {
-                    if selection == list.id { selection = nil }
-                    state.agenda.deleteList(list.id)
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("清单里的任务也会一起从 Google Tasks 删除。")
-        }
-    }
-
-    private func chip(_ title: String, id: String?) -> some View {
-        Button { withAnimation(Motion.spring) { selection = id } } label: {
-            Chip(text: title, tone: selection == id ? .sky : nil)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct NameField: View {
     var title: String
     var initial: String
@@ -714,6 +577,69 @@ struct DuePickerButton: View {
 
     private func label(_ p: PickedDue) -> String {
         Agenda.relativeDay(p.day, now: now) + (p.time.map { String(format: " %02d:%02d", $0.hour ?? 0, $0.minute ?? 0) } ?? "")
+    }
+}
+
+/// Which list a new task goes to; a typed #list still wins.
+struct ListPickerButton: View {
+    @Binding var listID: String?
+    /// Shown, and used, until something is picked.
+    var fallback: TaskListRecord? = nil
+    var onToggle: ((Bool) -> Void)? = nil
+    @Environment(AppState.self) private var state
+    @ViewState private var open = false
+
+    var body: some View {
+        let agenda = state.agenda
+        let current = listID.flatMap { id in agenda.lists.first { $0.id == id } } ?? fallback ?? agenda.defaultList
+        Button { open.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "list.bullet").font(.system(size: 10.5, weight: .semibold))
+                Text(current?.title ?? "清单").font(Typo.sans(11.5, .medium)).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 7.5, weight: .bold)).opacity(0.7)
+            }
+            .foregroundStyle(listID == nil ? Palette.ink3 : Tone.olive.color)
+            .padding(.horizontal, 7).frame(height: 24)
+            .background(RoundedRectangle(cornerRadius: 6).fill(listID == nil ? Palette.card.opacity(0.001) : Tone.olive.tint))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("选择清单；也可以在标题里写 #清单")
+        .onChange(of: open) { onToggle?(open) }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 1) {
+                Label11("添加到清单").padding(.horizontal, 10).padding(.bottom, 4)
+                ForEach(agenda.lists) { l in
+                    Button {
+                        listID = l.id
+                        open = false
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                                .opacity(l.id == current?.id ? 1 : 0).foregroundStyle(Tone.olive.color)
+                            Text(l.title).font(Typo.sans(12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+                            Spacer(minLength: 12)
+                            let n = agenda.view.open(in: l.id).count
+                            if n > 0 { Text("\(n)").font(Typo.sans(11)).foregroundStyle(Palette.ink4).monospacedDigit() }
+                        }
+                        .padding(.horizontal, 10).frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(l.id == current?.id ? Palette.sunk : .clear))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 10).padding(.horizontal, 4)
+            .frame(minWidth: 180)
+            .background(Palette.card)
+        }
+    }
+
+    /// The entry with the picked list applied, unless the text names one.
+    static func apply(_ listID: String?, to entry: inout QuickEntry, lists: [TaskListRecord]) {
+        guard entry.listTag == nil, let listID, let list = lists.first(where: { $0.id == listID }) else { return }
+        entry.listTag = list.title
     }
 }
 
@@ -892,21 +818,37 @@ private struct TimeStepper: View {
 /// Inline add field for the agenda module; the global quick panel has the full version.
 struct InlineQuickAdd: View {
     var placeholder = "明天下午3点 和李雷对齐方案 #工作"
+    /// Preset target list and day; the pickers and typed text override them.
+    var list: TaskListRecord? = nil
+    var due: Date? = nil
+    var autofocus = false
     @Environment(AppState.self) private var state
     @ViewState private var text = ""
     @ViewState private var timeBlock = true
     @ViewState private var picked: PickedDue?
+    @ViewState private var listID: String?
+    @FocusState private var focused: Bool
+
+    private var entry: QuickEntry {
+        var e = QuickEntryParser.parse(text, now: state.agenda.now)
+        picked?.apply(to: &e)
+        ListPickerButton.apply(listID ?? list?.id, to: &e, lists: state.agenda.lists)
+        if e.due == nil, let due { e.due = Calendar.hub.startOfDay(for: due) }
+        return e
+    }
 
     var body: some View {
-        var entry = QuickEntryParser.parse(text, now: state.agenda.now)
-        let _ = picked?.apply(to: &entry)
+        let entry = self.entry
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink3)
                 TextField(placeholder, text: $text).textFieldStyle(.plain).font(Typo.sans(12.5))
+                    .focused($focused)
                     .onSubmit {
                         if state.agenda.add(entry, timeBlock: timeBlock) { text = ""; picked = nil }
                     }
+                    .onAppear { if autofocus { DispatchQueue.main.async { focused = true } } }
+                ListPickerButton(listID: $listID, fallback: list)
                 DuePickerButton(picked: $picked, now: state.agenda.now)
                 Kbd("↩")
             }

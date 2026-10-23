@@ -1,25 +1,37 @@
+import AppKit
 import Foundation
 import HubKit
 import Observation
 
-/// The Memos page's timeline: hub's paged list with tag and text filters. Until hub ships the list
+/// The Memos page's timeline: hub's paged list with tag, text and view filters. Until hub ships the list
 /// endpoint it shows the module's recent memos, filtered locally.
 @MainActor @Observable
 final class MemosStore {
     enum Source { case hub, recent, sample }
     enum Phase: Equatable { case idle, loading, ready, failed(String) }
+    enum Filter: CaseIterable { case all, pinned, attachments, archived }
 
     typealias Memo = MemosData.Memo
 
     private let hub: HubModel
-    private(set) var items: [Memo] = []
-    private(set) var next: String?
+    private(set) var items: [Memo] = [] { didSet { snapshot() } }
+    private(set) var next: String? { didSet { snapshot() } }
     private(set) var source: Source = .hub
     private(set) var phase: Phase = .idle
     private(set) var loadingMore = false
     private(set) var tag: String?
+    private(set) var filter: Filter = .all
+    /// hub answered the archived view with ordinary memos: it doesn't know the `state` filter yet.
+    private(set) var archiveUnsupported = false
+    /// Creation dates from the last unfiltered list, so the activity grid holds still while filtering.
+    private(set) var activity: [Date] = []
+    private(set) var activityPartial = false
     var query = ""
     @ObservationIgnored private var generation = 0
+
+    private(set) var thumbnails: [String: NSImage] = [:]
+    private(set) var missing: Set<String> = []
+    @ObservationIgnored private var fetching: Set<String> = []
 
     init(hub: HubModel) {
         self.hub = hub
@@ -33,8 +45,17 @@ final class MemosStore {
         return counts.map { MemosData.Tag(name: $0.key, count: $0.value) }.sorted { ($0.count ?? 0) > ($1.count ?? 0) }
     }
 
+    var filtered: Bool { tag != nil || !query.isEmpty || filter != .all }
+
     func select(tag: String?) async {
         self.tag = tag == self.tag ? nil : tag
+        await reload()
+    }
+
+    func select(filter: Filter) async {
+        guard filter != self.filter else { return }
+        self.filter = filter
+        items = []
         await reload()
     }
 
@@ -47,11 +68,12 @@ final class MemosStore {
             return
         }
         do {
-            let page = try await api.memos(tag: tag, query: query.trimmingCharacters(in: .whitespaces))
+            let page = try await fetch(api, token: nil)
             guard g == generation else { return }
             if let page {
-                items = page.items
-                next = page.nextPageToken
+                archiveUnsupported = filter == .archived && !page.items.isEmpty && page.items.allSatisfy { $0.state == nil }
+                items = keep(page.items)
+                next = archiveUnsupported ? nil : page.nextPageToken
                 source = .hub
                 phase = .ready
             } else {
@@ -71,9 +93,9 @@ final class MemosStore {
         loadingMore = true
         defer { loadingMore = false }
         let g = generation
-        guard let page = try? await api.memos(pageToken: token, tag: tag, query: query), g == generation else { return }
+        guard let page = try? await fetch(api, token: token), g == generation else { return }
         let known = Set(items.map(\.id))
-        items += page.items.filter { !known.contains($0.id) }
+        items += keep(page.items).filter { !known.contains($0.id) }
         next = page.nextPageToken
     }
 
@@ -87,6 +109,7 @@ final class MemosStore {
         do {
             let saved = try await api.updateMemo(id: memo.id, content: content, visibility: visibility, pinned: pinned)
             if let i = items.firstIndex(where: { $0.id == memo.id }) { items[i] = saved }
+            if filter == .pinned, saved.pinned != true { items.removeAll { $0.id == memo.id } }
             hub.refresh()
         } catch {
             throw Failure(message: Self.message(error))
@@ -104,24 +127,75 @@ final class MemosStore {
         }
     }
 
+    func restore(_ memo: Memo) async throws {
+        guard let api = hub.liveAPI else { throw HubModel.WriteError.demo }
+        do {
+            _ = try await api.updateMemo(id: memo.id, state: "NORMAL")
+            items.removeAll { $0.id == memo.id }
+            hub.refresh()
+        } catch {
+            throw Failure(message: Self.message(error))
+        }
+    }
+
+    /// Image attachments through hub's read proxy; nil until loaded, and for good once hub says no.
+    func thumbnail(_ memo: Memo, _ file: Memo.Attachment) -> NSImage? {
+        let key = memo.id + "|" + file.name
+        if let hit = thumbnails[key] { return hit }
+        guard let api = hub.liveAPI, !missing.contains(key), !fetching.contains(key) else { return nil }
+        fetching.insert(key)
+        Task {
+            defer { fetching.remove(key) }
+            if let bytes = try? await api.memoAttachment(memo: memo.id, name: file.name), let image = NSImage(data: bytes) {
+                thumbnails[key] = image
+            } else {
+                missing.insert(key)
+            }
+        }
+        return nil
+    }
+
     struct Failure: LocalizedError {
         var message: String
         var errorDescription: String? { message }
     }
 
+    private func fetch(_ api: HubAPI, token: String?) async throws -> MemoPage? {
+        try await api.memos(pageToken: token, tag: tag, query: query.trimmingCharacters(in: .whitespaces),
+                            pinned: filter == .pinned, hasAttachments: filter == .attachments,
+                            state: filter == .archived ? "ARCHIVED" : nil)
+    }
+
+    /// The view filter again on the client, for hubs that ignore it.
+    private func keep(_ list: [Memo]) -> [Memo] {
+        switch filter {
+        case .all: list.filter { $0.state != "ARCHIVED" }
+        case .pinned: list.filter { $0.pinned == true }
+        case .attachments: list.filter { !($0.attachments ?? []).isEmpty }
+        case .archived: list.filter { $0.state == "ARCHIVED" }
+        }
+    }
+
+    private func snapshot() {
+        guard !filtered else { return }
+        activity = items.compactMap(\.createdAt)
+        activityPartial = next != nil
+    }
+
     private func apply(_ list: [Memo], source: Source) {
         items = list
         next = nil
+        archiveUnsupported = false
         self.source = source
         phase = .ready
     }
 
     private func local(_ list: [Memo]) -> [Memo] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        return list.filter { m in
+        return keep(list.filter { m in
             (tag.map { t in (m.tags ?? []).contains(t) || m.content.contains("#" + t) } ?? true)
                 && (q.isEmpty || m.content.localizedCaseInsensitiveContains(q))
-        }
+        })
         .sorted { ($0.pinned ?? false) && !($1.pinned ?? false) }
     }
 

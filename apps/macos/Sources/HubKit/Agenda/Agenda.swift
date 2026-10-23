@@ -78,12 +78,12 @@ public struct AgendaView: Sendable {
 
     public func completed(in listID: String) -> [AgendaTask] { completed.filter { $0.listID == listID } }
 
-    /// Dated open tasks from `today` on, overdue folded into today; today always comes first, even when empty.
+    /// Dated open tasks after `today`, one group per day; today and overdue have their own views.
     public func days(from today: Date, calendar: Calendar = .hub) -> [(day: Date, tasks: [AgendaTask])] {
         let start = calendar.startOfDay(for: today)
         let ahead = (upcoming + later).filter { !$0.completed && $0.due != nil }
         let grouped = Dictionary(grouping: ahead) { calendar.startOfDay(for: $0.due!) }
-        return [(start, dueNow)] + grouped.keys.filter { $0 > start }.sorted().map { ($0, grouped[$0]!) }
+        return grouped.keys.filter { $0 > start }.sorted().map { ($0, grouped[$0]!) }
     }
 
     /// Tasks due on a day (open, plus ones finished) and the events touching it.

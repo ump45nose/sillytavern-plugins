@@ -306,6 +306,8 @@ public struct MemosData: Codable, Equatable, Sendable {
         public var updatedAt: Date? = nil
         public var pinned: Bool? = nil
         public var attachments: [Attachment]? = nil
+        /// `NORMAL` or `ARCHIVED`; older hubs leave it out.
+        public var state: String? = nil
     }
     public struct Tag: Codable, Equatable, Sendable {
         public var name: String

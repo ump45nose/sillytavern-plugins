@@ -25,6 +25,8 @@ final class HubModel {
     private(set) var skyLive = false
     /// Every local day the archive has, newest first, and the windows of the days opened so far.
     private(set) var skyDays: [Date] = []
+    /// 10-minute segments per day, for the date picker's shading.
+    private(set) var skyActivity: [Date: Int] = [:]
     private(set) var skyByDay: [Date: [SkyWindowItem]] = [:]
     @ObservationIgnored private var skyFiles: [SkyFile] = []
     @ObservationIgnored private var skyLoading: Set<Date> = []
@@ -118,6 +120,7 @@ final class HubModel {
             if files.count != skyFiles.count {
                 skyFiles = files
                 skyDays = SkyArchive.days(files)
+                skyActivity = SkyArchive.activity(files)
                 skyByDay = [:]
             }
             if windows != sky { sky = windows }
@@ -143,6 +146,7 @@ final class HubModel {
         let grouped = Dictionary(grouping: sky) { Calendar.hub.startOfDay(for: $0.start) }
         skyByDay = grouped
         skyDays = grouped.keys.sorted(by: >)
+        skyActivity = grouped.mapValues { $0.reduce(0) { $0 + $1.segments.count } }
     }
 
     // MARK: Account
