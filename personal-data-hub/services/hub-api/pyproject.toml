@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.7,<3",
     "authlib>=1.5,<2",
     "joserfc>=1.6,<2",
+    "python-multipart>=0.0.20,<1",
 ]
 
 [dependency-groups]

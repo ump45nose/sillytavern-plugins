@@ -14,7 +14,7 @@ from test_records import NOW
 def memo(identifier='one', creator='users/owner'):
     return {'name': 'memos/'+identifier, 'creator': creator, 'content': '正文', 'tags': ['想法'],
             'createTime': '2026-10-20T04:00:00Z', 'updateTime': '2026-10-20T05:00:00Z',
-            'pinned': True, 'visibility': 'PRIVATE', 'credentials': 'SENTINEL-MEMOS',
+            'pinned': True, 'state': 'NORMAL', 'visibility': 'PRIVATE', 'credentials': 'SENTINEL-MEMOS',
             'attachments': [{'name': 'attachments/image1', 'filename': '照片.png', 'type': 'image/png'}]}
 
 
@@ -54,7 +54,7 @@ def test_own_list_official_filters_cursor_and_full_memo(settings, caplog):
             'page_size': 2, 'page_token': 'opaque-in', 'tag': tag, 'q': q})
         assert r.status_code == 200 and r.json()['next_page_token'] == 'opaque-next'
         item = r.json()['items'][0]
-        assert set(item) == {'id', 'created_at', 'updated_at', 'content', 'tags', 'visibility', 'pinned', 'url', 'attachments'}
+        assert set(item) == {'id', 'created_at', 'updated_at', 'content', 'tags', 'visibility', 'pinned', 'url', 'attachments', 'state'}
         assert item['updated_at'] == '2026-10-20T13:00:00+08:00' and item['pinned'] is True
         assert item['attachments'] == [{'name': 'attachments/image1', 'filename': '照片.png', 'type': 'image/png'}]
         params = calls[-1].url.params
@@ -117,7 +117,7 @@ def test_invalid_patch_is_rejected_before_io(settings, payload):
     settings.memos_token = SecretStr('SENTINEL-MEMOS')
     calls = []
     with TestClient(create_app(settings, now=lambda: NOW, transport=httpx.MockTransport(source(calls)))) as client:
-        assert client.patch('/api/v1/memos/one', headers=auth(settings), json=payload).status_code == 400
+        assert client.patch('/api/v1/memos/one', headers=auth(settings), json=payload).status_code == (422 if 'state' in payload else 400)
         assert not calls
 
 
