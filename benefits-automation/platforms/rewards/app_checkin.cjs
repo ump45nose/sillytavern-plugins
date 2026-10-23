@@ -3,6 +3,7 @@
 const fs = require("node:fs"), path = require("node:path");
 const { boundedJson } = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
+const {writeJson} = require("../../common/atomic_json.cjs");
 function validDate(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -48,9 +49,7 @@ function journal(stateDir, businessDate) {
   }
   function persist() {
     saved.business_date = businessDate;
-    const temporary = file + ".tmp";
-    fs.writeFileSync(temporary, JSON.stringify(saved), {mode: 0o600});
-    fs.renameSync(temporary, file);
+    writeJson(file, saved, 16384);
   }
   // Commit migrated intent before another capability can rotate its old day
   // journal. A read-only reconciliation must not forget an uncertain write.

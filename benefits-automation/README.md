@@ -15,15 +15,15 @@
 | 阿里云开发者社区 | [Aliyun](platforms/aliyun/README.md) | CookieCloud 最新 Cookie，签到与待收积分确认 |
 | Laowang | [Laowang](platforms/laowang/README.md) | 自动验证码、提交和签到读回通过 |
 | Microsoft Rewards | [Rewards](platforms/rewards/README.md) | 只执行约定范围内的脚本任务；测验、投票、探索不执行，派生要求同步排除 |
-| Epic 免费游戏 | [Epic](platforms/epic/README.md) | MacAir 独立脚本执行并回传 fn；2026-10-22 原始结果为商店资源 403，fn 不再执行 |
+| Epic 免费游戏 | [Epic](platforms/epic/README.md) | 已停用生产任务；源码及历史回执保留，不纳入福利异常日报 |
 
 [Steam ASF / FreePackages](platforms/steam/README.md) 已合入 main 并部署到 NAS：登录、持久恢复、真实接口、定时和通知已核验。用户已授权免费领取，Arena of Trophies 实际取得免费许可，owned 回查与防重复检查通过；公开商店超时的代理路由已修复，Hermes 已启用经核实的限免领取。缺少访问 token 的包继续待核查，合格普通游戏的限时赠送正向样本仍待实际活动覆盖。见 [2026-10-07 部署与验收记录](docs/STEAM_DEPLOYMENT_2026-10-07.md)。这次 Steam 部署独立于下述六平台生产迁移。
 
-Epic 当前阻塞及回归清理见 [2026-10-20 记录](docs/plans/2026-10-20-benefits-regression-cleanup.md)，Rewards 实际进度见 [能力与现场验收](docs/REWARDS_PARITY.md)。原六平台迁移历史见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 和 [生产迁移记录](docs/MIGRATION_2026-10-03.md)。生产启动已迁至 Hermes no-agent cron，六条旧青龙任务已停用。京东和中国移动不在当前六个平台中。
+Epic 停用前的阻塞及回归清理见 [2026-10-20 记录](docs/plans/2026-10-20-benefits-regression-cleanup.md)，Rewards 实际进度见 [能力与现场验收](docs/REWARDS_PARITY.md)。原六平台迁移历史见 [实现验收记录](docs/IMPLEMENTATION_ACCEPTANCE_2026-10-03.md) 和 [生产迁移记录](docs/MIGRATION_2026-10-03.md)。生产启动已迁至 Hermes no-agent cron，六条旧青龙任务已停用。京东和中国移动不在当前六个平台中。
 
 ## 结构
 
-2026-10-19 新增 [GLaDOS](platforms/glados/README.md)、[影视飓风](platforms/yingshijufeng/README.md)、[Olé](platforms/ole/README.md)、[雨云](platforms/rainyun/README.md)、[WorkBuddy 双版](platforms/workbuddy/README.md)、[WeTalk](platforms/wetalk/README.md) 的独立执行器。[Telegram 机器人签到](platforms/telegram/README.md) 通过账号自己的 Telegram Web 会话按 `--account` 给配置的机器人发送签到命令，支持多账号，尚待用户扫码登录后真实验收。[网易严选](platforms/yanxuan/README.md) 目前只有积分只读查询，尚未实现当前活动签到，不能为它注册签到任务。微信两平台共用 [YYB 取码服务](docs/YYB_LOGIN.md)。配置、真实账号验收和仍需处理的事项见 [新增平台验收记录](docs/NEW_PLATFORM_ACCEPTANCE_2026-10-19.md)；代码或离线测试通过不代表已经签到。
+2026-10-19 新增 [GLaDOS](platforms/glados/README.md)、[影视飓风](platforms/yingshijufeng/README.md)、[Olé](platforms/ole/README.md)、[雨云](platforms/rainyun/README.md)、[WorkBuddy 双版](platforms/workbuddy/README.md)、[WeTalk](platforms/wetalk/README.md) 的独立执行器。[Telegram 机器人签到](platforms/telegram/README.md) 通过账号自己的 Telegram Web 会话按 `--account` 给配置的机器人发送签到命令，支持多账号，各账号独立保存登录状态与动作记录；实际完成情况以当次正式回执为准。[网易严选](platforms/yanxuan/README.md) 目前只有积分只读查询，尚未实现当前活动签到，不能为它注册签到任务。微信两平台共用 [YYB 取码服务](docs/YYB_LOGIN.md)。配置、真实账号验收和仍需处理的事项见 [新增平台验收记录](docs/NEW_PLATFORM_ACCEPTANCE_2026-10-19.md)；代码或离线测试通过不代表已经签到。
 
 ```text
 common/                小型公共库；没有平台名分支或常驻进程

@@ -17,3 +17,4 @@ class Task:
     command: Callable | None = None
     validate: Callable | None = None
     result_partition: Callable | None = None
+    browser_recovery_reasons: frozenset[str] = frozenset()

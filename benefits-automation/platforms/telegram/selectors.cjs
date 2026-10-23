@@ -18,7 +18,7 @@ const SELECTORS = Object.freeze({
   passwordInput: '#auth-pages input[type="password"]:not(.stealthy):not([aria-hidden="true"])',
   appColumn: "#column-left",
   messageInput: '.input-message-input[contenteditable="true"]',
-  sendButton: ".btn-send",
+  sendButton: ".btn-send.send:not([disabled]):not([aria-disabled=\"true\"])",
   startButton: ".chat-input-control-button",
   bubble: ".bubbles-inner .bubble[data-mid]",
   messageText: ".message",
@@ -63,6 +63,7 @@ function readPage({selectors, limits}) {
     passwordBusy: Boolean(password && password.disabled),
     passwordRejected: Boolean(password && !password.disabled && password.classList.contains("error")),
     inputReady: Boolean(input),
+    draft: text(input, limits.text),
     startRequired: !input && anyVisible(selectors.startButton),
     messages,
     answers: all(selectors.answers).filter(visible).slice(0, limits.answers)

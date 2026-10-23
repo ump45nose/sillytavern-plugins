@@ -3,7 +3,7 @@
 const { publish } = require("../../common/result.cjs");
 const common = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
-const { parseProgress, progress, cards } = require("./activities.cjs");
+const { parseProgress, progress, cards } = require("./daily_page.cjs");
 const {metric, number} = require("../../common/details.cjs");
 function details(raw, daily, app, includeExplore = true) {
   const {quota, quotas} = require("./search.cjs");
@@ -14,6 +14,7 @@ function details(raw, daily, app, includeExplore = true) {
   if (counters.MobileSearch || counters.mobileSearch)
     put("mobile_search", quota(counters.MobileSearch ?? counters.mobileSearch));
   metrics.daily = metric("count", daily?.current, daily?.max);
+  metrics.daily_points = metric("points", daily?.points?.current, daily?.points?.max);
   metrics.app_daily = metric("count", app?.current, app?.max);
   metrics.balance = metric("points", flyout.userStatus.availablePoints);
   let locked = 0, omitted = 0;
@@ -148,10 +149,12 @@ async function run(chromium, state, options = {}, deps = common) {
 async function main() {
   let out;
   try {
+    const stateDir = process.env.BENEFITS_STATE_DIR;
+    const {readConfig, browserOptions} = require("./runtime_config.cjs");
     out = await run(
       common.dependency(process.env.REWARDS_ROOT),
-      common.readState(process.env.BENEFITS_STATE_DIR),
-      { proxy: process.env.REWARDS_PROXY },
+      common.readState(stateDir),
+      browserOptions(stateDir, readConfig(stateDir), process.env.REWARDS_PROXY),
     );
   } catch (error) {
     trace.failure("run", error, {capability: "snapshot"});

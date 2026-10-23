@@ -165,15 +165,32 @@ async function submit(
   });
 }
 async function reportActivity(page, parser, actionId, offer, timezoneOffset) {
-  return request(page, "/earn", {method: "POST", headers: {
+  const response = await request(page, "/earn", {method: "POST", headers: {
     Accept: "text/x-component", "Content-Type": "text/plain;charset=UTF-8",
     "Next-Action": actionId,
     "Next-Router-State-Tree": parser.routerStateTree("earn"),
   }, body: JSON.stringify([offer.hash, offer.activityType || 11,
     {offerid: offer.offerId, isPromotional: offer.isPromotional ? true : "$undefined",
       timezoneOffset}])});
+  const accepted = actionAccepted(response.text);
+  trace.emit("server_action.result", {status: response.status,
+    ...(accepted === null ? {} : {accepted})});
+  return {...response, accepted};
+}
+function actionAccepted(text) {
+  try {
+    const root = JSON.parse(/^0:(.+)$/m.exec(text)?.[1]);
+    if (typeof root.a === "boolean") return root.a;
+    const reference = /^\$@([0-9a-f]+)$/.exec(root.a)?.[1];
+    if (reference) {
+      const value = new RegExp("^" + reference + ":(true|false)$", "m").exec(text)?.[1];
+      if (value) return value === "true";
+    }
+  } catch {}
+  return null;
 }
 module.exports = {
+  actionAccepted,
   safePath,
   request,
   chunkPaths,

@@ -5,6 +5,7 @@ const fs = require("node:fs"),
 const common = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
 const interaction = require("./interaction.cjs");
+const {readConfig, browserOptions} = require("./runtime_config.cjs");
 const { publish } = require("../../common/result.cjs");
 const {metric, validateDetails} = require("../../common/details.cjs");
 const ORDER = Object.freeze([
@@ -141,7 +142,33 @@ function deliveryDetails(snapshots, stages) {
   for (const stage of Object.values(stages))
     for (const row of stage.details?.items || []) items.set(row.id, {...row,
       name: row.name === row.id && items.has(row.id) ? items.get(row.id).name : row.name});
+  if (snapshots.after?.execution === "ok" && snapshots.before?.cycle &&
+      snapshots.before.cycle === snapshots.after.cycle)
+    for (const row of snapshots.after.details?.items || [])
+      if (row.status === "complete") items.set(row.id, row);
   return {metrics, items: [...items.values()].slice(0,100)};
+}
+
+function reconcileDaily(stages, snapshots) {
+  const stage = stages.daily, after = snapshots.after;
+  if (!stage || after?.execution !== "ok" || after.business.daily !== "complete" ||
+      !snapshots.before?.cycle || snapshots.before.cycle !== after.cycle ||
+      (stage.cycle && stage.cycle !== after.cycle)) return false;
+  const rows = stage.details?.items || [];
+  const active = rows.filter(row => row.status !== "not_applicable" && !row.id.startsWith("rewards_cycle_"));
+  const observed = new Map((after.details?.items || []).map(row => [row.id, row]));
+  if (!active.length || !active.every(row => observed.get(row.id)?.status === "complete")) return false;
+  const reconciled = stage.execution === "ok" || ["daily_activity_not_credited",
+    "daily_activity_rejected", "previous_daily_submission_requires_reconciliation"].includes(stage.reason);
+  stages.daily = {...stage,
+    ...(reconciled ? {execution: "ok", reason: "daily_confirmed_by_fresh_snapshot"} : {}),
+    business: {daily: "complete"},
+    details: {metrics: {...stage.details.metrics,
+      ...Object.fromEntries(Object.entries(after.details?.metrics || {})
+        .filter(([key]) => ["daily", "daily_points"].includes(key)))},
+      items: rows.map(row => observed.get(row.id)?.status === "complete" ? observed.get(row.id) : row)},
+  };
+  return true;
 }
 async function execute(
   value,
@@ -249,6 +276,10 @@ async function execute(
       reason: "not_run_after_stop",
       business: { snapshot: "unknown" },
     };
+  if (!stopped && reconcileDaily(stages, snapshots)) {
+    business.daily = "complete";
+    failed = Object.values(stages).some(out => out.execution !== "ok");
+  }
   const weeklyQuest = out => out?.details?.items?.find(row => row.id === "desktop_app_weekly_quest")?.url;
   const weeklyBefore = weeklyQuest(snapshots.before), weeklyAfter = weeklyQuest(snapshots.after);
   const weeklyChanged = enabled.includes("desktop_app_weekly") &&
@@ -354,11 +385,6 @@ function createBindings({
     }
   }
   const state = (device) => sessions.get(device);
-  const preserve = (device) => (value) => {
-    writeReport(path.join(stateDir, device === "mobile" ?
-      "storage-state.mobile.json" : "storage-state.json"), value, 1024 * 1024);
-    sessions.set(device, value);
-  };
   // Only enabled browser capabilities need Chromium. Parser-only dependencies
   // remain lazy, so a daily/search or APP request cannot fail loading a parser.
   if ((desktopRequired || mobileRequired) && !chromium)
@@ -366,22 +392,12 @@ function createBindings({
   let loadedParser;
   const parser = () =>
     (loadedParser ??= require("./parser_loader.cjs").loadParser());
-  const base = {
-    proxy,
-    region: config.region,
-    contextOptions: config.desktop,
-    onVerifiedState: preserve("desktop"),
-    pacing,
-  };
-  const mobile = {
-    proxy,
-    region: config.region,
-    contextOptions: config.mobile,
-    onVerifiedState: preserve("mobile"),
-    pacing,
-  };
+  const base = browserOptions(stateDir, config, proxy, "desktop",
+    value => sessions.set("desktop", value), pacing);
+  const mobile = browserOptions(stateDir, config, proxy, "mobile",
+    value => sessions.set("mobile", value), pacing);
   const journal = (name) =>
-    require("./punchcards.cjs").journal(path.join(stateDir, name));
+    require("./journal.cjs").journal(path.join(stateDir, name));
   // Trusted in-process callbacks only. Never module names/grants/tokens from JSON.
   const goal = () =>
     config.goal?.url
@@ -583,10 +599,7 @@ async function main() {
     confirmedBusiness = Object.fromEntries(
       enabled.map((capability) => [capability, "unknown"]),
     );
-    const configPath = path.join(stateDir, "native-config.json");
-    const config = fs.existsSync(configPath)
-      ? common.boundedJson(configPath, 65536)
-      : {};
+    const config = readConfig(stateDir);
     const native = createBindings({
       stateDir,
       config,

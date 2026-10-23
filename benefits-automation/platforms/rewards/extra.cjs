@@ -370,24 +370,17 @@ async function main() {
   try {
     const fs = require("node:fs"),
       path = require("node:path");
-    const configFile = path.join(
-      process.env.BENEFITS_STATE_DIR,
-      "native-config.json",
-    );
-    const config = fs.existsSync(configFile)
-      ? common.boundedJson(configFile, 65536)
-      : {};
+    const {readConfig, browserOptions} = require("./runtime_config.cjs");
+    const config = readConfig(process.env.BENEFITS_STATE_DIR);
     out = await run(
       common.dependency(process.env.REWARDS_ROOT),
       common.readState(process.env.BENEFITS_STATE_DIR),
       loadParser(),
       {
-        proxy: process.env.REWARDS_PROXY,
+        ...browserOptions(process.env.BENEFITS_STATE_DIR, config, process.env.REWARDS_PROXY),
         goal: config.goal?.url ? { url: config.goal.url } : undefined,
-        journal: require("./punchcards.cjs").journal(path.join(process.env.BENEFITS_STATE_DIR,
+        journal: require("./journal.cjs").journal(path.join(process.env.BENEFITS_STATE_DIR,
           "explore-" + process.env.BENEFITS_BUSINESS_DATE + ".json")),
-        timezoneOffset: config.timezoneOffset,
-        interaction: config.interaction,
       },
     );
   } catch (error) {

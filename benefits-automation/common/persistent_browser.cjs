@@ -31,7 +31,7 @@ function hasProfile(profile) {
 }
 
 async function withProfile(browserType, options, work) {
-  const {profile, proxy, headless = true, contextOptions = {}, create = false} =
+  const {profile, proxy, headless = true, contextOptions = {}, create = false, closeTimeoutMs = 0} =
     options || {};
   if (typeof profile !== "string" || !profile) throw Error("profile_invalid");
   if (create) fs.mkdirSync(profile, {recursive: true, mode: 0o700});
@@ -45,7 +45,17 @@ async function withProfile(browserType, options, work) {
     const page = context.pages()[0] || (await context.newPage());
     return await work(context, page);
   } finally {
-    if (context) await context.close();
+    if (context) {
+      let timer;
+      try {
+        await Promise.race([context.close(), ...(closeTimeoutMs ? [new Promise((resolve, reject) => {
+          timer = setTimeout(() => reject(Error("browser_cleanup_failed")), closeTimeoutMs);
+        })] : [])]);
+      } catch (error) {
+        if (closeTimeoutMs) throw Error("browser_cleanup_failed");
+        throw error;
+      } finally { clearTimeout(timer); }
+    }
   }
 }
 

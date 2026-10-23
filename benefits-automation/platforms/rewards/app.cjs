@@ -6,6 +6,7 @@ const fs = require("node:fs"),
   path = require("node:path");
 const { boundedJson } = require("./browser_common.cjs");
 const trace = require("./telemetry.cjs");
+const {writeJson} = require("../../common/atomic_json.cjs");
 // Daily/read actions expire with their business day. Keep just one bounded day;
 // multi-day promotions continue to use their separate reconciliation journal.
 function dailyJournal(stateDir, businessDate) {
@@ -67,17 +68,7 @@ function dailyJournal(stateDir, businessDate) {
       if (!keys.includes(key) || !["attempted", "confirmed"].includes(status))
         throw Error("journal_invalid");
       entries[key] = status;
-      const temporary = file + ".tmp";
-      fs.writeFileSync(
-        temporary,
-        JSON.stringify({
-          schema_version: 1,
-          business_date: businessDate,
-          entries,
-        }),
-        { mode: 0o600 },
-      );
-      fs.renameSync(temporary, file);
+      writeJson(file, {schema_version: 1, business_date: businessDate, entries});
     },
   };
 }

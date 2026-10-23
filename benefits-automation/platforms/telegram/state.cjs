@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const {isPrivateFile} = require("../../common/private_file.cjs");
+const {writeJson} = require("../../common/atomic_json.cjs");
 
 const MAX_STATE = 65536;
 const CONFIRMED = new Set(["checkin_confirmed", "already_checked_in"]);
@@ -63,26 +64,11 @@ function read(file) {
 }
 
 function write(file, value) {
-  const encoded = JSON.stringify(value);
-  if (Buffer.byteLength(encoded) > MAX_STATE) throw new StateError("state_save_failed");
-  const directory = path.dirname(file);
-  const temporary = file + ".tmp-" + crypto.randomUUID();
-  let fd;
   try {
-    fs.mkdirSync(directory, {recursive: true, mode: 0o700});
-    fd = fs.openSync(temporary, "wx", 0o600);
-    fs.writeFileSync(fd, encoded);
-    fs.fsyncSync(fd);
-    fs.closeSync(fd);
-    fd = undefined;
-    fs.renameSync(temporary, file);
-    const parent = fs.openSync(directory, "r");
-    try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); }
+    fs.mkdirSync(path.dirname(file), {recursive: true, mode: 0o700});
+    writeJson(file, value, MAX_STATE);
   } catch {
     throw new StateError("state_save_failed");
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-    fs.rmSync(temporary, {force: true});
   }
 }
 

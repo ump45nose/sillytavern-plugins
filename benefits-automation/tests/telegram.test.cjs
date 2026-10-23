@@ -37,6 +37,9 @@ function workspace(config) {
 // Scripted Telegram Web K: chats keyed by bot username, replies after polls.
 function fakeTelegram({authenticated = true, chats = {}} = {}) {
   const state = {authenticated, chat: null, typed: "", sends: [], clicks: [], gotos: [], closed: 0, pending: []};
+  for (const current of Object.values(chats))
+    if (!current.notStarted && current.messages.length === 0)
+      current.messages.push({mid: "1", out: false, text: "Welcome"});
   let nextMid = 1000;
   const chat = () => chats[state.chat];
   const tick = () => {
@@ -53,6 +56,7 @@ function fakeTelegram({authenticated = true, chats = {}} = {}) {
       auth: !state.authenticated, authenticated: state.authenticated, qr: !state.authenticated,
       passwordRequired: false,
       inputReady: Boolean(current && !current.notStarted),
+      draft: state.typed,
       startRequired: Boolean(current && current.notStarted),
       messages: current ? current.messages.map((m) => ({...m, buttons: m.buttons || []})) : [],
       answers: current ? current.answers || [] : [],
@@ -62,6 +66,7 @@ function fakeTelegram({authenticated = true, chats = {}} = {}) {
     const handle = {
       locator: () => handle,
       first: () => handle,
+      waitFor: async () => {},
       nth: (index) => ({click: async () => {
         const mid = /data-mid="([^"]+)"/.exec(selector)[1];
         state.clicks.push({chat: state.chat, mid, index});
@@ -69,7 +74,8 @@ function fakeTelegram({authenticated = true, chats = {}} = {}) {
         chat().onButton?.({message, index, incoming, state});
       }}),
       count: async () => (selector === web.SELECTORS.sendButton && state.typed ? 1 : 0),
-      click: async () => {
+      click: async (options = {}) => {
+        if (options.trial) return;
         if (selector !== web.SELECTORS.sendButton) return;
         const text = state.typed;
         state.typed = "";

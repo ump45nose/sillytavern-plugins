@@ -341,7 +341,16 @@ async function readFlyout(context, existingPage = null) {
             if (length > MAX_FLYOUT) throw Error("response_too_large");
             const body = await response.body();
             if (body.length > MAX_FLYOUT) throw Error("response_too_large");
-            return JSON.parse(body);
+            try {
+              const raw = JSON.parse(body);
+              if (!raw || typeof raw !== "object" || Array.isArray(raw))
+                throw Error("flyout_invalid_response");
+              return raw;
+            } catch {
+              trace.emit("http.get", {route: "bing_flyout", status: response.status(),
+                attempt: attempt + 1, reason: "flyout_invalid_response"}, "error");
+              if (attempt === 1) throw Error("flyout_invalid_response");
+            }
           }
         } finally { await response.dispose(); }
       }

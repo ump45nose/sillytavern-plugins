@@ -1,8 +1,7 @@
 "use strict";
 // Adapted protocol logic: TheNetsky/Microsoft-Rewards-Script v4.3.2, GPL-3.0-or-later.
 // Full license and exact source commit are retained under vendor/rewards-parser.
-const fs = require("node:fs"),
-  path = require("node:path");
+const path = require("node:path");
 const common = require("./browser_common.cjs"),
   actions = require("./server_actions.cjs");
 const trace = require("./telemetry.cjs");
@@ -39,32 +38,7 @@ function classify(child, metadata, autoClaim = false) {
     return autoClaim ? "eligible" : "manual_claim";
   return "eligible";
 }
-function journal(file) {
-  let rows = {};
-  if (fs.existsSync(file)) rows = common.boundedJson(file, 65536);
-  if (
-    !rows ||
-    Array.isArray(rows) ||
-    typeof rows !== "object" ||
-    Object.keys(rows).length > 100 ||
-    Object.values(rows).some((v) => !["attempted", "confirmed"].includes(v))
-  )
-    throw Error("journal_invalid");
-  return {
-    has: (id) => Object.hasOwn(rows, id),
-    async mark(id, status) {
-      if (
-        !/^[A-Za-z0-9_-]{1,200}$/.test(id) ||
-        (Object.keys(rows).length >= 100 && !Object.hasOwn(rows, id))
-      )
-        throw Error("journal_limit");
-      rows[id] = status;
-      const temp = file + ".tmp";
-      fs.writeFileSync(temp, JSON.stringify(rows), { mode: 0o600 });
-      fs.renameSync(temp, file);
-    },
-  };
-}
+const {journal} = require("./journal.cjs");
 async function execute(driver, { autoClaim = false, timezoneOffset = 0 } = {}) {
   const outcomes = [];
   const inventory = await driver.inventory();
@@ -277,19 +251,15 @@ async function main() {
   let out;
   try {
     const dir = process.env.BENEFITS_STATE_DIR;
-    const configFile = path.join(dir, "native-config.json");
-    const config = fs.existsSync(configFile)
-      ? common.boundedJson(configFile, 65536)
-      : {};
+    const {readConfig, browserOptions} = require("./runtime_config.cjs");
+    const config = readConfig(process.env.BENEFITS_STATE_DIR);
     out = await run(
       common.dependency(process.env.REWARDS_ROOT),
       common.readState(dir),
       loadParser(),
       {
-        proxy: process.env.REWARDS_PROXY,
+        ...browserOptions(process.env.BENEFITS_STATE_DIR, config, process.env.REWARDS_PROXY),
         autoClaim: config.punchcards?.autoClaim === true,
-        timezoneOffset: config.timezoneOffset,
-        interaction: config.interaction,
         journal: journal(path.join(dir, "punchcard-journal.json")),
       },
     );
