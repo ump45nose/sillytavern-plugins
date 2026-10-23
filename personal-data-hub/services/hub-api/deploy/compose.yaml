@@ -11,7 +11,10 @@ services:
       HUB_DATABASE: /data/hub.sqlite
     env_file: [./env/hub.env]
     ports: ["192.168.31.201:18190:8080"]
-    volumes: ["/vol2/1000/Docker/hub/data:/data"]
+    volumes:
+      - "/vol2/1000/Docker/hub/data:/data"
+      # Enable alongside HUB_COMPUTER_HISTORY_* when published summaries are available.
+      # - "/home/yuwk/.codex/skysight-sync/devices:/archive/skysight/devices:ro"
     tmpfs: ["/tmp:size=16m,mode=1777"]
     networks: [hub, media]
     healthcheck:

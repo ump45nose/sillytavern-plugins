@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     oidc_client_id: str = "personal-hub"
     oidc_client_secret: SecretStr | None = None
     allowed_subjects: list[str] = []
+    # Explicit operator mapping; never infer ownership from the login allowlist.
+    owner_issuer: str | None = None
+    owner_subject: str | None = None
+    source_bindings: list[dict] = []
+    google_desktop_client: dict | None = None
+    computer_history_root: Path | None = None
+    # Archive directory key -> stable archive instance_id, pinned by the operator.
+    computer_history_devices: dict[str, str] = {}
 
     def secrets(self):
         return [v.get_secret_value() for v in self.__dict__.values() if isinstance(v, SecretStr) and v.get_secret_value()]

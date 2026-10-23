@@ -388,3 +388,118 @@ proxies share response cleanup while retaining each source's headers and checks.
 Recording days retain their `people` list and add `people_status` (`ok`, `error`, or
 `unconfigured`). Optional CRM enrichment has its own bounded deadline; a CRM failure
 preserves available Plaud recordings with an empty people list and error status.
+
+### User identity, state and synchronization
+
+`GET /api/v1/me` returns persistent `hub_instance_id`, `user_id`, `device_id`, the
+fixed business timezone `Asia/Shanghai`, and capabilities. OIDC `(issuer, sub)`
+identifies a user throughout login and device exchange. Devices, documents and
+attention state belong to users. Existing business adapters/caches belong only to
+the explicitly configured owner. Other allowed subjects have independent state,
+empty source bindings/status, and 403 for the owner's business routes. Additional
+users do not yet have independent upstream adapters.
+
+Before upgrading an existing database, explicitly set `HUB_OWNER_ISSUER` and
+`HUB_OWNER_SUBJECT` to its confirmed owner. Migration refuses ambiguous ownership
+and later owner changes, retains device IDs/token hashes and document versions,
+and expires pending logins. Development mode uses an isolated development user
+when no owner is supplied. Instance/user IDs persist through restarts/restores.
+
+`GET /api/v1/source-bindings` returns `{version, items}`. Each item contains
+`binding_id`, `source_type`, `account_ref`, `access` (`direct`/`hub`), `version`.
+Configured business sources receive stable opaque IDs. `HUB_SOURCE_BINDINGS` is a
+controlled JSON array of verified Google account references (`google_tasks` or
+`google_calendar`, `access: direct`); client declarations never authorize source
+credentials. Changing source configuration advances binding versions. Configuration
+is loaded at startup with fresh adapters/caches. Agenda reads mark outdated
+references in `invalid_binding_ids`; writes/restores require current versions.
+
+`GET /api/v1/sync/state` reads only local partition/binding versions; it is not a
+Google/business-data watermark. Missing partitions have version 0 in this manifest
+and return 404 from `GET /api/v1/user-state/{section}`. Reads never initialize
+state. PUT accepts `{document}` and `If-Match` (numeric or quoted numeric version).
+An explicit first import uses version 0; subsequent commits require the observed
+version. Missing preconditions return 428; conflicts return 409 with `current`.
+Responses contain `{version, updated_at, updated_by, document}` and an ETag.
+`updated_by` records the authenticated device.
+
+Version-1 partition fields, with unknown extensions retained:
+
+- `profile`: `{schema_version: 1, display_name?: string|null, timezone?: "Asia/Shanghai"}`.
+  Saved profiles explicitly contain the business timezone.
+- `agenda_preferences`: `{schema_version: 1, bindings: {binding_id: {binding_version,
+  today_list_ids?: string[]|null, default_list_id?: string|null,
+  default_calendar_id?: string|null}}}`. Tasks/Calendar resources require the
+  corresponding Google binding. Null, empty arrays and absent values stay distinct.
+- `reader_preferences`: `{schema_version: 1, default_currency?: string|null,
+  task_grouping?: string|null, font_family?: string|null}`. Currency is three
+  uppercase letters; fonts themselves and device execution state stay local.
+- `layout`: existing version-1 LayoutDocument, sharing the same document and
+  commit counter as `/api/v1/layout`. Legacy responses and the missing-precondition
+  400 behavior remain compatible. Business `/preferences` remains separate and
+  strictly validated.
+
+Limits are 16 KiB per new partition, 64 KiB for layout, nesting depth 20, 20 agenda
+bindings and 100 today-list IDs per binding. Unsupported formats and credential or
+local-queue fields are rejected. The latest 20 commits per document are retained,
+including legacy layout writes and the migrated current document.
+`GET /api/v1/user-state/{section}/history` returns `{items}`.
+`POST /api/v1/user-state/{section}/restore` accepts `{version}` and `If-Match`;
+restore revalidates the document and creates a new increasing commit version.
+Legacy clients can still resubmit a whole layout after a conflict; client C2 is
+needed for safe field/structural conflict handling.
+
+`GET /api/v1/google/desktop-client` reads `HUB_GOOGLE_DESKTOP_CLIENT`, containing
+only `version`, `client_id`, optional application `client_secret`, official
+`auth_uri`/`token_uri`, and loopback `redirect_uris`. Unknown fields, personal
+tokens, codes and verifiers are rejected at startup. Missing configuration returns
+503 `google_desktop_client_unconfigured`. Hub does not supply personal Google
+authorization or proxy Google Tasks/Calendar operations.
+
+### Computer history
+
+Mount only the published archive `devices` directory read-only. Configure
+`HUB_COMPUTER_HISTORY_ROOT` and pin `HUB_COMPUTER_HISTORY_DEVICES` as JSON
+`{directory_key: instance_id}`. Archive instance IDs become stable
+`source_device_id` values, independent of Hub login devices; their owner is the
+explicit source owner above. This adapter reads manifests and referenced summary
+objects, not raw events, screenshots or arbitrary Mac directories.
+
+- `GET /api/v1/computer-history/days`: optional `start_date`, `end_date`,
+  `source_device_id`, `limit` (1–100, default 30), `cursor`.
+- `GET /api/v1/computer-history/windows`: required `date` in the business timezone;
+  optional `source_device_id`, `limit` (1–200, default 50), `cursor`.
+- `GET /api/v1/computer-history/windows/{window_id}`: stable opaque ID, metadata
+  and upstream Memory/Recording summary sections. Checksums verify revisions;
+  corrected content retains the window ID. Filesystem paths are never returned.
+
+Lists return `{items, next_cursor, source_updated_at, coverage, status, timezone}`.
+Signed cursors bind user, endpoint, date/timezone, device filter, page size, binding
+version and cached archive snapshot. Invalid/expired cursors return 409
+`cursor_expired`. Metadata uses the existing timeout and 24-hour stale-data policy
+with a 30-second cache. Read failures retain stale cached data; a per-device error
+retains its previously observed windows. A successfully published manifest is
+authoritative for revisions. Missing names retain a disposable metadata index
+across restarts with `presence: unconfirmed` until a manifest explicitly supplies
+`deleted_records` (source record filenames) or `complete_inventory: true`. Coverage
+reports `unconfirmed_removals`; scan errors are not deletion inventories. This
+cache contains no summary bodies or copied raw data.
+
+Unconfigured sources return 503 `computer_history_unconfigured`; failed sources
+without a usable cache return 502 `computer_history_source_error`. Valid empty
+queries return 200 with empty items. Coverage reports each pinned device's archive cutoff, latest received window,
+manifest receipt time, known gaps and staleness. A legacy cutoff does not restrict
+newer objects explicitly listed in the manifest; latest window time does not
+attest continuous coverage. Existing manifests do not attest
+inventory completeness, so coverage remains `partial`/`unknown`, even for a valid
+empty manifest. Receipt time is manifest mtime, separate from captured activity.
+Collection, publication and missing-device repair remain the archive producer's
+responsibility.
+
+Before deployment, back up SQLite using its backup API and save image/Compose/env;
+rehearse on a copy and freeze writes for the final snapshot/migration. Old code
+cannot safely use the new user-keyed schema. Before reopening traffic, a failed
+upgrade can restore that frozen snapshot and original image/configuration. After
+accepting new writes, prefer a forward fix; downgrade requires a fresh frozen
+snapshot and an explicit export/merge of post-migration changes. Do not discard
+new user changes by restoring the old database.

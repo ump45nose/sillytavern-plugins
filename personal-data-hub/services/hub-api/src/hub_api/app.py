@@ -31,6 +31,8 @@ from .store import Store
 from .context import HubContext
 from .configuration import register as configuration_routes, preferences
 from .attention import register as attention_routes
+from .sync import register as sync_routes, configured_bindings
+from .computer_history import register as computer_history_routes
 
 ZONE = ZoneInfo("Asia/Shanghai")
 
@@ -40,7 +42,13 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
     now = now or (lambda: datetime.now(ZONE))
     if settings.oidc_issuer and settings.dev_token:
         raise ValueError('OIDC and development authentication must not be enabled together')
-    store = Store(settings.database)
+    if bool(settings.owner_issuer) != bool(settings.owner_subject):
+        raise ValueError('owner_issuer and owner_subject must be configured together')
+    owner = (settings.owner_issuer.rstrip('/'), settings.owner_subject) if settings.owner_subject else None
+    if settings.dev_token and owner is None:
+        owner = ('urn:hub:development', 'development')
+    store = Store(settings.database, owner)
+    store.configure_bindings(configured_bindings(settings, store))
     async def discard_cookies(request):
         # Bearer sources can share a LAN IP across ports; never forward one source's cookies.
         request.headers.pop("cookie", None)
@@ -106,11 +114,18 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             raise HTTPException(401)
         token = authorization[7:]
         if settings.dev_token and hmac.compare_digest(token.encode(), settings.dev_token.get_secret_value().encode()):
-            return "development"
+            return {'user_id':store.owner_id, 'device_id':'development'}
         device = store.authenticate(token, now().isoformat())
         if not device:
             raise HTTPException(401)
         return device
+
+    def source_authenticated(identity=Depends(authenticated)):
+        # The existing adapters and their caches belong to one configured owner.
+        # Additional identities get state APIs, never these instance credentials.
+        if identity['user_id'] != store.owner_id:
+            raise HTTPException(403)
+        return identity
 
     @app.get("/healthz")
     def healthz():
@@ -118,18 +133,18 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
             db.execute("SELECT 1").fetchone()
         return {"status": "ok"}
 
-    @app.get("/api/v1/status", dependencies=[Depends(authenticated)])
-    def status():
-        return {"sources": [manager.status(s) for s in manager.adapters]}
+    @app.get("/api/v1/status")
+    def status(identity=Depends(authenticated)):
+        return {"sources": [manager.status(s) for s in manager.adapters] if identity['user_id']==store.owner_id else []}
 
-    @app.get("/api/v1/modules", dependencies=[Depends(authenticated)])
+    @app.get("/api/v1/modules", dependencies=[Depends(source_authenticated)])
     async def batch(ids: str | None = None):
         selected = list(dict.fromkeys(ids.split(","))) if ids else list(MODULE_SOURCES)
         if any(s not in MODULE_SOURCES for s in selected):
             raise HTTPException(400)
         return {"modules": await modules(context, selected)}
 
-    @app.get("/api/v1/modules/{identifier}", dependencies=[Depends(authenticated)])
+    @app.get("/api/v1/modules/{identifier}", dependencies=[Depends(source_authenticated)])
     async def module(identifier: str, range: str = "day"):
         if range not in ("day", "week", "month", "year"):
             raise HTTPException(400)
@@ -138,22 +153,24 @@ def create_app(settings=None, adapters=None, now=None, transport=None):
         return (await modules(context, [identifier], token_range=range))[identifier]
 
     @app.get("/api/v1/devices", dependencies=[Depends(authenticated)])
-    def devices():
-        return {"devices": store.devices()}
+    def devices(identity=Depends(authenticated)):
+        return {"devices": store.devices(identity['user_id'])}
 
     @app.delete("/api/v1/devices/{identifier}", status_code=204, dependencies=[Depends(authenticated)])
-    def revoke(identifier: str):
-        if not store.revoke(identifier):
+    def revoke(identifier: str, identity=Depends(authenticated)):
+        if not store.revoke(identifier, identity['user_id'], now().isoformat()):
             raise HTTPException(404)
         from fastapi.responses import Response
         return Response(status_code=204)
 
     auth_routes(app, settings, store, client, now)
-    configuration_routes(app, store, context, authenticated, now)
-    subscription_routes(app, subscription_source, settings, manager, authenticated)
-    attention_routes(app, context, authenticated, now)
-    personal_routes(app, settings, personal, authenticated, now, manager)
-    memo_routes(app, settings, memos, authenticated, manager)
-    review_routes(app, review, settings, manager, authenticated)
-    media_routes(app, settings, media, authenticated)
+    configuration_routes(app, store, context, authenticated, now, source_authenticated)
+    sync_routes(app, settings, store, authenticated, now)
+    computer_history_routes(app, settings, store, source_authenticated, now)
+    subscription_routes(app, subscription_source, settings, manager, source_authenticated)
+    attention_routes(app, context, source_authenticated, now)
+    personal_routes(app, settings, personal, source_authenticated, now, manager)
+    memo_routes(app, settings, memos, source_authenticated, manager)
+    review_routes(app, review, settings, manager, source_authenticated)
+    media_routes(app, settings, media, source_authenticated)
     return app

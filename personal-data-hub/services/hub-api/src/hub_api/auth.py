@@ -66,6 +66,7 @@ class OIDC:
             params={'nonce':nonce,'client_id':self.settings.oidc_client_id,'access_token':raw.get('access_token')})
         claims.validate(now=int(self.now().timestamp()),leeway=30)
         if claims['sub'] not in self.settings.allowed_subjects: raise PermissionError('subject not allowed')
+        return claims['iss'], claims['sub']
 
 
 def register(app,settings,store,client,now):
@@ -122,14 +123,15 @@ def register(app,settings,store,client,now):
                 data={'grant_type':'authorization_code','code':code,'redirect_uri':oidc.callback,'code_verifier':payload['verifier']})
             response.raise_for_status();raw=response.json()
             try:
-                oidc.validate(raw,keys,payload['nonce'])
+                identity=oidc.validate(raw,keys,payload['nonce'])
             except InvalidKeyIdError:
                 _,keys=await oidc.discovery(force=True)
-                oidc.validate(raw,keys,payload['nonce'])
+                identity=oidc.validate(raw,keys,payload['nonce'])
         except PermissionError: raise HTTPException(403) from None
         except Exception: raise HTTPException(400) from None
         ticket=secrets.token_urlsafe(32)
-        if not store.save_login('exchange',ticket,{'device_name':payload['device_name'],'challenge':payload['challenge']},now().timestamp()+60,now().timestamp()): raise HTTPException(429)
+        user_id=store.user(*identity)
+        if not store.save_login('exchange',ticket,{'device_name':payload['device_name'],'challenge':payload['challenge'],'user_id':user_id},now().timestamp()+60,now().timestamp()): raise HTTPException(429)
         response=RedirectResponse(payload['redirect_uri']+'?'+urlencode({'code':ticket,'state':payload['client_state']}),status_code=302)
         response.delete_cookie('hub_login_'+state,path='/auth/callback',secure=True,httponly=True,samesite='lax')
         return response
