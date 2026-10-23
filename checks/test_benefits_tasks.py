@@ -30,6 +30,33 @@ summary = module("benefits_job_summary", "hermes/benefits_daily_summary.py")
 
 
 class JobTests(unittest.TestCase):
+    def test_external_task_never_launches_but_still_reports_its_returned_result(self):
+        manifest = json.loads((ROOT / "hermes/manifest.json").read_text())["profile_scripts"]
+        schedules = json.loads((ROOT / "hermes/schedules.json").read_text())
+        self.assertNotIn("benefits_epic.py", manifest)
+        self.assertNotIn("benefits-epic", {row["name"] for row in schedules})
+        self.assertFalse((ROOT / "hermes/benefits_epic.py").exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            delivery = root / "runtime/delivery"
+            delivery.mkdir(parents=True)
+            config = root / "benefits-deployment.json"
+            config.write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": {"epic": {
+                "label": "Epic 免费游戏（Mac）", "account": "default", "executor": "external"}}}))
+            path = delivery / "epic.json"
+            returned = {"platform": "epic", "account": "default", "business_date": "2026-10-22",
+                        "execution_status": "failed", "reason": "store_assets_access_denied",
+                        "business": {"claim": "unknown"}}
+            path.write_text(json.dumps(returned))
+            before = path.read_bytes()
+            with patch.object(runner, "CONFIG", config), \
+                    patch.object(runner.subprocess, "run") as launch, redirect_stdout(StringIO()):
+                self.assertEqual(runner.main("epic"), 0)
+            launch.assert_not_called()
+            self.assertEqual(path.read_bytes(), before)
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
+                self.assertIn("Epic 免费游戏（Mac）：商店资源被拒绝访问", report.build_report("2026-10-22"))
+
     def test_international_activity_summary_preserves_unknown_reward_and_observed_balance(self):
         text = summary.describe("workbuddy", {"execution_status": "ok",
             "business": {"activity": "complete", "reward": "unknown", "balance": "complete"},
@@ -112,7 +139,7 @@ class JobTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "runtime/runs/successful-run/result.json").read_text())["execution_status"], "ok")
             self.assertFalse((root / "outside").exists())
 
-    def test_new_platform_success_is_silent_and_unknown_reward_is_the_only_issue(self):
+    def test_new_platform_success_and_expected_international_reward_unknown_are_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             delivery = root / "runtime/delivery"
@@ -121,18 +148,51 @@ class JobTests(unittest.TestCase):
                       "workbuddy-cn": "WorkBuddy 国内版", "workbuddy-intl": "WorkBuddy 国际版"}
             tasks = {key: {"label": label, "account": key, **({"platform": "workbuddy"}
                      if key.startswith("workbuddy-") else {})} for key, label in labels.items()}
-            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": tasks}))
+            (root / "benefits-deployment.json").write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": tasks}))
             for key, task in tasks.items():
                 row = {"platform": task.get("platform", key), "account": key, "business_date": "2026-10-19",
                        "execution_status": "ok", "reason": "checkin_confirmed", "business": {"checkin": "complete"}}
                 (delivery / (key + ".json")).write_text(json.dumps(row))
-            with patch.object(report, "DELIVERY_ROOT", delivery):
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
                 self.assertEqual(report.build_report("2026-10-19"), "")
                 row.update(platform="workbuddy", reason="activity_sent_reward_unconfirmed",
-                           business={"checkin": "not_applicable", "activity": "complete", "reward": "unknown"})
+                           business={"checkin": "not_applicable", "activity": "complete",
+                                     "reward": "unknown", "balance": "complete"})
                 (delivery / "workbuddy-intl.json").write_text(json.dumps(row))
-                self.assertEqual(report.build_report("2026-10-19"),
-                    "**福利任务异常**\n- WorkBuddy 国际版：国际版活跃请求已发送，奖励未确认")
+                self.assertEqual(report.build_report("2026-10-19"), "")
+
+    def test_expected_workbuddy_reward_unknown_does_not_hide_other_problems(self):
+        row = {"platform": "workbuddy", "business_date": "2026-10-21", "execution_status": "ok",
+               "reason": "activity_sent_reward_unconfirmed", "business": {
+                   "checkin": "not_applicable", "activity": "complete", "reward": "unknown", "balance": "complete"}}
+        self.assertIsNone(report.issue_for("workbuddy", row, "2026-10-21"))
+        cases = [
+            {"execution_status": "failed"},
+            {"reason": "authentication_invalid"},
+            {"business_date": "2026-10-20"},
+            {"platform": "another"},
+            *({"business": {**row["business"], name: "unknown"}} for name in ("activity", "balance")),
+            {"business": {name: state for name, state in row["business"].items() if name != "balance"}},
+            {"business": {**row["business"], "checkin": "incomplete"}},
+        ]
+        for changed in cases:
+            with self.subTest(changed=changed):
+                self.assertIsNotNone(report.issue_for("workbuddy", {**row, **changed}, "2026-10-21"))
+
+    def test_silent_workbuddy_result_still_verifies_configured_account(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            delivery = root / "runtime/delivery"
+            delivery.mkdir(parents=True)
+            (root / "benefits-deployment.json").write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": {"workbuddy-intl": {
+                "label": "WorkBuddy 国际版", "platform": "workbuddy", "account": "expected"}}}))
+            row = {"platform": "workbuddy", "account": "another", "business_date": "2026-10-21",
+                   "execution_status": "ok", "reason": "activity_sent_reward_unconfirmed", "business": {
+                       "activity": "complete", "reward": "unknown", "balance": "complete"}}
+            (delivery / "workbuddy-intl.json").write_text(json.dumps(row))
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
+                self.assertEqual(report.build_report("2026-10-21"),
+                    "**福利任务异常**\n- WorkBuddy 国际版：结果账号与配置不一致")
 
     def test_report_uses_configured_tasks_and_verifies_account(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -142,11 +202,11 @@ class JobTests(unittest.TestCase):
             tasks = {"workbuddy-cn": {"label": "国内版", "platform": "workbuddy", "account": "cn"},
                 "glados": {"label": "GLaDOS", "account": "main"},
                 "ole": {"label": "Olé", "enabled": False}}
-            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": tasks}))
+            (root / "benefits-deployment.json").write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": tasks}))
             row = {"platform": "workbuddy", "account": "another-account", "business_date": "2026-10-19",
                 "execution_status": "ok", "business": {"checkin": "complete"}, "reason": "confirmed"}
             (delivery / "workbuddy-cn.json").write_text(json.dumps(row))
-            with patch.object(report, "DELIVERY_ROOT", delivery):
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
                 text = report.build_report("2026-10-19")
             self.assertIn("国内版：结果账号与配置不一致", text)
             self.assertIn("GLaDOS：未取得当日结果", text)
@@ -159,12 +219,12 @@ class JobTests(unittest.TestCase):
             delivery = root / "runtime/delivery"
             delivery.mkdir(parents=True)
             tasks = {"ole": {"label": "Olé"}, "yingshijufeng": {"label": "影视飓风"}}
-            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": tasks}))
+            (root / "benefits-deployment.json").write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": tasks}))
             for name in tasks:
                 row = {"platform": name, "business_date": "2026-10-19", "execution_status": "failed",
                     "business": {"checkin": "unknown"}, "reason": "wechat_code_authentication_invalid"}
                 (delivery / (name + ".json")).write_text(json.dumps(row))
-            with patch.object(report, "DELIVERY_ROOT", delivery):
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
                 text = report.build_report("2026-10-19")
             self.assertEqual(text.count("\n- "), 1)
             self.assertIn("微信取码服务认证失效（影响：Olé、影视飓风）", text)
@@ -176,7 +236,7 @@ class JobTests(unittest.TestCase):
             delivery.mkdir(parents=True)
             tasks = {"telegram-ai": {"label": "Telegram tg-ai", "platform": "telegram", "account": "tg-ai"},
                      "telegram-nsfw": {"label": "Telegram tg-nsfw", "platform": "telegram", "account": "tg-nsfw"}}
-            (root / "benefits-deployment.json").write_text(json.dumps({"tasks": tasks}))
+            (root / "benefits-deployment.json").write_text(json.dumps({"runtime_root": str(root / "runtime"), "timezone": "Asia/Shanghai", "tasks": tasks}))
             def write(key, **row):
                 base = {"platform": "telegram", "account": tasks[key]["account"], "business_date": "2026-10-19",
                         "execution_status": "ok", "reason": "all_bots_confirmed", "business": {"checkin": "complete"},
@@ -184,7 +244,7 @@ class JobTests(unittest.TestCase):
                 (delivery / (key + ".json")).write_text(json.dumps({**base, **row}))
             write("telegram-ai")
             write("telegram-nsfw")
-            with patch.object(report, "DELIVERY_ROOT", delivery):
+            with patch.object(report, "CONFIG", root / "benefits-deployment.json"):
                 self.assertEqual(report.build_report("2026-10-19"), "")
                 write("telegram-nsfw", reason="bots_incomplete", business={"checkin": "incomplete"},
                       details={"metrics": {}, "items": [

@@ -12,7 +12,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from common.telegram_notice import send_report
+from cron_reports.telegram_notice import send_report
 
 
 TOPIC_CONFIG = Path("/home/hermes/.hermes/profiles/lingjun/cron/notice_topics.json")

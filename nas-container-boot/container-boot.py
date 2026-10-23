@@ -164,6 +164,22 @@ def check(entries):
     return int(bool(missing or active_unplanned or stopped_planned))
 
 
+def ensure_started(name, dependencies, *, start_timeout=90, dependency_timeout=120):
+    """Start one entry after its prerequisites; return (started, error)."""
+    data = inspect(name)
+    if not data:
+        return False, "容器缺失"
+    dependency_ready = (lambda dep: wait_ready(dep, dependency_timeout)) if dependency_timeout else ready
+    if any(not dependency_ready(dep) for dep in dependencies):
+        return False, "依赖服务不可用"
+    if data['State']['Status'] == 'running':
+        return False, None
+    result = run('docker', 'start', name, timeout=start_timeout)
+    if not result or result.returncode:
+        return False, "启动失败"
+    return True, None
+
+
 def start(entries):
     failures = []
     previous_stage = None
@@ -171,24 +187,12 @@ def start(entries):
         if stage != previous_stage:
             log(f'stage {stage} begin')
             previous_stage = stage
-        data = inspect(name)
-        if not data:
-            log(f'ERROR missing container {name}; preserve configuration and retry later')
+        started, error = ensure_started(name, dependencies)
+        if error:
+            log(f'ERROR {name}: {error}')
             failures.append(name)
             continue
-        if any(not wait_ready(dep) for dep in dependencies):
-            log(f'ERROR skipped {name}: prerequisite unavailable')
-            failures.append(name)
-            continue
-        if data['State']['Status'] != 'running':
-            result = run('docker', 'start', name, timeout=90)
-            if not result or result.returncode:
-                log(f'ERROR start {name}: {(result.stderr if result else "timeout").strip()[:300]}')
-                failures.append(name)
-                continue
-            log(f'started {name}')
-        else:
-            log(f'already running {name}')
+        log(f'{"started" if started else "already running"} {name}')
         # Database and gateway consumers need their prerequisites ready, not
         # just a successful docker start response.
         if (stage <= 20 and name != 'tailscale') or name in ('memos', 'mailflow-backend', 'resume-builder-python-ai-backend',

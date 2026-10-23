@@ -25,9 +25,10 @@ paths in `/home/yuwk/cron/env/plaud-archive.env`; business code lives in
 acceptance and an explicit scheduler cutover; deploying source does not resume it.
 See [host entry](plaud-archive/README.md) for the native service.
 
-`/etc/systemd/system` contains symlinks only. Custom host scheduling uses
-systemd timers; user crontabs are intentionally kept empty unless an
-application owns and rewrites them itself.
+Scheduled-job units link from `/etc/systemd/system` to their runtime copies.
+Agent budgets and native logging configuration are installed directly by
+`nas-resource-governance/install.sh`. Custom host scheduling uses systemd timers;
+user crontabs are intentionally empty unless an application owns them.
 
 ## Managed jobs
 
@@ -39,10 +40,12 @@ application owns and rewrites them itself.
 - `hermes-telegram-recovery`: retired, disabled; native Hermes adapter
   reconnection replaces the old whole-gateway restart timer.
 - `nas-container-boot`: ordered NAS container startup after Docker starts.
-- `nas-resource-history`: minute host/process resource records and bounded
-  persistent journals; see `nas-resource-history/README.md` for selective installation.
+- `nas-resource-governance`: native budgets: Codex total 3 GiB, Hermes user total
+  3 GiB, selected containers total 6 GiB. Deploy with
+  `sudo bash nas-resource-governance/install.sh`. Services use group OOM cleanup
+  and limited native restarts; logs use journal, Docker and sysstat.
 - `qbittorrent-portmap-renew`: hourly qBittorrent UPnP mapping renewal.
-- `rsyslog-logrotate`: rotate rsyslog files every 30 minutes.
+- `rsyslog-logrotate`: retired; the native global logrotate timer covers it every 30 minutes.
 - `shellcrash-traffic`: traffic collector, reports, AI JSON and SubBoost refresh.
 - `subboost-update`: subscription refresh every six minutes and rule index hourly.
 - `taglab-delete-worker`: music cleanup every five minutes.
@@ -82,6 +85,13 @@ deduplicated by platform. Execution history remains in its source state and is
 not repeated after recovery. Benefits remain exception-only reports.
 Disabled tasks stay disabled, including Aliyun.
 
+Benefits tasks executed on another device use `executor: external` in the private
+deployment inventory. The local launcher never starts them or replaces their
+delivery records; exception reports still consume the remote script's returned
+result. Epic runs on MacAir and publishes its original JSON to the NAS. Its local
+Hermes schedule stays paused; a paused local launcher does not disable monitoring
+of the remote result.
+
 The media report includes download events and watchlist/theme business changes
 since its previous successful report. Download submissions use their event times
 (24 hours on first run); refreshed timestamps alone do not prove a state change.
@@ -110,14 +120,20 @@ schedules, paused state, report facts and confirmation protocols. Prior prompts
 are backed up in the private profile; rerunning is idempotent. Companion photos
 already use a single sentence and keep their image delivery contract.
 
-Run the notification regression checks with the existing Hermes Python runtime:
-`PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks`.
+Run the benefits job and notification checks with the existing Hermes runtime.
+Report helpers use the distinct `cron_reports` package.
+
+```sh
+PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks -p test_benefits_tasks.py
+PYTHONPATH=/home/hermes/.hermes/hermes-agent /home/hermes/.hermes/hermes-agent/venv/bin/python -m unittest discover -s checks -p test_notifications.py
+```
 
 Hermes restricts executable cron paths to each profile's `scripts/` directory.
 The installer preserves that boundary with small Python/Bash entrypoints which
 forward to the canonical source under `/home/yuwk/cron`. It also forwards the
-Episode/candidate CLI and Personal Review cron entrypoints, backing up each
-previous file under the private profile runtime.
+Episode/candidate CLI, backing up each previous file under the private profile
+runtime. Personal Review owns its email and Google collectors and application
+entrypoints; deploy that application before installing the NAS forwarding scripts.
 
 Create `/home/yuwk/cron/env/hermes.local.json` from
 `hermes/local.example.json` and fill in local routing/identity values. Keep the
@@ -169,6 +185,10 @@ has no error. At the user's request, X `content_unavailable` assets are excluded
 from attachment alerts; asset states and failed execution history are retained.
 Execution history stays in Favsync rather than its notifications.
 Rewards alerts name unsupported exploration topics;
+the NAS capability manifest now disables exploration under the agreed cost limit.
+Daily quizzes and polls are excluded before execution, so their dependent daily-set
+streak is no longer required. Simple daily URL activities and Bing/APP streaks
+still require independent confirmation.
 the existing Rewards job runs at 09:30 and 16:30 (Asia/Taipei) from 2026-10-13,
 retaining its job ID and delivery route. It verifies the preceding platform
 cycle in the morning and handles the reset cycle in the afternoon. Receipts
@@ -180,17 +200,19 @@ jobs use this same path. Each attempt keeps its structured record at
 `benefits-runtime/runs/<run_id>/result.json` and updates its independent delivery
 receipt, including launcher failures and lock contention. Their no-agent jobs
 use local delivery, so successful operations remain in execution history and
-do not produce success notifications. Unknown business outcomes, including an
-unconfirmed international WorkBuddy reward, remain visible in the exception
-report. WeTalk and Yanxuan are not scheduled until credentials and current
+do not produce success notifications. Once the international WorkBuddy activity
+and balance query are confirmed, its expected unknown reward is retained in the
+receipt without an exception alert. Execution failures, other unconfirmed business
+states, stale results and account mismatches remain visible. WeTalk and Yanxuan are not scheduled until credentials and current
 interfaces are accepted.
 Telegram bot check-ins run as `benefits-telegram-ai` (08:40) and
 `benefits-telegram-nsfw` (08:43, Asia/Taipei) through the same launcher, with
 deployment keys `telegram-ai` / `telegram-nsfw` and `platform: telegram`; the
 shared browser lock serialises them. Some bots roll their day over after Taipei
 midnight, so they run after 08:00. The exception report names each unconfirmed
-bot; `bot_rejected` (captcha or join-channel gate) is shown as needing a manual
-check-in. Opening Telegram Web is retried for about three minutes when the proxy
+bot; known bots that require arithmetic or verification must be disabled in the
+private bot configuration before execution. `bot_rejected` from an enabled bot
+still identifies a newly encountered gate. Opening Telegram Web is retried for about three minutes when the proxy
 drops; commands are never resent.
 Generation and result timestamps stay in the private receipts. Reports read the current delivery receipt on
 each invocation; previously sent messages retain the snapshot from their send

@@ -29,7 +29,7 @@ favsync = module("favsync_report", "hermes/reports/favsync/daily_report.py")
 benefits = module("benefits_report", "hermes/reports/benefits-automation/daily_report.py")
 media = module("daily_report", "hermes/reports/media-automation/daily_report.py")
 media_entry = module("media_entry", "hermes/reports/media-automation/cron_entrypoint.py")
-telegram = module("telegram_notice_test", "hermes/reports/common/telegram_notice.py")
+telegram = module("telegram_notice_test", "hermes/reports/cron_reports/telegram_notice.py")
 policy = module("notification_policy", "hermes/apply_notification_policy.py")
 watchtower = module("watchtower_report", "hermes/watchtower_monthly_update.py")
 episode = module("episode_report", "model/episode_daily.py")
@@ -115,11 +115,10 @@ class BenefitsTests(unittest.TestCase):
             root = Path(tmp) / "runtime/delivery"
             root.mkdir(parents=True)
             deployment = root.parents[1] / "benefits-deployment.json"
-            deployment.write_text(json.dumps({"tasks": {
+            deployment.write_text(json.dumps({"runtime_root": str(root.parent), "timezone": "Asia/Shanghai", "tasks": {
                 "rewards": {"label": "Rewards"},
                 "aliyun": {"label": "Aliyun", "enabled": False}}}))
-            with patch.object(benefits, "DELIVERY_ROOT", root), \
-                    patch.object(benefits, "TASKS", {"rewards": "Rewards", "aliyun": "Aliyun"}), \
+            with patch.object(benefits, "CONFIG", deployment), \
                     patch.object(benefits, "load_result", return_value=(self.row(reason="authentication_invalid"), None)):
                 report = benefits.build_report(NOW.date().isoformat())
             self.assertEqual(report, "**福利任务异常**\n- Rewards：登录失效")

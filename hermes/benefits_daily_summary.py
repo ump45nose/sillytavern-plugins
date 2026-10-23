@@ -4,26 +4,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from benefits_native_runner import CONFIG, bounded
-
-REASONS = {
-    "authentication_invalid": "登录失效", "human_required": "遇到验证",
-    "launcher_failed": "启动失败", "deadline_exceeded": "执行超时",
-    "configuration_or_io_error": "配置或结果保存失败", "lock_busy": "已有任务执行中",
-    "native_configuration_or_browser_error": "Epic 配置或浏览器异常",
-    "browser_timeout": "Epic 浏览器操作超时",
-    "login_not_confirmed": "Epic 登录未确认",
-    "full_intervention_pending": "微软任务遇到验证或登录问题",
-    "full_task_cycle_changed": "平台任务已重置，需核查新一轮",
-    "steam_login_required": "Steam 需要首次登录或恢复会话",
-    "steam_account_mismatch": "Steam 账号身份不匹配",
-    "private_file_unreadable": "Steam 私有配置未准备完成",
-    "discovery_coverage_incomplete": "自动发现覆盖不完整",
-    "discovery_candidates_require_review": "候选证据需要核对",
-    "cloudflare_browser_signature_banned": "Cloudflare 拦截当前浏览器签名",
-    "cloudflare_challenge": "Cloudflare 要求浏览器验证",
-    "request_parameters_invalid": "需要有效的客户端请求参数",
-}
+from benefits_results import CONFIG, REASONS, bounded, identity_issue, load_deployment
 
 
 def fmt(value):
@@ -56,8 +37,10 @@ def describe(platform, row):
     if platform == "rewards":
         for key, label in [("daily", "每日活动"), ("desktop_search", "电脑搜索"),
                            ("app_daily", "APP签到"), ("explore", "探索必应")]:
+            if key == "explore" and "extra" not in business:
+                continue
             progress(key, label)
-        for key, label in [("bing_streak", "必应连续打卡"), ("daily_set_streak", "每日连续打卡")]:
+        for key, label in [("bing_streak", "必应连续打卡"), ("app_streak", "APP连续打卡")]:
             if key in metrics:
                 progress(key, label)
         if "desktop_app_weekly" in metrics:
@@ -127,7 +110,7 @@ def describe(platform, row):
 
 
 def render(day):
-    cfg = bounded(CONFIG)
+    cfg = load_deployment(CONFIG)
     root = Path(cfg["runtime_root"]) / "delivery"
     lines = [f"每日签到结果 {day}"]
     for task_id, task in cfg["tasks"].items():
@@ -137,8 +120,7 @@ def render(day):
             continue
         try:
             row = bounded(root / (task_id + ".json"))
-            if (row.get("business_date") != day or row.get("platform") != platform
-                    or row.get("account") != task["account"]):
+            if identity_issue(platform, row, day, task["account"]):
                 row = None
         except (OSError, ValueError, TypeError):
             row = None
@@ -150,6 +132,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--date")
     args = parser.parse_args()
-    day = args.date or datetime.now(ZoneInfo(bounded(CONFIG)["timezone"])).date().isoformat()
+    day = args.date or datetime.now(ZoneInfo(load_deployment(CONFIG)["timezone"])).date().isoformat()
     datetime.strptime(day, "%Y-%m-%d")
     print(render(day))

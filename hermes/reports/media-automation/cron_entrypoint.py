@@ -12,7 +12,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common.dispatch_report import deliver_report
+from cron_reports.dispatch_report import deliver_report
 from daily_report import CHECKPOINT, TIMEZONE, load_checkpoint, prepare_report, save_checkpoint
 
 

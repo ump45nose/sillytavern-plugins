@@ -8,7 +8,7 @@
 - `media-automation/`：MoviePilot、FilmWatchlist、Emby Theme、MediaArchive 和
   DiscRemux 的只读报告；没有更新时间的来源只表示当前状态。
 - `benefits-automation/`：读取福利任务的投递 JSON，包含 Steam；跳过已明确禁用的任务。
-- `common/`：报告分发和 Telegram notice sender。
+- `cron_reports/`：报告分发和 Telegram notice sender。
 
 数据库以只读方式访问；API 凭据留在受保护的运行环境中，不进入报告、源码或调度定义。
 MoviePilot 私有接口地址从 `HERMES_CRON_CONFIG` 指定的配置读取，默认
@@ -24,7 +24,7 @@ notice bot 的身份来自 `CRON_LOCAL_CONFIG` 指定的私有配置（同一默
 
 源仓库 9 个 Python 文件均已存在于此目录，其中 6 个内容完全相同；
 `benefits-automation/daily_report.py`、`media-automation/daily_report.py` 和
-`common/telegram_notice.py` 保留目标仓库已有的 Steam、禁用任务过滤、私有地址与
+`cron_reports/telegram_notice.py` 保留目标仓库已有的 Steam、禁用任务过滤、私有地址与
 bot 身份配置改进，未用旧版覆盖。补齐目录说明、福利说明和忽略规则。
 代码文件及可执行权限保持不变。
 
