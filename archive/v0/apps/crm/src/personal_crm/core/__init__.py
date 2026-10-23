@@ -1,5 +1,1 @@
-"""CRM 核心领域模块。"""
-
-from .service import CrmService
-
-__all__ = ["CrmService"]
+"""共享 ID 与时间工具；业务读写统一由 archive 提供。"""

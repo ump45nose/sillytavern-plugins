@@ -1,6 +1,6 @@
 # Personal Data Hub
 
-个人信息采集与聚合的统一仓库。第一阶段已实现公共采集基座、来源适配、统一归档和只读 MCP，并接管 NAS 上的运行入口。Mac 同步 Agent 在 `agents/mac` 管理；带信息查看界面的 Mac 客户端在 `apps/mac-client` 管理。
+个人信息采集与聚合的统一仓库。第一阶段已实现公共采集基座、来源适配、统一归档、只读查询及 CRM 读写 MCP，并接管 NAS 上的运行入口。Mac 同步 Agent 在 `agents/mac` 管理；带信息查看界面的 Mac 客户端在 `apps/mac-client` 管理。
 
 系统采集、归档、聚合和查询个人信息。Plaud 转录、录音日报与摘要由 `processors/plaud` 管理，沿用原任务及独立运行环境；既有提醒、自动事实、个人复盘和投影源码保存在 `legacy/`。
 
@@ -17,7 +17,7 @@ flowchart LR
   Usage[既有 Token Monitor / ShellCrash MCP] --> Local
 ```
 
-公共基座位于 `src/personal_data_hub`，统一处理来源注册、账户边界、时间、幂等身份、版本、附件、提交水位、来源锁、运行记录和删除墓碑。既有 CRM 负责兼容微信推送、原 MCP 查询与 OAuth；Token Monitor / ShellCrash 的独立 MCP 继续运行。
+公共基座位于 `src/personal_data_hub`，统一处理来源注册、账户边界、时间、幂等身份、版本、附件、提交水位、来源锁、运行记录和删除墓碑。CRM 直接归档人物与可编辑交互，提供 API / MCP 读写；统一服务复用 OAuth；Token Monitor / ShellCrash 的独立 MCP 继续运行。
 
 结构化数据存入现有 PostgreSQL 的独立数据库 `personal_data_hub`，原始载荷和标准化字段同时保存。原始 UI 事件含 NUL 时使用 PostgreSQL JSON 保留转义值。文件按 SHA-256 存在 `/vol1/1000/personal-data-hub/assets`，记录保留原名称、类型、字节数和内容哈希。设备配置、凭据、数据库和附件均在仓库外。
 
@@ -25,7 +25,7 @@ flowchart LR
 
 | 来源 | 接入方式 | 当前范围 / 节奏 | 删除信号 |
 | --- | --- | --- | --- |
-| CRM / 微信 | 保留现有 webhook，归档和 CRM 表同事务提交 | 全部本机可读单聊/群聊及源消息；保留身份和水位，推送即入库，15 分钟对账 | 显式删除及完整来源清单 |
+| CRM / 微信 | 私聊增量采集，直接写入 crm_* 归档 | 连续私聊默认间隔 30 分钟聚合为交互，正文可编辑，保留附件；不做自我镜像 | 显式删除 |
 | Computer History / Skysight | 现有授权 Node 读取应用组，SSH/rsync 交付并取得数据库提交回执 | 已闭合原始片段、官方 10min / 6h 摘要；15 分钟 | 显式删除；缓存过期不删除 |
 | Plaud | 官方 MCP 下载、独立转录与日报处理 | 每小时同步最近 30 天；原任务处理前一天录音；归档原音频、分源转录、融合日报与摘要 | 源接口未提供可靠删除信号 |
 | AutoAccounting | 官方已合入的 HTTPS 账单 Webhook；聚合端薄适配 | 历史账单已导入；新账单推送即入库 | 官方导出暂不提供删除信号；可选扩展未启用 |
@@ -71,7 +71,7 @@ uv sync --python 3.12 --no-dev
 
 默认私有配置：`/home/yuwk/.config/personal-data-hub/config.json`；使用 `HUB_CONFIG` 或 `hub --config PATH` 指定其他配置。参考 `deployment/config.example.json`，其中没有生产凭据。`hub` 是维护 CLI；`personal-data-hub` 是 HTTP 服务入口。
 
-生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。统一只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_recording_content`、`get_data_asset_info`、`read_data_asset`。录音详情提供文字稿、分源草稿、每日摘要、处理状态和关联日报；HTTP 对应 `/api/v1/recordings/{record_id}/content`，详见 [Plaud 处理说明](processors/plaud/README.md)。联系人及日报查询继续可用，MCP 不开放数据写入。
+生产入口沿用 `https://crm-home.172906573.xyz`，OAuth 身份、密钥、盐和持久卷继续使用原配置。统一只读工具：`list_data_sources`、`list_data_records`、`get_data_record`、`get_recording_content`、`get_data_asset_info`、`read_data_asset`。录音详情提供文字稿、分源草稿、每日摘要、处理状态和关联日报；HTTP 对应 `/api/v1/recordings/{record_id}/content`，详见 [Plaud 处理说明](processors/plaud/README.md)。CRM 的人物、交互和附件通过 `/api/v1/crm` 与对应 MCP 工具读写；其他数据来源继续只读。详见 [CRM 使用说明](apps/crm/docs/usage.md)。
 
 每日分析数据使用 `get_daily_push_data` / `GET /api/v1/daily-push`：CRM 聊天按对象分组，健康和财务仅取当天。既有聊天事件引导读取新接口的冻结快照，分页保留全部聊天和当日账单。日期规则、字段及事件接入见 [每日推送接口](docs/daily-push.md)。
 

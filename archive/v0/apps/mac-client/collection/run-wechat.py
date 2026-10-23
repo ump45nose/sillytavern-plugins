@@ -6,9 +6,6 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "packages"))
-# The integrated client archives source data only. Legacy CRM settings must not
-# re-enable automatic facts, which the collection-only server rejects.
-os.environ["WECHAT_FACT_EXTRACTION"] = "false"
 
 if sys.argv[1:] == ["--access-check"]:
     from personal_crm.connector.config import ConnectorConfig

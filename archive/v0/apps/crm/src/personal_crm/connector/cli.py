@@ -19,9 +19,7 @@ def _output(result, compact: bool) -> dict:
     if not compact:
         return result.__dict__
     return {
-        "batch_id": result.batch_id,
-        "interaction_count": len(result.interactions),
-        "fact_count": len(result.facts),
+        "message_count": len(result.messages),
         "sent": result.sent,
         "accepted": result.accepted,
         "duplicates": result.duplicates,

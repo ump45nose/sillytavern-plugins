@@ -45,6 +45,8 @@ class DailyPushData:
                 message["late_arrival"] = True
             if row["content"] is None:
                 message["content_status"] = "not_collected"
+            if row.get("ended_at"):
+                message["ended_at"] = row["ended_at"]
             contact["messages"].append(message)
         health = self._health(selected.isoformat(), timezone, start, finish)
         finance = self._finance(start, finish, zone)
@@ -56,27 +58,9 @@ class DailyPushData:
 
     def _chats(self, start, end, zone):
         if self.repository is None:
-            from personal_crm.storage import CrmRepository
-            self.repository = CrmRepository(self.store.engine.url.render_as_string(hide_password=False),
-                                            create_schema=False, hub_store=self.store)
-        from personal_crm.events import CONTENT_PREFIX
-        from personal_crm.storage.models import Interaction, Person
-        with self.repository.session() as session:
-            rows = session.execute(select(Interaction, Person.display_name)
-                .join(Person, Person.id == Interaction.person_id)
-                .where(Interaction.channel == "wechat", Interaction.occurred_at >= instant(start),
-                       Interaction.occurred_at < instant(end))
-                .order_by(Interaction.person_id, Interaction.occurred_at, Interaction.id)).all()
-            result = []
-            for item, name in rows:
-                original = (item.message or {}).get("record", {})
-                content = original.get("content") if item.message else (
-                    item.summary[len(CONTENT_PREFIX):] if item.summary.startswith(CONTENT_PREFIX) else None)
-                result.append({"id": item.id, "person_id": item.person_id, "person_name": name,
-                               "occurred_at": item.occurred_at.astimezone(zone).isoformat(),
-                               "direction": item.direction, "content": content,
-                               "sender": original.get("sender")})
-            return result
+            from personal_crm.archive import Archive
+            self.repository = Archive(engine=self.store.engine, asset_root=self.store.root, create_schema=False)
+        return self.repository.report_records(instant(end), instant(start))
 
     def _health(self, day, timezone, start, finish):
         # 按样本业务日期筛选；接收时间不代表样本属于今天，且不能回退到昨日值。

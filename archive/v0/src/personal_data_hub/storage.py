@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, select, text, update
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, MetaData, String, Table, Text, create_engine, delete, func, insert, inspect, select, text, update, column, table
 
 from .contracts import Asset, Batch, digest, utcnow
 
@@ -222,7 +222,13 @@ class Store:
 
     def _gc(self):
         with self.engine.begin() as c:
-            for key in c.scalars(select(assets.c.id).where(~assets.c.id.in_(select(asset_refs.c.asset_id)))):
+            unused = select(assets.c.id).where(~assets.c.id.in_(select(asset_refs.c.asset_id)))
+            # CRM uses the same blobs, but no longer mirrors its records into Hub.
+            if inspect(c).has_table("crm_attachments"):
+                crm = table("crm_attachments", column("file_key", String))
+                file_key = func.substr(assets.c.id, 1, 2) + "/" + assets.c.id
+                unused = unused.where(~select(crm.c.file_key).where(crm.c.file_key == file_key).exists())
+            for key in c.scalars(unused):
                 (self.root / key[:2] / key).unlink(missing_ok=True)
                 c.execute(delete(assets).where(assets.c.id == key))
 

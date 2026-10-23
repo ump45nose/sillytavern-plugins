@@ -10,12 +10,11 @@ from mcp_platform import RuntimeConfig
 from mcp_platform.events import EventError, EventService, WebhookResponse
 
 from personal_crm.app.settings import Settings
-from personal_crm.core import CrmService
 from personal_crm.daily_review import DailyReviewService
 from personal_crm.daily_review_events import EVENT_NAMES, DailyReviewEventProducer
 from personal_crm.events import EVENT_NAME, ChatEventProducer
 from personal_crm.mcp import create_mcp
-from personal_crm.storage import CrmRepository
+from personal_crm.archive import Archive
 
 
 def at(value):
@@ -69,7 +68,7 @@ def sources(tmp_path):
 async def test_mcp_default_today_business_date_and_full_content(tmp_path):
     daily, _, body = sources(tmp_path)
     server = create_mcp(
-        CrmService(CrmRepository("sqlite:///:memory:")),
+        Archive(asset_root=tmp_path / "assets"),
         Settings(mcp_development_no_auth=True),
         daily_reviews=daily,
     )
@@ -125,7 +124,7 @@ async def test_daily_events_coexist_retry_snapshot_and_signed_delivery(tmp_path)
         transport=callback,
         clock=lambda: at("2026-10-05T23:00").timestamp(),
     )
-    repo = CrmRepository("sqlite:///:memory:")
+    repo = Archive(asset_root=tmp_path / "assets")
     ChatEventProducer(repo, bus, owner="owner", storage_path=str(tmp_path / "chat"))
     producers = {
         source: DailyReviewEventProducer(

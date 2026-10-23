@@ -34,8 +34,10 @@ class Settings(BaseSettings):
         "https://x.ai/*,https://*.x.ai/*,"
         "https://x.com/*,https://*.x.com/*"
     )
-    reminder_scheduler_enabled: bool = True
-    reminder_poll_seconds: int = 3600
+    crm_asset_root: str = '/data/crm-assets'
+    wechat_interaction_gap_minutes: int = 30
+    hub_api_token: str = ''
+    hub_viewer_token: str = ''
     # 主动事件必须显式启用并绑定已授权用户，复用现有 /data 持久卷。
     chat_events_enabled: bool = False
     chat_event_owner: str = ""

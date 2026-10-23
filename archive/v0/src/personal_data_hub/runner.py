@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 import os
 from pathlib import Path
@@ -26,14 +25,16 @@ def store_from(config):
 
 
 def adapter(settings):
-    from .collectors import BillsCollector, FilesCollector, MemosCollector, PlaudCollector, SQLiteCollector, TokenCollector, PostgreSQLCrmCollector
+    from .collectors import BillsCollector, FilesCollector, MemosCollector, PlaudCollector, SQLiteCollector, TokenCollector
     from .remote import GoogleCollector, EmailCollector, Mem0Collector, GitCollector
     name = settings["adapter"]
-    classes = {"crm_pg": PostgreSQLCrmCollector, "crm": SQLiteCollector, "health": SQLiteCollector, "shellcrash": SQLiteCollector, "memos": MemosCollector, "plaud": PlaudCollector, "bills": BillsCollector, "skysight": FilesCollector, "files": FilesCollector, "token": TokenCollector, "google": GoogleCollector, "email": EmailCollector, "mem0": Mem0Collector, "git": GitCollector}
+    classes = {"health": SQLiteCollector, "shellcrash": SQLiteCollector, "memos": MemosCollector, "plaud": PlaudCollector, "bills": BillsCollector, "skysight": FilesCollector, "files": FilesCollector, "token": TokenCollector, "google": GoogleCollector, "email": EmailCollector, "mem0": Mem0Collector, "git": GitCollector}
     return classes[name](settings)
 
 
 def run(store, source, settings, since=None):
+    if settings['adapter'] in {'crm_pg', 'crm'}:
+        raise ValueError('CRM is directly archived; remove its mirror collector from sources')
     store.register(source, settings.get("account", "owner"), settings["adapter"], settings.get("deletion_support", "explicit_only"))
     rid = str(uuid4())
     totals = dict(changed=0, duplicates=0, tombstoned=0, deleted=0)
