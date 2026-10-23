@@ -1,13 +1,6 @@
 """不接触真实下载器的最小候选选择冒烟检查。"""
 
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
-
-
-source = Path(__file__).resolve().parents[1] / "plugins.v2" / "filmwatchlist" / "selection.py"
-spec = spec_from_file_location("filmwatchlist_selection", source)
-selection = module_from_spec(spec)
-spec.loader.exec_module(selection)
+from app.plugins.filmwatchlist import selection
 
 
 assert selection.quality_key("Film.2160p.BluRay.REMUX.mkv") > selection.quality_key("Film.1080p.BluRay.REMUX.mkv")
