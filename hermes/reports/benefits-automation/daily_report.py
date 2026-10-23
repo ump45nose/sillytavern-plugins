@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
@@ -19,7 +20,11 @@ from benefits_results import CONFIG, MAX_JSON_BYTES, REASONS, identity_issue, lo
 TELEGRAM_BOT_REASONS = {
     "bot_rejected": "被拒绝（验证题或入群门槛），需手动签到",
     "bot_not_started": "未开始对话，需先手动点 START",
-    "previous_send_unconfirmed": "已发送但结果未确认，需手动核对",
+    "previous_send_unconfirmed": "发送结果未确认，未重复发送",
+    "previous_send_baseline_unavailable": "旧发送记录缺少消息基线，无法确认，未重复发送",
+    "message_baseline_unavailable": "聊天记录尚未加载，未发送签到命令",
+    "previous_send_draft_pending": "草稿仍在，发送未确认（未重复发送）",
+    "send_draft_pending": "命令仍在草稿中，发送未确认",
     "reply_timeout": "未回复",
     "reply_unrecognized": "回复无法识别",
     "button_not_found": "未找到签到按钮",
@@ -134,9 +139,15 @@ def issue_for(platform: str, row: Mapping[str, object], day: str) -> str | None:
             if normalized_state in {"complete", "not_applicable"}:
                 continue
             task_name = TASK_LABELS.get(str(name), str(name))
-            incomplete.append(
-                f"{task_name}{STATE_LABELS.get(normalized_state, normalized_state)}"
-            )
+            description = f"{task_name}{STATE_LABELS.get(normalized_state, normalized_state)}"
+            metrics = details.get("metrics", {}) if isinstance(details, Mapping) else {}
+            quota = metrics.get("daily_points" if name == "daily" else name, {}) if isinstance(metrics, Mapping) else {}
+            if (platform == "rewards" and isinstance(quota, Mapping) and quota.get("unit") == "points"
+                    and all(isinstance(quota.get(key), (int, float)) and not isinstance(quota.get(key), bool)
+                            and math.isfinite(quota[key]) and quota[key] >= 0
+                            for key in ("current", "max")) and quota["max"] > 0):
+                description += f"（{quota['current']:g}/{quota['max']:g} 分）"
+            incomplete.append(description)
         if incomplete:
             parts.append("、".join(incomplete))
 
