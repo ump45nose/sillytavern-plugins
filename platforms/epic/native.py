@@ -6,6 +6,7 @@ No upstream service, scheduler, settings singleton or video recorder is imported
 import json
 import asyncio
 import os
+import sys
 from pathlib import Path
 import time
 import re
@@ -174,16 +175,27 @@ class Login:
         if not email or not password:
             raise Paused("login_credentials_required")
         remembered = page.get_by_text(email, exact=True)
+        email_box, password_box = page.locator("#email"), page.locator("#password")
         if await page.get_by_text("Welcome back", exact=True).is_visible() and await remembered.is_visible():
             if "remembered" in self.acted: raise Paused("login_stagnant")
             self.acted.add("remembered")
             await remembered.click(timeout=5000)
-        elif await page.locator("#password").is_visible():
+        elif await password_box.is_visible() and await email_box.is_visible():
+            # Current account page shows both fields and submits with Continue.
+            if "credentials" in self.acted: raise Paused("login_not_confirmed")
+            self.acted.add("credentials")
+            await email_box.fill(email)
+            await password_box.fill(password)
+            submit = page.locator("#sign-in")
+            if not await submit.is_visible():
+                submit = page.locator("#continue")
+            await submit.click(timeout=10000)
+        elif await password_box.is_visible():
             if "password" in self.acted: raise Paused("login_not_confirmed")
             self.acted.add("password")
-            await page.locator("#password").fill(password)
+            await password_box.fill(password)
             await page.locator("#sign-in").click(timeout=10000)
-        elif await page.locator("#email").is_visible():
+        elif await email_box.is_visible():
             if "email" in self.acted: raise Paused("login_not_confirmed")
             self.acted.add("email")
             await page.locator("#email").fill(email)
@@ -223,8 +235,155 @@ class Login:
         await page.wait_for_timeout(3000)
 
 
+async def _minimize(page):
+    try:
+        session = await page.context.new_cdp_session(page)
+        info = await session.send("Browser.getWindowForTarget")
+        await session.send("Browser.setWindowBounds", {
+            "windowId": info["windowId"],
+            "bounds": {"windowState": "minimized"},
+        })
+    except Exception as error:
+        print(json.dumps({"event": "epic_chrome_window", "type": type(error).__name__}), flush=True)
+
+
+async def _claim(browser, context, config, state_dir):
+    page = browser.pages[0] if browser.pages else await browser.new_page()
+    await _minimize(page)
+    driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
+    browser.on("response", driver.observe_response)
+    browser.on("response", report_purchase_error)
+    await driver._goto(STORE + "/free-games", 45)
+    await page.wait_for_timeout(5000)
+    auth = Login(driver, config)
+    driver.sso_login = auth.sso
+    workflow = ClaimWorkflow(driver, context, deadline=time.monotonic() + 1100,
+        expires_at=context["business_date"] + "T23:59:59+08:00",
+        automatic_kinds={"login", "captcha", "account_link"},
+        handlers={"login": auth.login, "captcha": auth.captcha, "account_link": auth.link})
+    return await workflow.run()
+
+
+def _decrypt_chrome_cookie(encrypted, key, host):
+    if not encrypted.startswith(b"v10") or len(encrypted) <= 3:
+        return None
+    from hashlib import sha256
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(b" " * 16)).decryptor()
+    padded = decryptor.update(encrypted[3:]) + decryptor.finalize()
+    pad = padded[-1]
+    if not 1 <= pad <= 16 or padded[-pad:] != bytes([pad]) * pad:
+        return None
+    body = padded[:-pad]
+    # Current Chrome binds each value to its host with a SHA-256 prefix.
+    prefix = sha256(host.encode()).digest()
+    if body.startswith(prefix):
+        body = body[len(prefix):]
+    try:
+        return body.decode()
+    except UnicodeDecodeError:
+        return None
+
+
+def _mac_home():
+    """Ignore a redirected HOME; Chrome and its keychain stay in the login home."""
+    import pwd
+    return Path(pwd.getpwuid(os.getuid()).pw_dir)
+
+
+def local_chrome_cookies():
+    """Epic cookies from the Mac's normal Chrome profile. Values stay in memory."""
+    import shutil
+    import sqlite3
+    import subprocess
+    import tempfile
+    from hashlib import pbkdf2_hmac
+
+    home = _mac_home()
+    password = subprocess.check_output(
+        ["security", "find-generic-password", "-w", "-s", "Chrome Safe Storage", "-a", "Chrome",
+         str(home / "Library/Keychains/login.keychain-db")],
+        text=True,
+    ).strip()
+    key = pbkdf2_hmac("sha1", password.encode(), b"saltysalt", 1003, 16)
+    root = home / "Library/Application Support/Google/Chrome"
+    profiles = [root / "Default", *sorted(path for path in root.glob("Profile *") if path.is_dir())]
+    same_site = {-1: "Lax", 0: "None", 1: "Lax", 2: "Strict"}
+    cookies = []
+    for profile in profiles:
+        database = profile / "Cookies"
+        if not database.is_file():
+            continue
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = Path(temporary) / "Cookies"
+            shutil.copy(database, copied)
+            for suffix in ("-wal", "-shm"):
+                extra = Path(str(database) + suffix)
+                if extra.is_file():
+                    shutil.copy(extra, Path(str(copied) + suffix))
+            connection = sqlite3.connect(f"file:{copied}?mode=ro", uri=True)
+            try:
+                rows = connection.execute(
+                    "SELECT host_key, name, encrypted_value, path, expires_utc, "
+                    "is_secure, is_httponly, samesite FROM cookies "
+                    "WHERE host_key LIKE '%epicgames.com'"
+                )
+                for host, name, encrypted, path, expires, secure, http_only, site in rows:
+                    value = _decrypt_chrome_cookie(encrypted, key, host)
+                    if not value or not host or not name:
+                        continue
+                    item = {
+                        "name": name,
+                        "value": value,
+                        "domain": host,
+                        "path": path or "/",
+                        "secure": bool(secure),
+                        "httpOnly": bool(http_only),
+                        "sameSite": same_site.get(site, "Lax"),
+                    }
+                    if expires:
+                        unix = int(expires / 1_000_000 - 11_644_473_600)
+                        if unix > 0:
+                            item["expires"] = unix
+                    cookies.append(item)
+            finally:
+                connection.close()
+    return cookies
+
+
+async def _chrome_context(playwright, config, state_dir):
+    """macOS uses the installed Google Chrome instead of the Linux Camoufox build."""
+    profile = Path(state_dir) / "chrome"
+    profile.mkdir(mode=0o700, exist_ok=True)
+    # Headless Chrome is a different client, so the daily Chrome session and
+    # Cloudflare clearance do not carry over. Keep the real Chrome window and
+    # minimize it before any navigation.
+    options = dict(channel="chrome", headless=False, locale="zh-CN",
+                   args=["--disable-blink-features=AutomationControlled"])
+    if config.get("proxy"):
+        options["proxy"] = {"server": config["proxy"]}
+    browser = await playwright.chromium.launch_persistent_context(str(profile), **options)
+    try:
+        cookies = local_chrome_cookies()
+    except Exception as error:
+        print(json.dumps({"event": "epic_chrome_cookies", "type": type(error).__name__}), flush=True)
+        cookies = []
+    if cookies:
+        await browser.add_cookies(cookies)
+        print(json.dumps({"event": "epic_chrome_cookies", "count": len(cookies)}), flush=True)
+    return browser
+
+
 async def execute(context, config, state_dir):
     # Importing HTTP platforms does not import Camoufox/numpy/Playwright.
+    if sys.platform == "darwin":
+        from playwright.async_api import async_playwright
+        async with async_playwright() as playwright:
+            browser = await _chrome_context(playwright, config, state_dir)
+            try:
+                return await _claim(browser, context, config, state_dir)
+            finally:
+                await browser.close()
     from camoufox import AsyncCamoufox
     from camoufox import pkgman
     cache = Path(config["browser_cache"])
@@ -233,16 +392,4 @@ async def execute(context, config, state_dir):
     pkgman.INSTALL_DIR = cache
     async with AsyncCamoufox(from_options=_browser_options(config, state_dir),
                             persistent_context=True) as browser:
-        page = browser.pages[0] if browser.pages else await browser.new_page()
-        driver = BrowserDriver(browser, page, Journal(state_dir), checkout_evidence=checkout_evidence)
-        browser.on("response", driver.observe_response)
-        browser.on("response", report_purchase_error)
-        await driver._goto(STORE + "/free-games", 45)
-        await page.wait_for_timeout(5000)
-        auth = Login(driver, config)
-        driver.sso_login = auth.sso
-        workflow = ClaimWorkflow(driver, context, deadline=time.monotonic() + 1100,
-            expires_at=context["business_date"] + "T23:59:59+08:00",
-            automatic_kinds={"login", "captcha", "account_link"},
-            handlers={"login": auth.login, "captcha": auth.captcha, "account_link": auth.link})
-        return await workflow.run()
+        return await _claim(browser, context, config, state_dir)
