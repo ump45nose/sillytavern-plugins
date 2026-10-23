@@ -717,11 +717,18 @@ struct GitModule: View {
                     valueText(g.activity?.commitsToday.map(String.init) ?? "—", g.activity?.streakDays.map { "· 连续 \($0) 天" } ?? "", Palette.ink)
                 }
             }
-            AdaptiveRow(threshold: 360 * 2 + 28, spacing: 28) {
-                waitList(waiting)
-                blockedList(blocked)
+            HubScroll {
+                AdaptiveRow(threshold: 360 * 2 + 28, spacing: 28) {
+                    waitList(waiting)
+                    blockedList(blocked)
+                }
+                .padding(.top, 2).padding(.bottom, 6)
             }
-            .padding(.top, 2)
+            .frame(maxHeight: .infinity)
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [Palette.card.opacity(0), Palette.card], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 20).allowsHitTesting(false)
+            }
             if let a = g.activity {
                 Text(["近 30 天 \(a.commits30d.map(String.init) ?? "—") 次提交", a.repos30d.map { "\($0) 个仓库" }].compactMap { $0 }.joined(separator: " · "))
                     .font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).padding(.top, 14)

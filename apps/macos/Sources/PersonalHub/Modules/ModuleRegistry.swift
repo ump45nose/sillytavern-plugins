@@ -30,7 +30,7 @@ extension ModuleID {
         case .crm: ModuleInfo(title: "交流", symbol: "person.2", tone: .rose, meta: "personal-crm · 录音附属")
         case .media: ModuleInfo(title: "媒体", symbol: "play.rectangle", tone: .plum, meta: "Emby · Navidrome · qBittorrent")
         case .token: ModuleInfo(title: "Token 用量", symbol: "hexagon", tone: .clay, meta: "Token Monitor")
-        case .git: ModuleInfo(title: "GitHub", symbol: "arrow.triangle.branch", tone: .olive, meta: "ump45nose · 通知与 PR")
+        case .git: ModuleInfo(title: "GitHub", symbol: "arrow.triangle.branch", tone: .olive, meta: "ump45nose · 通知与 PR", detailHeight: 400)
         case .net: ModuleInfo(title: "网络", symbol: "wifi", tone: .sage, meta: "usage-monitor")
         case .subs: ModuleInfo(title: "订阅", symbol: "repeat", tone: .ochre, meta: "订阅资料 · 账号额度")
         case .sky: ModuleInfo(title: "电脑历史", symbol: "desktopcomputer", tone: .steel, meta: "skysight-sync")

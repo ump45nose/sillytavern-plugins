@@ -121,6 +121,8 @@ enum QARender {
         state.aiRun.reset()
         await shot("ai-pending", width: 460, AIPendingList())
         await shot("quick-memo", width: 600, QuickMemoView(close: {}))
+        await shot("git-detail", width: 1240, ModuleCard(item: LayoutItem(.git, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        await shot("git-narrow", width: 680, ModuleCard(item: LayoutItem(.git, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("net-detail", width: 640, ModuleCard(item: LayoutItem(.net, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("compact-narrow", width: 760, HStack(alignment: .top, spacing: 14) {
             ForEach([ModuleID.git, .net, .bills], id: \.self) { m in ModuleCard(item: LayoutItem(m, .compact), index: 0, count: 1).frame(width: 230) }
