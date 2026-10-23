@@ -520,6 +520,7 @@ private struct ColumnBoard<Content: View>: View {
 
     var body: some View {
         GeometryReader { g in
+            // SwiftUI makes the document as tall as the whole scroll view, bar included; top-align so the bar only covers empty room.
             let height = max(g.size.height - HubScroller.barHeight, 120)
             let overflow = contentWidth > g.size.width + 1
             HubScroll(.horizontal, bar: true) {
@@ -527,9 +528,9 @@ private struct ColumnBoard<Content: View>: View {
                     .padding(.bottom, 2)
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
                     .padding(.trailing, overflow ? Self.fade : 0)
-                    .frame(height: height, alignment: .top)
+                    .frame(height: max(g.size.height, height), alignment: .top)
             }
-            .environment(\.columnHeight, height - 2)
+            .environment(\.columnHeight, height - 4)
             .overlay(alignment: .trailing) {
                 if overflow {
                     LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg], startPoint: .leading, endPoint: .trailing)
@@ -613,6 +614,8 @@ private struct TaskColumn<Trailing: View>: View {
             }
             if let add {
                 add.padding(.horizontal, 16).overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
+            } else {
+                Color.clear.frame(height: 8)
             }
         }
         .frame(width: width, alignment: .leading)

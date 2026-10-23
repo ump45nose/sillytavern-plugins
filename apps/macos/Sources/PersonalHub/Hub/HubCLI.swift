@@ -223,11 +223,15 @@ enum HubCLI {
         let su = d.subs?.data, items = su?.items ?? []
         line(d.subs?.status.hasData ?? false, "subs", "\(status(d.subs)) · items \(items.count) · products \(SubsProduct.group(items).count)"
              + " · converted \(items.filter { $0.monthlyConverted?.isEmpty == false }.count) · regions \(items.filter { $0.billingRegion != nil }.count)"
-             + " · links \(items.filter { $0.quotaUrlConfigured == true }.count) · total \(su?.monthly(in: "CNY") == nil ? "null" : "set")"
+             + " · total \(su?.monthly(in: "CNY") == nil ? "null" : "set")"
              + " · rates \(su?.exchangeRates?.rates?.count ?? 0)")
         do {
             let records = try await api.subscriptionRecords()
             line(true, "subs.records", "\(records.count) · regions \(records.filter { $0.billingRegion != nil }.count) · quota \(records.filter { $0.quota != nil }.count)")
+            if let first = records.first {
+                let one = try await api.subscriptionRecord(id: first.id)
+                line(one.id == first.id && one.version == first.version, "subs.record", "single read matches the list")
+            }
         } catch let e as HubError {
             line(false, "subs.records", describe(e))
         } catch { line(false, "subs.records", "\(type(of: error))") }

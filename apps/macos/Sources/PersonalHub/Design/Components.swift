@@ -431,6 +431,25 @@ final class HubScroller: NSScroller {
         scroll.tile()
         scroll.reflectScrolledClipView(scroll.contentView)
     }
+
+    /// A mouse wheel turned over a sideways board, outside any column that can scroll itself, moves the board.
+    /// Trackpads already scroll sideways and are left alone.
+    static func wheel(_ event: NSEvent, board scroll: NSScrollView) -> Bool {
+        guard !event.hasPreciseScrollingDeltas, abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+              let window = scroll.window, event.window === window,
+              let hit = window.contentView?.hitTest(event.locationInWindow), hit === scroll || hit.isDescendant(of: scroll),
+              let document = scroll.documentView else { return false }
+        if let inner = hit.enclosingScrollView, inner !== scroll, hit !== scroll.horizontalScroller,
+           let doc = inner.documentView, doc.frame.height > inner.contentView.bounds.height + 1 { return false }
+        let clip = scroll.contentView
+        let maxX = max(document.frame.width - clip.bounds.width, 0)
+        guard maxX > 0 else { return false }
+        var origin = clip.bounds.origin
+        origin.x = min(max(origin.x - event.scrollingDeltaY * 14, 0), maxX)
+        clip.scroll(to: origin)
+        scroll.reflectScrolledClipView(clip)
+        return true
+    }
 }
 
 /// `ScrollView` whose scrollers are `HubScroller`s.
@@ -469,10 +488,20 @@ private struct ScrollerProbe: NSViewRepresentable {
     final class Probe: NSView {
         var bar = false
         private var observer: NSObjectProtocol?
+        private var monitor: Any?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             DispatchQueue.main.async { [weak self] in self?.adopt() }
+            if bar, window != nil, monitor == nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                    guard let scroll = self?.enclosingScrollView else { return event }
+                    return HubScroller.wheel(event, board: scroll) ? nil : event
+                }
+            } else if window == nil, let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
             if bar, observer == nil {
                 // The system resets the style when the "show scroll bars" preference changes.
                 observer = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
@@ -486,7 +515,10 @@ private struct ScrollerProbe: NSViewRepresentable {
             if let scroll = enclosingScrollView { HubScroller.adopt(scroll, bar: bar) }
         }
 
-        deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
+        deinit {
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
     }
 }
 

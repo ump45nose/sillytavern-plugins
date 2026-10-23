@@ -297,7 +297,6 @@ public struct SubsData: Codable, Equatable, Sendable {
         public var exchangeRateStale: Bool?
         public var binding: SubscriptionBinding?
         public var quotaSource: String?
-        public var quotaUrlConfigured: Bool?
         public var note: String?
     }
     /// Units per one `base`, as decimal strings.

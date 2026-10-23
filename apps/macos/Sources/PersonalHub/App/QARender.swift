@@ -62,6 +62,17 @@ enum QARender {
             state.taskSelection = name == "list" ? "s7" : nil
             await shot("tasks-\(name)", width: 1320, height: 860, MainView().background(Palette.bg))
         }
+        if only == nil || only!.contains(where: { "tasks-long".hasPrefix($0) || $0.hasPrefix("tasks-long") }) {
+            state.taskSelection = nil
+            state.agenda.preview(AgendaSample.long(now: state.agenda.now))
+            try? await Task.sleep(for: .milliseconds(300))
+            for (name, scope) in [("overdue", TaskScope.overdue), ("all", .all)] {
+                state.taskScope = scope
+                await shot("tasks-long-\(name)", width: 1320, height: 860, MainView().background(Palette.bg))
+            }
+            state.agenda.preview(AgendaSample.store(now: state.agenda.now))
+            try? await Task.sleep(for: .milliseconds(300))
+        }
         state.taskSelection = nil
         state.go("home")
         for tab in 0..<4 {
@@ -132,6 +143,7 @@ enum QARender {
         await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
         await shot("subs-compact", width: 340, ModuleCard(item: LayoutItem(.subs, .compact), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("subs-detail", width: 1100, ModuleCard(item: LayoutItem(.subs, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        await shot("subs-detail-narrow", width: 760, ModuleCard(item: LayoutItem(.subs, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         if let sub = state.hub.data.subs?.data?.items?.first {
             await shot("subs-edit", width: 1000, SubEditCard(item: sub) {}.padding(20).background(Palette.bg))
         }

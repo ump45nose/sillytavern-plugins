@@ -49,29 +49,18 @@ private func item(_ id: String, _ name: String, key: String? = nil) -> SubsData.
     #expect(q.error == "timeout" && q.reading == nil)
 }
 
-@Test func subscriptionLinkIsWriteOnlyAndPreviewedWithoutSaving() async throws {
+@Test func billingRegionIsSavedAndBlankClearsIt() async throws {
     let hub = ScriptedHub { r in
-        switch (r.httpMethod ?? "GET", r.url!.path) {
-        case ("POST", "/api/v1/net/quota-preview"):
-            return (200, #"{"status": "ok", "stale": false, "error": null, "reading": {"observed_at": "2026-10-23T02:00:00Z", "expires_at": null, "windows": [{"id": "traffic", "label": "流量", "unit": "bytes", "used": 100, "limit": 200, "observed_at": "2026-10-23T02:00:00Z"}]}}"#)
-        case ("PATCH", "/api/v1/subscriptions/records/s1"):
-            return (200, #"{"id": "s1", "version": 5, "name": "机场", "account_label": "", "category": "network", "plan": "", "currency": "CNY", "frequency": 1, "payer": "self", "auto_renew": false, "active": true, "note": "", "quota_url_configured": true}"#)
-        default: return (404, "{}")
-        }
+        r.httpMethod == "PATCH" && r.url!.path == "/api/v1/subscriptions/records/s1"
+            ? (200, #"{"id": "s1", "version": 5, "name": "机场", "account_label": "", "category": "network", "plan": "", "currency": "CNY", "frequency": 1, "payer": "self", "auto_renew": false, "active": true, "note": "", "billing_region": "美国"}"#)
+            : (404, "{}")
     }
-    let q = try await api(hub).netQuotaPreview(quotaUrl: "https://sub.example/x")
-    #expect(hub.requests.last?.body?["quota_url"] as? String == "https://sub.example/x")
-    #expect(q.reading?.windows.first?.used == 100)
-
     var r = SubscriptionRecord()
     r.id = "s1"; r.version = 4; r.name = "机场"; r.category = "network"; r.billingRegion = "  "
-    #expect(r.document["quota_url"] == nil)
     #expect(r.document["billing_region"] is NSNull)
-    r.quotaUrl = ""
-    #expect(r.document["quota_url"] is NSNull)
-    r.quotaUrl = "https://sub.example/x"; r.billingRegion = "美国"
+    #expect(r.document["quota_url"] == nil)
+    r.billingRegion = "美国"
     let saved = try await api(hub).saveSubscription(r)
-    #expect(hub.requests.last?.body?["quota_url"] as? String == "https://sub.example/x")
     #expect(hub.requests.last?.body?["billing_region"] as? String == "美国")
-    #expect(saved.quotaUrlConfigured == true && saved.quotaUrl == nil)
+    #expect(saved.billingRegion == "美国" && saved.version == 5)
 }

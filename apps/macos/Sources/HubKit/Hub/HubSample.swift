@@ -80,7 +80,7 @@ public enum HubSample {
         let rates = SubsData.ExchangeRates(base: "USD", stale: false, rates: ["USD": "1", "CNY": "7.12", "INR": "84.1", "BOB": "6.91", "EUR": "0.92"])
         func sub(_ id: String, _ name: String, _ price: Double, _ currency: String, _ cycle: String, _ renewIn: Int,
                  key service: String? = nil, category: String = "other", payer: String = "self", label: String? = nil, plan: String? = nil,
-                 region: String? = nil, link: Bool = false, quota: [SubscriptionQuota.Window]? = nil, active: Bool = true) -> SubsData.Item {
+                 region: String? = nil, quota: [SubscriptionQuota.Window]? = nil, active: Bool = true) -> SubsData.Item {
             let monthly: Double? = cycle == "month" ? price : cycle == "year" ? price / 12 : nil
             let both = { (v: Double) in ["CNY": rates.convert(v, from: currency, to: "CNY")!, "USD": rates.convert(v, from: currency, to: "USD")!] }
             return .init(id: id, name: name, price: price, currency: currency, cycle: cycle,
@@ -90,7 +90,7 @@ public enum HubSample {
                                                   lastSuccessAt: now.addingTimeInterval(-600)) },
                          serviceKey: service, expiresOn: cycle == "one_time" ? key(renewIn) : nil, plan: plan,
                          billingRegion: region, autoRenew: cycle != "one_time", priceConverted: both(price), monthlyConverted: monthly.map(both),
-                         exchangeRateDate: key(0), exchangeRateStale: false, quotaUrlConfigured: link)
+                         exchangeRateDate: key(0), exchangeRateStale: false)
         }
         func window(_ id: String, _ label: String, _ percent: Double, resetsIn hours: Double) -> SubscriptionQuota.Window {
             .init(id: id, label: label, usedPercent: percent, resetsAt: now.addingTimeInterval(hours * 3600), observedAt: now.addingTimeInterval(-600))
@@ -105,7 +105,7 @@ public enum HubSample {
             sub("chatgpt", "ChatGPT Plus", 1950, "INR", "year", 130, key: "chatgpt", category: "ai", label: "个人账号", plan: "Plus", region: "印度"),
             sub("cursor", "Cursor Pro", 20, "USD", "month", 12, key: "cursor", category: "ai", payer: "company", plan: "Pro",
                 quota: [window("month", "本月", 82, resetsIn: 300)]),
-            sub("proxy", "主力机场", 25, "CNY", "month", 13, category: "network", label: "个人账号", plan: "标准套餐 200 GB", link: true, quota: [traffic]),
+            sub("proxy", "主力机场", 25, "CNY", "month", 13, category: "network", label: "个人账号", plan: "标准套餐 200 GB", quota: [traffic]),
             sub("spare", "备用机场", 70, "BOB", "one_time", 71, category: "network", region: "玻利维亚"),
             sub("google", "Google One 2TB", 68, "CNY", "month", 23, category: "membership", label: "家庭", plan: "2 TB"),
             sub("icloud", "iCloud+", 21, "CNY", "month", 10, category: "membership", payer: "unknown", plan: "200 GB"),

@@ -90,9 +90,6 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
     public var billingRegion: String?
     public var binding: SubscriptionBinding?
     public var quota: SubscriptionQuota?
-    public var quotaUrlConfigured: Bool?
-    /// Write-only subscription link: nil leaves the stored one alone, "" removes it.
-    public var quotaUrl: String?
 
     public init() {}
 
@@ -105,7 +102,6 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
             "next_renewal": nextRenewal as Any? ?? NSNull(), "expires_on": expiresOn as Any? ?? NSNull(),
             "payer": payer, "auto_renew": autoRenew, "active": active, "note": note,
             "billing_region": billingRegion.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } as Any? ?? NSNull()]
-        if let quotaUrl { result["quota_url"] = quotaUrl.isEmpty ? NSNull() : quotaUrl }
         if let binding {
             result["binding"] = ["collector": binding.collector, "provider": binding.provider,
                 "account": binding.account, "account_email": binding.accountEmail ?? "", "profile": binding.profile ?? ""]

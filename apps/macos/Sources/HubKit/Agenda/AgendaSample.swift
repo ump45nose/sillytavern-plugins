@@ -2,6 +2,22 @@ import Foundation
 
 /// The design mockup's agenda as a cache, placed around `now`, shown until Google is connected.
 public enum AgendaSample {
+    /// The sample with a long 循环任务 list and a pile of overdue work, so columns have to scroll.
+    public static func long(now: Date, calendar: Calendar = .hub) -> AgendaStore {
+        var s = store(now: now, calendar: calendar)
+        let today = calendar.startOfDay(for: now)
+        func day(_ offset: Int) -> String { GoogleDate.dayString(calendar.date(byAdding: .day, value: offset, to: today)!, calendar: calendar) }
+        s.lists.insert(TaskListRecord(id: "routine", title: "循环任务"), at: 1)
+        let routine = ["晨跑", "背单词", "记账", "整理收件箱", "喝水 8 杯", "读书 30 分钟", "冥想", "拉伸", "写日报", "复盘今天", "备好明天的衣服",
+                       "倒垃圾", "给植物浇水", "洗漱睡觉", "周报", "清理桌面", "练字", "散步", "收衣服", "整理照片", "回消息", "洗漱睡觉 2"]
+        s.tasks += routine.enumerated().map { i, t in
+            TaskRecord(id: "r\(i)", listID: "routine", title: t, notes: i % 3 == 0 ? "一三五七" : nil, due: i % 4 == 0 ? day(-(i % 5) - 1) : nil,
+                       position: String(format: "%02d", i))
+        }
+        s.tasks += (0..<16).map { i in TaskRecord(id: "o\(i)", listID: "work", title: "逾期事项 \(i + 1)", due: day(-2 - i), position: "9\(i)") }
+        return s
+    }
+
     public static func store(now: Date, calendar: Calendar = .hub) -> AgendaStore {
         let today = calendar.startOfDay(for: now)
         func day(_ offset: Int) -> String { GoogleDate.dayString(calendar.date(byAdding: .day, value: offset, to: today)!, calendar: calendar) }

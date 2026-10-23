@@ -744,11 +744,12 @@ struct DuePickerPanel: View {
     }
 }
 
-/// Monday-first month grid; days before `today` are disabled.
+/// Monday-first month grid; days before `today` are disabled unless `allowPast`.
 struct MonthCalendar: View {
     @Binding var day: Date
     @Binding var month: Date
     var today: Date
+    var allowPast = false
 
     static let weekdays = ["一", "二", "三", "四", "五", "六", "日"]
 
@@ -771,7 +772,7 @@ struct MonthCalendar: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(step < 0 && first <= cal.date(from: cal.dateComponents([.year, .month], from: today))!)
+                    .disabled(!allowPast && step < 0 && first <= cal.date(from: cal.dateComponents([.year, .month], from: today))!)
                 }
             }
             .padding(.bottom, 4)
@@ -786,7 +787,7 @@ struct MonthCalendar: View {
 
     private func cell(_ d: Date) -> some View {
         let cal = Calendar.hub
-        let selected = cal.isDate(d, inSameDayAs: day), isToday = cal.isDate(d, inSameDayAs: today), past = d < today
+        let selected = cal.isDate(d, inSameDayAs: day), isToday = cal.isDate(d, inSameDayAs: today), past = !allowPast && d < today
         return Button { day = d } label: {
             Text(verbatim: "\(cal.component(.day, from: d))").font(Typo.sans(13.5, selected || isToday ? .semibold : .regular)).monospacedDigit()
                 .foregroundStyle(selected ? Color.white : past ? Palette.ink4 : isToday ? Tone.clay.color : Palette.ink)

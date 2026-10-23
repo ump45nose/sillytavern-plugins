@@ -294,17 +294,15 @@ public struct HubAPI: Sendable {
         return try await get(path)
     }
 
+    public func subscriptionRecord(id: String) async throws -> SubscriptionRecord {
+        try decode(SubscriptionRecord.self, try await get("/api/v1/subscriptions/records/" + path(id)))
+    }
+
     public func saveSubscription(_ record: SubscriptionRecord) async throws -> SubscriptionRecord {
         let isNew = record.version == 0
         var r = try request("/api/v1/subscriptions/records" + (isNew ? "" : "/" + path(record.id)), method: isNew ? "POST" : "PATCH", body: record.document)
         if !isNew { r.setValue(String(record.version), forHTTPHeaderField: "If-Match") }
         return try decode(SubscriptionRecord.self, try await send(r))
-    }
-
-    /// Resolves a network subscription link without saving it; the answer has the shape of a record's `quota`.
-    public func netQuotaPreview(quotaUrl: String) async throws -> SubscriptionQuota {
-        let r = try request("/api/v1/net/quota-preview", method: "POST", body: ["quota_url": quotaUrl])
-        return try decode(SubscriptionQuota.self, try await send(r))
     }
 
     public func deleteSubscription(_ record: SubscriptionRecord) async throws {
