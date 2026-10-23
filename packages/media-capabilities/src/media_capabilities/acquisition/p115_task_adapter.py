@@ -24,13 +24,17 @@ class P115TaskAdapter:
     submission_candidate_id = None
     last_submission_receipt = None
     def __init__(self, movie_path: str = '/Media/Movie', tv_path: str = '/Media/TV_Show',
-                 local_strm_root: str = '/Media/115_strm'):
+                 local_strm_root: str = '/Media/115_strm', allowed_roots=('/Media',)):
         self.movie_path = movie_path.rstrip('/')
         self.tv_path = tv_path.rstrip('/')
         self.local_strm_root = local_strm_root.rstrip('/')
+        roots = tuple('/' + str(root).strip('/') for root in allowed_roots if str(root).strip('/'))
+        if not roots:
+            raise ValueError('请配置 115 允许目标根目录')
         for path in (self.movie_path, self.tv_path):
-            if not path.startswith('/Media/') or '..' in Path(path).parts:
-                raise ValueError('115 目标目录必须是 /Media 下的固定目录')
+            target = Path(path)
+            if '..' in target.parts or not any(target != Path(root) and target.is_relative_to(Path(root)) for root in roots):
+                raise ValueError('115 目标目录超出允许根目录')
         if self.movie_path == self.tv_path:
             raise ValueError('电影和剧集不能共用 115 目标目录')
 
