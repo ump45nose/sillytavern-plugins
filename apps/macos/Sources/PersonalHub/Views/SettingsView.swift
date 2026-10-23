@@ -57,6 +57,7 @@ private struct SettingRow<Content: View>: View {
 private struct GeneralSettings: View {
     @Environment(AppState.self) private var state
     @ViewState private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @AppStorage(Typo.preferenceKey) private var systemTypeface = false
     @ViewState private var loginError: String?
     @ViewState private var confirmReset = false
 
@@ -82,6 +83,14 @@ private struct GeneralSettings: View {
                         Button("选择…") { pickAvatar() }.buttonStyle(.plain).font(Typo.sans(12)).foregroundStyle(Palette.ink2)
                     }
                 }
+            }
+            SettingRow(title: "界面字体",
+                       note: AnthropicFonts.available ? "Anthropic 字体读自本机的 Claude.app，只在这台 Mac 上使用" : "没找到 Claude.app 里的 Anthropic 字体，正在用系统字体") {
+                Picker("", selection: $systemTypeface) {
+                    Text("Anthropic").tag(false)
+                    Text("系统").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize().disabled(!AnthropicFonts.available)
             }
             SettingRow(title: "登录时启动", note: loginError) {
                 Toggle("", isOn: $launchAtLogin).toggleStyle(.hub).labelsHidden()

@@ -205,6 +205,8 @@ struct EventEditor: View {
 struct CheckCircle: View {
     var done: Bool
     var size: CGFloat = 16
+    /// Ring colour while open: rose when overdue, ochre when it has a time.
+    var ring: Color = Palette.ink4
     @ViewState private var burst = false
     @ViewState private var drawn: CGFloat = 0
     @ViewState private var pop: CGFloat = 1
@@ -215,7 +217,7 @@ struct CheckCircle: View {
             Circle().stroke(Tone.olive.color.opacity(burst ? 0 : 0.55), lineWidth: burst ? 0.5 : 3)
                 .scaleEffect(burst ? 2.1 : 1)
                 .opacity(burst ? 1 : 0)
-            Circle().strokeBorder(done ? Tone.olive.color : Palette.ink4, lineWidth: 1.5)
+            Circle().strokeBorder(done ? Tone.olive.color : ring, lineWidth: 1.5)
             Circle().fill(Tone.olive.color).scaleEffect(done ? 1 : 0.01)
             CheckMark().trim(from: 0, to: done ? drawn : 0)
                 .stroke(.white, style: StrokeStyle(lineWidth: max(1.6, size * 0.13), lineCap: .round, lineJoin: .round))
@@ -253,6 +255,8 @@ struct TaskRow: View {
     var showList = true
     var showDue = true
     var depth = 0
+    /// The overdue view writes lateness into the caption instead of a date capsule.
+    var lateInline = false
     /// Set on the task page: a click selects the row for the details panel instead of double-click editing.
     var onSelect: ((AgendaTask) -> Void)? = nil
     var selectedID: String? = nil
@@ -265,7 +269,7 @@ struct TaskRow: View {
     var body: some View {
         VStack(spacing: 0) {
             row
-            ForEach(task.subtasks) { TaskRow(task: $0, showList: false, depth: depth + 1, onSelect: onSelect, selectedID: selectedID) }
+            ForEach(task.subtasks) { TaskRow(task: $0, showList: false, depth: depth + 1, lateInline: lateInline, onSelect: onSelect, selectedID: selectedID) }
         }
     }
 
@@ -289,7 +293,8 @@ struct TaskRow: View {
         let late = task.overdueDays > 0 && !done
         return HStack(spacing: 10) {
             Button(action: toggle) {
-                CheckCircle(done: done, size: depth > 0 ? 14 : 16)
+                CheckCircle(done: done, size: depth > 0 ? 14 : 16,
+                            ring: late ? Tone.rose.color : task.scheduled() != nil ? Tone.ochre.color : Palette.ink4)
             }
             .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 1) {
@@ -304,7 +309,7 @@ struct TaskRow: View {
                 if let meta { Text(meta).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
             }
             Spacer(minLength: 4)
-            if let label = dueLabel {
+            if let label = dueLabel, !(lateInline && late) {
                 Text(label).font(Typo.sans(11, late ? .semibold : .regular)).monospacedDigit()
                     .foregroundStyle(late ? Tone.rose.color : Palette.ink2)
                     .padding(.horizontal, 7).padding(.vertical, 2)
@@ -332,12 +337,25 @@ struct TaskRow: View {
         }
     }
 
-    private var meta: String? {
-        var parts: [String] = []
-        if showList, !task.listTitle.isEmpty { parts.append(task.listTitle) }
-        if !task.subtasks.isEmpty { parts.append("\(task.subtasks.filter(\.completed).count)/\(task.subtasks.count) 子任务") }
-        if let notes = task.notes?.split(separator: "\n").first { parts.append(String(notes)) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    /// List, time (ochre), subtask progress and the first line of notes; the overdue view leads with lateness in rose.
+    private var meta: AttributedString? {
+        var parts: [AttributedString] = []
+        func part(_ s: String, _ color: Color? = nil) {
+            var a = AttributedString(s)
+            if let color { a.foregroundColor = color }
+            parts.append(a)
+        }
+        if lateInline, task.overdueDays > 0, !task.completed, let due = task.due {
+            let c = Calendar.hub.dateComponents([.month, .day], from: due)
+            part("逾期 \(task.overdueDays) 天 · \(c.month!)/\(c.day!)", Tone.rose.color)
+        }
+        if showList, !task.listTitle.isEmpty { part(task.listTitle) }
+        if let at = task.scheduled() { part(Agenda.clock(at), Color(hex: "#9C7B22")) }
+        if !task.subtasks.isEmpty { part("\(task.subtasks.filter(\.completed).count)/\(task.subtasks.count) 个子任务") }
+        if let line = task.summaryLine { part(line) }
+        guard var out = parts.first else { return nil }
+        for p in parts.dropFirst() { out += AttributedString(" · ") + p }
+        return out
     }
 
     private var dueLabel: String? {

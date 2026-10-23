@@ -326,8 +326,8 @@ final class MarkdownTextView: NSTextView {
 struct MarkdownStyle {
     var size: CGFloat
 
-    private var body: NSFont { .systemFont(ofSize: size) }
-    private var bold: NSFont { .systemFont(ofSize: size, weight: .semibold) }
+    private var body: NSFont { Typo.sansFont(size) }
+    private var bold: NSFont { Typo.sansFont(size, .semibold) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: size - 1, weight: .regular) }
     private static let hidden: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 0.01), .foregroundColor: NSColor.clear]
 
@@ -389,11 +389,11 @@ struct MarkdownStyle {
                 let font: NSFont = switch level {
                 case 1: Typo.serifFont(size + 9)
                 case 2: Typo.serifFont(size + 5)
-                case 3: .systemFont(ofSize: size + 1.5, weight: .semibold)
+                case 3: Typo.sansFont(size + 1.5, .semibold)
                 default: bold
                 }
                 storage.addAttributes([.font: font, .paragraphStyle: paragraph(before: level <= 2 ? 10 : 6, spacing: 3)], range: range)
-                marker(at(m.range), [.foregroundColor: faint, .font: NSFont.systemFont(ofSize: size - 1)])
+                marker(at(m.range), [.foregroundColor: faint, .font: Typo.sansFont(size - 1)])
                 inlines(storage, line: line, range: range, shown: shown)
                 return
             }
@@ -472,7 +472,7 @@ struct MarkdownStyle {
                     storage.addAttributes(shown ? [.foregroundColor: faint] : Self.hidden, range: marker)
                 }
                 if kind == .link, shown {
-                    storage.addAttributes([.foregroundColor: faint, .font: NSFont.systemFont(ofSize: size - 2)], range: at(m.range(at: 2)))
+                    storage.addAttributes([.foregroundColor: faint, .font: Typo.sansFont(size - 2)], range: at(m.range(at: 2)))
                 }
             }
         }

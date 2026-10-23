@@ -368,7 +368,7 @@ struct AddTaskRow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 16)
-                        Text(parent == nil ? "添加任务" : "添加子任务").font(Typo.sans(12.5))
+                        Text(label).font(Typo.sans(12.5)).lineLimit(1)
                         Spacer()
                     }
                     .foregroundStyle(Palette.ink3).contentShape(Rectangle())
@@ -384,6 +384,17 @@ struct AddTaskRow: View {
         if e.due == nil, let due { e.due = Calendar.hub.startOfDay(for: due) }
         ListPickerButton.apply(listID ?? list?.id, to: &e, lists: state.agenda.lists)
         return e
+    }
+
+    /// Says where the task goes: 添加到今天 / 添加到周五 / 添加到工作.
+    private var label: String {
+        if parent != nil { return "添加子任务" }
+        if let list { return "添加到\(list.title)" }
+        if let due {
+            let rel = Agenda.relativeDay(due, now: state.agenda.now)
+            return "添加到" + (rel.contains("/") ? Agenda.weekdayName(due) : rel)
+        }
+        return "添加任务"
     }
 
     private var hint: String? {
@@ -402,6 +413,65 @@ struct AddTaskRow: View {
         }
         text = ""
         focused = true
+    }
+}
+
+/// An event with a colour bar; opens the editor. Day columns stack the time range over the title, the menu keeps
+/// one line of start time, title and caption.
+struct EventStrip: View {
+    var event: AgendaEvent
+    var caption: String? = nil
+    var stacked = true
+    var accent = false
+    @Environment(AppState.self) private var state
+    @ViewState private var editing = false
+
+    var body: some View {
+        Button { editing = true } label: {
+            if stacked {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1.5).fill(event.tone.color).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(event.allDay ? "全天" : "\(Agenda.clock(event.start)) – \(Agenda.clock(event.end))")
+                            .font(Typo.sans(10.5)).monospacedDigit().foregroundStyle(Palette.ink3)
+                        Text(event.title).font(Typo.sans(12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 6).padding(.horizontal, 8)
+                .background(event.tone.color.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+            } else {
+                AgendaLine(tone: event.tone.color, time: event.allDay ? "全天" : Agenda.clock(event.start), title: event.title, caption: caption, accent: accent)
+            }
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $editing, arrowEdge: .bottom) {
+            EventEditor(mode: .edit(event)) { editing = false }.environment(state)
+        }
+    }
+}
+
+/// One compact agenda row: colour bar, time, title, caption.
+struct AgendaLine: View {
+    var tone: Color
+    var time: String
+    var title: String
+    var caption: String?
+    var accent = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5).fill(tone).frame(width: 3, height: 14)
+            Text(time).font(Typo.sans(11.5)).monospacedDigit().foregroundStyle(Palette.ink3).frame(width: 36, alignment: .leading)
+            Text(title).font(Typo.sans(12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+            Spacer(minLength: 4)
+            if let caption {
+                Text(caption).font(Typo.sans(11)).foregroundStyle(accent ? Palette.clayDeep : Palette.ink3).lineLimit(1).fixedSize()
+            }
+        }
+        .frame(height: 24).contentShape(Rectangle())
     }
 }
 
@@ -441,24 +511,37 @@ extension EnvironmentValues {
 }
 
 /// Columns side by side, each as tall as its content up to the page; the row scrolls sideways when it doesn't fit.
+/// When the columns overflow, the right edge fades to say there is more; trailing room lets the last column clear the fade.
 private struct ColumnBoard<Content: View>: View {
     @ViewBuilder var content: Content
+    @ViewState private var contentWidth: CGFloat = 0
+
+    private static var fade: CGFloat { 56 }
 
     var body: some View {
         GeometryReader { g in
             let height = max(g.size.height - HubScroller.barHeight, 120)
+            let overflow = contentWidth > g.size.width + 1
             HubScroll(.horizontal, bar: true) {
                 HStack(alignment: .top, spacing: 14) { content }
                     .padding(.bottom, 2)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                    .padding(.trailing, overflow ? Self.fade : 0)
                     .frame(height: height, alignment: .top)
             }
             .environment(\.columnHeight, height - 2)
+            .overlay(alignment: .trailing) {
+                if overflow {
+                    LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: Self.fade).padding(.bottom, HubScroller.barHeight).allowsHitTesting(false)
+                }
+            }
         }
     }
 }
 
 /// Stable colour per list, by its place in the sidebar.
-private func listTone(_ id: String, in lists: [TaskListRecord]) -> Tone {
+func listTone(_ id: String, in lists: [TaskListRecord]) -> Tone {
     let tones: [Tone] = [.sky, .olive, .ochre, .plum, .rose, .clay, .steel]
     return tones[(lists.firstIndex { $0.id == id } ?? 0) % tones.count]
 }
@@ -478,10 +561,14 @@ private struct TaskColumn<Trailing: View>: View {
     var empty: String? = nil
     var add: AddTaskRow? = nil
     var completed: [AgendaTask] = []
+    var lateInline = false
     @ViewBuilder var trailing: Trailing
     @Environment(AppState.self) private var state
     @Environment(\.columnHeight) private var maxHeight
     @ViewState private var showDone = false
+    @ViewState private var rowsHeight: CGFloat = 0
+
+    private static var fade: CGFloat { 28 }
 
     var body: some View {
         let chrome: CGFloat = 46 + (add == nil ? 8 : 38)
@@ -496,14 +583,15 @@ private struct TaskColumn<Trailing: View>: View {
                 trailing
             }
             .padding(.horizontal, 16).frame(height: 46)
+            let room = max(maxHeight - chrome, 80), overflow = rowsHeight > room + 1
             HubScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     if !events.isEmpty {
-                        Flow(spacing: 6) { ForEach(events) { EventPill(event: $0) } }.padding(.bottom, 8)
+                        VStack(alignment: .leading, spacing: 2) { ForEach(events) { EventStrip(event: $0) } }.padding(.bottom, 6)
                     }
                     ForEach(tasks) { t in
-                        TaskRow(task: t, showList: showList, showDue: showDue, onSelect: { state.taskSelection = $0.id },
-                                selectedID: state.taskSelection)
+                        TaskRow(task: t, showList: showList, showDue: showDue, lateInline: lateInline,
+                                onSelect: { state.taskSelection = $0.id }, selectedID: state.taskSelection)
                     }
                     if tasks.isEmpty, let empty {
                         Text(empty).font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
@@ -511,10 +599,18 @@ private struct TaskColumn<Trailing: View>: View {
                     if !completed.isEmpty { doneFold }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
+                .padding(.bottom, overflow ? Self.fade : 0)
             }
             .scrollIndicators(.automatic)
-            .frame(maxHeight: max(maxHeight - chrome, 80))
+            .frame(maxHeight: room)
             .fixedSize(horizontal: false, vertical: true)
+            .overlay(alignment: .bottom) {
+                if overflow {
+                    LinearGradient(colors: [Palette.card.opacity(0), Palette.card], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.fade).allowsHitTesting(false)
+                }
+            }
             if let add {
                 add.padding(.horizontal, 16).overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
             }
@@ -727,7 +823,7 @@ private struct OverdueTasks: View {
         } else {
             ColumnBoard {
                 ForEach(groups, id: \.0.id) { list, tasks in
-                    TaskColumn(title: list.title, dot: listTone(list.id, in: agenda.lists).color, tasks: tasks, showList: false) {
+                    TaskColumn(title: list.title, dot: listTone(list.id, in: agenda.lists).color, tasks: tasks, showList: false, lateInline: true) {
                         Button {
                             let today = Calendar.hub.startOfDay(for: agenda.now)
                             withAnimation(Motion.spring) { tasks.forEach { agenda.reschedule($0, to: today) } }

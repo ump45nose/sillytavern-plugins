@@ -38,6 +38,7 @@ public enum AgendaSample {
             EventRecord(id: "e1", calendarID: "sample", title: "周会", location: "腾讯会议", start: at(10), end: at(11), colorID: "7"),
             EventRecord(id: "e2", calendarID: "sample", title: "迁移方案评审", location: "3F 会议室", start: at(14), end: at(15.5), colorID: "9"),
             EventRecord(id: "e3", calendarID: "sample", title: "羽毛球", location: "体育馆 3 号场", start: at(19), end: at(20.5), colorID: "10"),
+            EventRecord(id: "e4", calendarID: "sample", title: "牙医复诊", location: "口腔医院", start: at(24 * 2 + 15), end: at(24 * 2 + 16), colorID: "4"),
         ]
         return s
     }

@@ -17,11 +17,19 @@ public struct AgendaTask: Sendable, Identifiable, Hashable {
     /// Google's manual order within the list; sorts lexically.
     public var position: String? = nil
 
+    private static let timeLine = #"(?m)^时间\s*([01]?\d|2[0-3])[:：]([0-5]\d)\s*$"#
+
+    /// The first line of notes worth showing under the title; the "时间 15:00" line is shown as the time instead.
+    public var summaryLine: String? {
+        notes?.split(separator: "\n").lazy.map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && $0.range(of: Self.timeLine, options: .regularExpression) == nil }
+    }
+
     /// Google Tasks keeps only the date; a time typed without a time block is saved as a
     /// "时间 15:00" line in the notes.
     public func scheduled(calendar: Calendar = .hub) -> Date? {
         guard let due, let notes,
-              let r = notes.range(of: #"(?m)^时间\s*([01]?\d|2[0-3])[:：]([0-5]\d)\s*$"#, options: .regularExpression) else { return nil }
+              let r = notes.range(of: Self.timeLine, options: .regularExpression) else { return nil }
         let digits = notes[r].dropFirst(2).trimmingCharacters(in: .whitespaces).split(whereSeparator: { $0 == ":" || $0 == "：" })
         guard digits.count == 2, let h = Int(digits[0]), let m = Int(digits[1]) else { return nil }
         return calendar.date(bySettingHour: h, minute: m, second: 0, of: calendar.startOfDay(for: due))

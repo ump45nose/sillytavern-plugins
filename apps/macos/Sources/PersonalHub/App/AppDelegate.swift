@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        let host = NSHostingController(rootView: PopoverView().environment(state))
+        let host = NSHostingController(rootView: TypefaceScope { PopoverView() }.environment(state))
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
     }
@@ -139,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             w.isReleasedWhenClosed = false
             w.title = "Personal Hub"
             w.backgroundColor = NSColor(Palette.bg)
-            w.contentView = NSHostingView(rootView: MainView().environment(state))
+            w.contentView = NSHostingView(rootView: TypefaceScope { MainView() }.environment(state))
             w.minSize = NSSize(width: 1100, height: 720)
             w.setFrameAutosaveName("PersonalHubMain")
             if !w.setFrameUsingName("PersonalHubMain") { w.center() }
@@ -186,7 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             w.titlebarAppearsTransparent = true
             w.title = "设置"
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView().environment(state))
+            w.contentView = NSHostingView(rootView: TypefaceScope { SettingsView() }.environment(state))
             w.center()
             w.delegate = self
             settingsWindow = w

@@ -186,24 +186,45 @@ private struct TrayAttention: View {
     }
 }
 
+/// Today's remaining events and timed tasks, one 24pt row each; when today is done, the next event ahead.
 private struct TrayAgenda: View {
     @Environment(AppState.self) private var state
 
+    private static let limit = 5
+
+    private enum Row: Identifiable {
+        case event(AgendaEvent)
+        case task(AgendaTask, Date)
+        var id: String { switch self { case .event(let e): "e" + e.id; case .task(let t, _): "t" + t.id } }
+        var at: Date { switch self { case .event(let e): e.start; case .task(_, let d): d } }
+    }
+
     var body: some View {
-        let v = state.agenda.view, now = state.agenda.now
-        let next = Array(v.upcomingEvents.prefix(2))
-        VStack(alignment: .leading, spacing: 6) {
+        let agenda = state.agenda, v = agenda.view, now = agenda.now
+        let rows = (v.events.filter { $0.end > now }.map(Row.event)
+            + v.timedTasks(on: now).filter { !$0.task.completed && $0.at >= now }.map { Row.task($0.task, $0.at) })
+            .sorted { $0.at < $1.at }
+        VStack(alignment: .leading, spacing: 2) {
             TrayHeading(title: "日程")
-            if let e = v.currentEvent ?? v.nextEvent {
-                let when = e.id == v.currentEvent?.id ? "进行中" : Agenda.countdown(to: e.start, now: now)
-                EventBlock(event: e, caption: "\(Agenda.clock(e.start)) – \(Agenda.clock(e.end)) · \(when)")
-                if let after = next.first(where: { $0.id != e.id }) {
-                    EventBlock(event: after, caption: "\(Agenda.relativeDay(after.start, now: now)) \(Agenda.clock(after.start)) – \(Agenda.clock(after.end))")
+            if rows.isEmpty {
+                if let e = v.upcomingEvents.first {
+                    EventStrip(event: e, caption: Agenda.relativeDay(e.start, now: now), stacked: false)
+                } else {
+                    Text("接下来没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
                 }
-            } else if let e = next.first {
-                EventBlock(event: e, caption: "\(Agenda.relativeDay(e.start, now: now)) \(Agenda.clock(e.start)) – \(Agenda.clock(e.end))")
-            } else {
-                Text("接下来没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+            }
+            ForEach(rows.prefix(Self.limit)) { row in
+                switch row {
+                case .event(let e):
+                    let live = e.start <= now
+                    EventStrip(event: e, caption: live ? "进行中" : e.id == v.nextEvent?.id ? Agenda.countdown(to: e.start, now: now) : nil,
+                               stacked: false, accent: live)
+                case .task(let t, let at):
+                    AgendaLine(tone: listTone(t.listID, in: agenda.lists).color, time: Agenda.clock(at), title: t.title, caption: "任务")
+                }
+            }
+            if rows.count > Self.limit {
+                Text("还有 \(rows.count - Self.limit) 项").font(Typo.sans(11)).foregroundStyle(Palette.ink3).padding(.leading, 11)
             }
         }
     }
