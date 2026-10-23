@@ -107,7 +107,8 @@ def main():
             mcp_bridge = bridge()
             async def mcp_call():
                 async with Client(create_server(mcp_bridge)) as client:
-                    assert len((await client.list_tools()).tools) == 3
+                    assert {tool.name for tool in (await client.list_tools()).tools} == {
+                        'search_resources', 'download_media', 'check_media', 'get_download_status'}
                     result = await client.call_tool('download_media', {'request': {'title': 'Movie', 'request_id': 'mcp'}})
                     receipt = result.structured_content
                     assert receipt['status'] == 'submitted' and receipt['route'] == 'public_bt'

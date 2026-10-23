@@ -118,7 +118,8 @@ def main():
                 async def check_mcp():
                     async with Client(create_server(Bridge())) as client:
                         tools = await client.list_tools()
-                        assert len(tools.tools) == 3
+                        assert {tool.name for tool in tools.tools} == {
+                            'search_resources', 'download_media', 'check_media', 'get_download_status'}
                         reply = await client.call_tool('search_resources',
                             {'request': {'title': 'Big Buck Bunny', 'year': 2008}})
                         assert reply.structured_content['identity_status'] == 'unverified'

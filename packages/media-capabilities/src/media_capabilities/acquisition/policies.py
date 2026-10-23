@@ -31,6 +31,9 @@ def inspect_target(title: str, files, target: DownloadTarget):
     if not okay:
         raise ValueError(reason)
     if target.scope == "movie":
+        if sum(PurePosixPath(name.replace("\\", "/")).suffix.lower() in (".mkv", ".mp4")
+               for name in files) != 1:
+            raise ValueError("电影资源必须只包含一个 MKV/MP4 视频")
         return
     found, unknown = set(), False
     for name in files:

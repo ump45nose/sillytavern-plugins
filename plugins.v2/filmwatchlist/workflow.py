@@ -3,17 +3,18 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.chain.download import DownloadChain
 from app.chain.search import SearchChain
-from app.helper.torrent import TorrentHelper
 from app.log import logger
 from app.schemas.types import MediaType
 from app.utils.http import RequestUtils
 from media_capabilities.acquisition.runtime import HostUnavailable
 
-from .evidence import magnet_evidence, torrent_evidence
+from media_capabilities.acquisition.models import DownloadTarget, MediaIdentity, ResourceCandidate
+from media_capabilities.acquisition.resolution import pt_candidate, public_candidates
+from media_capabilities.acquisition.policies import subtitle_evidence
 from .p115_task_adapter import ShareEvidence
 from .public_index import IndexStatus, MediaQuery, Mini4KIndexer
 from .quality_selection import MediaCandidate, rank_candidates
-from .selection import inspect_files, normalize_title, quality_key
+from .selection import normalize_title, quality_key
 
 
 def store_reused_receipt(self, film_id, decision, records, receipt):
@@ -67,9 +68,16 @@ def submit_pt(self, film_id: int, context, content: bytes, decision: dict, recor
                 task_state='SUBMITTED', status='等待入库', reason='M-Team 已提交下载')
 
 
+def download_target(media_type, expected, season=None):
+    kind = 'movie' if media_type == MediaType.MOVIE.value else 'tv'
+    return DownloadTarget(MediaIdentity('', kind), 'movie' if kind == 'movie' else 'season',
+                          frozenset((season or 1, episode) for episode in expected or ()))
+
+
 def process_unified(self, film_id: int, item: dict, media, media_type: str,
                      expected: set[int] | None, common: dict, records: dict):
     """Search both sources, verify playable bytes, then route one candidate."""
+    target = download_target(media_type, expected, common['season'])
     query = MediaQuery(
         title=str(item.get('title') or ''),
         aliases=tuple(dict.fromkeys(str(name) for name in
@@ -112,14 +120,10 @@ def process_unified(self, film_id: int, item: dict, media, media_type: str,
     for context in contexts[:12]:
         torrent = context.torrent_info
         try:
-            content, _, files = DownloadChain().download_torrent(torrent, source='FilmWatchlist')
+            content, _, _ = DownloadChain().download_torrent(torrent, source='FilmWatchlist')
             if not content:
                 raise ValueError('种子获取失败')
-            evidence = torrent_evidence(content, torrent.title, expected)
-            candidates.append(MediaCandidate(
-                'pt', torrent.title, evidence.video_bytes, evidence.total_bytes,
-                torrent.page_url or evidence.info_hash, info_hash=evidence.info_hash,
-                torrent_content=content, context=context, files=evidence.files))
+            candidates.append(pt_candidate(content, torrent.title, torrent.page_url, context, target))
         except (ValueError, TypeError, KeyError) as exc:
             rejected.append(f'{torrent.title}: {exc}')
         except Exception as exc:
@@ -142,44 +146,20 @@ def process_unified(self, film_id: int, item: dict, media, media_type: str,
         if resolved.status != IndexStatus.OK:
             rejected.append(f'{indexed.title}: 链接失效')
             continue
-        for link in resolved.links:
-            try:
-                if link.kind == 'magnet' and link.value:
-                    evidence = magnet_evidence(link.value, indexed.title, expected, timeout=25)
-                    if evidence.private:
-                        raise ValueError('private BT，禁止提交 115')
-                    if evidence.info_hash in failed_hashes:
-                        raise ValueError('此 info-hash 的 115 任务之前已失败')
-                    candidates.append(MediaCandidate(
-                        'public_bt', indexed.title, evidence.video_bytes, evidence.total_bytes,
-                        indexed.candidate_id, info_hash=evidence.info_hash,
-                        link=link.value, files=evidence.files))
-                elif link.kind == 'torrent' and link.torrent_bytes:
-                    evidence = torrent_evidence(link.torrent_bytes, indexed.title, expected)
-                    if evidence.private:
-                        raise ValueError('private BT，禁止提交 115')
-                    if evidence.info_hash in failed_hashes:
-                        raise ValueError('此 info-hash 的 115 任务之前已失败')
-                    candidates.append(MediaCandidate(
-                        'public_bt', indexed.title, evidence.video_bytes, evidence.total_bytes,
-                        indexed.candidate_id, info_hash=evidence.info_hash,
-                        link=f'magnet:?xt=urn:btih:{evidence.info_hash}', files=evidence.files))
-                elif link.kind == '115_share' and link.value and self._share_115_enabled:
-                    share = adapter.preview_share(link.value, indexed.title, expected)
-                    candidates.append(MediaCandidate(
-                        '115_share', indexed.title, share.video_bytes, share.total_bytes,
-                        indexed.candidate_id, link=link.value, files=share.files,
-                        file_ids=share.root_ids,
-                        evidence={'root_names': share.root_names}))
-            except (ValueError, RuntimeError) as exc:
-                if '元数据' in str(exc) or '客户端' in str(exc):
-                    uncertain = True
-                    unresolved_items.append(indexed)
-                rejected.append(f'{indexed.title}: {exc}')
-            except Exception as exc:
+        resource = ResourceCandidate(indexed.candidate_id, 'mini4k', indexed.title,
+                                     subtitles=subtitle_evidence(indexed.quality_text))
+        verified, errors = public_candidates(resolved.links, resource, target, lambda: adapter,
+                                             share_enabled=self._share_115_enabled)
+        for candidate in verified:
+            if candidate.info_hash and candidate.info_hash in failed_hashes:
+                rejected.append(f'{indexed.title}: 此 info-hash 的 115 任务之前已失败')
+            else:
+                candidates.append(candidate)
+        for exc in errors:
+            if not isinstance(exc, (ValueError, RuntimeError)) or '元数据' in str(exc) or '客户端' in str(exc):
                 uncertain = True
                 unresolved_items.append(indexed)
-                rejected.append(f'{indexed.title}: {type(exc).__name__}')
+            rejected.append(f'{indexed.title}: {exc if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__}')
     unique_candidates = {}
     for candidate in candidates:
         key = (candidate.source, candidate.info_hash or candidate.candidate_id)
@@ -372,13 +352,9 @@ def process_one(self, item: dict, client: RequestUtils, records: dict):
     for context in contexts:
         torrent = context.torrent_info
         try:
-            content, _, files = DownloadChain().download_torrent(torrent, source="FilmWatchlist")
-            if content and not files:
-                _, files = TorrentHelper().get_fileinfo_from_torrent_content(content)
-            valid, reason = inspect_files(torrent.title, files, expected)
-            if not content or not valid:
-                rejected.append(f"{torrent.title}: {reason if content else '种子获取失败'}")
-                continue
+            content, _, _ = DownloadChain().download_torrent(torrent, source="FilmWatchlist")
+            candidate = pt_candidate(content, torrent.title, torrent.page_url, context,
+                                     download_target(media_type, expected, season))
             non_remux = quality_key(torrent.title)[0] == 0
             chosen = {**common, "torrent_title": torrent.title,
                       "torrent_url": torrent.page_url, "non_remux": non_remux,
@@ -388,8 +364,7 @@ def process_one(self, item: dict, client: RequestUtils, records: dict):
                             reason="非 Remux 回退" if non_remux else "Remux 优先")
                 return
             # Compute the stable task identity before writing intent or submitting.
-            evidence = torrent_evidence(content, torrent.title, expected)
-            chosen.update(info_hash=evidence.info_hash, candidate_id=torrent.page_url or evidence.info_hash)
+            chosen.update(info_hash=candidate.info_hash, candidate_id=candidate.candidate_id)
         except Exception as exc:
             rejected.append(f"{torrent.title}: {type(exc).__name__}")
             logger.warning(f"片单 {film_id} 候选处理失败：{type(exc).__name__}")

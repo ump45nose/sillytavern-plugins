@@ -32,12 +32,15 @@ def create_server(bridge):
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def download_media(request: AcquisitionRequest) -> dict[str, Any]:
         """提交媒体下载任务。使用 candidate_id 指定候选，或根据片名、TMDB/IMDb 标识及偏好检索、选择资源并提交到下载器。"""
+        return await submit_download(request)
+
+    async def submit_download(request):
         return await anyio.to_thread.run_sync(lambda: bridge.download(asdict(request)), abandon_on_cancel=True)
 
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def check_media(request: AcquisitionRequest) -> dict[str, Any]:
         """查询媒体信息。使用 candidate_id 指定候选，或根据片名、TMDB/IMDb 标识及偏好检索、选择资源。"""
-        return await anyio.to_thread.run_sync(lambda: bridge.download(asdict(request)), abandon_on_cancel=True)
+        return await submit_download(request)
 
     @server.tool(structured_output=True, annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
     async def get_download_status(task_id: str) -> dict[str, Any]:
