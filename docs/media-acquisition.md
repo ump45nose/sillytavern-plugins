@@ -24,8 +24,8 @@ MoviePilot 的 `app.*`，也不另存站点、115 或下载器密码。
 
 ## 安装与迁移
 
-网页/MCP 部署只要求 MoviePilot 安装 **media-capabilities[acquisition] 0.3.3** 和
-**MediaCapabilities 0.1.2**。使用片单时另将 FilmWatchlist 更新到 **1.4.3**。
+网页/MCP 部署只要求 MoviePilot 安装 **media-capabilities[acquisition] 0.4.0** 和
+**MediaCapabilities 0.1.3**。使用片单时另将 FilmWatchlist 更新到 **1.4.3**。
 MoviePilot 安装插件只复制插件目录，共享包必须先安装在宿主 Python 环境中。
 
 当前 NAS 的实际入口、持久安装方式、备份及验证限制见
@@ -34,7 +34,7 @@ MoviePilot 安装插件只复制插件目录，共享包必须先安装在宿主
 ```sh
 # 在仓库根目录构建，复制 wheel 到 MoviePilot 的 Python 环境：
 python3 -m pip wheel --no-deps --wheel-dir .build/wheels ./packages/media-capabilities
-python3 -m pip install '/path/to/media_capabilities-0.3.3-py3-none-any.whl[acquisition]'
+python3 -m pip install '/path/to/media_capabilities-0.4.0-py3-none-any.whl[acquisition]'
 ```
 
 已有实例的迁移顺序：

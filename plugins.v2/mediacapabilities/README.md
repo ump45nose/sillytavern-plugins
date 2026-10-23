@@ -3,7 +3,7 @@
 独立 MoviePilot 插件，默认关闭。宿主只维护配置、受保护的 HTTP 接口、运行时
 生命周期和公共提交记录；搜索、策略、预检与 adapter 实现在共享 wheel 中。
 
-先在 MoviePilot 的 Python 环境安装 `media-capabilities[acquisition]` **0.3.3**，
+先在 MoviePilot 的 Python 环境安装 `media-capabilities[acquisition]` **0.4.0**，
 再通过仓库根目录的插件清单安装 `MediaCapabilities` **0.1.2**。已有实例升级
 共享包后需重启 MoviePilot。打开“启用公共获取宿主”，按需要配置站点与 115 路由。
 查询网页和下载 MCP 可以在 FilmWatchlist 未安装时使用。

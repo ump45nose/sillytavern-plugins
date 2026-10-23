@@ -43,7 +43,10 @@ def main():
     host.init_plugin(host.config)
     assert registry.store.read() == first_state
     assert PluginBase.data_by_id['FilmWatchlist'] == original
-    assert all(api['auth'] == 'bear' for api in host.get_api()) and len(host.get_api()) == 5
+    assert all(api['auth'] == 'bear' for api in host.get_api())
+    assert {api['path'] for api in host.get_api()} == {
+        '/acquisition_search', '/acquisition_search_status', '/acquisition_more',
+        '/acquisition_upgrade_check', '/acquisition_download', '/acquisition_status'}
     inherited = registry.submit('share-retry', 'share-link-hash',
         {'route': '115_share', 'candidate_id': original['records']['9']['candidate_id']},
         lambda: (_ for _ in ()).throw(AssertionError('migration re-submitted share')))
