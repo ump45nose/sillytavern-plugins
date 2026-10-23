@@ -25,6 +25,9 @@ struct SubscriptionManager: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(record.name + (record.accountLabel.isEmpty ? "" : " · " + record.accountLabel))
                         Text(payer(record.payer) + " · " + (record.plan.isEmpty ? record.category : record.plan)).font(.caption).foregroundStyle(.secondary)
+                        if record.category == "ai" {
+                            Text("付费区域：" + (record.billingRegion ?? "待确认")).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                     Button("编辑") { editing = record }
@@ -110,19 +113,28 @@ private struct SubscriptionEditor: View {
                     }
                     TextField("套餐", text: $draft.plan)
                     TextField("金额（留空为未知，0 为免费）", text: optional(\SubscriptionRecord.price))
-                    TextField("币种，例如 CNY / USD", text: $draft.currency)
+                    TextField("币种，例如 CNY / USD / BOB / INR", text: $draft.currency)
+                    TextField("付费区域，例如 美国 / 玻利维亚 / 印度", text: optional(\SubscriptionRecord.billingRegion))
                     Picker("周期", selection: Binding(get: { draft.cycle ?? "" }, set: { draft.cycle = $0.isEmpty ? nil : $0 })) {
                         Text("未设置").tag(""); Text("天").tag("day"); Text("周").tag("week")
                         Text("月").tag("month"); Text("年").tag("year"); Text("一次性").tag("one_time")
                     }
                     Stepper("每 \(draft.frequency) 个周期", value: $draft.frequency, in: 1...3650)
                     TextField("下次续费 YYYY-MM-DD", text: optional(\SubscriptionRecord.nextRenewal))
+                        .disabled(draft.cycle == "one_time")
+                    if draft.cycle == "month" && draft.frequency == 1 {
+                        Picker("每月续费日", selection: Binding(get: { draft.renewalDay ?? 0 }, set: { draft.renewalDay = $0 == 0 ? nil : $0 })) {
+                            Text("未设置").tag(0)
+                            ForEach(1...31, id: \.self) { day in Text("每月 \(day) 日").tag(day) }
+                        }
+                    }
                     TextField("到期日期 YYYY-MM-DD", text: optional(\SubscriptionRecord.expiresOn))
                     Picker("付款方", selection: $draft.payer) {
                         Text("待确认").tag("unknown"); Text("个人").tag("self")
                         Text("公司").tag("company"); Text("其他").tag("other"); Text("无需付费").tag("none")
                     }
                     Toggle("自动续费", isOn: $draft.autoRenew)
+                        .disabled(draft.cycle == "one_time")
                     Toggle("启用", isOn: $draft.active)
                     if draft.category == "ai" || draft.category == "network" {
                         Picker("额度来源账号", selection: Binding(get: { bindingID }, set: { id in
@@ -157,6 +169,13 @@ private struct SubscriptionEditor: View {
         }
         .onChange(of: draft.category) { _, category in
             if let b = draft.binding, (b.collector == "subboost") != (category == "network") || !["ai", "network"].contains(category) { draft.binding = nil }
+        }
+        .onChange(of: draft.cycle) { _, cycle in
+            if cycle != "month" { draft.renewalDay = nil }
+            if cycle == "one_time" { draft.autoRenew = false; draft.nextRenewal = nil }
+        }
+        .onChange(of: draft.frequency) { _, value in
+            if value != 1 { draft.renewalDay = nil }
         }
     }
 

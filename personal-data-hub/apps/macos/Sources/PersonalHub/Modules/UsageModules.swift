@@ -1007,7 +1007,12 @@ struct SubsModule: View {
                     ForEach(items.prefix(2)) { sub in
                         HStack(spacing: 8) {
                             SubLogo(name: sub.name, size: 20, iconURL: sub.iconUrl, themeColor: sub.themeColor)
-                            Text(sub.name).font(Typo.sans(12.5))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(sub.name).font(Typo.sans(12.5))
+                                if sub.category == "ai" {
+                                    Text("付费区域：" + (sub.billingRegion ?? "待确认")).font(Typo.sans(10)).foregroundStyle(Palette.ink3)
+                                }
+                            }
                             Spacer()
                             RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
                         }
@@ -1028,6 +1033,13 @@ struct SubsModule: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(sub.name + ((sub.accountLabel ?? "").isEmpty ? "" : " · " + (sub.accountLabel ?? ""))).font(Typo.sans(13))
                                 Text(Self.priceText(sub)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
+                                if let converted = Self.conversionText(sub) {
+                                    Text(converted).font(Typo.sans(10)).foregroundStyle(Palette.ink3).monospacedDigit()
+                                        .help("参考汇率日期：" + (sub.exchangeRateDate ?? "未知") + "；实际扣款以账单为准")
+                                }
+                                if sub.category == "ai" {
+                                    Text("付费区域：" + (sub.billingRegion ?? "待确认") + (sub.renewalDay.map { " · 每月 \($0) 日续费" } ?? "")).font(Typo.sans(10)).foregroundStyle(Palette.ink3)
+                                }
                                 if let quota = sub.quota { Text(Self.quotaText(quota)).font(Typo.sans(10)).foregroundStyle(Palette.ink3) }
                             }
                             Spacer()
@@ -1041,6 +1053,12 @@ struct SubsModule: View {
                         .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.line2).frame(height: 1) } }
                         .rise(i)
                     }
+                    if let rates = s.exchangeRates {
+                        HStack(spacing: 4) {
+                            Text(Self.exchangeText(rates)).font(Typo.sans(9)).foregroundStyle(Palette.ink3)
+                            Link("ExchangeRate-API", destination: URL(string: "https://www.exchangerate-api.com")!).font(Typo.sans(9))
+                        }.padding(.top, 4)
+                    }
                 }
             }
         }
@@ -1048,12 +1066,13 @@ struct SubsModule: View {
     }
 
     @ViewBuilder private func monthly(_ data: SubsData) -> some View {
-        let totals = data.monthlyByCurrency ?? [:]
+        let converted = data.monthlyConverted ?? [:]
+        let totals = converted.isEmpty ? (data.monthlyByCurrency ?? [:]) : converted
         VStack(alignment: .leading, spacing: 3) {
             if totals.isEmpty { Hero.empty("个人预计 / 月") }
             else {
                 ForEach(totals.keys.sorted(), id: \.self) { currency in
-                    Hero(value: totals[currency] ?? 0, prefix: currency + " ", unit: "/ 月")
+                    Hero(value: totals[currency] ?? 0, prefix: (converted.isEmpty ? "" : "≈ ") + currency + " ", unit: "/ 月")
                 }
             }
             if let count = data.unclassifiedPayerCount, count > 0 {
@@ -1091,11 +1110,27 @@ struct SubsModule: View {
     }
 
     static func priceText(_ s: SubsData.Item) -> String {
-        let symbol = ["CNY": "¥", "USD": "$", "EUR": "€", "HKD": "HK$", "JPY": "¥"][s.currency ?? "CNY"] ?? (s.currency ?? "")
+        let symbol = ["CNY": "¥", "USD": "$", "EUR": "€", "HKD": "HK$", "JPY": "JP¥", "BOB": "BOB ", "INR": "₹"][s.currency ?? "CNY"] ?? (s.currency ?? "")
         let unit = ["day": "天", "week": "周", "month": "月", "year": "年", "one_time": "一次性"][s.cycle ?? ""] ?? "周期未设置"
         let frequency = (s.frequency ?? 1) > 1 ? String(s.frequency ?? 1) : ""
         let payer = ["self": "个人", "company": "公司", "other": "其他付款方", "none": "无需付费", "unknown": "付款方待确认"][s.payer ?? "unknown"] ?? ""
         return (s.price.map { $0 == 0 ? "免费" : "\(symbol)\(Fmt.number($0, $0.rounded() == $0 ? 0 : 2)) / \(frequency)\(unit)" } ?? "金额未知") + " · " + payer
+    }
+
+    static func conversionText(_ s: SubsData.Item) -> String? {
+        guard let price = s.price, price > 0, s.currency != "CNY" else { return nil }
+        let values = ["USD", "CNY"].filter { $0 != s.currency }.compactMap { currency -> String? in
+            guard let amount = s.priceConverted?[currency] else { return nil }
+            return (currency == "USD" ? "$" : "¥") + Fmt.number(amount, 2)
+        }
+        guard !values.isEmpty else { return "汇率暂不可用" }
+        return "≈ " + values.joined(separator: " / ") + (s.exchangeRateStale == true ? " · 汇率已过期" : "")
+    }
+
+    static func exchangeText(_ rates: SubscriptionExchangeRates) -> String {
+        let date = rates.observedAt.map { Calendar.hub.dateComponents([.year, .month, .day], from: $0) }
+        let label = date.map { "\($0.year ?? 0)-\($0.month ?? 0)-\($0.day ?? 0)" } ?? "未知日期"
+        return "估算汇率 · " + label + (rates.stale == true ? " · 已过期" : "") + " · 来源"
     }
 }
 

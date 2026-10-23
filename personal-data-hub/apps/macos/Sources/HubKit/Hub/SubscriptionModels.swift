@@ -41,9 +41,11 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
     public var plan: String = ""
     public var price: String?
     public var currency: String = "CNY"
+    public var billingRegion: String?
     public var cycle: String?
     public var frequency: Int = 1
     public var nextRenewal: String?
+    public var renewalDay: Int?
     public var expiresOn: String?
     public var payer: String = "unknown"
     public var autoRenew: Bool = false
@@ -51,6 +53,9 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
     public var note: String = ""
     public var binding: SubscriptionBinding?
     public var quota: SubscriptionQuota?
+    public var priceConverted: [String: String]?
+    public var exchangeRateDate: String?
+    public var exchangeRateStale: Bool?
 
     public init() {}
 
@@ -59,6 +64,7 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
             "service_key": serviceKey as Any? ?? NSNull(), "theme_color": themeColor as Any? ?? NSNull(),
             "subscription_url": subscriptionUrl as Any? ?? NSNull(), "account_label": accountLabel, "category": category,
             "plan": plan, "price": price as Any? ?? NSNull(), "currency": currency,
+            "billing_region": billingRegion as Any? ?? NSNull(), "renewal_day": renewalDay as Any? ?? NSNull(),
             "cycle": cycle as Any? ?? NSNull(), "frequency": frequency,
             "next_renewal": nextRenewal as Any? ?? NSNull(), "expires_on": expiresOn as Any? ?? NSNull(),
             "payer": payer, "auto_renew": autoRenew, "active": active, "note": note]
@@ -68,6 +74,12 @@ public struct SubscriptionRecord: Codable, Equatable, Sendable, Identifiable {
         } else { result["binding"] = NSNull() }
         return result
     }
+}
+
+public struct SubscriptionExchangeRates: Codable, Equatable, Sendable {
+    public var observedAt: Date?
+    public var sourceUrl: String?
+    public var stale: Bool?
 }
 
 public struct SubscriptionBrandCatalog: Decodable, Sendable {

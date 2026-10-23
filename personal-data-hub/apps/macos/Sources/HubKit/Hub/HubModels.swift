@@ -287,10 +287,17 @@ public struct SubsData: Codable, Equatable, Sendable {
         public var subscriptionUrl: String?
         public var expiresOn: String?
         public var plan: String?
+        public var billingRegion: String?
+        public var renewalDay: Int?
+        public var priceConverted: [String: Double]?
+        public var exchangeRateDate: String?
+        public var exchangeRateStale: Bool?
     }
     public var monthlyTotal: Double?
     public var items: [Item]?
     public var monthlyByCurrency: [String: Double]?
+    public var monthlyConverted: [String: Double]?
+    public var exchangeRates: SubscriptionExchangeRates?
     public var unclassifiedPayerCount: Int?
 }
 
