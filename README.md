@@ -61,3 +61,5 @@ personal-records backup --database /data/records.sqlite --destination /private/b
 沿用现有 Nginx Proxy Manager，域名转发到 `192.168.31.201:18087`，复用已有泛域名证书。公网 443 受限，URL 必须带 `:28443`。DNS 使用现有 DDNS 泛域名 A/AAAA，不新增此域名的 CF Tunnel/CNAME。
 
 `mcp.app.yaml` 保存服务和 OAuth 元数据；此服务的域名由本机 NPM 管理，不执行会登记 Tunnel 的 `mcpctl deploy`。修改公共地址时同步服务环境和该独立 OIDC 客户端回调，保留密钥与 OAuth 状态。
+
+健康汇总 `GET /api/v1/health/summary` 支持可选 `group_by=date`，返回稀疏的逐日 `days: [{date, metrics}]`；与区间汇总共用计算逻辑，睡眠新增 `awake_seconds`（清醒区间去重时长）。省略分组参数时保持原接口。Hub 通过此接口读取展示指标，业务计算保留在本服务。
