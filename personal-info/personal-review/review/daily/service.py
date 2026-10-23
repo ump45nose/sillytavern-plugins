@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from review.daily.material import DailyMaterialBundle, DailyMaterialSection
 from review.domain import Evidence, EvidenceKind, TimeWindow
 from review.ledger import MemosClient
-from review.state import StateRepository
+from review.state import StateRepository, serialized
 
 
 class DailyReviewService:
@@ -499,7 +499,8 @@ class DailyReviewService:
                 merged[newest.evidence_id] = newest
         return sorted(merged.values(), key=lambda item: (item.occurred_at, item.source, item.evidence_id))
 
-    def finalize(self, session_id: str, user_content: str, dry_run: bool = False) -> dict:
+    @serialized
+    def finalize(self, session_id: str, user_content: str, dry_run: bool = False, confirmation_source: str = 'telegram') -> dict:
         """校验并发布用户确认正文；绝不自动拼回候选池。"""
 
         session = self.state.load_session(session_id)
@@ -537,7 +538,7 @@ class DailyReviewService:
         values = dict(session)
         values.update(status="finalized", final_content=content, memo_name=memo_name)
         self.state.save_session(values)
-        result = {"status": "finalized", "memo_name": memo_name}
+        result = {"status": "finalized", "memo_name": memo_name, "confirmed_from": confirmation_source}
         self.state.put_idempotent("daily-finalize", session_id, result)
         self._enqueue_projections(session_id, memo_name, content)
         return result
