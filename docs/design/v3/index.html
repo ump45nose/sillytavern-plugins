@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Personal Hub · v3 设计稿（待确认）</title>
+<style>
+  :root {
+    --canvas:#E7E2D6; --bg:#F4F1EA; --side:#ECE8DE; --card:#FFFDF8; --sunk:#F6F3EC;
+    --line:#E6E0D3; --line2:#EFEAE0; --ink:#1F1E1B; --ink2:#5E5D59; --ink3:#93918A; --ink4:#B9B6AD;
+    --clay:#D97757; --clayT:#F7E4DA; --olive:#7D8F5E; --oliveT:#E7EBDD; --sky:#6A9BCC; --skyT:#E2EBF4;
+    --plum:#9C7BA0; --plumT:#EFE6EF; --rose:#C97B84; --roseT:#F5E3E5; --steel:#5F7A99; --steelT:#E3E9F0;
+    --ochre:#C9A23F; --ochreT:#F5ECD3; --kraft:#C99A6E; --sage:#7FA394; --dot:#CFCAC0;
+    --serif:"New York","Songti SC",Georgia,serif; --sans:-apple-system,"PingFang SC",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); font-family:var(--sans); color:var(--ink); font-size:13px; -webkit-font-smoothing:antialiased; }
+  .doc { max-width:1240px; margin:0 auto; padding:40px 32px 80px; }
+  h1 { font-family:var(--serif); font-weight:400; font-size:34px; margin:0 0 6px; }
+  .lead { color:var(--ink2); margin:0 0 26px; line-height:1.7; }
+  nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:34px; }
+  nav a { text-decoration:none; color:var(--ink2); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:999px; }
+  section { margin-bottom:64px; }
+  .sh { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+  .sh h2 { font-family:var(--serif); font-weight:400; font-size:26px; margin:0; }
+  h3.fig { font-family:var(--serif); font-weight:400; font-size:17px; margin:30px 0 4px; }
+  .tag { font-size:11px; color:var(--clay); background:var(--clayT); padding:2px 8px; border-radius:999px; }
+  .note { color:var(--ink3); font-size:12px; margin:0 0 16px; line-height:1.7; max-width:900px; }
+  .ask { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--clay); border-radius:10px; padding:14px 18px; margin-top:22px; }
+  .ask b { font-weight:600; }
+  .ask ol { margin:6px 0 0; padding-left:20px; color:var(--ink2); line-height:1.85; }
+  .win { background:var(--bg); border-radius:14px; box-shadow:0 20px 50px rgba(60,40,10,.14); overflow:hidden; border:1px solid var(--line); }
+  .wbar { height:34px; display:flex; align-items:center; gap:7px; padding:0 14px; background:var(--side); border-bottom:1px solid var(--line); }
+  .wbar i { width:11px; height:11px; border-radius:50%; background:#E6DFD2; display:inline-block; }
+  .wbar span { margin-left:10px; color:var(--ink3); font-size:11.5px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; }
+  .ch { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+  .ico { width:26px; height:26px; border-radius:8px; display:grid; place-items:center; font-size:13px; flex:none; }
+  .ct { font-weight:600; }
+  .meta, .l11 { color:var(--ink3); font-size:11px; }
+  .hero { font-family:var(--serif); font-size:36px; letter-spacing:-.5px; line-height:1.1; }
+  .unit { color:var(--ink3); font-size:12px; margin-left:4px; font-family:var(--sans); letter-spacing:0; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:3px 10px; border-radius:999px; background:var(--sunk); border:1px solid var(--line2); color:var(--ink2); white-space:nowrap; }
+  .chip.sm { font-size:10.5px; padding:1px 7px; }
+  .chip.on { background:var(--ink); color:#fff; border-color:transparent; font-weight:500; }
+  .chip.sky { background:var(--skyT); color:var(--steel); border-color:transparent; }
+  .chip.clay { background:var(--clayT); color:var(--clay); border-color:transparent; }
+  .chip.rose { background:var(--roseT); color:var(--rose); border-color:transparent; }
+  .chip.olive { background:var(--oliveT); color:var(--olive); border-color:transparent; }
+  .chip.plum { background:var(--plumT); color:var(--plum); border-color:transparent; }
+  .chip.ochre { background:var(--ochreT); color:#9C7B22; border-color:transparent; }
+  .seg { display:inline-flex; gap:2px; padding:3px; background:var(--sunk); border-radius:10px; border:1px solid var(--line2); }
+  .seg b { font-weight:400; color:var(--ink3); padding:4px 12px; border-radius:7px; font-size:12px; white-space:nowrap; }
+  .seg b.on { background:var(--card); color:var(--ink); font-weight:600; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+  .seg b .n { font-size:10.5px; margin-left:4px; color:var(--ink4); font-weight:400; }
+  .seg b.on .n { color:var(--ink3); }
+  .seg b.late { color:var(--rose); }
+  .st { display:flex; align-items:center; gap:8px; color:var(--ink3); font-size:11px; letter-spacing:.5px; margin:16px 0 8px; }
+  .st::after { content:""; flex:1; height:1px; background:var(--line2); }
+  .row { display:flex; align-items:center; gap:10px; }
+  .sp { flex:1; }
+  .bar { height:6px; border-radius:6px; background:#EEE8DC; overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:6px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; background:var(--ink); color:#fff; font-weight:600; font-size:12px; padding:6px 13px; border-radius:8px; white-space:nowrap; }
+  .btn.sec { background:var(--sunk); color:var(--ink); font-weight:400; border:1px solid var(--line); }
+  .btn.ghost { background:transparent; color:var(--ink2); font-weight:400; padding:6px 8px; }
+  .kbd { font-size:10.5px; color:var(--ink3); border:1px solid var(--line); background:var(--card); border-radius:5px; padding:1px 6px; }
+  code { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; background:var(--sunk); padding:1px 5px; border-radius:4px; }
+  .anno { position:relative; }
+  .pin { position:absolute; width:20px; height:20px; border-radius:50%; background:var(--clay); color:#fff; font-size:11px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 3px rgba(217,119,87,.22); z-index:5; }
+  .legend { display:grid; grid-template-columns:22px 1fr; gap:6px 8px; margin-top:16px; color:var(--ink2); line-height:1.6; font-size:12.5px; max-width:980px; }
+  .legend .pin { position:static; }
+  .fade-b { position:relative; }
+  .fade-b::after { content:""; position:absolute; left:0; right:0; bottom:0; height:26px; background:linear-gradient(rgba(255,253,248,0),var(--card)); pointer-events:none; border-radius:0 0 16px 16px; }
+  .scrollbar { position:absolute; right:4px; width:4px; border-radius:4px; background:rgba(0,0,0,.16); }
+
+  /* Attached timeline style: serif clock, grey dot on a hairline. */
+  .tl { position:relative; }
+  .tl .e { display:grid; grid-template-columns:var(--tw,54px) 22px 1fr; align-items:start; }
+  .tl .t { font-family:var(--serif); font-size:15px; color:var(--ink3); text-align:right; line-height:20px; font-variant-numeric:tabular-nums; }
+  .tl .r { position:relative; align-self:stretch; }
+  .tl .r::before { content:""; position:absolute; left:10.5px; top:0; bottom:0; width:1px; background:var(--line); }
+  .tl .e:first-child .r::before { top:7px; }
+  .tl .e:last-child .r::before { bottom:auto; height:7px; }
+  .tl .r::after { content:""; position:absolute; left:7.5px; top:6px; width:7px; height:7px; border-radius:50%; background:var(--dot); box-shadow:0 0 0 3px var(--bg); }
+  .tl.oncard .r::after { box-shadow:0 0 0 3px var(--card); }
+  .tl .e.on .r::after { background:var(--ink); }
+  .tl .e.live .r::after { background:var(--steel); box-shadow:0 0 0 3px var(--steelT); }
+  .tl .b { padding:0 0 22px 4px; min-width:0; }
+  .tl .e.on .b .box { background:var(--card); border:1px solid var(--line); box-shadow:0 1px 2px rgba(60,40,10,.05); }
+  .tl .box { border-radius:12px; padding:9px 12px 11px; margin:-9px 0 0 -2px; border:1px solid transparent; }
+  .tl .tt { font-weight:600; font-size:13.5px; line-height:1.45; }
+  .tl .ds { color:var(--ink2); font-size:12.5px; line-height:1.65; margin-top:3px; }
+  .apps { display:inline-flex; gap:3px; vertical-align:middle; }
+  .apps i { width:14px; height:14px; border-radius:4px; display:inline-block; }
+
+  /* Tasks */
+  .side-nav { background:var(--side); padding:12px 10px; border-right:1px solid var(--line); }
+  .side-nav .it { display:flex; align-items:center; gap:9px; padding:6px 10px; border-radius:8px; color:var(--ink2); font-size:13px; }
+  .side-nav .it.on { background:var(--card); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  .side-nav .it .n { margin-left:auto; font-size:11px; color:var(--ink4); font-weight:400; }
+  .side-nav .it .n.late { color:var(--rose); }
+  .side-nav .sub { margin-left:16px; border-left:1px solid var(--line); padding-left:6px; }
+  .side-nav .sub .it { padding:4px 10px; font-size:12.5px; }
+  .side-nav .gl { width:16px; text-align:center; color:var(--ink3); font-size:12px; }
+  .cols { display:flex; gap:14px; align-items:stretch; overflow:hidden; }
+  .col { background:var(--card); border:1px solid var(--line); border-radius:16px; width:292px; flex:none; display:flex; flex-direction:column; position:relative; }
+  .col .hd { display:flex; align-items:center; gap:8px; padding:13px 16px 9px; }
+  .col .hd .nm { font-weight:600; font-size:13.5px; }
+  .col .hd .c { color:var(--ink4); font-size:11.5px; }
+  .col .bd { flex:1; overflow:hidden; padding:0 8px; position:relative; }
+  .col .ft { border-top:1px solid var(--line2); padding:9px 16px; color:var(--ink3); font-size:12px; }
+  .task { display:flex; gap:10px; padding:8px 8px; border-radius:9px; align-items:flex-start; }
+  .task.sel { background:var(--skyT); }
+  .task .ck { width:15px; height:15px; border-radius:50%; border:1.5px solid var(--ink4); flex:none; margin-top:1px; }
+  .task .ck.p1 { border-color:var(--rose); } .task .ck.p2 { border-color:var(--ochre); } .task .ck.p3 { border-color:var(--sky); }
+  .task .ck.done { background:var(--olive); border-color:var(--olive); }
+  .task .tx { flex:1; min-width:0; line-height:1.45; font-size:13px; }
+  .task .sub { color:var(--ink3); font-size:11px; margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
+  .task .sub .late { color:var(--rose); }
+  .ev { display:flex; gap:8px; align-items:stretch; padding:5px 8px; font-size:12.5px; }
+  .ev .bl { width:3px; border-radius:3px; flex:none; }
+  .ev .tm { color:var(--ink3); font-size:11px; font-variant-numeric:tabular-nums; }
+  .grp { color:var(--ink3); font-size:11px; padding:10px 8px 4px; letter-spacing:.4px; }
+  .frames { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .frames .card { padding:12px; }
+
+  /* Tray */
+  .tray { width:380px; background:var(--card); border-radius:14px; border:1px solid var(--line); box-shadow:0 20px 50px rgba(60,40,10,.14); padding:14px; flex:none; }
+  .tray .th { display:flex; align-items:center; gap:8px; color:var(--ink3); font-size:11px; letter-spacing:.5px; margin:14px 0 8px; }
+  .tray .th::after { content:""; flex:1; height:1px; background:var(--line2); }
+  .tray .th.tabs::after { display:none; }
+  .tray .task { padding:5px 4px; } .tray .task .tx { font-size:12.5px; }
+  .more { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--ink2); font-size:12px; padding:7px; border-radius:8px; background:var(--sunk); margin-top:4px; }
+  .mini { flex:1; background:var(--sunk); border-radius:10px; padding:8px 9px; }
+  .mini .k { color:var(--ink3); font-size:10px; } .mini .v { font-family:var(--serif); font-size:15px; margin-top:2px; }
+  .brace { border-left:2px solid var(--clay); padding-left:10px; color:var(--clay); font-size:11.5px; }
+
+  /* Memos */
+  .composer { background:var(--card); border:1px solid var(--line); border-radius:16px; }
+  .composer.focus { border-color:rgba(217,119,87,.55); box-shadow:0 0 0 4px rgba(217,119,87,.09), 0 8px 24px rgba(60,40,10,.06); }
+  .composer .ph { color:var(--ink4); font-size:13.5px; }
+  .tool { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; color:var(--ink2); font-size:12.5px; }
+  .tool:hover, .tool.on { background:var(--sunk); }
+  .wys { font-size:14px; line-height:1.75; color:var(--ink); }
+  .wys h4 { font-family:var(--serif); font-weight:500; font-size:19px; margin:0 0 4px; }
+  .wys .mk { color:var(--ink4); }
+  .wys .cb { display:inline-block; width:13px; height:13px; border:1.5px solid var(--ink4); border-radius:4px; vertical-align:-2px; margin-right:7px; }
+  .wys .cb.x { background:var(--olive); border-color:var(--olive); }
+  .wys .x + s { color:var(--ink3); }
+  .wys .tagt { color:var(--steel); background:var(--steelT); border-radius:5px; padding:0 4px; }
+  .wys .caret { display:inline-block; width:1.5px; height:17px; background:var(--clay); vertical-align:-3px; }
+  .att { display:flex; align-items:center; gap:8px; border:1px solid var(--line); background:var(--sunk); border-radius:10px; padding:6px 10px 6px 6px; font-size:12px; color:var(--ink2); }
+  .thumb { width:44px; height:44px; border-radius:8px; background:linear-gradient(135deg,#D7C7AE,#B9A27F); }
+  .memo { background:var(--card); border:1px solid var(--line2); border-radius:12px; padding:11px 14px; font-size:13.5px; line-height:1.7; }
+  .search { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; color:var(--ink4); }
+  .heat { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,10px); grid-auto-columns:10px; gap:3px; }
+  .heat i { width:10px; height:10px; border-radius:2px; display:block; }
+
+  /* Subscriptions */
+  .logo { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; font-weight:700; font-size:12px; color:#fff; flex:none; }
+  .subrow { display:grid; grid-template-columns:28px minmax(190px,1.3fr) minmax(220px,1.6fr) 110px 104px 24px; gap:14px; align-items:center; padding:11px 12px; border-radius:12px; }
+  .subrow:hover, .subrow.hov { background:var(--sunk); }
+  .subrow .nm { font-weight:600; font-size:13.5px; }
+  .subrow .lb { display:flex; gap:5px; margin-top:3px; flex-wrap:wrap; }
+  .q { display:grid; grid-template-columns:52px 1fr 86px; gap:8px; align-items:center; font-size:11px; color:var(--ink3); }
+  .q + .q { margin-top:5px; }
+  .q .bar { height:5px; }
+  .price { text-align:right; font-family:var(--serif); font-size:16px; }
+  .price small { display:block; font-family:var(--sans); font-size:10.5px; color:var(--ink3); }
+  .renew { font-size:11.5px; text-align:right; color:var(--ink2); }
+  .renew small { display:block; color:var(--ink3); font-size:10.5px; }
+  .gl2 { color:var(--ink4); text-align:center; }
+  .strip { position:relative; height:54px; }
+  .strip .axis { position:absolute; left:0; right:0; top:30px; height:1px; background:var(--line); }
+  .strip .tick { position:absolute; top:36px; font-size:10px; color:var(--ink4); transform:translateX(-50%); }
+  .strip .mk2 { position:absolute; top:24px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; }
+  .strip .mk2 i { width:13px; height:13px; border-radius:50%; border:2px solid var(--card); }
+  .strip .mk2 span { position:absolute; bottom:17px; font-size:10.5px; color:var(--ink2); white-space:nowrap; }
+  .fld { display:flex; flex-direction:column; gap:5px; }
+  .fld label { color:var(--ink3); font-size:11px; }
+  .in { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 10px; min-height:30px; display:flex; align-items:center; gap:6px; font-size:12.5px; }
+  .in.ph { color:var(--ink4); }
+  .in .caret2 { color:var(--ink4); margin-left:auto; font-size:10px; }
+  .sentence { font-size:13px; color:var(--ink2); line-height:2.2; }
+  .sentence .in { display:inline-flex; min-height:26px; padding:2px 9px; vertical-align:middle; margin:0 3px; color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>v3 设计稿 · 待确认</h1>
+  <p class="lead">对应上一轮反馈的 1、3、4、5 项（第 2 项 GitHub 详细卡高度已完成）。示例数据均为虚构，只表达布局与交互。每节末尾的「需要确认」是我拿不准、希望你拍板的地方；没有异议的部分会按图实现。</p>
+  <nav>
+    <a href="#sky">1 · 电脑历史</a><a href="#tasks">3 · 任务</a><a href="#memos">4 · Memos</a><a href="#subs">5 · 订阅</a>
+  </nav>
+
+  <!-- ========================= 1 SKY ========================= -->
+  <section id="sky">
+    <div class="sh"><h2>电脑历史</h2><span class="tag">重做布局</span></div>
+    <p class="note">现在的问题：三张同样厚重的卡片（日期条、时间轴、列表+详情）互相抢视线，日期条横向很长、信息少，详情区像表单。新方案把它当成「一天的日志」来读：顶部一条轻量概览，左边是附件里的时间线样式（衬线时间 + 细线灰点），右边是像文章一样的阅读区。</p>
+
+    <div class="win anno">
+      <div class="wbar"><i></i><i></i><i></i><span>Personal Hub — 电脑历史</span></div>
+      <div style="padding:22px 26px 26px">
+        <!-- header -->
+        <div class="row" style="margin-bottom:16px">
+          <div style="font-family:var(--serif);font-size:24px">电脑历史</div>
+          <div class="sp"></div>
+          <div class="seg"><b class="on">全部设备</b><b>MacBook Pro</b><b>Mac mini</b></div>
+          <div class="row" style="gap:2px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px">
+            <span class="btn ghost" style="padding:4px 9px">‹</span>
+            <span style="padding:4px 10px;font-weight:600">10 月 21 日 · 周三 <span style="color:var(--ink4);font-weight:400">▾</span></span>
+            <span class="btn ghost" style="padding:4px 9px">›</span>
+          </div>
+          <span class="btn sec" style="padding:6px 11px">今天</span>
+          <span class="pin" style="position:static">1</span>
+        </div>
+
+        <!-- overview -->
+        <div class="card" style="padding:18px 22px 14px;position:relative">
+          <div class="row" style="align-items:flex-end;gap:22px">
+            <div>
+              <div style="font-family:var(--serif);font-size:30px;line-height:1">7.6<span class="unit">小时活跃</span></div>
+              <div class="l11" style="margin-top:6px">4 个窗口 · 46 个片段 · 比本周均值多 0.8 小时</div>
+            </div>
+            <div style="width:1px;height:38px;background:var(--line2)"></div>
+            <div style="flex:1;max-width:420px">
+              <div class="l11" style="margin-bottom:6px">应用占比</div>
+              <div class="bar" style="height:8px;display:flex;gap:2px;background:none">
+                <i style="width:38%;background:var(--sky)"></i><i style="width:21%;background:var(--clay)"></i><i style="width:16%;background:var(--olive)"></i><i style="width:11%;background:var(--plum)"></i><i style="width:14%;background:var(--line)"></i>
+              </div>
+              <div class="row l11" style="gap:12px;margin-top:6px">
+                <span><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--sky)"></i> Xcode 38%</span>
+                <span><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--clay)"></i> Claude 21%</span>
+                <span><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--olive)"></i> Safari 16%</span>
+                <span><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--plum)"></i> 飞书 11%</span>
+              </div>
+            </div>
+          </div>
+          <!-- ribbon -->
+          <div style="margin-top:18px;display:grid;grid-template-columns:86px 1fr;row-gap:8px;align-items:center;position:relative">
+            <div class="l11" style="color:var(--ink2)">MacBook Pro</div>
+            <div style="position:relative;height:16px;background:var(--sunk);border-radius:5px">
+              <i style="position:absolute;left:37.5%;width:12%;top:3px;bottom:3px;background:var(--sky);border-radius:3px;opacity:.85"></i>
+              <i style="position:absolute;left:50%;width:6%;top:3px;bottom:3px;background:var(--clay);border-radius:3px;opacity:.85"></i>
+              <i style="position:absolute;left:56.5%;width:9%;top:3px;bottom:3px;background:var(--sky);border-radius:3px;opacity:.85"></i>
+              <i style="position:absolute;left:66%;width:4%;top:3px;bottom:3px;background:var(--plum);border-radius:3px;opacity:.85"></i>
+              <i style="position:absolute;left:84%;width:7%;top:3px;bottom:3px;background:var(--olive);border-radius:3px;opacity:.85"></i>
+            </div>
+            <div class="l11" style="color:var(--ink2)">Mac mini</div>
+            <div style="position:relative;height:16px;background:var(--sunk);border-radius:5px">
+              <i style="position:absolute;left:41%;width:5%;top:3px;bottom:3px;background:var(--olive);border-radius:3px;opacity:.85"></i>
+              <i style="position:absolute;left:71%;width:8%;top:3px;bottom:3px;background:var(--clay);border-radius:3px;opacity:.85"></i>
+            </div>
+            <!-- selected window bracket 12:00–18:00 -->
+            <div style="position:absolute;left:calc(86px + (100% - 86px) * .5);width:calc((100% - 86px) * .25);top:-6px;bottom:-6px;border:1.5px solid var(--ink);border-radius:8px;pointer-events:none"></div>
+            <div></div>
+            <div class="row l11" style="justify-content:space-between;color:var(--ink4);margin-top:2px"><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
+          </div>
+          <div class="pin" style="right:-8px;top:96px">2</div>
+        </div>
+
+        <!-- body -->
+        <div style="display:grid;grid-template-columns:330px 1fr;gap:26px;margin-top:22px;align-items:start">
+          <div class="anno">
+            <div class="l11" style="margin:0 0 14px 76px;letter-spacing:.5px">4 个窗口</div>
+            <div class="tl">
+              <div class="e live"><div class="t">18:00</div><div class="r"></div><div class="b"><div class="box">
+                <div class="row l11" style="gap:6px"><span>18:00 – 现在 · MacBook Pro</span><span class="chip sky sm">进行中</span></div>
+                <div class="tt">整理周报素材，回复评审意见</div>
+                <div class="apps" style="margin-top:5px"><i style="background:var(--plum)"></i><i style="background:var(--olive)"></i></div>
+              </div></div></div>
+              <div class="e on"><div class="t" style="color:var(--ink)">12:00</div><div class="r"></div><div class="b"><div class="box">
+                <div class="l11">12:00 – 18:00 · MacBook Pro</div>
+                <div class="tt">重构任务页，排查同步冲突</div>
+                <div class="apps" style="margin-top:5px"><i style="background:var(--sky)"></i><i style="background:var(--clay)"></i><i style="background:var(--olive)"></i></div>
+              </div></div></div>
+              <div class="e"><div class="t">06:00</div><div class="r"></div><div class="b"><div class="box">
+                <div class="l11">06:00 – 12:00 · 两台设备</div>
+                <div class="tt">阅读 SwiftUI 布局资料，晨会</div>
+                <div class="apps" style="margin-top:5px"><i style="background:var(--olive)"></i><i style="background:var(--plum)"></i></div>
+              </div></div></div>
+              <div class="e"><div class="t">00:00</div><div class="r"></div><div class="b"><div class="box">
+                <div class="l11">00:00 – 06:00 · Mac mini</div>
+                <div class="tt" style="color:var(--ink3);font-weight:400">只有后台同步，没有前台活动</div>
+              </div></div></div>
+            </div>
+            <div class="pin" style="left:-10px;top:30px">3</div>
+          </div>
+
+          <div class="card anno" style="padding:26px 30px 10px">
+            <div class="row l11" style="gap:8px;font-size:12px"><span>12:00 – 18:00</span><span>·</span><span>MacBook Pro</span><span>·</span><span>36 个片段</span></div>
+            <div style="font-family:var(--serif);font-size:30px;margin:8px 0 12px;line-height:1.25">重构任务页，排查同步冲突</div>
+            <p style="font-family:var(--serif);font-size:16px;line-height:1.85;color:var(--ink2);margin:0 0 8px;max-width:640px">下午主要在 Xcode 里改任务页的分栏布局，中途用 Claude 讨论日历视图的交互；16 点前后定位到 Google Tasks 同步时子任务顺序错乱的原因，补了测试。最后半小时在飞书上同步了进度。</p>
+            <div class="st" style="margin-top:22px">10 分钟片段</div>
+            <div class="tl oncard" style="--tw:48px">
+              <div class="e"><div class="t">17:50</div><div class="r"></div><div class="b">
+                <div class="tt" style="font-weight:500">在飞书同步任务页进度</div>
+                <div class="ds">发了截图和剩余事项，约好明天上午评审。</div>
+              </div></div>
+              <div class="e"><div class="t">17:40</div><div class="r"></div><div class="b">
+                <div class="tt" style="font-weight:500">补写子任务排序测试</div>
+                <div class="ds">新增 3 个用例覆盖 position 字段为空的情况。</div>
+              </div></div>
+              <div class="e"><div class="t">17:30</div><div class="r"></div><div class="b">
+                <div class="tt" style="font-weight:500">定位同步冲突</div>
+                <div class="ds">对比本地缓存和服务端返回，发现排序键被覆盖。</div>
+              </div></div>
+              <div class="e"><div class="t" style="color:var(--ink4)">⋯</div><div class="r" style="opacity:.0"></div><div class="b">
+                <span class="l11" style="color:var(--steel)">显示其余 33 个片段</span>
+              </div></div>
+            </div>
+            <div class="pin" style="right:-8px;top:24px">4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="pin">1</span><span>日期改成「‹ 日期 ▾ ›」一个控件：左右键逐日翻，点日期弹出月历（下图），「今天」一键回来。取代现在很长的日期条。设备切换放在同一行。</span>
+      <span class="pin">2</span><span>概览：活跃时长 + 应用占比一根分段条；下方每台设备一条 24 小时色带，色块是 10 分钟片段（按主应用着色），选中窗口用黑色描边框出来，点色带任意处跳到对应窗口。</span>
+      <span class="pin">3</span><span>窗口列表使用附件里的时间线样式：衬线时间在左、细线上的灰点、宽松行距。选中项是浅色卡片，点变黑；进行中的窗口点是蓝色。新的在上，没有前台活动的窗口用浅色一句话带过。</span>
+      <span class="pin">4</span><span>阅读区：衬线大标题 + 衬线正文（像读文章），片段同样用时间线样式，默认显示最近 3 条，「显示其余」展开。去掉原来的「应用分布」长列表，占比已经在顶部表达。</span>
+    </div>
+
+    <h3 class="fig">日期浮层</h3>
+    <p class="note">点日期弹出月历：每天的底色深浅表示活跃时长（与 Memos 热力同一组颜色），没有归档的日期置灰不可点；顶部可以切月份，最早到第一次同步的月份。</p>
+    <div class="card" style="width:286px;padding:14px 16px;box-shadow:0 14px 34px rgba(60,40,10,.12)">
+      <div class="row" style="margin-bottom:10px"><span style="font-family:var(--serif);font-size:16px">2026 年 10 月</span><span class="sp"></span><span class="l11">‹ &nbsp; ›</span></div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:11.5px">
+        <span class="l11">一</span><span class="l11">二</span><span class="l11">三</span><span class="l11">四</span><span class="l11">五</span><span class="l11">六</span><span class="l11">日</span>
+        <span></span><span></span>
+        <span style="padding:5px 0;color:var(--ink4)">1</span><span style="padding:5px 0;color:var(--ink4)">2</span><span style="padding:5px 0;color:var(--ink4)">3</span><span style="padding:5px 0;color:var(--ink4)">4</span><span style="padding:5px 0;color:var(--ink4)">5</span>
+        <span style="padding:5px 0;color:var(--ink4)">6</span><span style="padding:5px 0;color:var(--ink4)">7</span><span style="padding:5px 0;color:var(--ink4)">8</span>
+        <span style="padding:5px 0;border-radius:6px;background:#EFE1D3">9</span><span style="padding:5px 0;border-radius:6px;background:#E8C9B5">10</span><span style="padding:5px 0;border-radius:6px;background:#EFEAE0">11</span><span style="padding:5px 0;border-radius:6px;background:#EFEAE0">12</span>
+        <span style="padding:5px 0;border-radius:6px;background:#DFA88E">13</span><span style="padding:5px 0;border-radius:6px;background:#E8C9B5">14</span><span style="padding:5px 0;border-radius:6px;background:#CB8466;color:#fff">15</span><span style="padding:5px 0;border-radius:6px;background:#E8C9B5">16</span><span style="padding:5px 0;border-radius:6px;background:#EFE1D3">17</span><span style="padding:5px 0;border-radius:6px;background:#EFEAE0">18</span><span style="padding:5px 0;border-radius:6px;background:#EFEAE0">19</span>
+        <span style="padding:5px 0;border-radius:6px;background:#DFA88E">20</span><span style="padding:5px 0;border-radius:6px;background:var(--ink);color:#fff;font-weight:600">21</span><span style="padding:5px 0;color:var(--ink4)">22</span><span style="padding:5px 0;color:var(--ink4)">23</span><span style="padding:5px 0;color:var(--ink4)">24</span><span style="padding:5px 0;color:var(--ink4)">25</span>
+      </div>
+    </div>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>附件的时间线样式我理解为「左衬线时间、细线、灰点、宽行距」，窗口列表和片段列表都用它，可以吗？</li>
+      <li>去掉详情里的「应用分布」长列表，只保留顶部的占比条，可以吗？</li>
+      <li>日期选择从横向日期条改成「‹ 日期 ▾ ›」加月历浮层，可以吗？</li>
+    </ol></div>
+  </section>
+
+  <!-- ========================= 3 TASKS ========================= -->
+  <section id="tasks">
+    <div class="sh"><h2>任务</h2><span class="tag">任务页 · 菜单 · 主页卡片</span></div>
+    <p class="note">统一规则：<b>逾期、今天、即将</b>三个分类同级、互不重叠——逾期是截止日早于今天的未完成任务；今天只包含今天到期的任务和你选择在「今天」显示的清单；即将从明天开始。任务页里所有视图都是<b>横向排列的列</b>，每列最高等于页面可用高度，超出就在列内滚动，页面本身不再上下滚动。</p>
+
+    <h3 class="fig">任务页 · 今天</h3>
+    <div class="win anno">
+      <div class="wbar"><i></i><i></i><i></i><span>Personal Hub — 任务</span></div>
+      <div style="display:grid;grid-template-columns:200px 1fr;height:600px">
+        <div class="side-nav anno">
+          <div class="it"><span class="gl">⌂</span>主页</div>
+          <div class="it on"><span class="gl">☑</span>任务</div>
+          <div class="sub">
+            <div class="it"><span class="gl" style="color:var(--rose)">!</span>逾期<span class="n late">2</span></div>
+            <div class="it" style="background:rgba(255,253,248,.6);color:var(--ink);font-weight:600"><span class="gl">◐</span>今天<span class="n">5</span></div>
+            <div class="it"><span class="gl">→</span>即将<span class="n">9</span></div>
+            <div class="it"><span class="gl">▦</span>日历</div>
+            <div class="it"><span class="gl">✓</span>已完成</div>
+            <div class="it"><span class="gl" style="transform:rotate(90deg);display:inline-block">›</span>所有任务<span class="n">17</span></div>
+            <div class="sub" style="margin-left:14px">
+              <div class="it"><span class="gl" style="color:var(--sky)">●</span>工作<span class="n">8</span></div>
+              <div class="it"><span class="gl" style="color:var(--olive)">●</span>个人<span class="n">5</span></div>
+              <div class="it"><span class="gl" style="color:var(--ochre)">●</span>采购<span class="n">4</span></div>
+            </div>
+          </div>
+          <div class="it"><span class="gl">◍</span>生活</div>
+          <div class="it"><span class="gl">▤</span>用量</div>
+          <div class="it"><span class="gl">▭</span>电脑历史</div>
+          <div class="it"><span class="gl">✎</span>Memos</div>
+          <div class="it"><span class="gl">↻</span>复盘</div>
+          <div class="pin" style="right:-8px;top:40px">1</div>
+        </div>
+        <div style="padding:20px 22px 22px;display:flex;flex-direction:column;min-width:0">
+          <div class="row" style="margin-bottom:16px">
+            <div style="font-family:var(--serif);font-size:24px">今天</div>
+            <div class="l11" style="font-size:12px">10 月 21 日 周三 · 5 项待办 · 2 个日程</div>
+            <div class="sp"></div>
+            <span class="btn sec">「今天」显示的清单 ▾</span>
+            <span class="btn">＋ 新建任务</span>
+          </div>
+          <div class="cols anno" style="flex:1">
+            <div class="col">
+              <div class="hd"><span class="nm">今天到期</span><span class="c">5</span><span class="sp"></span><span class="l11">⋯</span></div>
+              <div class="bd">
+                <div class="task"><span class="ck p1"></span><div class="tx">提交 v3 设计稿<div class="sub"><span>工作</span><span>⌁ 2 个子任务</span></div></div></div>
+                <div class="task sel"><span class="ck p2"></span><div class="tx">回复评审意见<div class="sub"><span>工作</span><span>15:00</span></div></div></div>
+                <div class="task"><span class="ck"></span><div class="tx">交房租<div class="sub"><span>个人</span></div></div></div>
+                <div class="task"><span class="ck"></span><div class="tx">取快递<div class="sub"><span>个人</span></div></div></div>
+                <div class="task"><span class="ck p3"></span><div class="tx">整理会议纪要<div class="sub"><span>工作</span></div></div></div>
+              </div>
+              <div class="ft">＋ 添加到今天</div>
+            </div>
+            <div class="col">
+              <div class="hd"><span style="color:var(--sky)">●</span><span class="nm">工作</span><span class="c">8</span><span class="sp"></span><span class="l11">⋯</span></div>
+              <div class="bd fade-b">
+                <div class="task"><span class="ck"></span><div class="tx">梳理订阅接口字段<div class="sub"><span>周五</span></div></div></div>
+                <div class="task"><span class="ck"></span><div class="tx">Android 首页适配<div class="sub"><span>下周一</span></div></div></div>
+                <div class="task"><span class="ck"></span><div class="tx">准备周会议题</div></div>
+                <div class="task"><span class="ck"></span><div class="tx">更新部署文档</div></div>
+                <div class="task"><span class="ck"></span><div class="tx">清理旧的采集脚本</div></div>
+                <div class="task"><span class="ck"></span><div class="tx">评估本地向量库</div></div>
+                <div class="task"><span class="ck"></span><div class="tx">回顾季度目标</div></div>
+                <div class="task"><span class="ck"></span><div class="tx">联系供应商续约</div></div>
+                <div class="scrollbar" style="top:8px;height:90px"></div>
+              </div>
+              <div class="ft">＋ 添加到工作</div>
+            </div>
+            <div class="col" style="width:260px">
+              <div class="hd"><span class="nm">今天的日程</span><span class="c">2</span></div>
+              <div class="bd" style="padding:4px 16px">
+                <div class="tl oncard" style="--tw:40px">
+                  <div class="e"><div class="t" style="font-size:14px">10:00</div><div class="r"></div><div class="b"><div class="tt" style="font-weight:500">晨会</div><div class="ds">30 分钟 · 会议室 3</div></div></div>
+                  <div class="e on"><div class="t" style="font-size:14px;color:var(--clay)">10:30</div><div class="r"></div><div class="b"><div class="l11" style="color:var(--clay)">现在</div></div></div>
+                  <div class="e"><div class="t" style="font-size:14px">15:00</div><div class="r"></div><div class="b"><div class="tt" style="font-weight:500">设计评审</div><div class="ds">1 小时 · 线上</div></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="pin" style="left:286px;top:-10px">2</div>
+            <div class="pin" style="left:270px;top:92px">3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="pin">1</span><span>边栏二级菜单：逾期（玫红计数，0 时隐藏）、今天、即将、日历、已完成、所有任务。所有任务的展开/收起有动画：箭头旋转 90°，子项从上往下展开并淡入（约 0.25 秒弹簧），收起时反向。</span>
+      <span class="pin">2</span><span>每列宽约 290，高度等于页面可用高度；内容超出时列内滚动，底部渐隐提示还有内容。添加行固定在列底。「今天」由「今天到期」+ 你选择显示的清单（这里是工作）+ 今天的日程组成。</span>
+      <span class="pin">3</span><span>点任务在右侧滑出详情面板（覆盖在列上方，宽 360），不挤压列宽；Esc 或点空白关闭。列多于窗口宽度时整体横向滚动。</span>
+    </div>
+
+    <h3 class="fig">任务页 · 即将 / 逾期 / 所有任务</h3>
+    <p class="note">即将：从明天开始，每天一列（有日程就在列顶显示），7 天之后合并成「之后」一列，横向滚动。逾期：按所属清单分列，列头提供「全部改到今天」。所有任务：每个清单一列，规则相同。</p>
+    <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:16px">
+      <div class="win"><div style="padding:16px 18px;height:330px;display:flex;flex-direction:column">
+        <div class="row" style="margin-bottom:12px"><div style="font-family:var(--serif);font-size:20px">即将</div><span class="l11">明天起 · 9 项</span></div>
+        <div class="cols" style="flex:1;position:relative">
+          <div class="col" style="width:200px"><div class="hd"><span class="nm">明天</span><span class="c">周四 · 3</span></div><div class="bd">
+            <div class="ev"><span class="bl" style="background:var(--sky)"></span><div><div class="tm">09:30</div>和 Android 对齐接口</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">发周报</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">预约体检</div></div></div></div>
+          <div class="col" style="width:200px"><div class="hd"><span class="nm">周五</span><span class="c">10/23 · 2</span></div><div class="bd">
+            <div class="task"><span class="ck"></span><div class="tx">梳理订阅接口字段</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">买咖啡豆</div></div></div></div>
+          <div class="col" style="width:200px"><div class="hd"><span class="nm">周六</span><span class="c">10/24 · 1</span></div><div class="bd">
+            <div class="ev"><span class="bl" style="background:var(--olive)"></span><div><div class="tm">全天</div>爬山</div></div></div></div>
+          <div class="col" style="width:200px;opacity:.6"><div class="hd"><span class="nm">周日</span><span class="c">10/25</span></div><div class="bd"><div class="l11" style="padding:8px">没有安排</div></div></div>
+          <div style="position:absolute;right:0;top:0;bottom:0;width:60px;background:linear-gradient(90deg,rgba(244,241,234,0),var(--bg))"></div>
+        </div>
+      </div></div>
+      <div class="win"><div style="padding:16px 18px;height:330px;display:flex;flex-direction:column">
+        <div class="row" style="margin-bottom:12px"><div style="font-family:var(--serif);font-size:20px;color:var(--rose)">逾期</div><span class="l11">2 项</span><span class="sp"></span><span class="btn sec" style="padding:4px 10px;font-size:11.5px">全部改到今天</span></div>
+        <div class="cols" style="flex:1">
+          <div class="col" style="width:100%"><div class="hd"><span style="color:var(--sky)">●</span><span class="nm">工作</span><span class="c">1</span></div><div class="bd" style="flex:none;padding-bottom:8px">
+            <div class="task"><span class="ck p2"></span><div class="tx">提交报销单<div class="sub"><span class="late">逾期 3 天 · 10/18</span></div></div></div></div>
+            <div class="hd" style="border-top:1px solid var(--line2)"><span style="color:var(--olive)">●</span><span class="nm">个人</span><span class="c">1</span></div><div class="bd" style="flex:none">
+            <div class="task"><span class="ck"></span><div class="tx">续办健身卡<div class="sub"><span class="late">逾期 1 天 · 昨天</span></div></div></div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <h3 class="fig">所有任务的展开动画</h3>
+    <div class="frames">
+      <div class="card"><div class="l11" style="margin-bottom:8px">收起</div><div class="side-nav" style="border:0;border-radius:10px"><div class="it"><span class="gl">›</span>所有任务<span class="n">17</span></div></div></div>
+      <div class="card"><div class="l11" style="margin-bottom:8px">0.12 秒：箭头转到 45°，第一项淡入下滑</div><div class="side-nav" style="border:0;border-radius:10px"><div class="it"><span class="gl" style="transform:rotate(45deg);display:inline-block">›</span>所有任务<span class="n">17</span></div><div class="sub" style="margin-left:30px;opacity:.5;transform:translateY(-4px)"><div class="it"><span class="gl" style="color:var(--sky)">●</span>工作</div></div></div></div>
+      <div class="card"><div class="l11" style="margin-bottom:8px">0.25 秒：展开完成</div><div class="side-nav" style="border:0;border-radius:10px"><div class="it"><span class="gl" style="transform:rotate(90deg);display:inline-block">›</span>所有任务<span class="n">17</span></div><div class="sub" style="margin-left:30px"><div class="it"><span class="gl" style="color:var(--sky)">●</span>工作</div><div class="it"><span class="gl" style="color:var(--olive)">●</span>个人</div><div class="it"><span class="gl" style="color:var(--ochre)">●</span>采购</div></div></div></div>
+    </div>
+
+    <h3 class="fig">菜单栏面板 · 任务区</h3>
+    <p class="note">默认收起：每个分类最多显示几行（按屏幕剩余高度自动计算，至少 3 行），保证打开面板时底部 4 个指标（健康、今日支出、Token、网络）不用滚动就能看到。点「还有 N 项」逐步展开，每次多显示 5 行；超过面板高度后在任务区内部滚动；展开后出现「收起」。分类标签：逾期（有逾期时才出现）· 今天 · 所有 · 即将。</p>
+    <div class="row" style="align-items:flex-start;gap:30px">
+      <div>
+        <div class="l11" style="margin-bottom:8px">默认（收起）</div>
+        <div class="tray">
+          <div class="seg"><b class="on">主页</b><b>工作</b><b>生活</b></div>
+          <div class="th"><span>今天的日程</span></div>
+          <div class="ev"><span class="bl" style="background:var(--sky)"></span><div><span class="tm">10:00</span>&nbsp; 晨会</div></div>
+          <div class="ev"><span class="bl" style="background:var(--clay)"></span><div><span class="tm">15:00</span>&nbsp; 设计评审</div></div>
+          <div class="th tabs"><span class="seg" style="padding:2px"><b class="late" style="padding:2px 9px">逾期<span class="n" style="color:var(--rose)">2</span></b><b class="on" style="padding:2px 9px">今天<span class="n">5</span></b><b style="padding:2px 9px">所有</b><b style="padding:2px 9px">即将</b></span></div>
+          <div class="task"><span class="ck p1"></span><div class="tx">提交 v3 设计稿</div></div>
+          <div class="task"><span class="ck p2"></span><div class="tx">回复评审意见 <span class="l11">15:00</span></div></div>
+          <div class="task"><span class="ck"></span><div class="tx">交房租</div></div>
+          <div class="more">还有 2 项 ⌄</div>
+          <div class="row" style="gap:8px;margin-top:14px">
+            <div class="mini"><div class="k">睡眠 · 步数</div><div class="v">7.2 <span class="unit" style="font-size:9px">小时</span></div></div>
+            <div class="mini"><div class="k">今日支出</div><div class="v">¥86</div></div>
+            <div class="mini"><div class="k">Token</div><div class="v">3.4M</div></div>
+            <div class="mini"><div class="k">网络</div><div class="v">62%</div></div>
+          </div>
+          <div style="height:1px;background:var(--line2);margin:12px 0 10px"></div>
+          <div class="row l11" style="font-size:12px;color:var(--ink2)"><span>◆ 打开 Personal Hub</span><span class="sp"></span><span>设置 ⌘,</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="l11" style="margin-bottom:8px">展开后（「所有」标签，按清单分组）</div>
+        <div class="tray">
+          <div class="th tabs"><span class="seg" style="padding:2px"><b class="late" style="padding:2px 9px">逾期<span class="n" style="color:var(--rose)">2</span></b><b style="padding:2px 9px">今天<span class="n">5</span></b><b class="on" style="padding:2px 9px">所有</b><b style="padding:2px 9px">即将</b></span></div>
+          <div style="position:relative;height:250px;overflow:hidden" class="fade-b">
+            <div class="grp" style="padding-left:4px">工作 · 8</div>
+            <div class="task"><span class="ck"></span><div class="tx">梳理订阅接口字段 <span class="l11">周五</span></div></div>
+            <div class="task"><span class="ck"></span><div class="tx">Android 首页适配</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">准备周会议题</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">更新部署文档</div></div>
+            <div class="grp" style="padding-left:4px">个人 · 5</div>
+            <div class="task"><span class="ck"></span><div class="tx">预约体检</div></div>
+            <div class="task"><span class="ck"></span><div class="tx">买咖啡豆</div></div>
+            <div class="scrollbar" style="top:6px;height:70px"></div>
+          </div>
+          <div class="row" style="margin-top:4px"><span class="more" style="flex:1">还有 9 项 ⌄</span><span class="more" style="flex:none;padding:7px 12px">收起 ⌃</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="fig">主页 · 日程与任务卡片</h3>
+    <p class="note">主页的详细卡跟任务页用同一套分类：左边今天的日程（时间线样式），右边任务（逾期 / 今天 / 即将 三栏并排），每栏有最大高度，超出在栏内滚动；标题旁「打开任务页 →」。窄宽度时三栏变成标签切换。</p>
+    <div class="card" style="padding:16px 18px">
+      <div class="ch"><div class="ico" style="background:var(--skyT);color:var(--steel)">☑</div><span class="ct">日程与任务</span><span class="meta">10 月 21 日 周三</span><span class="sp"></span><span class="l11" style="color:var(--steel);font-size:12px">打开任务页 →</span></div>
+      <div style="display:grid;grid-template-columns:240px 1fr 1fr 1fr;gap:20px;height:210px">
+        <div class="tl oncard" style="--tw:40px">
+          <div class="e"><div class="t" style="font-size:14px">10:00</div><div class="r"></div><div class="b"><div class="tt" style="font-weight:500">晨会</div><div class="ds">30 分钟</div></div></div>
+          <div class="e"><div class="t" style="font-size:14px">15:00</div><div class="r"></div><div class="b"><div class="tt" style="font-weight:500">设计评审</div><div class="ds">1 小时 · 线上</div></div></div>
+          <div class="e"><div class="t" style="font-size:14px">19:30</div><div class="r"></div><div class="b"><div class="tt" style="font-weight:500">羽毛球</div></div></div>
+        </div>
+        <div style="border-left:1px solid var(--line2);padding-left:16px"><div class="row" style="margin-bottom:4px"><span style="font-weight:600;color:var(--rose)">逾期</span><span class="l11">2</span></div>
+          <div class="task"><span class="ck p2"></span><div class="tx">提交报销单<div class="sub"><span class="late">3 天</span></div></div></div>
+          <div class="task"><span class="ck"></span><div class="tx">续办健身卡<div class="sub"><span class="late">昨天</span></div></div></div></div>
+        <div style="border-left:1px solid var(--line2);padding-left:16px;position:relative" class="fade-b"><div class="row" style="margin-bottom:4px"><span style="font-weight:600">今天</span><span class="l11">5</span></div>
+          <div class="task"><span class="ck p1"></span><div class="tx">提交 v3 设计稿</div></div>
+          <div class="task"><span class="ck p2"></span><div class="tx">回复评审意见</div></div>
+          <div class="task"><span class="ck"></span><div class="tx">交房租</div></div>
+          <div class="task"><span class="ck"></span><div class="tx">取快递</div></div></div>
+        <div style="border-left:1px solid var(--line2);padding-left:16px"><div class="row" style="margin-bottom:4px"><span style="font-weight:600">即将</span><span class="l11">9</span></div>
+          <div class="grp" style="padding:4px 8px">明天</div>
+          <div class="task"><span class="ck"></span><div class="tx">发周报</div></div>
+          <div class="task"><span class="ck"></span><div class="tx">预约体检</div></div>
+          <div class="grp" style="padding:4px 8px">周五</div>
+          <div class="task"><span class="ck"></span><div class="tx">梳理订阅接口字段</div></div></div>
+      </div>
+    </div>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>「今天」不再包含逾期项，逾期单独成类，菜单里没有逾期时隐藏这个标签，可以吗？</li>
+      <li>「主页这边你没页设计」我理解为两件事：任务页的各个视图（今天、即将、所有任务）做成横向列、每列以页面高度为上限；另外主页的「日程与任务」卡片按上图重做。理解对吗？</li>
+      <li>即将：7 天以内每天一列，之后合并成「之后」一列，可以吗？</li>
+      <li>菜单任务区默认行数按屏幕剩余高度自动算（至少 3 行），每次点击多显示 5 行，可以吗？还是希望固定一个默认行数？</li>
+    </ol></div>
+  </section>
+
+  <!-- ========================= 4 MEMOS ========================= -->
+  <section id="memos">
+    <div class="sh"><h2>Memos</h2><span class="tag">恢复上一版结构 + 新输入框</span></div>
+    <p class="note">回到上一版的左右结构：左栏是活跃度和标签，右边是正文。输入框固定在正文顶部、不随时间线滚动；搜索框在输入框下、时间线上方。现在的输入框会把 <code>**</code>、<code>#</code>、<code>- [ ]</code> 这些符号原样留在文字里（只是变淡），看起来不像预览。新的做法是光标不在的那一行隐藏符号、直接显示排版结果，光标所在行才露出符号，类似 Typora 或 Bear。</p>
+
+    <div class="win anno">
+      <div class="wbar"><i></i><i></i><i></i><span>Personal Hub — Memos</span></div>
+      <div style="display:grid;grid-template-columns:250px 1fr;gap:24px;padding:22px 26px;height:640px">
+        <div>
+          <div style="font-family:var(--serif);font-size:24px;margin-bottom:16px">Memos</div>
+          <div class="row" style="gap:18px;margin-bottom:14px">
+            <div><div style="font-family:var(--serif);font-size:22px">12</div><div class="l11">本周</div></div>
+            <div><div style="font-family:var(--serif);font-size:22px">48</div><div class="l11">近 30 天</div></div>
+            <div><div style="font-family:var(--serif);font-size:22px">6</div><div class="l11">连续天数</div></div>
+          </div>
+          <div class="heat" id="heat"></div>
+          <div class="st">标签</div>
+          <div style="display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--ink2)">
+            <div class="row" style="padding:5px 8px;border-radius:8px;background:var(--card);color:var(--ink);font-weight:600"># 全部<span class="sp"></span><span class="l11">212</span></div>
+            <div class="row" style="padding:5px 8px"># 想法<span class="sp"></span><span class="l11">64</span></div>
+            <div class="row" style="padding:5px 8px"># 读书<span class="sp"></span><span class="l11">31</span></div>
+            <div class="row" style="padding:5px 8px"># 工作<span class="sp"></span><span class="l11">27</span></div>
+            <div class="row" style="padding:5px 8px"># 生活<span class="sp"></span><span class="l11">19</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;min-width:0">
+          <div class="composer anno" style="padding:12px 14px">
+            <div class="row"><span class="ph">记下此刻…  支持 Markdown，# 加标签</span><span class="sp"></span><span class="tool">📎</span><span class="tool">#</span></div>
+            <div class="pin" style="right:-8px;top:-8px">1</div>
+          </div>
+          <div class="row anno" style="margin:14px 0 6px;gap:8px">
+            <div class="search" style="flex:1">⌕ <span>搜索 Memo…</span><span class="sp"></span><span class="kbd">⌘F</span></div>
+            <span class="chip on">全部</span><span class="chip">置顶</span><span class="chip">有附件</span><span class="chip">已归档</span>
+            <div class="pin" style="right:-8px;top:-8px">2</div>
+          </div>
+          <div style="flex:1;overflow:hidden;position:relative" class="anno">
+            <div class="row" style="margin:14px 0 8px"><span style="font-family:var(--serif);font-size:16px">今天</span><span class="l11">周三</span><span style="flex:1;height:1px;background:var(--line2)"></span></div>
+            <div class="tl" style="--tw:44px">
+              <div class="e"><div class="t" style="font-size:13.5px">10:20</div><div class="r"></div><div class="b"><div class="memo">读完《设计中的设计》第三章：好的设计是把信息的<b>重量</b>分配对。<span style="color:var(--steel)">#读书</span></div></div></div>
+              <div class="e"><div class="t" style="font-size:13.5px">09:05</div><div class="r"></div><div class="b"><div class="memo">
+                <div><span class="wys"><span class="cb x"></span><s style="color:var(--ink3)">把电脑历史的设计稿发出去</s></span></div>
+                <div><span class="wys"><span class="cb"></span>跟进订阅额度的显示</span></div>
+                <div class="row" style="margin-top:8px;gap:6px"><div class="thumb" style="width:64px;height:48px"></div><div class="thumb" style="width:64px;height:48px;background:linear-gradient(135deg,#C9D6E2,#8FA8C2)"></div></div>
+              </div></div></div>
+            </div>
+            <div class="row" style="margin:6px 0 8px"><span style="font-family:var(--serif);font-size:16px">昨天</span><span class="l11">周二</span><span style="flex:1;height:1px;background:var(--line2)"></span></div>
+            <div class="tl" style="--tw:44px">
+              <div class="e"><div class="t" style="font-size:13.5px">22:40</div><div class="r"></div><div class="b"><div class="memo">晚上散步时想到：周报可以先由时间线自动生成骨架，再手动补充感受。<span style="color:var(--steel)">#想法</span></div></div></div>
+            </div>
+            <div class="pin" style="right:-8px;top:10px">3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="fig">点击或开始输入后：输入框展开</h3>
+    <div class="composer focus anno" style="padding:14px 16px 10px;max-width:880px">
+      <div class="wys">
+        <h4>周三复盘</h4>
+        <div>今天最大的收获是把任务页的<b>分类边界</b>理清了。</div>
+        <div><span class="cb x"></span><s>逾期单独成类</s></div>
+        <div><span class="cb"></span>菜单任务区 <span class="mk">**</span>渐进展开<span class="mk">**</span><span class="caret"></span></div>
+        <div>• 参考 <span style="color:var(--steel);text-decoration:underline">Things 3</span> 的列表动画</div>
+        <div><span class="tagt">#工作</span> <span class="tagt">#复盘</span></div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:12px">
+        <div class="att"><div class="thumb"></div><div>白板照片.jpg<div class="l11">1.2 MB</div></div><span style="color:var(--ink4)">✕</span></div>
+        <div class="att" style="padding:10px 12px"><span>📄</span><div>任务页草图.pdf<div class="l11">320 KB · 上传中 64%</div></div></div>
+      </div>
+      <div class="row" style="border-top:1px solid var(--line2);margin-top:12px;padding-top:8px;gap:2px">
+        <span class="tool"><b>B</b></span><span class="tool"><i>I</i></span><span class="tool">H</span><span class="tool">•</span><span class="tool">☐</span><span class="tool" style="font-family:ui-monospace">&lt;/&gt;</span><span class="tool">🔗</span><span class="tool">#</span><span class="tool on">📎</span>
+        <span class="sp"></span>
+        <span class="chip">🔒 仅自己 ▾</span>
+        <span class="l11" style="margin:0 6px">Esc 收起 · 草稿已保存</span>
+        <span class="btn">发送 <span style="opacity:.6;font-weight:400">⌘↩</span></span>
+      </div>
+      <div class="pin" style="right:-8px;top:-8px">4</div>
+    </div>
+    <div class="legend">
+      <span class="pin">1</span><span>收起时只有一行（约 46 高），右侧有附件和标签按钮；点击、按 <code>⌘N</code> 或直接开始输入就展开。</span>
+      <span class="pin">2</span><span>搜索框在输入框下方、时间线上方；右侧是筛选：全部 / 置顶 / 有附件 / 已归档。左栏点标签也会过滤。</span>
+      <span class="pin">3</span><span>时间线按天分组，日期标题跟随吸顶；每条 Memo 左侧也用附件的时间线样式（衬线时间 + 灰点），卡片只用一条很淡的边框。</span>
+      <span class="pin">4</span><span>展开后高度随内容增长（最低 160，最高约窗口的一半，超出在框内滚动）。标题、粗体、清单、列表、链接、标签都按排版显示，只有光标所在行露出符号。附件可以拖进来、粘贴截图或点 📎 选文件，以缩略图或文件卡片显示。草稿自动保存，Esc 收起但不丢内容。</span>
+    </div>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>附件上传需要 hub 新增一个上传接口（现在只能读附件）。我先写接口规格交给 fn 侧，接口上线前 📎 按钮显示为不可用，可以吗？</li>
+      <li>预览采用「光标所在行露出符号、其他行只显示排版结果」的方式，可以吗？还是更想要「编辑 / 预览」两个标签切换？</li>
+      <li>时间线里每条 Memo 也用附件的时间线样式，可以吗？还是保留上一版的纯卡片列表？</li>
+    </ol></div>
+  </section>
+
+  <!-- ========================= 5 SUBS ========================= -->
+  <section id="subs">
+    <div class="sh"><h2>订阅</h2><span class="tag">简略卡 · 详细卡 · 原地编辑</span></div>
+    <p class="note">数据来自 hub 的订阅接口：名称、账号标签、分类（AI / 网络 / 会员 / 其他）、套餐、价格和周期、下次续费、付款方、自动续费、绑定的额度来源和额度窗口。去掉现在系统样式的管理弹窗，增删改都在卡片里原地完成。</p>
+
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start">
+      <div>
+        <div class="l11" style="margin-bottom:8px">简略卡</div>
+        <div class="card" style="height:212px;display:flex;flex-direction:column">
+          <div class="ch" style="margin-bottom:10px"><div class="ico" style="background:var(--ochreT);color:#9C7B22">◈</div><span class="ct">订阅</span><span class="meta">12 项</span><span class="sp"></span><span class="l11" style="font-size:15px;color:var(--ink3)">＋</span></div>
+          <div class="hero">¥486<span class="unit">/ 月 · 个人付</span></div>
+          <div class="l11" style="margin-top:4px">另有 $40 / 月 · 公司付 3 项</div>
+          <div style="margin-top:12px;font-size:12px" class="row"><span class="logo" style="width:18px;height:18px;font-size:9px;border-radius:5px;background:#C9785A">C</span><span>Claude Max</span><span class="sp"></span><span class="chip clay sm">3 天后 · $100</span></div>
+          <div class="q" style="grid-template-columns:auto 1fr 34px;margin-top:9px"><span>本周额度</span><div class="bar"><i style="width:61%;background:var(--clay)"></i></div><span style="text-align:right">61%</span></div>
+          <div class="sp"></div>
+          <div class="row l11"><span class="chip ochre sm">1 项付款方待确认</span></div>
+        </div>
+        <p class="note" style="margin-top:10px">显示：月均支出（按货币分开，主货币大字）、最近一笔续费、用得最紧的一个额度；有付款方未确认时给一个提示。右上「＋」直接新增。</p>
+      </div>
+
+      <div>
+        <div class="l11" style="margin-bottom:8px">详细卡（用量页）</div>
+        <div class="card anno" style="padding:18px 20px 12px">
+          <div class="row" style="align-items:flex-end;gap:26px">
+            <div class="ch" style="margin:0;align-self:flex-start"><div class="ico" style="background:var(--ochreT);color:#9C7B22">◈</div><span class="ct">订阅</span></div>
+            <div><div class="hero" style="font-size:30px">¥486<span class="unit">/ 月</span></div><div class="l11">个人付 · 9 项</div></div>
+            <div><div class="hero" style="font-size:22px;color:var(--ink2)">$40<span class="unit">/ 月</span></div><div class="l11">个人付 · 1 项</div></div>
+            <div style="flex:1;max-width:280px">
+              <div class="l11" style="margin-bottom:5px">付款方</div>
+              <div class="bar" style="height:7px;display:flex;gap:2px;background:none"><i style="width:62%;background:var(--ink2)"></i><i style="width:25%;background:var(--sky)"></i><i style="width:13%;background:var(--ochre)"></i></div>
+              <div class="row l11" style="gap:10px;margin-top:5px"><span>个人 8</span><span style="color:var(--steel)">公司 3</span><span style="color:#9C7B22">待确认 1</span></div>
+            </div>
+            <div class="sp"></div>
+            <span class="btn">＋ 新增订阅</span>
+          </div>
+          <div class="pin" style="left:-10px;top:14px">1</div>
+
+          <div class="st" style="margin-top:18px">未来 30 天续费</div>
+          <div class="strip anno">
+            <div class="axis"></div>
+            <div class="tick" style="left:0">今天</div><div class="tick" style="left:25%">10/28</div><div class="tick" style="left:50%">11/4</div><div class="tick" style="left:75%">11/12</div><div class="tick" style="left:100%;transform:translateX(-100%)">11/20</div>
+            <div class="mk2" style="left:10%"><span>Claude $100</span><i style="background:var(--clay)"></i></div>
+            <div class="mk2" style="left:30%"><span>iCloud ¥21</span><i style="background:var(--sky)"></i></div>
+            <div class="mk2" style="left:46%"><span>机场 ¥25</span><i style="background:var(--olive)"></i></div>
+            <div class="mk2" style="left:83%"><span>ChatGPT $20</span><i style="background:var(--ink2)"></i></div>
+            <div class="pin" style="right:-12px;top:6px">2</div>
+          </div>
+
+          <div class="row" style="margin:14px 0 6px;gap:6px">
+            <span class="chip on">全部 12</span><span class="chip">AI 5</span><span class="chip">网络 2</span><span class="chip">会员 4</span><span class="chip">其他 1</span>
+            <span class="sp"></span><span class="l11">按下次续费排序 ▾</span>
+          </div>
+
+          <div class="grp" style="padding-left:12px">AI · 5</div>
+          <div class="subrow anno">
+            <span class="logo" style="background:#C9785A">C</span>
+            <div><div class="nm">Claude Max</div><div class="lb"><span class="chip sm">个人账号</span><span class="chip sm">Max 5×</span><span class="chip sky sm">公司付</span></div></div>
+            <div><div class="q"><span>5 小时</span><div class="bar"><i style="width:34%;background:var(--clay)"></i></div><span>34% · 2:10</span></div>
+                 <div class="q"><span>本周</span><div class="bar"><i style="width:61%;background:var(--clay)"></i></div><span>61% · 4 天</span></div></div>
+            <div class="price">$100<small>每月 · 自动续费</small></div>
+            <div class="renew"><span class="chip clay sm">3 天后</span><small>10/24</small></div>
+            <span class="gl2">⋯</span>
+            <div class="pin" style="right:-12px;top:6px">3</div>
+          </div>
+          <div class="subrow">
+            <span class="logo" style="background:#3E3D39">G</span>
+            <div><div class="nm">ChatGPT Plus</div><div class="lb"><span class="chip sm">工作邮箱</span><span class="chip sm">Plus</span></div></div>
+            <div><div class="q"><span>GPT-5</span><div class="bar"><i style="width:12%;background:var(--ink2)"></i></div><span>12% · 3 小时</span></div></div>
+            <div class="price">$20<small>每月</small></div>
+            <div class="renew">11/15<small>25 天后</small></div>
+            <span class="gl2">⋯</span>
+          </div>
+          <div class="grp" style="padding-left:12px">网络 · 2</div>
+          <div class="subrow">
+            <span class="logo" style="background:var(--olive)">S</span>
+            <div><div class="nm">机场 · 标准套餐</div><div class="lb"><span class="chip sm">SubBoost</span><span class="chip sm">200 GB</span></div></div>
+            <div><div class="q"><span>本月流量</span><div class="bar"><i style="width:47%;background:var(--olive)"></i></div><span>94 / 200 GB</span></div></div>
+            <div class="price">¥25<small>每月</small></div>
+            <div class="renew">11/3<small>13 天后</small></div>
+            <span class="gl2">⋯</span>
+          </div>
+          <div class="grp" style="padding-left:12px">会员 · 4</div>
+          <div class="subrow">
+            <span class="logo" style="background:var(--sky)">i</span>
+            <div><div class="nm">iCloud+</div><div class="lb"><span class="chip sm">家庭</span><span class="chip sm">200 GB</span><span class="chip ochre sm">付款方待确认</span></div></div>
+            <div class="l11">没有额度来源</div>
+            <div class="price">¥21<small>每月</small></div>
+            <div class="renew">10/31<small>10 天后</small></div>
+            <span class="gl2">⋯</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="pin">1</span><span>顶部：每种货币一个月均金额（不换算汇率），旁边是付款方分布；「待确认」点击后只显示这些订阅。</span>
+      <span class="pin">2</span><span>未来 30 天的续费日：每个点是一笔扣款，颜色对应分类；悬停显示金额和账号，点击定位到对应行。</span>
+      <span class="pin">3</span><span>每行：标识、名称、标签（账号标签、套餐、付款方，「个人付」不显示）、额度窗口（名称、用量条、百分比或用量/上限、重置倒计时；数据过期时变灰并显示「x 小时前」）、价格和周期、续费倒计时（7 天内高亮）。点行或「⋯」原地展开编辑。</span>
+    </div>
+
+    <h3 class="fig">原地编辑 / 新增</h3>
+    <p class="note">点某一行，这一行在列表里展开成编辑卡（其他行变淡）；「新增订阅」在列表顶部插入一张空的编辑卡。周期和续费日用一句话填写，比表单更好读。保存时带上版本号，如果别处已经改过会提示「已有更新，重新载入」。</p>
+    <div class="card" style="padding:18px 20px;max-width:980px;box-shadow:0 10px 30px rgba(60,40,10,.08);border-color:#E3D6C4">
+      <div class="row" style="gap:12px;margin-bottom:16px">
+        <span class="logo" style="background:#C9785A;width:36px;height:36px;font-size:15px;border-radius:10px">C</span>
+        <div style="flex:1"><div class="in" style="font-size:15px;font-weight:600;border:0;padding:0;background:none">Claude Max</div><div class="l11">上次修改 10/12 · 版本 4</div></div>
+        <div class="seg"><b class="on">AI</b><b>网络</b><b>会员</b><b>其他</b></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div class="fld"><label>账号标签</label><div class="in">个人账号</div></div>
+        <div class="fld"><label>套餐</label><div class="in">Max 5×</div></div>
+        <div class="fld"><label>金额</label><div class="in"><span style="color:var(--ink3)">USD ▾</span><span>100.00</span></div></div>
+      </div>
+      <div class="sentence" style="margin-top:12px">
+        每 <span class="in">1</span><span class="in">月 ▾</span> 续费一次，下次在 <span class="in">2026-10-24 ▾</span>，
+        <span class="in">✓ 自动续费</span>；到期日 <span class="in" style="color:var(--ink4)">无</span>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:14px 18px;align-items:center;margin-top:10px">
+        <span class="l11">付款方</span>
+        <div class="seg" style="justify-self:start"><b>个人</b><b class="on">公司</b><b>其他</b><b>免费</b><b>待确认</b></div>
+        <span class="l11">额度来源</span>
+        <div class="row" style="gap:8px">
+          <div class="in" style="min-width:320px"><span class="logo" style="width:18px;height:18px;font-size:9px;border-radius:5px;background:#C9785A">C</span>Token Monitor · Claude · 个人账号<span class="caret2">▾</span></div>
+          <span class="l11">当前：5 小时 34% · 本周 61%</span>
+        </div>
+        <span class="l11">备注</span>
+        <div class="in ph">比如：发票抬头、取消方式…</div>
+      </div>
+      <div class="row" style="margin-top:18px;border-top:1px solid var(--line2);padding-top:12px">
+        <span style="color:var(--rose);font-size:12px">删除订阅</span>
+        <span class="l11" style="margin-left:10px">停用（保留记录，不计入月均）</span>
+        <span class="sp"></span>
+        <span class="btn ghost">取消</span><span class="btn">保存 <span style="opacity:.6;font-weight:400">⌘↩</span></span>
+      </div>
+    </div>
+    <p class="note" style="margin-top:10px">额度来源下拉列出 hub 返回的可绑定账号（AI 来自 Token Monitor，网络来自 SubBoost），每项带当前额度预览；选「不绑定」就只记周期和价格。删除需要二次确认；「停用」对应 <code>active = false</code>，在列表底部的「已停用」分组里显示。</p>
+
+    <div class="ask"><b>需要确认</b><ol>
+      <li>简略卡放主货币月均、最近一笔续费和最紧的一个额度，可以吗？「主货币」我按人民币算，没有人民币就取金额最大的那个。</li>
+      <li>编辑放在卡片里原地展开，不再弹出窗口，可以吗？在菜单面板里点订阅时会打开主窗口的用量页并定位到这一行。</li>
+      <li>「个人付」默认不显示标签，只标出公司付、其他、免费和待确认，可以吗？</li>
+    </ol></div>
+  </section>
+</div>
+<script>
+  const h = document.getElementById('heat');
+  const c = ['#EFEAE0','#EFE1D3','#E8C9B5','#DFA88E','#CB8466','#B35A3D'];
+  let s = 7;
+  for (let i = 0; i < 7 * 18; i++) { s = (s * 9301 + 49297) % 233280; const v = s / 233280; const k = i > 120 ? 0 : v < .3 ? 0 : v < .5 ? 1 : v < .7 ? 2 : v < .85 ? 3 : v < .95 ? 4 : 5; const e = document.createElement('i'); e.style.background = c[k]; h.appendChild(e); }
+</script>
+</body>
+</html>
