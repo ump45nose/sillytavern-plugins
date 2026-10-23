@@ -287,11 +287,52 @@ public struct SubsData: Codable, Equatable, Sendable {
         public var subscriptionUrl: String?
         public var expiresOn: String?
         public var plan: String?
+        /// Free text: 美国, 印度…
+        public var billingRegion: String?
+        public var autoRenew: Bool?
+        /// The price and the monthly spend in CNY and USD, at the rate of `exchangeRateDate`.
+        public var priceConverted: [String: Double]?
+        public var monthlyConverted: [String: Double]?
+        public var exchangeRateDate: String?
+        public var exchangeRateStale: Bool?
+        public var binding: SubscriptionBinding?
+        public var quotaSource: String?
+        public var quotaUrlConfigured: Bool?
+        public var note: String?
+    }
+    /// Units per one `base`, as decimal strings.
+    public struct ExchangeRates: Codable, Equatable, Sendable {
+        public var base: String?
+        public var stale: Bool?
+        public var rates: [String: String]?
+
+        public init(base: String? = nil, stale: Bool? = nil, rates: [String: String]? = nil) {
+            self.base = base; self.stale = stale; self.rates = rates
+        }
+
+        public init(from decoder: Decoder) throws {
+            enum K: String, CodingKey { case base, stale, rates }
+            let c = try decoder.container(keyedBy: K.self)
+            base = try? c.decodeIfPresent(String.self, forKey: .base)
+            stale = try? c.decodeIfPresent(Bool.self, forKey: .stale)
+            rates = (try? c.decodeIfPresent([String: String].self, forKey: .rates))
+                ?? (try? c.decodeIfPresent([String: Double].self, forKey: .rates))?.mapValues { String($0) }
+        }
+
+        /// `amount` of `from` in `to`; nil when either rate is missing.
+        public func convert(_ amount: Double, from: String, to: String) -> Double? {
+            if from == to { return amount }
+            guard let f = rates?[from].flatMap(Double.init), let t = rates?[to].flatMap(Double.init), f > 0 else { return nil }
+            return amount / f * t
+        }
     }
     public var monthlyTotal: Double?
     public var items: [Item]?
     public var monthlyByCurrency: [String: Double]?
     public var unclassifiedPayerCount: Int?
+    public var monthlyConverted: [String: Double]?
+    public var unconvertedCurrencies: [String]?
+    public var exchangeRates: ExchangeRates?
 }
 
 public struct MemosData: Codable, Equatable, Sendable {

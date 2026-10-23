@@ -169,6 +169,12 @@ public struct HubAPI: Sendable {
         try await get(path, query: query)
     }
 
+    /// Raw POST for side-effect-free endpoints (previews); status and body, which callers must not print.
+    public func probePost(_ path: String, body: [String: Any]) async throws -> (Int, Data) {
+        let (data, response) = try await exchange(request(path, method: "POST", body: body))
+        return (response.statusCode, data)
+    }
+
     /// Read-only proxy for a memo's own attachment.
     public func memoAttachment(memo id: String, name: String) async throws -> Data {
         let memo = id.split(separator: "/").last.map(String.init) ?? id
@@ -293,6 +299,12 @@ public struct HubAPI: Sendable {
         var r = try request("/api/v1/subscriptions/records" + (isNew ? "" : "/" + path(record.id)), method: isNew ? "POST" : "PATCH", body: record.document)
         if !isNew { r.setValue(String(record.version), forHTTPHeaderField: "If-Match") }
         return try decode(SubscriptionRecord.self, try await send(r))
+    }
+
+    /// Resolves a network subscription link without saving it; the answer has the shape of a record's `quota`.
+    public func netQuotaPreview(quotaUrl: String) async throws -> SubscriptionQuota {
+        let r = try request("/api/v1/net/quota-preview", method: "POST", body: ["quota_url": quotaUrl])
+        return try decode(SubscriptionQuota.self, try await send(r))
     }
 
     public func deleteSubscription(_ record: SubscriptionRecord) async throws {

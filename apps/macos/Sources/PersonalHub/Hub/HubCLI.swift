@@ -39,6 +39,70 @@ enum HubCLI {
     private static let enums: Set<String> = ["state", "status", "currency", "cycle", "category", "payer", "type", "visibility",
                                              "region", "billing_region", "auto_renew", "quota_source", "quota_url_configured", "kind", "collector", "provider", "unit", "source", "pinned", "stale", "active"]
 
+    /// `--hub-preview PATH`: POSTs `{}` to a preview endpoint and prints the status, hub's validation message
+    /// and the response's top-level keys. Only for endpoints that save nothing.
+    static func preview(_ path: String, body: [String: String] = [:]) async -> Int32 {
+        guard path.hasSuffix("-preview"), let credential = try? CredentialStore.load().hub,
+              let (status, data) = try? await HubAPI(transport: URLSessionTransport(), credential: credential).probePost(path, body: body) else {
+            print("FAIL preview")
+            return 1
+        }
+        let object = try? JSONSerialization.jsonObject(with: data)
+        let error = (object as? [String: Any])?["error"] as? [String: Any]
+        print("HTTP \(status)")
+        if let error { print("  error: code=\(error["code"] ?? "-") field=\(error["field"] ?? "-") message=\(error["message"] ?? "-")") }
+        if let detail = (object as? [String: Any])?["detail"] { print("  detail: \(detail)") }
+        if let keys = (object as? [String: Any])?.keys.sorted() { print("  keys: \(keys.joined(separator: ", "))") }
+        return 0
+    }
+
+    /// `--hub-openapi FILTER`: hub's own API description for paths containing FILTER — methods, summaries,
+    /// parameters and request / response schema properties. Metadata only; no data is fetched.
+    static func openAPI(_ filter: String) async -> Int32 {
+        guard let credential = try? CredentialStore.load().hub,
+              let data = try? await HubAPI(transport: URLSessionTransport(), credential: credential).probe("/openapi.json"),
+              let doc = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let paths = doc["paths"] as? [String: [String: Any]] else {
+            print("FAIL openapi")
+            return 1
+        }
+        let schemas = (doc["components"] as? [String: Any])?["schemas"] as? [String: [String: Any]] ?? [:]
+        func describe(_ schema: Any?, depth: Int = 0) -> String {
+            guard let s = schema as? [String: Any] else { return "?" }
+            if let ref = s["$ref"] as? String {
+                let name = String(ref.split(separator: "/").last ?? "")
+                guard depth < 2, let target = schemas[name] else { return name }
+                return name + " " + describe(target, depth: depth + 1)
+            }
+            if let any = (s["anyOf"] ?? s["oneOf"]) as? [Any] { return any.map { describe($0, depth: depth) }.joined(separator: "|") }
+            if let props = s["properties"] as? [String: Any] {
+                let required = Set(s["required"] as? [String] ?? [])
+                return "{" + props.keys.sorted().map { k in (required.contains(k) ? k + "*" : k) + ": " + describe(props[k], depth: depth + 1) }
+                    .joined(separator: ", ") + "}"
+            }
+            if let items = s["items"] { return "[" + describe(items, depth: depth) + "]" }
+            if let e = s["enum"] as? [Any] { return "enum(" + e.map { "\($0)" }.joined(separator: ",") + ")" }
+            return s["type"] as? String ?? "any"
+        }
+        for path in paths.keys.sorted() where path.contains(filter) {
+            for (method, op) in paths[path]!.sorted(by: { $0.key < $1.key }) {
+                guard let op = op as? [String: Any] else { continue }
+                print("\(method.uppercased()) \(path) — \(op["summary"] as? String ?? "")")
+                if let d = op["description"] as? String, !d.isEmpty { print("  desc: \(d.replacingOccurrences(of: "\n", with: " "))") }
+                for p in op["parameters"] as? [[String: Any]] ?? [] {
+                    print("  param \(p["in"] ?? "?") \(p["name"] ?? "?")\((p["required"] as? Bool) == true ? "*" : ""): \(describe(p["schema"]))")
+                }
+                if let body = (op["requestBody"] as? [String: Any])?["content"] as? [String: [String: Any]] {
+                    for (type, c) in body { print("  body \(type): \(describe(c["schema"]))") }
+                }
+                if let ok = ((op["responses"] as? [String: Any])?["200"] as? [String: Any])?["content"] as? [String: [String: Any]] {
+                    for (_, c) in ok { print("  200: \(describe(c["schema"]))") }
+                }
+            }
+        }
+        return 0
+    }
+
     /// `--hub-probe PATH [k=v …]`: the response's shape as key paths with types and counts; values only for `enums`.
     static func probe(_ path: String, query: [String: String]) async -> Int32 {
         guard let credential = try? CredentialStore.load().hub else {
@@ -153,9 +217,20 @@ enum HubCLI {
         line(d.net?.status.hasData ?? false, "net", "\(status(d.net)) · hourly \(n?.hourly?.count ?? 0) · pools \(n?.pools.map { "\($0.count)" } ?? "null") · month \(n?.monthBytes == nil ? "null" : "set")")
         let me = d.memos?.data
         line(d.memos?.status.hasData ?? false, "memos", "\(status(d.memos)) · recent \(me?.recent?.count ?? 0) · tags \(me?.tags?.count ?? 0)")
-        for (name, s) in [("git", d.git?.status), ("subs", d.subs?.status), ("attention", d.attention?.status)] {
+        for (name, s) in [("git", d.git?.status), ("attention", d.attention?.status)] {
             line(s != nil && s != .error, name, s?.rawValue ?? "missing")
         }
+        let su = d.subs?.data, items = su?.items ?? []
+        line(d.subs?.status.hasData ?? false, "subs", "\(status(d.subs)) · items \(items.count) · products \(SubsProduct.group(items).count)"
+             + " · converted \(items.filter { $0.monthlyConverted?.isEmpty == false }.count) · regions \(items.filter { $0.billingRegion != nil }.count)"
+             + " · links \(items.filter { $0.quotaUrlConfigured == true }.count) · total \(su?.monthly(in: "CNY") == nil ? "null" : "set")"
+             + " · rates \(su?.exchangeRates?.rates?.count ?? 0)")
+        do {
+            let records = try await api.subscriptionRecords()
+            line(true, "subs.records", "\(records.count) · regions \(records.filter { $0.billingRegion != nil }.count) · quota \(records.filter { $0.quota != nil }.count)")
+        } catch let e as HubError {
+            line(false, "subs.records", describe(e))
+        } catch { line(false, "subs.records", "\(type(of: error))") }
 
         var ranges = d.token
         for r in [TokenRange.week, .month, .year] {

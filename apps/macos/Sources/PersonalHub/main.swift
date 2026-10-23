@@ -71,6 +71,25 @@ if let i = CommandLine.arguments.firstIndex(of: "--hub-probe"), CommandLine.argu
     app.run()
 }
 
+// `PersonalHub --hub-openapi FILTER` prints hub's API description for matching paths.
+if let i = CommandLine.arguments.firstIndex(of: "--hub-openapi"), CommandLine.arguments.indices.contains(i + 1) {
+    app.setActivationPolicy(.prohibited)
+    let filter = CommandLine.arguments[i + 1]
+    Task.detached { exit(await HubCLI.openAPI(filter)) }
+    app.run()
+}
+
+if let i = CommandLine.arguments.firstIndex(of: "--hub-preview"), CommandLine.arguments.indices.contains(i + 1) {
+    app.setActivationPolicy(.prohibited)
+    let path = CommandLine.arguments[i + 1]
+    let body = Dictionary(CommandLine.arguments[(i + 2)...].prefix { !$0.hasPrefix("--") }.compactMap { kv -> (String, String)? in
+        let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
+        return p.count == 2 ? (p[0], p[1]) : nil
+    }, uniquingKeysWith: { $1 })
+    Task.detached { exit(await HubCLI.preview(path, body: body)) }
+    app.run()
+}
+
 #if DEBUG
 if let dir = CommandLine.value(after: "--qa-render") {
     app.setActivationPolicy(.prohibited)

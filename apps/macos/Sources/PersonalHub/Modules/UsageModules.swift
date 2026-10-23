@@ -996,15 +996,15 @@ struct SubLogo: View {
     var body: some View {
         let _ = state.hub.imageGeneration
         let color = themeColor.map { Color(hex: $0) } ?? HubFormat.tone(for: name).color
-        Group {
-            if let image = state.hub.subscriptionIcon(iconURL) {
-                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).padding(size * 0.12)
-            } else {
-                Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.48, .bold)).foregroundStyle(color)
-            }
+        if let image = state.hub.subscriptionIcon(iconURL) {
+            Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).padding(size * 0.12)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color.opacity(0.12)))
+        } else {
+            Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.46, .semibold)).foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color))
         }
-        .frame(width: size, height: size)
-        .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color.opacity(0.12)))
     }
 }
 

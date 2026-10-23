@@ -135,6 +135,11 @@ enum QARender {
         if let sub = state.hub.data.subs?.data?.items?.first {
             await shot("subs-edit", width: 1000, SubEditCard(item: sub) {}.padding(20).background(Palette.bg))
         }
+        for (id, name) in [("proxy", "subs-edit-link"), ("spare", "subs-edit-nolink")] {
+            if let sub = state.hub.data.subs?.data?.items?.first(where: { $0.id == id }) {
+                await shot(name, width: 1000, SubEditCard(item: sub) {}.padding(20).background(Palette.bg))
+            }
+        }
         UserDefaults.standard.set(QASample.memoDraft, forKey: "qa.memos.draft")
         await shot("memo-composer", width: 860, MemoComposer(maxHeight: 420, open: true, draftKey: "qa.memos.draft").padding(20).background(Palette.bg))
         func swatch(_ hex: String) -> NSImage {
