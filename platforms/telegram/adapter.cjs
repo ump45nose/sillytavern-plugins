@@ -24,7 +24,7 @@ class NotLoggedIn extends Error {}
 
 const realClock = {
   now: () => Date.now(),
-  sleep: (page, ms) => page.waitForTimeout(ms),
+  sleep: (page, ms) => page ? page.waitForTimeout(ms) : new Promise(resolve => setTimeout(resolve, ms)),
   spacing: ([min, max]) => crypto.randomInt(min * 1000, max * 1000 + 1),
 };
 
@@ -93,12 +93,13 @@ async function openChat(page, bot, clock) {
 }
 
 function commandIndex(messages, entry, command) {
+  if (entry.baseline === null) return -1;
   const wanted = web.normalize(command);
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     const value = web.midValue(message);
-    if (message.out && value !== null && (entry.baseline === null || value > entry.baseline) &&
-        web.normalize(message.text).includes(wanted)) return i;
+    if (message.out && value !== null && value > entry.baseline &&
+        web.normalize(message.text).trim().split(/\s/)[0] === wanted) return i;
   }
   return -1;
 }
@@ -132,7 +133,15 @@ function buttonTarget(snap, index, bot) {
   return null;
 }
 
-async function send(page, bot, journal, snap) {
+function sendFailure(error, bot, phase) {
+  const message = String(error?.message || "");
+  console.error(JSON.stringify({event: "telegram_send_failure", bot: bot.id, phase,
+    type: ["Error", "TimeoutError", "TypeError"].includes(error?.name) ? error.name : "Error",
+    interaction: ["intercepts pointer events", "not stable", "outside of the viewport", "not visible", "Target closed"]
+      .filter(marker => message.includes(marker))}));
+}
+
+async function send(page, bot, journal, snap, onIntent) {
   const input = page.locator(web.SELECTORS.messageInput).locator("visible=true").first();
   await input.click({timeout: 10000});
   await input.fill(bot.command, {timeout: 10000});
@@ -143,39 +152,61 @@ async function send(page, bot, journal, snap) {
   }
   // The send button, not Enter: Enter may pick a command suggestion instead.
   const button = page.locator(web.SELECTORS.sendButton).locator("visible=true");
-  if ((await button.count()) !== 1) {
+  try {
+    await button.first().waitFor({state: "visible", timeout: 10000});
+    await button.first().click({trial: true, timeout: 10000});
+  } catch (error) {
+    sendFailure(error, bot, "preflight");
+    await input.fill("", {timeout: 10000}).catch(() => {});
+    return "send_control_unavailable";
+  }
+  if ((await web.boundedRead(button.count())) !== 1) {
     await input.fill("", {timeout: 10000}).catch(() => {});
     return "send_control_unavailable";
   }
   const values = snap.messages.map(web.midValue).filter((value) => value !== null);
   journal.markSent(bot.id, values.length ? Math.max(...values) : null);
-  await button.first().click({timeout: 10000}).catch(() => {}); // May have reached Telegram.
+  onIntent();
+  try {
+    await button.first().click({timeout: 10000});
+    console.error(JSON.stringify({event: "telegram_send_invoked", bot: bot.id}));
+  } catch (error) { sendFailure(error, bot, "click"); }
   return null;
 }
 
-async function checkBot(page, bot, journal, clock, points = new Map()) {
+async function checkBot(page, bot, journal, clock, points = new Map(), onIntent = () => {}) {
   const item = (status, reason) => ({
     id: bot.id, name: "@" + bot.username, url: "https://t.me/" + bot.username, status, reason,
   });
   if (!bot.enabled) return item("not_applicable", "bot_disabled");
   let entry = journal.get(bot.id);
   if (entry.phase === "confirmed") return item("complete", entry.reason);
-  const opened = await openChat(page, bot, clock);
+  let opened = await openChat(page, bot, clock);
   if (!opened) return item("unknown", "chat_unavailable");
   if (opened.startRequired) return item("blocked", "bot_not_started");
   const resumed = entry.phase === "sent";
+  if (resumed && entry.baseline === null) return item("unknown", "previous_send_baseline_unavailable");
   if (!resumed) {
-    const refused = await send(page, bot, journal, opened);
+    const deadline = clock.now() + CHAT_TIMEOUT_MS;
+    while (!opened.messages.some(message => web.midValue(message) !== null)) {
+      if (clock.now() >= deadline) return item("unknown", "message_baseline_unavailable");
+      await clock.sleep(page, 1000);
+      opened = await web.snapshot(page);
+      if (!opened.authenticated) throw new NotLoggedIn();
+    }
+    const refused = await send(page, bot, journal, opened, onIntent);
     if (refused) return item("unknown", refused);
     entry = journal.get(bot.id);
   }
-  let seenCommand = false, sawReply = false;
+  let seenCommand = false, sawReply = false, lastSnapshot = opened;
   const end = clock.now() + bot.replyTimeoutMs;
   while (clock.now() < end) {
     const snap = await web.snapshot(page);
+    lastSnapshot = snap;
     if (!snap.authenticated) throw new NotLoggedIn();
     const index = commandIndex(snap.messages, entry, bot.command);
     if (index >= 0) {
+      if (!seenCommand) console.error(JSON.stringify({event: "telegram_outgoing_observed", bot: bot.id}));
       seenCommand = true;
       sawReply = sawReply || snap.messages.slice(index + 1).some((message) => !message.out);
       const texts = verdictTexts(snap, index, entry, bot);
@@ -199,7 +230,9 @@ async function checkBot(page, bot, journal, clock, points = new Map()) {
     }
     await clock.sleep(page, 1000);
   }
-  if (!seenCommand) return item("unknown", resumed ? "previous_send_unconfirmed" : "command_not_visible");
+  if (!seenCommand) return item("unknown", web.normalize(lastSnapshot.draft || "").trim() === web.normalize(bot.command)
+    ? resumed ? "previous_send_draft_pending" : "send_draft_pending"
+    : resumed ? "previous_send_unconfirmed" : "command_not_visible");
   if (bot.button && entry.button === "none") return item("unknown", sawReply ? "button_not_found" : "reply_timeout");
   return item("unknown", sawReply ? "reply_unrecognized" : "reply_timeout");
 }
@@ -251,41 +284,51 @@ async function run(firefox, {profile, stateDir, businessDate, account, configFil
     throw error;
   }
   let latest = summary(journalItems(config, journal));
-  const checkpoint = (items = [], metrics = {}) => {
+  const items = [], points = new Map();
+  const checkpoint = () => {
     const observed = new Map(items.map((item) => [item.id, item]));
-    latest = summary(journalItems(config, journal).map((item) => observed.get(item.id) || item), metrics);
+    latest = summary(journalItems(config, journal).map((item) => observed.get(item.id) || item),
+      pointMetrics(config.bots, points));
     if (!statusOnly) onProgress(latest);
   };
   checkpoint();
   try {
-    return await withProfile(firefox, {profile, proxy, headless: true, contextOptions: CONTEXT},
-      async (context, page) => {
-        await openAppRetrying(page, clock);
-        if (statusOnly) {
-          const result = summary(journalItems(config, journal));
-          return {...result, reason: "authenticated"};
+    const browserOptions = {profile, proxy, headless: true, contextOptions: CONTEXT, closeTimeoutMs: 10000};
+    if (statusOnly) return await withProfile(firefox, browserOptions, async (context, page) => {
+      await openAppRetrying(page, clock);
+      return {...summary(journalItems(config, journal)), reason: "authenticated"};
+    });
+    let visited = false;
+    for (const bot of config.bots) {
+      const pending = bot.enabled && journal.get(bot.id).phase !== "confirmed";
+      if (pending && visited) await clock.sleep(null, clock.spacing(config.spacing));
+      if (!pending) items.push(await checkBot(null, bot, journal, clock, points));
+      else for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          items.push(await withProfile(firefox, browserOptions,
+            (context, page) => checkBot(page, bot, journal, clock, points, checkpoint)));
+          break;
+        } catch (error) {
+          checkpoint();
+          if (attempt || error?.message !== "telegram_snapshot_timeout") throw error;
+          console.error(JSON.stringify({event: "telegram_read_recovery", bot: bot.id,
+            phase: journal.get(bot.id).phase}));
         }
-        const items = [];
-        const points = new Map();
-        let visited = false;
-        for (const bot of config.bots) {
-          const pending = bot.enabled && journal.get(bot.id).phase !== "confirmed";
-          if (pending && visited) await clock.sleep(page, clock.spacing(config.spacing));
-          items.push(await checkBot(page, bot, journal, clock, points));
-          checkpoint(items, pointMetrics(config.bots, points));
-          visited = visited || pending;
-        }
-        return summary(items, pointMetrics(config.bots, points));
-      });
+      }
+      checkpoint();
+      visited = visited || pending;
+    }
+    return summary(items, pointMetrics(config.bots, points));
   } catch (error) {
+    checkpoint();
     const reason = error instanceof NotLoggedIn ? "not_logged_in"
       : error instanceof StateError ? error.code
-        : ["selector_broken", "telegram_app_unavailable", "telegram_snapshot_timeout"].includes(error?.message) ? error.message
+        : ["selector_broken", "telegram_app_unavailable", "telegram_snapshot_timeout", "browser_cleanup_failed"].includes(error?.message) ? error.message
           : "browser_or_network_error";
     console.error(JSON.stringify({event: "telegram_browser_failure", reason, type: error?.name,
       interaction: ["intercepts pointer events", "not stable", "outside of the viewport", "not visible", "Target closed"]
         .filter((marker) => String(error?.message || "").includes(marker))}));
-    return {...latest, execution: "failed", reason,
+    return {...latest, execution: "failed", reason, cleanupPending: reason === "browser_cleanup_failed",
       ...(error instanceof NotLoggedIn ? {checkin: "blocked"} : {})};
   }
 }
@@ -389,6 +432,7 @@ async function main() {
   }
   publish(r.execution, r.reason, {checkin: r.checkin},
     r.details || {metrics: {}, items: []});
+  if (r.cleanupPending) process.exit(1);
 }
 
 if (require.main === module) main();

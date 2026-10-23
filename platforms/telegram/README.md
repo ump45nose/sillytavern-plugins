@@ -67,10 +67,12 @@ python3 platforms/telegram/run.py --runtime-root $R --browser-cache $C --account
 1. 打开 Web K，确认已登录；逐个打开 `web.telegram.org/k/#@<username>`。NAS 代理到 web.telegram.org 偶尔断开一两分钟：打开页面（只读）失败时每 30 秒重试，最多约 180 秒，仍失败返回 `telegram_app_unavailable`；发送命令从不重试，由 journal 保证当天只发一次。
 2. 当日 journal（`state/telegram/<account>/telegram-journal.json`）为 confirmed 的机器人直接报告完成，不打开对话。
 3. 未开始过的机器人（只显示 START）返回 `bot_not_started`，不代按 START；请先在手机上手动开始一次。
-4. 命令写入输入框并核对后，先在 journal 记 sent，再点击发送按钮（不按 Enter，避免选中命令建议）。之后当天只读回：找到本次命令之后的回复并匹配，确认后记 confirmed。
-5. 已 sent 但未确认的机器人（例如上次超时或进程中断）不会重发，只读历史；仍无法确认时报告 `previous_send_unconfirmed`。按钮同样只点击一次。
+4. 命令写入输入框并核对后，先确认发送按钮可点击，再在 journal 记 sent 并保存部分结果，最后点击发送按钮（不按 Enter，避免选中命令建议）。之后当天只读回：找到本次命令之后的回复并匹配，确认后记 confirmed。
+5. 已 sent 但未确认的机器人（例如上次超时或进程中断）不会重发，只读历史；仍无法确认时报告 `previous_send_unconfirmed`；命令仍在草稿时报告 `previous_send_draft_pending`。sent 表示发送意图，不代表消息已送达。按钮同样只点击一次。
 
-网页执行脚本的只读查询最多等待 10 秒，卡住时明确失败，不一直等到总任务 deadline。每完成一个机器人即保存正式部分结果；后续网页、网络或浏览器回收失败仍保留已确认条目，下一次由同一 journal 续查，不由 Agent 代签或改写结果。
+每个待处理机器人使用独立的浏览器进程，继续复用该账号的 profile。网页只读查询最多等待 10 秒，超时后至多重开一次浏览器读回；发送意图继续生效。浏览器关闭最多等待 10 秒，回收失败由公共启动器确认后代进程已清理后，才允许在原总时限内重启一次适配器。每完成一个机器人即保存正式部分结果；后续网页、网络或浏览器回收失败仍保留已确认条目，下一次由同一 journal 续查，不由 Agent 代签或改写结果。
+
+发送前必须读到有效消息编号，历史尚未加载时最多等待 30 秒；仍缺少消息基线则返回 `message_baseline_unavailable`，不写发送意图、不发送。历史 sent 记录的基线为 null 时返回 `previous_send_baseline_unavailable`，保留记录且不重发，不能使用后来加载的旧回复确认今天成功。
 
 journal 只保存阶段、消息编号和按钮消息文本的 16 位 hash，不保存命令、回复或任何消息文本；回复文本只在进程内存中匹配，不进入结果或日志。
 

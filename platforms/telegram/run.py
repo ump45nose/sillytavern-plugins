@@ -26,7 +26,8 @@ def command(args):
 
 TASK = Task("telegram", DIRECTORY, "adapter.cjs", 600,
             frozenset(["TELEGRAM_CONFIG", "TELEGRAM_PROXY"]), browser=True,
-            configure=configure, command=command, validate=validate)
+            configure=configure, command=command, validate=validate,
+            browser_recovery_reasons=frozenset({"browser_cleanup_failed"}))
 
 if __name__ == "__main__":
     raise SystemExit(run(TASK))

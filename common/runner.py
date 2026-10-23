@@ -127,24 +127,40 @@ def run(task: Task):
                 )
                 scope = None
                 try:
-                    with ExitStack() as process_stack:
-                        if task.browser:
-                            scope = process_stack.enter_context(
-                                BrowserScope(
-                                    runtime / "locks/browser-cleanup.json",
-                                    context["run_id"],
-                                    report=lambda record: sink.feed((json.dumps(record) + "\n").encode()),
+                    deadline = time.monotonic() + a.timeout
+                    for attempt in range(2 if task.browser and task.browser_recovery_reasons else 1):
+                        with ExitStack() as process_stack:
+                            if task.browser:
+                                scope = process_stack.enter_context(
+                                    BrowserScope(
+                                        runtime / "locks/browser-cleanup.json",
+                                        context["run_id"],
+                                        report=lambda record: sink.feed((json.dumps(record) + "\n").encode()),
+                                    )
                                 )
+                            outcome = supervise(
+                                argv,
+                                ROOT,
+                                env,
+                                max(2, deadline - time.monotonic()),
+                                sink,
+                                leases,
+                                interactive=interactive,
                             )
-                        outcome = supervise(
-                            argv,
-                            ROOT,
-                            env,
-                            a.timeout,
-                            sink,
-                            leases,
-                            interactive=interactive,
-                        )
+                        if (attempt or not task.browser_recovery_reasons or interactive
+                                or scope is None or not scope.cleanup_verified
+                                or outcome.spawn_error or outcome.timed_out or outcome.interrupted
+                                or deadline - time.monotonic() < 2):
+                            break
+                        try:
+                            candidate = read_result(run_dir / "adapter-result.json", context)
+                        except (OSError, ValueError, TypeError):
+                            break
+                        if (candidate["execution_status"] != "failed"
+                                or candidate["reason"] not in task.browser_recovery_reasons):
+                            break
+                        sink.feed((json.dumps({"event": "browser_adapter_recovery",
+                                               "reason": candidate["reason"]}) + "\n").encode())
                 finally:
                     # Even cleanup/reporting exceptions must not erase a valid
                     # partial result that the adapter already published.

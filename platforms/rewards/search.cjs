@@ -312,7 +312,7 @@ async function run(chromium, state, device, options = {}, deps = common) {
     });
     return {
       execution: "failed",
-      reason: error.details?.code || (["flyout_request_failed", "flyout_unavailable", "flyout_redirect_unavailable"].includes(error.message)
+      reason: error.details?.code || (["flyout_request_failed", "flyout_unavailable", "flyout_redirect_unavailable", "flyout_invalid_response"].includes(error.message)
         ? error.message : "search_unconfirmed"),
       business,
       details: details(),
@@ -324,25 +324,15 @@ async function main() {
   let out;
   try {
     const stateDir = process.env.BENEFITS_STATE_DIR;
-    let config = {};
-    try {
-      config = common.boundedJson(
-        path.join(stateDir, "native-config.json"),
-        65536,
-      );
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
+    const {readConfig, browserOptions} = require("./runtime_config.cjs");
+    const config = readConfig(stateDir);
     out = await run(
       common.dependency(process.env.REWARDS_ROOT),
       common.readState(stateDir, device),
       device,
       {
-        proxy: process.env.REWARDS_PROXY,
+        ...browserOptions(stateDir, config, process.env.REWARDS_PROXY, device),
         search: config.search,
-        interaction: config.interaction,
-        region: config.region,
-        contextOptions: device === "mobile" ? config.mobile : config.desktop,
         journal: dailyJournal(stateDir, device, process.env.BENEFITS_BUSINESS_DATE),
       },
     );
@@ -361,7 +351,7 @@ function dailyJournal(stateDir, device, businessDate) {
   if (!["desktop", "mobile"].includes(device) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(businessDate || ""))
     throw Error("business_date_invalid");
-  return require("./punchcards.cjs").journal(
+  return require("./journal.cjs").journal(
     path.join(stateDir, "search-" + device + "-" + businessDate + ".json"));
 }
 module.exports = {

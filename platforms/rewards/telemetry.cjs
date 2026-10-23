@@ -12,19 +12,19 @@ const REASONS = new Set(("human_required captcha login_required terms_changed ag
   "app_authorization_navigation_failed app_token_exchange_failed app_inventory_unavailable app_response_unavailable " +
   "app_response_too_large app_locale_invalid app_inventory_limit app_offer_invalid journal_invalid journal_limit " +
   "business_date_invalid business_date_regressed authenticated_inventory_unavailable flyout_request_failed " +
-  "flyout_unavailable flyout_redirect_unavailable input_too_large session_invalid dependency_not_configured dependency_incompatible " +
+  "flyout_unavailable flyout_redirect_unavailable flyout_invalid_response input_too_large session_invalid dependency_not_configured dependency_incompatible " +
   "page_too_large session_state_limit snapshot_unavailable capability_failed browser_operation_failed " +
   "search_submission_uncertain search_stagnant quota_unknown quota_regressed_reprobe_required " +
   "search_unconfirmed activation_evidence_unavailable activity_action_unavailable deployment_evidence_unavailable " +
   "action_chunks_missing action_discovery_limit ambiguous_action_id invalid_action_id counter_inventory_unavailable " +
   "inventory_unavailable offer_inventory_unavailable daily_browser_or_network_error daily_progress_unavailable " +
-  "daily_journal_unavailable daily_action_unavailable daily_activity_not_credited daily_already_complete daily_complete " +
+  "daily_journal_unavailable daily_action_unavailable daily_activity_not_credited daily_activity_rejected daily_already_complete daily_complete " +
   "app_checkin_progress_unavailable previous_daily_submission_requires_reconciliation " +
   "daily_submitted_without_attributable_confirmation not_run_after_stop capability_binding_pending " +
   "full_requested_capabilities_complete full_requested_capabilities_partial full_intervention_pending " +
   "full_in_progress full_preflight_or_reporting_failed full_deadline_exceeded full_resource_busy " +
   "snapshot_binding_unavailable confirmed_before_intervention app_readback_finished " +
-  "app_checkin_confirmed_by_fresh_snapshot fresh_readonly_snapshot invalid_interaction_config " +
+  "app_checkin_confirmed_by_fresh_snapshot daily_confirmed_by_fresh_snapshot fresh_readonly_snapshot invalid_interaction_config " +
   "invalid_interaction_random request_cancelled_during_cleanup daily_cycle_unavailable daily_cycle_changed " +
   "streak_progress_unavailable streaks_readback_finished full_task_cycle_changed platform_task_cycle " +
   "desktop_app_progress_unavailable desktop_app_weekly_changed desktop_app_weekly_unavailable " +
@@ -39,7 +39,7 @@ const STATES = new Set(["ok", "failed", "busy", "timeout", "complete", "unknown"
   "blocked", "not_applicable", "attempted", "confirmed", "http", "browser", "cached"]);
 const OPERATIONS = new Set(("run stage snapshot browser.launch browser.context browser.page browser.close " +
   "browser.context_close page.goto page.waitForURL page.waitForLoadState page.request_failed " +
-  "http.get http.post http.fetch http.redirect server_action.request auth.http_redirect auth.browser_redirect " +
+  "http.get http.post http.fetch http.redirect server_action.request server_action.result auth.http_redirect auth.browser_redirect " +
   "auth.exchange auth.cache app.request app.snapshot app.inventory app.offer app.checkin " +
   "search.submit search.readback search.skip activity.submit promotion.submit promotion.readback " +
   "interaction.pause interaction.type interaction.click interaction.review interaction.batch_break " +
@@ -92,7 +92,7 @@ function clean(fields) {
   for (const key of ["duration_ms", "delay_ms", "timeout_ms", "status", "count", "current", "max", "attempt",
     "ttl_ms", "rss_mb", "free_memory_mb", "total_memory_mb", "swap_free_mb", "swap_total_mb", "load_1m", "characters", "line"])
     if (Number.isFinite(fields[key]) && Math.abs(fields[key]) <= 1e9) out[key] = fields[key];
-  for (const key of ["refresh_required", "proxy_configured", "has_code", "state_matches", "has_error", "complete", "reconciled", "closing"])
+  for (const key of ["refresh_required", "proxy_configured", "has_code", "state_matches", "has_error", "complete", "reconciled", "closing", "accepted"])
     if (typeof fields[key] === "boolean") out[key] = fields[key];
   for (const [key, values] of [["capability", CAPABILITIES], ["phase", CAPABILITIES], ["route", ROUTES], ["redirect_route", ROUTES],
     ["reason", REASONS], ["state", STATES], ["execution", STATES], ["error_name", NAMES], ["error_code", CODES]])

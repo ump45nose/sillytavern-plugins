@@ -225,12 +225,11 @@ async function run(_chromium, state, parser, options = {}, deps = common) {
 }
 async function main() {
   const dir = process.env.BENEFITS_STATE_DIR;
-  const fs = require("node:fs"), file = path.join(dir, "native-config.json");
-  const config = fs.existsSync(file) ? common.boundedJson(file, 65536) : {};
+  const {readConfig, browserOptions} = require("./runtime_config.cjs");
+  const config = readConfig(dir);
   const out = await run(common.dependency(process.env.REWARDS_ROOT), common.readState(dir),
-    require("./parser_loader.cjs").loadParser(), {proxy: process.env.REWARDS_PROXY,
-      region: config.region, contextOptions: config.desktop, timezoneOffset: config.timezoneOffset,
-      interaction: config.interaction, journalForQuest: parent => require("./punchcards.cjs").journal(
+    require("./parser_loader.cjs").loadParser(), {...browserOptions(dir, config, process.env.REWARDS_PROXY),
+      journalForQuest: parent => require("./journal.cjs").journal(
         path.join(dir, "desktop-app-weekly-" + trace.reference(parent) + ".json"))});
   require("../../common/result.cjs").publish(out.execution, out.reason, out.business, out.details);
 }
