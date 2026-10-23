@@ -4,11 +4,10 @@ from dataclasses import asdict
 import hashlib
 import re
 
-from .evidence import magnet_evidence, torrent_evidence
+from .resolution import pt_candidate, public_candidates
 from .models import MediaIdentity, ResourceCandidate, SourcePage
-from .policies import inspect_target, subtitle_evidence
+from .policies import subtitle_evidence
 from .public_index import MediaQuery
-from .quality_selection import MediaCandidate
 from .selection import normalize_title
 from .media_types import normalize_media_type
 
@@ -139,16 +138,9 @@ class MTeamAdapter:
         from app.chain.download import DownloadChain
         context = copy(candidate.native)
         content, _, _ = DownloadChain().download_torrent(context.torrent_info, source="MediaAcquisition")
-        evidence = torrent_evidence(content, candidate.title)
-        inspect_target(candidate.title, evidence.files, target)
         context.media_info = self.identities.context_media(target.media, target)
-        subs = subtitle_evidence(files=evidence.files)
-        if not subs.chinese:
-            subs = candidate.subtitles
-        return [MediaCandidate("pt", candidate.title, evidence.video_bytes, evidence.total_bytes,
-            candidate.candidate_id, info_hash=evidence.info_hash, torrent_content=content,
-            context=context, files=evidence.files,
-            evidence={"subtitles": asdict(subs), "seeders": candidate.seeders})]
+        return [pt_candidate(content, candidate.title, candidate.candidate_id, context, target,
+                             candidate.subtitles, candidate.seeders)]
 
     def health(self):
         from app.db.site_oper import SiteOper
@@ -181,39 +173,12 @@ class Mini4KAdapter:
         if resolved.status.value != "OK":
             raise ValueError("Mini4K 解析状态：" + resolved.status.value +
                              ("；" + resolved.reason if resolved.reason else ""))
-        results, seen_hashes = [], set()
-        for link in sorted(resolved.links, key=lambda item: item.kind != 'torrent'):
-            if link.kind in ("torrent", "magnet"):
-                if link.info_hash and link.info_hash in seen_hashes:
-                    continue
-                try:
-                    ev = torrent_evidence(link.torrent_bytes, candidate.title) if link.kind == "torrent" \
-                         else magnet_evidence(link.value, candidate.title, timeout=25)
-                    if ev.private:
-                        continue
-                    inspect_target(candidate.title, ev.files, target)
-                except ValueError:
-                    continue
-                seen_hashes.add(ev.info_hash)
-                magnet = next((item.value for item in resolved.links if item.kind == 'magnet'
-                               and item.info_hash == ev.info_hash), None)
-                results.append(MediaCandidate("public_bt", candidate.title, ev.video_bytes, ev.total_bytes,
-                    candidate.candidate_id, info_hash=ev.info_hash,
-                    link=magnet or (link.value if link.kind == "magnet" else f"magnet:?xt=urn:btih:{ev.info_hash}"),
-                    files=ev.files, evidence={"subtitles": asdict(subtitle_evidence(files=ev.files)
-                        if subtitle_evidence(files=ev.files).chinese else candidate.subtitles),
-                        "target_path": self.p115_factory().target_path(target.media.media_type)}))
-            elif link.kind == "115_share" and self.settings.share_115_enabled and target.scope != "series":
-                adapter = self.p115_factory()
-                ev = adapter.preview_share(link.value, candidate.title)
-                inspect_target(candidate.title, ev.files, target)
-                # A one-way share identity is enough for deduplication; never save its code.
-                from .public_index import Mini4KIndexer
-                results.append(MediaCandidate("115_share", candidate.title, ev.video_bytes, ev.total_bytes,
-                    candidate.candidate_id, link=link.value, files=ev.files, file_ids=ev.root_ids,
-                    evidence={"root_names": list(ev.root_names), "share_key": Mini4KIndexer._link_selector(link.value),
-                        "target_path": adapter.target_path(target.media.media_type),
-                        "subtitles": asdict(candidate.subtitles)}))
+        results, _ = public_candidates(resolved.links, candidate, target, self.p115_factory,
+                                       share_enabled=self.settings.share_115_enabled)
+        if results:
+            target_path = self.p115_factory().target_path(target.media.media_type)
+            for result in results:
+                result.evidence['target_path'] = target_path
         if not results:
             raise ValueError("Mini4K 没有满足目标范围的公开 BT 或已启用分享")
         return results

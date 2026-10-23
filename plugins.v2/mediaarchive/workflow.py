@@ -168,6 +168,8 @@ class ArchiveService:
                     name = f"S{unit.season:02d}E{asset.episode:02d}-" + name
                 if previous and previous.get("receipt"):
                     continue
+                if previous:
+                    directory, name = previous["directory"], previous["name"]
                 observed = self.cloud.find(asset, directory, name)
                 if observed is None:
                     if previous:

@@ -1,6 +1,7 @@
 import base64
 import json
-import runpy
+import os
+import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -241,7 +242,8 @@ def test_strm_and_cloud_media_type_mapping(kind, folder, tmp_path, monkeypatch):
     conftest.module('app.plugins.p115strmhelper.api', Api=Api)
     conftest.module('app.plugins.p115strmhelper.schemas')
     conftest.module('app.plugins.p115strmhelper.schemas.strm_api',
-                    StrmApiData=SimpleNamespace, StrmApiPayloadData=SimpleNamespace)
+                    StrmApiData=SimpleNamespace, StrmApiPayloadData=SimpleNamespace,
+                    StrmApiStatusCode=SimpleNamespace(Success=0))
     adapter = P115TaskAdapter(local_strm_root=str(tmp_path))
     monkeypatch.setattr(adapter, '_service', lambda: SimpleNamespace(client=object()))
     assert adapter.ensure_strm(kind, (1,)) == 1
@@ -418,4 +420,9 @@ def test_library_only_completion_reopened_clears_old_fact_before_new_submit(env)
     'smoke_quality_115.py', 'smoke_identify_retry.py',
     'smoke_unified_workflow.py', 'smoke_workflow.py'])
 def test_existing_offline_smokes(script):
-    runpy.run_path(str(Path(__file__).with_name(script)), run_name='__main__')
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, 'PYTHONPATH': os.pathsep.join(
+        [str(root / 'tests'), str(root / 'packages/media-capabilities/src')])}
+    subprocess.run([sys.executable, '-c',
+        'import conftest, runpy, sys; runpy.run_path(sys.argv[1], run_name="__main__")',
+        str(Path(__file__).with_name(script))], env=env, check=True)

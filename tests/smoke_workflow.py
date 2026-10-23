@@ -20,7 +20,7 @@ fallback = SimpleNamespace(torrent_info=SimpleNamespace(
     page_url="https://example.test/file"))
 downloader = Mock()
 downloader.download_torrent.side_effect = [
-    (b"disc", "", ["Film.iso"]),
+    (bencode.bencode({b'info': {b'name': b'Film.iso', b'length': 1234}}), "", ["Film.iso"]),
     (bencode.bencode({b'info': {b'name': b'Film.mkv', b'length': 1234}}), "", ["Film.mkv"]),
 ]
 downloader.download_single.return_value = ("test-hash", None)
