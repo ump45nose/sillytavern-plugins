@@ -375,10 +375,10 @@ final class HubModel {
         return try await live(api)
     }
 
-    func postMemo(_ content: String, visibility: String = "PRIVATE") async throws {
+    func postMemo(_ content: String, visibility: String = "PRIVATE", attachments: [String] = []) async throws {
         guard let api else { throw WriteError.demo }
         do {
-            let created = try await api.createMemo(content: content, visibility: visibility)
+            let created = try await api.createMemo(content: content, visibility: visibility, attachments: attachments)
             await sync.inserted(memo: created.id, content: content, visibility: visibility)
         } catch let e as HubError {
             throw WriteError.hub(e)

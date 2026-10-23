@@ -101,9 +101,24 @@ final class MemosStore {
         next = page.nextPageToken
     }
 
-    func create(_ content: String, visibility: String) async throws {
-        try await hub.postMemo(content, visibility: visibility)
+    func create(_ content: String, visibility: String, attachments: [String] = []) async throws {
+        try await hub.postMemo(content, visibility: visibility, attachments: attachments)
         await reload()
+    }
+
+    /// Uploads one file for the composer; it stays unlinked until the memo is sent.
+    func upload(_ bytes: Data, filename: String, type: String) async throws -> HubAPI.UploadedAttachment {
+        guard let api = hub.liveAPI else { throw HubModel.WriteError.demo }
+        do {
+            return try await api.uploadMemoAttachment(bytes, filename: filename, type: type)
+        } catch {
+            throw Failure(message: Self.message(error))
+        }
+    }
+
+    /// Best effort: an unlinked upload left behind only takes space in Memos.
+    func discard(attachment name: String) async {
+        try? await hub.liveAPI?.deleteMemoAttachment(name: name)
     }
 
     func update(_ memo: Memo, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil) async throws {

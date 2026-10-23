@@ -15,6 +15,8 @@ struct MarkdownEditor: NSViewRepresentable {
     /// Height of the laid-out text including the inset, for editors that grow with their content.
     var onHeight: ((CGFloat) -> Void)? = nil
     var onEscape: (() -> Void)? = nil
+    /// Pasted or dropped files and images; return true when taken, false to paste as text.
+    var onFiles: ((NSPasteboard) -> Bool)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -55,6 +57,7 @@ struct MarkdownEditor: NSViewRepresentable {
         view.insertionPointColor = NSColor(Tone.clay.color)
         view.selectedTextAttributes = [.backgroundColor: NSColor(Tone.clay.tint)]
         view.string = text
+        view.onFiles = onFiles
         controller?.view = view
         coordinator.restyle(view)
         return scroll
@@ -64,6 +67,7 @@ struct MarkdownEditor: NSViewRepresentable {
         context.coordinator.parent = self
         guard let view = scroll.documentView as? MarkdownTextView else { return }
         controller?.view = view
+        view.onFiles = onFiles
         view.isEditable = editable
         guard view.string != text else { return }
         view.string = text
@@ -193,6 +197,30 @@ extension NSAttributedString.Key {
 final class MarkdownTextView: NSTextView {
     var size: CGFloat = 13.5
     var onFocus: (() -> Void)?
+    var onFiles: ((NSPasteboard) -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        if let onFiles, onFiles(.general) { return }
+        super.paste(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        Self.carriesFiles(sender.draggingPasteboard) && onFiles != nil ? .copy : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        Self.carriesFiles(sender.draggingPasteboard) && onFiles != nil ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if Self.carriesFiles(sender.draggingPasteboard), let onFiles, onFiles(sender.draggingPasteboard) { return true }
+        return super.performDragOperation(sender)
+    }
+
+    private static func carriesFiles(_ pb: NSPasteboard) -> Bool {
+        pb.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+            || pb.availableType(from: [.png, .tiff]) != nil
+    }
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()

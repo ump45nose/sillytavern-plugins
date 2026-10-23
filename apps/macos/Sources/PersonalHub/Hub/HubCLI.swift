@@ -37,7 +37,7 @@ enum HubCLI {
 
     /// Enum-like fields whose distinct values are safe to show.
     private static let enums: Set<String> = ["state", "status", "currency", "cycle", "category", "payer", "type", "visibility",
-                                             "region", "kind", "collector", "provider", "unit", "source", "pinned", "stale", "active"]
+                                             "region", "billing_region", "auto_renew", "quota_source", "quota_url_configured", "kind", "collector", "provider", "unit", "source", "pinned", "stale", "active"]
 
     /// `--hub-probe PATH [k=v …]`: the response's shape as key paths with types and counts; values only for `enums`.
     static func probe(_ path: String, query: [String: String]) async -> Int32 {

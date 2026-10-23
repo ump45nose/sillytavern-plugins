@@ -219,11 +219,17 @@ struct MemoComposer: View {
     @ViewState private var busy = false
     @ViewState private var error: String?
     @ViewState private var editor = MarkdownController()
+    @ViewState private var uploads: MemoUploads
 
-    init(maxHeight: CGFloat, open: Bool = false, draftKey: String = "memos.draft") {
+    init(maxHeight: CGFloat, open: Bool = false, draftKey: String = "memos.draft", uploads: MemoUploads? = nil) {
         self.maxHeight = maxHeight
         _open = ViewState(initialValue: open)
         _draft = AppStorage(wrappedValue: "", draftKey)
+        _uploads = ViewState(initialValue: uploads ?? MemoUploads())
+    }
+
+    private var canSend: Bool {
+        !busy && !uploads.uploading && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !uploads.names.isEmpty)
     }
 
     var body: some View {
@@ -234,6 +240,18 @@ struct MemoComposer: View {
         .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(open ? Tone.clay.color.opacity(0.45) : Palette.line))
         .shadow(color: Color(hex: "#3C280A").opacity(open ? 0.06 : 0.02), radius: open ? 10 : 2, y: open ? 4 : 1)
         .background { Button("") { expand() }.keyboardShortcut("n", modifiers: .command).hidden() }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            for p in providers {
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    DispatchQueue.main.async {
+                        expand()
+                        uploads.add([url], store: state.memos)
+                    }
+                }
+            }
+            return !providers.isEmpty
+        }
     }
 
     private var collapsed: some View {
@@ -247,8 +265,11 @@ struct MemoComposer: View {
                 Text("记下此刻…  支持 Markdown，# 加标签").font(Typo.sans(13.5)).foregroundStyle(Palette.ink4)
             }
             Spacer(minLength: 8)
+            if !uploads.items.isEmpty {
+                Label("\(uploads.items.count)", systemImage: "paperclip").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
+            }
             Kbd("⌘N")
-            tool("paperclip", help: "附件要等 hub 提供上传接口", enabled: false) {}
+            tool("paperclip", help: "附加文件") { expand(); uploads.pick(store: state.memos) }
             tool("number", help: "加标签") { expand(); DispatchQueue.main.async { editor.insert("#") } }
         }
         .padding(.leading, 16).padding(.trailing, 10).frame(height: 48)
@@ -260,7 +281,8 @@ struct MemoComposer: View {
         let height = min(max(textHeight, 160), maxHeight)
         return VStack(alignment: .leading, spacing: 0) {
             MarkdownEditor(text: $draft, size: 14, inset: NSSize(width: 14, height: 14), controller: editor,
-                           onHeight: { textHeight = $0 }, onEscape: collapse)
+                           onHeight: { textHeight = $0 }, onEscape: collapse,
+                           onFiles: { [uploads, memos = state.memos] in uploads.take($0, store: memos) })
                 .frame(height: height)
                 .overlay(alignment: .topLeading) {
                     if draft.isEmpty {
@@ -268,6 +290,14 @@ struct MemoComposer: View {
                             .padding(.leading, 19).padding(.top, 14).allowsHitTesting(false)
                     }
                 }
+            if !uploads.items.isEmpty {
+                Flow(spacing: 8) {
+                    ForEach(uploads.items) { item in
+                        MemoUploadCard(item: item) { uploads.remove(item, store: state.memos) }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 12)
+            }
             if let error {
                 Text(error).font(Typo.sans(11.5)).foregroundStyle(Tone.rose.color).padding(.horizontal, 16).padding(.bottom, 6)
             }
@@ -284,20 +314,20 @@ struct MemoComposer: View {
                 tool("chevron.left.forwardslash.chevron.right", help: "代码") { editor.wrap("`", "`", placeholder: "代码") }
                 tool("link", help: "链接") { editor.wrap("[", "](https://)", placeholder: "链接文字") }
                 tool("number", help: "标签") { editor.insert("#") }
-                tool("paperclip", help: "附件要等 hub 提供上传接口", enabled: false) {}
+                tool("paperclip", help: "附加文件，也可以拖入或粘贴截图") { uploads.pick(store: state.memos) }
                 Spacer(minLength: 8)
                 VisibilityMenu(value: $visibility)
                 Text(draft.isEmpty ? "Esc 收起" : "Esc 收起 · 草稿已保存").font(Typo.sans(11)).foregroundStyle(Palette.ink4)
                     .padding(.horizontal, 8).lineLimit(1).fixedSize()
                 Button(action: post) {
                     HStack(spacing: 6) {
-                        Text(busy ? "发送中…" : "发送")
+                        Text(busy ? "发送中…" : uploads.uploading ? "等上传…" : "发送")
                         Text("⌘↩").font(Typo.sans(11)).opacity(0.6)
                     }
                 }
                 .buttonStyle(.hubPrimary)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+                .disabled(!canSend)
             }
             .padding(.leading, 8).padding(.trailing, 10).padding(.vertical, 8)
         }
@@ -325,13 +355,14 @@ struct MemoComposer: View {
 
     private func post() {
         let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty, !busy else { return }
+        guard canSend else { return }
         busy = true
         error = nil
         Task {
             do {
-                try await state.memos.create(content, visibility: visibility)
+                try await state.memos.create(content, visibility: visibility, attachments: uploads.names)
                 draft = ""
+                uploads.clear()
                 collapse()
             } catch {
                 self.error = error.localizedDescription

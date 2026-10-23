@@ -137,6 +137,16 @@ enum QARender {
         }
         UserDefaults.standard.set(QASample.memoDraft, forKey: "qa.memos.draft")
         await shot("memo-composer", width: 860, MemoComposer(maxHeight: 420, open: true, draftKey: "qa.memos.draft").padding(20).background(Palette.bg))
+        func swatch(_ hex: String) -> NSImage {
+            NSImage(size: NSSize(width: 34, height: 34), flipped: false) { r in NSColor(Color(hex: hex)).setFill(); r.fill(); return true }
+        }
+        let files = MemoUploads([
+            .init(filename: "白板照片.jpg", type: "image/jpeg", size: 1_240_000, preview: swatch("#C9B89A"), phase: .done("attachments/a")),
+            .init(filename: "任务页草图.pdf", type: "application/pdf", size: 320_000, phase: .uploading),
+            .init(filename: "录屏.mov", type: "video/quicktime", size: 90_000_000, phase: .failed("超过 64 MB，没有上传")),
+        ])
+        await shot("memo-composer-files", width: 860,
+                   MemoComposer(maxHeight: 420, open: true, draftKey: "qa.memos.draft", uploads: files).padding(20).background(Palette.bg))
         UserDefaults.standard.removeObject(forKey: "qa.memos.draft")
         await shot("markdown-reveal", width: 560, height: 660, VStack(spacing: 0) {
             ForEach([0, 2, 5], id: \.self) { MarkdownRevealPreview(text: QASample.memoDraft, line: $0).frame(height: 220) }
