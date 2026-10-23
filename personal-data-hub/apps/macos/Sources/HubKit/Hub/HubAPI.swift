@@ -20,6 +20,7 @@ public enum HubError: Error, Equatable, Sendable {
         case .expired: "这次复盘已经过期，不能再确认"
         case .http(502): "来源写入失败，可以稍后重试"
         case .http(409): "有冲突，未保存"
+        case .http(413): "文件太大，hub 拒绝了上传"
         case .http(503): "hub 未配置这个来源"
         case .http(let code): "hub 返回 \(code)"
         case .invalidResponse: "hub 返回了无法识别的数据"
@@ -95,34 +96,90 @@ public struct HubAPI: Sendable {
 
     public struct CreatedMemo: Decodable, Sendable { public var id: String }
 
-    public func createMemo(content: String, visibility: String = "PRIVATE") async throws -> CreatedMemo {
-        let data = try await send(request("/api/v1/memos", method: "POST", body: ["content": content, "visibility": visibility]))
+    /// `attachments` are names from `uploadMemoAttachment`, linked as the memo is created.
+    public func createMemo(content: String, visibility: String = "PRIVATE", attachments: [String] = []) async throws -> CreatedMemo {
+        var body: [String: Any] = ["content": content, "visibility": visibility]
+        if !attachments.isEmpty { body["attachments"] = attachments }
+        let data = try await send(request("/api/v1/memos", method: "POST", body: body))
         return try decode(CreatedMemo.self, data)
     }
 
+    public struct UploadedAttachment: Decodable, Equatable, Sendable {
+        public var name: String
+        public var filename: String?
+        public var type: String?
+        public var size: Int?
+    }
+
+    /// One file, not yet linked to any memo. Sent once, never retried.
+    public func uploadMemoAttachment(_ bytes: Data, filename: String, type: String) async throws -> UploadedAttachment {
+        let boundary = "hub-" + UUID().uuidString
+        let safe = filename.replacingOccurrences(of: "\"", with: "'").replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
+        var body = Data()
+        body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safe)\"\r\nContent-Type: \(type)\r\n\r\n".utf8))
+        body.append(bytes)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        var r = try request("/api/v1/memos/attachments", method: "POST")
+        r.timeoutInterval = 120
+        r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        r.httpBody = body
+        return try decode(UploadedAttachment.self, try await send(r))
+    }
+
+    /// Only for attachments not yet linked to a memo (409 otherwise).
+    public func deleteMemoAttachment(name: String) async throws {
+        let file = name.split(separator: "/").last.map(String.init) ?? name
+        _ = try await send(request("/api/v1/memos/attachments/\(path(file))", method: "DELETE"))
+    }
+
     /// nil while hub-api has no list endpoint yet (404, or 405 beside the existing POST).
-    public func memos(pageSize: Int = 20, pageToken: String? = nil, tag: String? = nil, query: String? = nil) async throws -> MemoPage? {
+    /// `pinned`, `hasAttachments` and `state` are newer filters; an older hub ignores them, so callers re-check the items.
+    public func memos(pageSize: Int = 20, pageToken: String? = nil, tag: String? = nil, query: String? = nil,
+                      pinned: Bool = false, hasAttachments: Bool = false, state: String? = nil) async throws -> MemoPage? {
         var q = ["page_size": String(pageSize)]
         if let pageToken { q["page_token"] = pageToken }
         if let tag, !tag.isEmpty { q["tag"] = tag }
         if let query, !query.isEmpty { q["q"] = query }
+        if pinned { q["pinned"] = "true" }
+        if hasAttachments { q["has_attachments"] = "true" }
+        if let state { q["state"] = state }
         let (data, response) = try await exchange(request("/api/v1/memos", query: q))
         if response.statusCode == 404 || response.statusCode == 405 { return nil }
         return try decode(MemoPage.self, try check(data, response))
     }
 
     /// Only the fields given are sent.
-    public func updateMemo(id: String, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil) async throws -> MemosData.Memo {
+    public func updateMemo(id: String, content: String? = nil, visibility: String? = nil, pinned: Bool? = nil,
+                           state: String? = nil) async throws -> MemosData.Memo {
         var body: [String: Any] = [:]
         if let content { body["content"] = content }
         if let visibility { body["visibility"] = visibility }
         if let pinned { body["pinned"] = pinned }
+        if let state { body["state"] = state }
         return try decode(MemosData.Memo.self, try await send(request("/api/v1/memos/\(path(id))", method: "PATCH", body: body)))
     }
 
     /// hub archives rather than deletes; the memo can be restored in Memos.
     public func archiveMemo(id: String) async throws {
         _ = try await send(request("/api/v1/memos/\(path(id))", method: "DELETE"))
+    }
+
+    /// Raw GET for the shape probe; callers must not print the body.
+    public func probe(_ path: String, query: [String: String] = [:]) async throws -> Data {
+        try await get(path, query: query)
+    }
+
+    /// Raw POST for side-effect-free endpoints (previews); status and body, which callers must not print.
+    public func probePost(_ path: String, body: [String: Any]) async throws -> (Int, Data) {
+        let (data, response) = try await exchange(request(path, method: "POST", body: body))
+        return (response.statusCode, data)
+    }
+
+    /// Read-only proxy for a memo's own attachment.
+    public func memoAttachment(memo id: String, name: String) async throws -> Data {
+        let memo = id.split(separator: "/").last.map(String.init) ?? id
+        let file = name.split(separator: "/").last.map(String.init) ?? name
+        return try await get("/api/v1/memos/\(path(memo))/attachments/\(path(file))")
     }
 
     /// Image references from module data are opaque and signed by hub-api.
@@ -237,6 +294,10 @@ public struct HubAPI: Sendable {
         return try await get(path)
     }
 
+    public func subscriptionRecord(id: String) async throws -> SubscriptionRecord {
+        try decode(SubscriptionRecord.self, try await get("/api/v1/subscriptions/records/" + path(id)))
+    }
+
     public func saveSubscription(_ record: SubscriptionRecord) async throws -> SubscriptionRecord {
         let isNew = record.version == 0
         var r = try request("/api/v1/subscriptions/records" + (isNew ? "" : "/" + path(record.id)), method: isNew ? "POST" : "PATCH", body: record.document)
@@ -292,9 +353,12 @@ public struct HubAPI: Sendable {
         case 401, 403: throw HubError.unauthorized
         case 409 where Self.problem(data)?.code == "expired": throw HubError.expired
         case 422: throw HubError.rejected(Self.problem(data)?.message ?? "内容没有通过校验", field: Self.problem(data)?.field)
-        case 400, 404, 409:
-            guard let problem = Self.problem(data), let message = problem.message else { throw HubError.http(response.statusCode) }
-            throw HubError.rejected(message, field: problem.field)
+        case 400, 404, 409, 413:
+            if let problem = Self.problem(data), let message = problem.message { throw HubError.rejected(message, field: problem.field) }
+            if let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"] as? String {
+                throw HubError.rejected(detail, field: nil)
+            }
+            throw HubError.http(response.statusCode)
         default: throw HubError.http(response.statusCode)
         }
     }

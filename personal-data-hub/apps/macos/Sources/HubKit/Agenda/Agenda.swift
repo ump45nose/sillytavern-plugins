@@ -16,6 +16,24 @@ public struct AgendaTask: Sendable, Identifiable, Hashable {
     public var completedAt: Date? = nil
     /// Google's manual order within the list; sorts lexically.
     public var position: String? = nil
+
+    private static let timeLine = #"(?m)^时间\s*([01]?\d|2[0-3])[:：]([0-5]\d)\s*$"#
+
+    /// The first line of notes worth showing under the title; the "时间 15:00" line is shown as the time instead.
+    public var summaryLine: String? {
+        notes?.split(separator: "\n").lazy.map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && $0.range(of: Self.timeLine, options: .regularExpression) == nil }
+    }
+
+    /// Google Tasks keeps only the date; a time typed without a time block is saved as a
+    /// "时间 15:00" line in the notes.
+    public func scheduled(calendar: Calendar = .hub) -> Date? {
+        guard let due, let notes,
+              let r = notes.range(of: Self.timeLine, options: .regularExpression) else { return nil }
+        let digits = notes[r].dropFirst(2).trimmingCharacters(in: .whitespaces).split(whereSeparator: { $0 == ":" || $0 == "：" })
+        guard digits.count == 2, let h = Int(digits[0]), let m = Int(digits[1]) else { return nil }
+        return calendar.date(bySettingHour: h, minute: m, second: 0, of: calendar.startOfDay(for: due))
+    }
 }
 
 public struct AgendaEvent: Sendable, Identifiable, Hashable {
@@ -78,12 +96,12 @@ public struct AgendaView: Sendable {
 
     public func completed(in listID: String) -> [AgendaTask] { completed.filter { $0.listID == listID } }
 
-    /// Dated open tasks from `today` on, overdue folded into today; today always comes first, even when empty.
+    /// Dated open tasks after `today`, one group per day; today and overdue have their own views.
     public func days(from today: Date, calendar: Calendar = .hub) -> [(day: Date, tasks: [AgendaTask])] {
         let start = calendar.startOfDay(for: today)
         let ahead = (upcoming + later).filter { !$0.completed && $0.due != nil }
         let grouped = Dictionary(grouping: ahead) { calendar.startOfDay(for: $0.due!) }
-        return [(start, dueNow)] + grouped.keys.filter { $0 > start }.sorted().map { ($0, grouped[$0]!) }
+        return grouped.keys.filter { $0 > start }.sorted().map { ($0, grouped[$0]!) }
     }
 
     /// Tasks due on a day (open, plus ones finished) and the events touching it.
@@ -92,6 +110,11 @@ public struct AgendaView: Sendable {
         return (open + completed.filter { !seen.contains($0.id) })
             .filter { $0.due.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
             .sorted { $0.completed != $1.completed ? !$0.completed : ($0.position ?? "~") < ($1.position ?? "~") }
+    }
+
+    /// Tasks due on a day that carry a time, for the day's schedule.
+    public func timedTasks(on day: Date, calendar: Calendar = .hub) -> [(task: AgendaTask, at: Date)] {
+        tasks(on: day, calendar: calendar).compactMap { t in t.scheduled(calendar: calendar).map { (t, $0) } }.sorted { $0.at < $1.at }
     }
 
     public func events(on day: Date, calendar: Calendar = .hub) -> [AgendaEvent] {

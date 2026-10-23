@@ -4,13 +4,12 @@ import SwiftUI
 
 /// What the task page shows; the sidebar lists the same entries under 任务.
 enum TaskScope: Hashable {
-    case today, upcoming, calendar, completed, all
+    case overdue, today, upcoming, calendar, completed, all
     case list(String)
-
-    static let smart: [TaskScope] = [.today, .upcoming, .calendar, .completed]
 
     var title: String {
         switch self {
+        case .overdue: "逾期"
         case .today: "今天"
         case .upcoming: "即将"
         case .calendar: "日历"
@@ -22,6 +21,7 @@ enum TaskScope: Hashable {
 
     var symbol: String {
         switch self {
+        case .overdue: "exclamationmark.circle"
         case .today: "sun.max"
         case .upcoming: "calendar.day.timeline.left"
         case .calendar: "calendar"
@@ -38,20 +38,22 @@ struct TasksPage: View {
     var body: some View {
         let scope = resolved
         let selected = scope == .calendar ? nil : state.taskSelection.flatMap(find)
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 14) {
-                TasksHeader(scope: scope)
-                SyncNotice()
-                content(scope).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            TasksHeader(scope: scope)
+            SyncNotice()
+            content(scope).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .overlay(alignment: .topTrailing) {
             if let selected {
                 TaskInspector(task: selected)
+                    .padding(.top, 64)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 28).padding(.top, 4).padding(.bottom, 24)
         .animation(Motion.spring, value: state.taskSelection)
         .onChange(of: scope) { state.taskSelection = nil }
+        .onExitCommand { state.taskSelection = nil }
     }
 
     /// A list removed elsewhere falls back to the board.
@@ -62,6 +64,7 @@ struct TasksPage: View {
 
     @ViewBuilder private func content(_ scope: TaskScope) -> some View {
         switch scope {
+        case .overdue: OverdueTasks()
         case .today: TodayTasks()
         case .upcoming: UpcomingTasks()
         case .calendar: TaskCalendar()
@@ -111,12 +114,15 @@ private struct TasksHeader: View {
     private var subtitle: String {
         let agenda = state.agenda, v = agenda.view
         switch scope {
+        case .overdue:
+            return v.overdue.isEmpty ? "没有过了截止日的任务" : "\(v.overdue.count) 项过了截止日 · 按清单分列"
         case .today:
-            let open = v.dueNow.filter { !$0.completed }.count
-            return [Agenda.longDay(agenda.now), "\(open) 项到期", v.overdue.isEmpty ? nil : "\(v.overdue.count) 项逾期",
+            let open = v.today.filter { !$0.completed }.count
+            let events = v.events.count + v.allDay.count
+            return [Agenda.longDay(agenda.now), "\(open) 项待办", events > 0 ? "\(events) 个日程" : nil,
                     v.todayDone > 0 ? "已完成 \(v.todayDone)" : nil].compactMap { $0 }.joined(separator: " · ")
         case .upcoming:
-            return "从今天起按日期排列 · \((v.upcoming + v.later).count + v.dueNow.filter { !$0.completed }.count) 项有日期"
+            return "明天起 · \((v.upcoming + v.later).count) 项"
         case .calendar:
             return "任务按到期日放进月历，和日程排在一起"
         case .completed:
@@ -130,30 +136,81 @@ private struct TasksHeader: View {
     }
 
     @ViewBuilder private var trailing: some View {
-        switch scope {
-        case .today:
-            HStack(spacing: 6) {
-                Text("今天显示的清单").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
-                TodayListsMenu()
-            }
-            .padding(.horizontal, 10).frame(height: 30)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.line))
-        case .list(let id):
-            HStack(spacing: 8) {
-                Segmented(options: [(false, "我的顺序"), (true, "到期日")], selection: $byDue, small: true).fixedSize()
-                if let list = state.agenda.lists.first(where: { $0.id == id }) { ListMenu(list: list) }
-            }
-        case .all:
-            ToolButton(symbol: "plus", title: "新建清单") { creating = true }
-                .popover(isPresented: $creating) {
-                    NameField(title: "新建清单", initial: "") { name in
-                        if let name { state.taskScope = .list(state.agenda.createList(name)) }
-                        creating = false
+        let agenda = state.agenda
+        HStack(spacing: 8) {
+            switch scope {
+            case .overdue:
+                if !agenda.view.overdue.isEmpty {
+                    ToolButton(symbol: "sun.max", title: "全部改到今天") {
+                        let today = Calendar.hub.startOfDay(for: agenda.now)
+                        withAnimation(Motion.spring) { agenda.view.overdue.forEach { agenda.reschedule($0, to: today) } }
                     }
                 }
-        default:
-            EmptyView()
+            case .today:
+                if !agenda.view.overdue.isEmpty {
+                    Button { withAnimation(Motion.spring) { state.taskScope = .overdue } } label: {
+                        Chip(text: "\(agenda.view.overdue.count) 项逾期", tone: .rose, systemImage: "arrow.right")
+                    }
+                    .buttonStyle(.plain)
+                }
+                HStack(spacing: 6) {
+                    Text("「今天」显示的清单").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    TodayListsMenu()
+                }
+                .padding(.horizontal, 10).frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.line))
+            case .list(let id):
+                Segmented(options: [(false, "我的顺序"), (true, "到期日")], selection: $byDue, small: true).fixedSize()
+                if let list = agenda.lists.first(where: { $0.id == id }) { ListMenu(list: list) }
+            case .all:
+                ToolButton(symbol: "plus", title: "新建清单") { creating = true }
+                    .popover(isPresented: $creating) {
+                        NameField(title: "新建清单", initial: "") { name in
+                            if let name { state.taskScope = .list(agenda.createList(name)) }
+                            creating = false
+                        }
+                    }
+            default:
+                EmptyView()
+            }
+            if scope != .completed { NewTaskButton(scope: scope) }
+        }
+    }
+}
+
+/// 新建任务: the quick-add field with list and date pickers, preset from the current view.
+private struct NewTaskButton: View {
+    var scope: TaskScope
+    @Environment(AppState.self) private var state
+    @ViewState private var open = false
+
+    var body: some View {
+        ToolButton(symbol: "plus", title: "新建任务", prominent: true) { open = true }
+            .popover(isPresented: $open, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("新建任务").font(Typo.serif(17))
+                    InlineQuickAdd(placeholder: "任务名称，可写「明天下午3点」", list: list, due: due, autofocus: true)
+                    Text("↩ 添加，可以连续添加 · Esc 关闭").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
+                }
+                .padding(16)
+                .frame(width: 440)
+                .background(Palette.card)
+                .environment(state)
+            }
+    }
+
+    private var list: TaskListRecord? {
+        if case .list(let id) = scope { return state.agenda.lists.first { $0.id == id } }
+        return nil
+    }
+
+    private var due: Date? {
+        let cal = Calendar.hub, today = cal.startOfDay(for: state.agenda.now)
+        switch scope {
+        case .today, .overdue: return today
+        case .upcoming: return cal.date(byAdding: .day, value: 1, to: today)
+        default: return nil
         }
     }
 }
@@ -281,18 +338,29 @@ struct AddTaskRow: View {
     @Environment(AppState.self) private var state
     @ViewState private var editing = false
     @ViewState private var text = ""
+    @ViewState private var listID: String?
+    @ViewState private var picking = false
     @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             if editing {
                 Circle().strokeBorder(Palette.ink4, style: StrokeStyle(lineWidth: 1.5, dash: [2.5, 2])).frame(width: 16, height: 16)
-                TextField(parent == nil ? "任务名称，可写「明天下午3点」或 #清单" : "子任务名称", text: $text)
+                TextField(parent == nil ? "任务名称，可写「明天下午3点」" : "子任务名称", text: $text)
                     .textFieldStyle(.plain).font(Typo.sans(13)).focused($focused)
                     .onSubmit(submit)
                     .onExitCommand { text = ""; editing = false }
-                    .onChange(of: focused) { _, on in if !on, text.isEmpty { editing = false } }
+                    .onChange(of: focused) { _, on in
+                        // Focus moves to the list picker on mouse-down, before it reports open.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { if !on, !focused, text.isEmpty, !picking { editing = false } }
+                    }
                 if let hint { Text(hint).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1) }
+                if parent == nil {
+                    ListPickerButton(listID: $listID, fallback: list) { open in
+                        picking = open
+                        if !open { focused = true }
+                    }
+                }
             } else {
                 Button {
                     editing = true
@@ -300,7 +368,7 @@ struct AddTaskRow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 16)
-                        Text(parent == nil ? "添加任务" : "添加子任务").font(Typo.sans(12.5))
+                        Text(label).font(Typo.sans(12.5)).lineLimit(1)
                         Spacer()
                     }
                     .foregroundStyle(Palette.ink3).contentShape(Rectangle())
@@ -314,15 +382,25 @@ struct AddTaskRow: View {
     private var entry: QuickEntry {
         var e = QuickEntryParser.parse(text, now: state.agenda.now)
         if e.due == nil, let due { e.due = Calendar.hub.startOfDay(for: due) }
-        if e.listTag == nil, let list { e.listTag = list.title }
+        ListPickerButton.apply(listID ?? list?.id, to: &e, lists: state.agenda.lists)
         return e
+    }
+
+    /// Says where the task goes: 添加到今天 / 添加到周五 / 添加到工作.
+    private var label: String {
+        if parent != nil { return "添加子任务" }
+        if let list { return "添加到\(list.title)" }
+        if let due {
+            let rel = Agenda.relativeDay(due, now: state.agenda.now)
+            return "添加到" + (rel.contains("/") ? Agenda.weekdayName(due) : rel)
+        }
+        return "添加任务"
     }
 
     private var hint: String? {
         guard parent == nil, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         let e = entry
-        let day = e.due.map { Agenda.relativeDay($0, now: state.agenda.now) + (e.hasTime ? " " + Agenda.clock($0) : "") }
-        return [day, e.listTag ?? state.agenda.defaultList?.title].compactMap { $0 }.joined(separator: " · ")
+        return e.due.map { Agenda.relativeDay($0, now: state.agenda.now) + (e.hasTime ? " " + Agenda.clock($0) : "") }
     }
 
     private func submit() {
@@ -338,8 +416,67 @@ struct AddTaskRow: View {
     }
 }
 
+/// An event with a colour bar; opens the editor. Day columns stack the time range over the title, the menu keeps
+/// one line of start time, title and caption.
+struct EventStrip: View {
+    var event: AgendaEvent
+    var caption: String? = nil
+    var stacked = true
+    var accent = false
+    @Environment(AppState.self) private var state
+    @ViewState private var editing = false
+
+    var body: some View {
+        Button { editing = true } label: {
+            if stacked {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1.5).fill(event.tone.color).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(event.allDay ? "全天" : "\(Agenda.clock(event.start)) – \(Agenda.clock(event.end))")
+                            .font(Typo.sans(10.5)).monospacedDigit().foregroundStyle(Palette.ink3)
+                        Text(event.title).font(Typo.sans(12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 6).padding(.horizontal, 8)
+                .background(event.tone.color.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+            } else {
+                AgendaLine(tone: event.tone.color, time: event.allDay ? "全天" : Agenda.clock(event.start), title: event.title, caption: caption, accent: accent)
+            }
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $editing, arrowEdge: .bottom) {
+            EventEditor(mode: .edit(event)) { editing = false }.environment(state)
+        }
+    }
+}
+
+/// One compact agenda row: colour bar, time, title, caption.
+struct AgendaLine: View {
+    var tone: Color
+    var time: String
+    var title: String
+    var caption: String?
+    var accent = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5).fill(tone).frame(width: 3, height: 14)
+            Text(time).font(Typo.sans(11.5)).monospacedDigit().foregroundStyle(Palette.ink3).frame(width: 36, alignment: .leading)
+            Text(title).font(Typo.sans(12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+            Spacer(minLength: 4)
+            if let caption {
+                Text(caption).font(Typo.sans(11)).foregroundStyle(accent ? Palette.clayDeep : Palette.ink3).lineLimit(1).fixedSize()
+            }
+        }
+        .frame(height: 24).contentShape(Rectangle())
+    }
+}
+
 /// An event as a small tinted pill: time and title; opens the editor.
-private struct EventPill: View {
+struct EventPill: View {
     var event: AgendaEvent
     @Environment(AppState.self) private var state
     @ViewState private var editing = false
@@ -363,72 +500,395 @@ private struct EventPill: View {
 
 // MARK: - Views
 
+private struct ColumnHeightKey: EnvironmentKey { static let defaultValue: CGFloat = 600 }
+
+extension EnvironmentValues {
+    /// How tall a task column may grow before it scrolls inside.
+    fileprivate var columnHeight: CGFloat {
+        get { self[ColumnHeightKey.self] }
+        set { self[ColumnHeightKey.self] = newValue }
+    }
+}
+
+/// Columns side by side, each as tall as its content up to the page; the row scrolls sideways when it doesn't fit.
+/// When the columns overflow, the right edge fades to say there is more; trailing room lets the last column clear the fade.
+private struct ColumnBoard<Content: View>: View {
+    @ViewBuilder var content: Content
+    @ViewState private var contentWidth: CGFloat = 0
+
+    private static var fade: CGFloat { 56 }
+
+    var body: some View {
+        GeometryReader { g in
+            // SwiftUI makes the document as tall as the whole scroll view, bar included; top-align so the bar only covers empty room.
+            let height = max(g.size.height - HubScroller.barHeight, 120)
+            let overflow = contentWidth > g.size.width + 1
+            HubScroll(.horizontal, bar: true) {
+                HStack(alignment: .top, spacing: 14) { content }
+                    .padding(.bottom, 2)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                    .padding(.trailing, overflow ? Self.fade : 0)
+                    .frame(height: max(g.size.height, height), alignment: .top)
+            }
+            .environment(\.columnHeight, height - 4)
+            .overlay(alignment: .trailing) {
+                if overflow {
+                    LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: Self.fade).padding(.bottom, HubScroller.barHeight).allowsHitTesting(false)
+                }
+            }
+        }
+    }
+}
+
+/// Stable colour per list, by its place in the sidebar.
+func listTone(_ id: String, in lists: [TaskListRecord]) -> Tone {
+    let tones: [Tone] = [.sky, .olive, .ochre, .plum, .rose, .clay, .steel]
+    return tones[(lists.firstIndex { $0.id == id } ?? 0) % tones.count]
+}
+
+/// One list of tasks as a card column: header, rows that scroll inside, the add row pinned at the bottom.
+private struct TaskColumn<Trailing: View>: View {
+    var title: String
+    var caption: String? = nil
+    var dot: Color? = nil
+    var titleColor: Color = Palette.ink
+    var width: CGFloat = 292
+    var dim = false
+    var tasks: [AgendaTask]
+    var events: [AgendaEvent] = []
+    var showList = true
+    var showDue = true
+    var empty: String? = nil
+    var add: AddTaskRow? = nil
+    var completed: [AgendaTask] = []
+    var lateInline = false
+    @ViewBuilder var trailing: Trailing
+    @Environment(AppState.self) private var state
+    @Environment(\.columnHeight) private var maxHeight
+    @ViewState private var showDone = false
+    @ViewState private var rowsHeight: CGFloat = 0
+
+    private static var fade: CGFloat { 28 }
+
+    var body: some View {
+        let chrome: CGFloat = 46 + (add == nil ? 8 : 38)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+                Text(title).font(Typo.sans(13.5, .semibold)).foregroundStyle(titleColor).lineLimit(1)
+                let open = tasks.filter { !$0.completed }.count
+                if open > 0 { Text("\(open)").font(Typo.sans(12)).foregroundStyle(Palette.ink4).monospacedDigit() }
+                if let caption { Text(caption).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1) }
+                Spacer(minLength: 4)
+                trailing
+            }
+            .padding(.horizontal, 16).frame(height: 46)
+            let room = max(maxHeight - chrome, 80), overflow = rowsHeight > room + 1
+            HubScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !events.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) { ForEach(events) { EventStrip(event: $0) } }.padding(.bottom, 6)
+                    }
+                    ForEach(tasks) { t in
+                        TaskRow(task: t, showList: showList, showDue: showDue, lateInline: lateInline,
+                                onSelect: { state.taskSelection = $0.id }, selectedID: state.taskSelection)
+                    }
+                    if tasks.isEmpty, let empty {
+                        Text(empty).font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
+                    }
+                    if !completed.isEmpty { doneFold }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
+                .padding(.bottom, overflow ? Self.fade : 0)
+            }
+            .scrollIndicators(.automatic)
+            .frame(maxHeight: room)
+            .fixedSize(horizontal: false, vertical: true)
+            .overlay(alignment: .bottom) {
+                if overflow {
+                    LinearGradient(colors: [Palette.card.opacity(0), Palette.card], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.fade).allowsHitTesting(false)
+                }
+            }
+            if let add {
+                add.padding(.horizontal, 16).overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
+            } else {
+                Color.clear.frame(height: 8)
+            }
+        }
+        .frame(width: width, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
+        .opacity(dim ? 0.62 : 1)
+        .animation(Motion.spring, value: tasks.map(\.id))
+        .animation(Motion.spring, value: tasks.map(\.completed))
+    }
+
+    @ViewBuilder private var doneFold: some View {
+        Button { withAnimation(Motion.spring) { showDone.toggle() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).rotationEffect(.degrees(showDone ? 90 : 0))
+                Text("已完成 \(completed.count)").font(Typo.sans(12))
+                Spacer()
+            }
+            .foregroundStyle(Palette.ink3).padding(.vertical, 8).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .top) { Rectangle().fill(Palette.line2).frame(height: 1) }
+        if showDone {
+            ForEach(completed.prefix(50)) { t in
+                TaskRow(task: t, showList: false, onSelect: { state.taskSelection = $0.id }, selectedID: state.taskSelection)
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+}
+
+extension TaskColumn where Trailing == EmptyView {
+    init(title: String, caption: String? = nil, dot: Color? = nil, titleColor: Color = Palette.ink, width: CGFloat = 292, dim: Bool = false,
+         tasks: [AgendaTask], events: [AgendaEvent] = [], showList: Bool = true, showDue: Bool = true, empty: String? = nil,
+         add: AddTaskRow? = nil, completed: [AgendaTask] = []) {
+        self.init(title: title, caption: caption, dot: dot, titleColor: titleColor, width: width, dim: dim, tasks: tasks, events: events,
+                  showList: showList, showDue: showDue, empty: empty, add: add, completed: completed) { EmptyView() }
+    }
+}
+
+/// A day's events on the serif-clock timeline: all-day ones as pills, then a 现在 marker between past and future.
+struct DaySchedule: View {
+    var day: Date
+    @Environment(AppState.self) private var state
+
+    private enum Stop: Identifiable {
+        case event(AgendaEvent), task(AgendaTask, Date), now(Date)
+        var id: String {
+            switch self {
+            case .event(let e): e.id
+            case .task(let t, _): "task:" + t.id
+            case .now: "now"
+            }
+        }
+        var start: Date {
+            switch self {
+            case .event(let e): e.start
+            case .task(_, let at): at
+            case .now(let at): at
+            }
+        }
+    }
+
+    var body: some View {
+        let agenda = state.agenda, now = agenda.now
+        let events = agenda.view.events(on: day), allDay = events.filter(\.allDay)
+        let tasks = agenda.view.timedTasks(on: day)
+        let timed = (events.filter { !$0.allDay }.map(Stop.event) + tasks.map { Stop.task($0.task, $0.at) }).sorted { $0.start < $1.start }
+        let isToday = Calendar.hub.isDate(day, inSameDayAs: now)
+        let split = timed.firstIndex { $0.start > now } ?? timed.count
+        let stops: [Stop] = isToday && !timed.isEmpty ? Array(timed.prefix(split)) + [.now(now)] + timed.dropFirst(split) : timed
+        VStack(alignment: .leading, spacing: 0) {
+            if !allDay.isEmpty {
+                Flow(spacing: 6) { ForEach(allDay) { EventPill(event: $0) } }.padding(.bottom, 12)
+            }
+            ForEach(Array(stops.enumerated()), id: \.1.id) { i, stop in
+                switch stop {
+                case .now(let at):
+                    TimelineEntry(time: Agenda.clock(at), first: i == 0, last: i == stops.count - 1, dot: Tone.clay.color,
+                                  timeColor: Tone.clay.color, timeWidth: 40, timeSize: 14, gap: 16) {
+                        Text("现在").font(Typo.sans(11.5, .medium)).foregroundStyle(Tone.clay.color).padding(.top, 2)
+                    }
+                case .event(let e):
+                    TimelineEntry(time: Agenda.clock(e.start), first: i == 0, last: i == stops.count - 1,
+                                  timeColor: isToday && e.end <= now ? Palette.ink4 : Palette.ink3, timeWidth: 40, timeSize: 14, gap: 16) {
+                        EventLine(event: e, past: isToday && e.end <= now)
+                    }
+                case .task(let t, let at):
+                    let past = t.completed || (isToday && at <= now)
+                    TimelineEntry(time: Agenda.clock(at), first: i == 0, last: i == stops.count - 1, dot: Tone.olive.color.opacity(0.8),
+                                  timeColor: past ? Palette.ink4 : Palette.ink3, timeWidth: 40, timeSize: 14, gap: 16) {
+                        ScheduledTask(task: t)
+                    }
+                }
+            }
+            if events.isEmpty && tasks.isEmpty {
+                Text(isToday ? "今天没有日程" : "没有日程").font(Typo.sans(12)).foregroundStyle(Palette.ink3).padding(.vertical, 6)
+            }
+        }
+    }
+}
+
+/// A timed task inside the schedule: tick it off where it stands.
+private struct ScheduledTask: View {
+    var task: AgendaTask
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button { withAnimation(Motion.spring) { state.agenda.toggle(task) } } label: {
+                Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13)).foregroundStyle(task.completed ? Tone.olive.color : Palette.ink3)
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title).font(Typo.sans(13)).foregroundStyle(task.completed ? Palette.ink3 : Palette.ink)
+                    .strikethrough(task.completed, color: Palette.ink4).lineLimit(2)
+                Text("任务 · " + task.listTitle).font(Typo.sans(11)).foregroundStyle(Palette.ink3).lineLimit(1)
+            }
+        }
+    }
+}
+
+private struct ScheduleColumn: View {
+    var day: Date
+    @Environment(AppState.self) private var state
+    @Environment(\.columnHeight) private var maxHeight
+    @ViewState private var newEvent = false
+
+    var body: some View {
+        let agenda = state.agenda, now = agenda.now
+        let count = agenda.view.events(on: day).count + agenda.view.timedTasks(on: day).count
+        let isToday = Calendar.hub.isDate(day, inSameDayAs: now)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(isToday ? "今天的日程" : "日程").font(Typo.sans(13.5, .semibold))
+                if count > 0 { Text("\(count)").font(Typo.sans(12)).foregroundStyle(Palette.ink4).monospacedDigit() }
+                Spacer()
+                if agenda.writableCalendar != nil {
+                    Button { newEvent = true } label: {
+                        Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink3)
+                            .frame(width: 22, height: 22).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).help("新建日程")
+                    .popover(isPresented: $newEvent, arrowEdge: .bottom) {
+                        EventEditor(mode: .create(AgendaModule.nextSlot(after: now))) { newEvent = false }.environment(state)
+                    }
+                }
+            }
+            .padding(.horizontal, 16).frame(height: 46)
+            HubScroll {
+                DaySchedule(day: day).padding(.horizontal, 16).padding(.top, 2).padding(.bottom, 14)
+            }
+            .scrollIndicators(.automatic)
+            .frame(maxHeight: max(maxHeight - 46, 80))
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(width: 264, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
+    }
+}
+
+/// An event's title and span on the timeline; click to edit.
+struct EventLine: View {
+    var event: AgendaEvent
+    var past = false
+    @Environment(AppState.self) private var state
+    @ViewState private var editing = false
+
+    var body: some View {
+        Button { editing = true } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.title).font(Typo.sans(13, .medium)).foregroundStyle(past ? Palette.ink3 : Palette.ink).lineLimit(2)
+                Text(caption).font(Typo.sans(11.5)).foregroundStyle(Palette.ink3).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $editing, arrowEdge: .leading) {
+            EventEditor(mode: .edit(event)) { editing = false }.environment(state)
+        }
+    }
+
+    private var caption: String {
+        let minutes = Int(event.end.timeIntervalSince(event.start) / 60)
+        let span = minutes >= 60 ? (minutes % 60 == 0 ? "\(minutes / 60) 小时" : String(format: "%.1f 小时", Double(minutes) / 60)) : "\(minutes) 分钟"
+        return [span, event.location].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+    }
+}
+
+private struct OverdueTasks: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let agenda = state.agenda, v = agenda.view
+        let groups = agenda.lists.compactMap { l -> (TaskListRecord, [AgendaTask])? in
+            let tasks = v.overdue.filter { $0.listID == l.id }
+            return tasks.isEmpty ? nil : (l, tasks)
+        }
+        if groups.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle").font(.system(size: 26, weight: .light)).foregroundStyle(Tone.olive.color)
+                Text("没有逾期的任务").font(Typo.serif(19))
+                Text("过了截止日还没完成的任务会出现在这里。").font(Typo.sans(12.5)).foregroundStyle(Palette.ink3)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 60)
+        } else {
+            ColumnBoard {
+                ForEach(groups, id: \.0.id) { list, tasks in
+                    TaskColumn(title: list.title, dot: listTone(list.id, in: agenda.lists).color, tasks: tasks, showList: false, lateInline: true) {
+                        Button {
+                            let today = Calendar.hub.startOfDay(for: agenda.now)
+                            withAnimation(Motion.spring) { tasks.forEach { agenda.reschedule($0, to: today) } }
+                        } label: {
+                            Text("改到今天").font(Typo.sans(11.5)).foregroundStyle(Palette.ink2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct TodayTasks: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         let agenda = state.agenda, v = agenda.view, today = Calendar.hub.startOfDay(for: agenda.now)
-        HubScroll {
-            VStack(alignment: .leading, spacing: 14) {
-                if !v.overdue.isEmpty {
-                    TaskSection(title: "逾期", tone: .rose, tasks: v.overdue)
-                }
-                TaskSection(title: "今天", caption: Agenda.longDay(agenda.now), tasks: v.today, events: v.events(on: today),
-                            empty: "今天没有到期的任务", add: AddTaskRow(due: today))
-                ForEach(agenda.todayExtras, id: \.list.id) { list, tasks in
-                    TaskSection(title: list.title, caption: "清单", tone: .sky, tasks: tasks, showList: false,
-                                empty: "清单里没有其他未完成的任务", add: AddTaskRow(list: list)) {
-                        Button { agenda.showInToday(list.id, false) } label: {
-                            Image(systemName: "pin.slash").font(.system(size: 11)).foregroundStyle(Palette.ink3)
-                        }
-                        .buttonStyle(.plain).help("不在「今天」显示这个清单")
+        ColumnBoard {
+            TaskColumn(title: "今天到期", tasks: v.today, showDue: false, empty: "今天没有到期的任务", add: AddTaskRow(due: today))
+            ForEach(agenda.todayExtras, id: \.list.id) { list, tasks in
+                TaskColumn(title: list.title, dot: listTone(list.id, in: agenda.lists).color, tasks: tasks, showList: false,
+                           empty: "清单里没有其他未完成的任务", add: AddTaskRow(list: list)) {
+                    Button { withAnimation(Motion.spring) { agenda.showInToday(list.id, false) } } label: {
+                        Image(systemName: "pin.slash").font(.system(size: 11)).foregroundStyle(Palette.ink3)
                     }
-                }
-                if agenda.todayLists.isEmpty {
-                    Text("用右上角的图钉把常用清单固定到「今天」。").font(Typo.sans(12)).foregroundStyle(Palette.ink3)
+                    .buttonStyle(.plain).help("不在「今天」显示这个清单")
                 }
             }
-            .frame(maxWidth: 820, alignment: .leading)
-            .padding(.bottom, 12)
+            ScheduleColumn(day: today)
         }
-        .scrollIndicators(.never)
     }
 }
 
+/// The next seven days one column each, then everything later in one.
 private struct UpcomingTasks: View {
     @Environment(AppState.self) private var state
-    private static let horizon = 14
 
     var body: some View {
         let agenda = state.agenda, v = agenda.view, cal = Calendar.hub
         let today = cal.startOfDay(for: agenda.now)
-        let end = cal.date(byAdding: .day, value: Self.horizon, to: today)!
-        let days: [(Date, [AgendaTask], [AgendaEvent])] = (0..<Self.horizon).compactMap { i in
-            let day = cal.date(byAdding: .day, value: i, to: today)!
-            let tasks = i == 0 ? v.dueNow : v.tasks(on: day).filter { !$0.completed }
-            let events = v.events(on: day)
-            return i < 2 || !tasks.isEmpty || !events.isEmpty ? (day, tasks, events) : nil
-        }
-        let later = v.later.filter { ($0.due ?? .distantFuture) >= end }
-        HubScroll {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(days, id: \.0) { day, tasks, events in
-                    TaskSection(title: title(day), caption: Agenda.longDay(day), tasks: tasks, events: events,
-                                showDue: false, empty: "没有到期的任务", add: AddTaskRow(due: day))
-                }
-                if !later.isEmpty {
-                    TaskSection(title: "更晚", caption: "两周以后", tasks: later)
-                }
+        ColumnBoard {
+            ForEach(1...7, id: \.self) { i in
+                let day = cal.date(byAdding: .day, value: i, to: today)!
+                let tasks = v.tasks(on: day).filter { !$0.completed }, events = v.events(on: day)
+                TaskColumn(title: title(day), caption: caption(day), width: 252, dim: tasks.isEmpty && events.isEmpty,
+                           tasks: tasks, events: events, showDue: false, empty: "没有安排", add: AddTaskRow(due: day))
             }
-            .frame(maxWidth: 820, alignment: .leading)
-            .padding(.bottom, 12)
+            TaskColumn(title: "之后", caption: "一周以后", width: 252, tasks: v.later, empty: "一周以后没有任务")
         }
-        .scrollIndicators(.never)
     }
 
     private func title(_ day: Date) -> String {
         let rel = Agenda.relativeDay(day, now: state.agenda.now)
         return rel.contains("/") ? Agenda.weekdayName(day) : rel
+    }
+
+    private func caption(_ day: Date) -> String {
+        let c = Calendar.hub.dateComponents([.month, .day], from: day)
+        let rel = Agenda.relativeDay(day, now: state.agenda.now)
+        return (["明天", "后天"].contains(rel) ? Agenda.weekdayName(day) + " · " : "") + "\(c.month!)/\(c.day!)"
     }
 }
 
@@ -462,19 +922,14 @@ private struct ListBoard: View {
 
     var body: some View {
         let agenda = state.agenda, v = agenda.view
-        HubScroll([.horizontal, .vertical]) {
-            HStack(alignment: .top, spacing: 14) {
-                ForEach(agenda.lists) { list in
-                    TaskSection(title: list.title, tasks: v.open(in: list.id), showList: false, empty: "没有未完成的任务",
-                                add: AddTaskRow(list: list), completed: v.completed(in: list.id)) {
-                        ListMenu(list: list)
-                    }
-                    .frame(width: 300)
+        ColumnBoard {
+            ForEach(agenda.lists) { list in
+                TaskColumn(title: list.title, dot: listTone(list.id, in: agenda.lists).color, tasks: v.open(in: list.id),
+                           showList: false, empty: "没有未完成的任务", add: AddTaskRow(list: list), completed: v.completed(in: list.id)) {
+                    ListMenu(list: list)
                 }
             }
-            .padding(.bottom, 12)
         }
-        .scrollIndicators(.never)
     }
 }
 
@@ -720,7 +1175,7 @@ private struct TaskInspector: View {
         .background(RoundedRectangle(cornerRadius: Metrics.cardRadius).fill(Palette.card))
         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardRadius))
         .overlay(RoundedRectangle(cornerRadius: Metrics.cardRadius).strokeBorder(Palette.line))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        .shadow(color: Color(hex: "#3C280A").opacity(0.14), radius: 22, y: 10)
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
@@ -737,48 +1192,63 @@ private struct TaskInspector: View {
 struct TaskNav: View {
     @Environment(AppState.self) private var state
     @AppStorage("taskNavListsOpen") private var listsOpen = true
+    /// Mirrors the stored flag; toggling stored defaults directly skips the transition.
+    @ViewState private var open = true
     @ViewState private var creating = false
 
     var body: some View {
         let agenda = state.agenda, v = agenda.view
         VStack(spacing: 1) {
-            row(.today, count: v.dueNow.filter { !$0.completed }.count, alert: !v.overdue.isEmpty)
+            if !v.overdue.isEmpty || state.taskScope == .overdue {
+                row(.overdue, count: v.overdue.count, alert: true)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            row(.today, count: v.today.filter { !$0.completed }.count)
             row(.upcoming, count: (v.upcoming + v.later).count)
             row(.calendar)
             row(.completed)
             row(.all, count: v.allTasks.filter { !$0.completed }.count) {
-                Button { withAnimation(Motion.spring) { listsOpen.toggle() } } label: {
+                Button { open.toggle() } label: {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.ink3)
-                        .rotationEffect(.degrees(listsOpen ? 90 : 0)).frame(width: 16, height: 16).contentShape(Rectangle())
+                        .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 16, height: 16).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .help(open ? "收起清单" : "展开清单")
             }
-            if listsOpen {
-                ForEach(agenda.lists) { list in
-                    let pinned = agenda.todayLists.contains { $0.id == list.id }
-                    row(.list(list.id), title: list.title, count: v.open(in: list.id).count, indent: 18, pinned: pinned)
-                        .contextMenu {
-                            Button(pinned ? "不在「今天」显示" : "在「今天」显示") { agenda.showInToday(list.id, !pinned) }
+            if open {
+                VStack(spacing: 1) {
+                    ForEach(agenda.lists) { list in
+                        let pinned = agenda.todayLists.contains { $0.id == list.id }
+                        row(.list(list.id), title: list.title, count: v.open(in: list.id).count, indent: 18, pinned: pinned)
+                            .contextMenu {
+                                Button(pinned ? "不在「今天」显示" : "在「今天」显示") { agenda.showInToday(list.id, !pinned) }
+                            }
+                    }
+                    Button { creating = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus").font(.system(size: 10, weight: .semibold)).frame(width: 16)
+                            Text("新建清单").font(Typo.sans(12))
+                            Spacer()
                         }
-                }
-                Button { creating = true } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus").font(.system(size: 10, weight: .semibold)).frame(width: 16)
-                        Text("新建清单").font(Typo.sans(12))
-                        Spacer()
+                        .foregroundStyle(Palette.ink3).padding(.leading, 46).frame(height: 26).contentShape(Rectangle())
                     }
-                    .foregroundStyle(Palette.ink3).padding(.leading, 46).frame(height: 26).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $creating, arrowEdge: .trailing) {
-                    NameField(title: "新建清单", initial: "") { name in
-                        if let name { state.taskScope = .list(agenda.createList(name)) }
-                        creating = false
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $creating, arrowEdge: .trailing) {
+                        NameField(title: "新建清单", initial: "") { name in
+                            if let name { state.taskScope = .list(agenda.createList(name)) }
+                            creating = false
+                        }
                     }
                 }
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -8)), removal: .opacity.combined(with: .offset(y: -4))))
             }
         }
         .padding(.top, 2).padding(.bottom, 6)
+        .clipped()
+        .animation(Motion.spring, value: open)
+        .animation(Motion.spring, value: v.overdue.isEmpty)
+        .onAppear { open = listsOpen }
+        .onChange(of: open) { listsOpen = open }
     }
 
     private func row(_ scope: TaskScope, title: String? = nil, count: Int? = nil, indent: CGFloat = 0,

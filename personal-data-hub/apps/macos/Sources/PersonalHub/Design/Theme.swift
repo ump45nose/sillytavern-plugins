@@ -64,11 +64,33 @@ extension Tone {
 }
 
 enum Typo {
-    /// New York with Songti SC for CJK, matching the mockup's serif headings.
-    /// New York is loaded from its file because the system-UI instance widens CJK punctuation to 1.5em.
+    /// Anthropic Serif and Sans when Claude.app is installed, read from its bundle in place (never copied or shipped);
+    /// otherwise New York and the system font. "系统字体" in settings forces the fallback.
+    static let preferenceKey = "typeface.system"
+    static var anthropic: Bool { !UserDefaults.standard.bool(forKey: preferenceKey) && AnthropicFonts.available }
+
     static func serif(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> Font { Font(serifFont(size, weight)) }
 
     static func serifFont(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> NSFont {
+        if anthropic, let f = AnthropicFonts.font(.serif, size: size, weight: weight.rawValue) { return f }
+        return newYorkFont(size, weight)
+    }
+
+    static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        guard anthropic, let f = AnthropicFonts.font(.sans, size: size, weight: AnthropicFonts.weight(weight)) else {
+            return .system(size: size, weight: weight)
+        }
+        return Font(f)
+    }
+
+    static func sansFont(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> NSFont {
+        if anthropic, let f = AnthropicFonts.font(.sans, size: size, weight: weight.rawValue) { return f }
+        return .systemFont(ofSize: size, weight: weight)
+    }
+
+    /// New York with Songti SC for CJK, matching the mockup's serif headings.
+    /// New York is loaded from its file because the system-UI instance widens CJK punctuation to 1.5em.
+    private static func newYorkFont(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
         let w = weight.rawValue
         let bold = w >= NSFont.Weight.semibold.rawValue
         let instance: String = switch w {
@@ -96,8 +118,15 @@ enum Typo {
         }, uniquingKeysWith: { a, _ in a })
     }()
 
-    static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight, design: .monospaced) }
+}
+
+/// Rebuilds a window's views when the typeface setting changes; `Typo` reads it on each call, not through SwiftUI.
+struct TypefaceScope<Content: View>: View {
+    @AppStorage(Typo.preferenceKey) private var system = false
+    @ViewBuilder var content: Content
+
+    var body: some View { content.id(system) }
 }
 
 enum Metrics {

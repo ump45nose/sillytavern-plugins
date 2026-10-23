@@ -77,14 +77,48 @@ public enum HubSample {
             today: .init(downBytes: 6.8 * gb, upBytes: 0.9 * gb), monthBytes: 142 * gb,
             hourly: (0..<24).map { .init(hour: at($0, 0), bytes: $0 > hourNow ? nil : hourly[$0] * gb) }))
 
-        func sub(_ id: String, _ name: String, _ price: Double, _ currency: String, _ cycle: String, _ renewIn: Int, _ monthly: Double) -> SubsData.Item {
-            .init(id: id, name: name, price: price, currency: currency, cycle: cycle, nextRenewal: key(renewIn), monthlyEquivalent: monthly)
+        let rates = SubsData.ExchangeRates(base: "USD", stale: false, rates: ["USD": "1", "CNY": "7.12", "INR": "84.1", "BOB": "6.91", "EUR": "0.92"])
+        func sub(_ id: String, _ name: String, _ price: Double, _ currency: String, _ cycle: String, _ renewIn: Int,
+                 key service: String? = nil, category: String = "other", payer: String = "self", label: String? = nil, plan: String? = nil,
+                 region: String? = nil, quota: [SubscriptionQuota.Window]? = nil, active: Bool = true) -> SubsData.Item {
+            let monthly: Double? = cycle == "month" ? price : cycle == "year" ? price / 12 : nil
+            let both = { (v: Double) in ["CNY": rates.convert(v, from: currency, to: "CNY")!, "USD": rates.convert(v, from: currency, to: "USD")!] }
+            return .init(id: id, name: name, price: price, currency: currency, cycle: cycle,
+                         nextRenewal: cycle == "one_time" ? nil : key(renewIn), monthlyEquivalent: monthly,
+                         version: 3, accountLabel: label, category: category, payer: payer, frequency: 1, active: active,
+                         quota: quota.map { .init(reading: .init(windows: $0, observedAt: now.addingTimeInterval(-600)), status: "ok", stale: false,
+                                                  lastSuccessAt: now.addingTimeInterval(-600)) },
+                         serviceKey: service, expiresOn: cycle == "one_time" ? key(renewIn) : nil, plan: plan,
+                         billingRegion: region, autoRenew: cycle != "one_time", priceConverted: both(price), monthlyConverted: monthly.map(both),
+                         exchangeRateDate: key(0), exchangeRateStale: false)
         }
-        out.subs = env("subs", SubsData(monthlyTotal: 1486, items: [
-            sub("claude", "Claude Max", 100, "USD", "month", 8, 712), sub("domain", "域名 ×2", 96, "CNY", "year", 5, 8),
-            sub("chatgpt", "ChatGPT Plus", 20, "USD", "month", 14, 142.4), sub("cursor", "Cursor Pro", 20, "USD", "month", 12, 142.4),
-            sub("google", "Google One 2TB", 68, "CNY", "month", 23, 68), sub("vps", "VPS", 6, "USD", "month", 19, 42.7), sub("proxy", "主力机场", 25, "CNY", "month", 41, 25),
-        ]))
+        func window(_ id: String, _ label: String, _ percent: Double, resetsIn hours: Double) -> SubscriptionQuota.Window {
+            .init(id: id, label: label, usedPercent: percent, resetsAt: now.addingTimeInterval(hours * 3600), observedAt: now.addingTimeInterval(-600))
+        }
+        let traffic = SubscriptionQuota.Window(id: "traffic", label: "本期流量", unit: "bytes", used: 94 * gb, limit: 200 * gb,
+                                               remaining: 106 * gb, resetsAt: now.addingTimeInterval(13 * 86_400), observedAt: now.addingTimeInterval(-600))
+        let items = [
+            sub("claude", "Claude", 100, "USD", "month", 3, key: "claude", category: "ai", payer: "company", label: "个人账号", plan: "Max 5×",
+                region: "美国", quota: [window("5h", "5 小时", 34, resetsIn: 2.2), window("week", "本周", 61, resetsIn: 96)]),
+            sub("claude-work", "Claude", 20, "USD", "month", 25, key: "claude", category: "ai", label: "工作邮箱", plan: "Pro",
+                region: "美国", quota: [window("week", "本周", 12, resetsIn: 140)]),
+            sub("chatgpt", "ChatGPT Plus", 1950, "INR", "year", 130, key: "chatgpt", category: "ai", label: "个人账号", plan: "Plus", region: "印度"),
+            sub("cursor", "Cursor Pro", 20, "USD", "month", 12, key: "cursor", category: "ai", payer: "company", plan: "Pro",
+                quota: [window("month", "本月", 82, resetsIn: 300)]),
+            sub("proxy", "主力机场", 25, "CNY", "month", 13, category: "network", label: "个人账号", plan: "标准套餐 200 GB", quota: [traffic]),
+            sub("spare", "备用机场", 70, "BOB", "one_time", 71, category: "network", region: "玻利维亚"),
+            sub("google", "Google One 2TB", 68, "CNY", "month", 23, category: "membership", label: "家庭", plan: "2 TB"),
+            sub("icloud", "iCloud+", 21, "CNY", "month", 10, category: "membership", payer: "unknown", plan: "200 GB"),
+            sub("domain", "域名 ×2", 96, "CNY", "year", 5),
+            sub("music", "Apple Music", 11, "CNY", "month", 40, category: "membership", active: false),
+        ]
+        let live = items.filter { $0.active != false }
+        func total(_ c: String) -> Double { live.compactMap { $0.monthlyConverted?[c] }.reduce(0, +) }
+        var byCurrency: [String: Double] = [:]
+        for s in live { if let m = s.monthlyEquivalent { byCurrency[s.currency ?? "CNY", default: 0] += m } }
+        out.subs = env("subs", SubsData(monthlyTotal: total("CNY"), items: items, monthlyByCurrency: byCurrency,
+                                        unclassifiedPayerCount: 1, monthlyConverted: ["CNY": total("CNY"), "USD": total("USD")],
+                                        unconvertedCurrencies: [], exchangeRates: rates))
 
         out.memos = env("memos", MemosData(
             recent: [.init(id: "m1", createdAt: now.addingTimeInterval(-16 * 60), content: "方向定下来了：按模块组装，不按领域；任务和复盘目标合进主页。 #日报", tags: ["日报"]),

@@ -54,7 +54,7 @@ enum QARender {
             state.go(String(page))
             await shot("page-\(page)", width: 1320, height: 1500, MainView().background(Palette.bg))
         }
-        let scopes: [(String, TaskScope)] = [("today", .today), ("upcoming", .upcoming), ("calendar", .calendar),
+        let scopes: [(String, TaskScope)] = [("overdue", .overdue), ("today", .today), ("upcoming", .upcoming), ("calendar", .calendar),
                                              ("completed", .completed), ("all", .all), ("list", .list("work"))]
         for (name, scope) in scopes {
             state.go("tasks")
@@ -62,9 +62,20 @@ enum QARender {
             state.taskSelection = name == "list" ? "s7" : nil
             await shot("tasks-\(name)", width: 1320, height: 860, MainView().background(Palette.bg))
         }
+        if only == nil || only!.contains(where: { "tasks-long".hasPrefix($0) || $0.hasPrefix("tasks-long") }) {
+            state.taskSelection = nil
+            state.agenda.preview(AgendaSample.long(now: state.agenda.now))
+            try? await Task.sleep(for: .milliseconds(300))
+            for (name, scope) in [("overdue", TaskScope.overdue), ("all", .all)] {
+                state.taskScope = scope
+                await shot("tasks-long-\(name)", width: 1320, height: 860, MainView().background(Palette.bg))
+            }
+            state.agenda.preview(AgendaSample.store(now: state.agenda.now))
+            try? await Task.sleep(for: .milliseconds(300))
+        }
         state.taskSelection = nil
         state.go("home")
-        for tab in 0..<3 {
+        for tab in 0..<4 {
             await shot("tray-tasks-\(tab)", width: 380, TrayTasks(tab: tab).padding(16).background(Palette.card))
         }
         if let id = state.newPage() {
@@ -130,6 +141,37 @@ enum QARender {
         await shot("plaud-compact", width: 340, ModuleCard(item: LayoutItem(.plaud, .compact), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("plaud-detail", width: 1100, ModuleCard(item: LayoutItem(.plaud, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
         await shot("markdown", width: 560, height: 520, MarkdownEditor(text: .constant(QASample.markdown)).background(Palette.card))
+        await shot("subs-compact", width: 340, ModuleCard(item: LayoutItem(.subs, .compact), index: 0, count: 1).padding(20).background(Palette.bg))
+        await shot("subs-detail", width: 1100, ModuleCard(item: LayoutItem(.subs, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        await shot("subs-detail-narrow", width: 760, ModuleCard(item: LayoutItem(.subs, .detail), index: 0, count: 1).padding(20).background(Palette.bg))
+        if let sub = state.hub.data.subs?.data?.items?.first {
+            await shot("subs-edit", width: 1000, SubEditCard(item: sub) {}.padding(20).background(Palette.bg))
+        }
+        for (id, name) in [("proxy", "subs-edit-link"), ("spare", "subs-edit-nolink")] {
+            if let sub = state.hub.data.subs?.data?.items?.first(where: { $0.id == id }) {
+                await shot(name, width: 1000, SubEditCard(item: sub) {}.padding(20).background(Palette.bg))
+            }
+        }
+        UserDefaults.standard.set(QASample.memoDraft, forKey: "qa.memos.draft")
+        await shot("memo-composer", width: 860, MemoComposer(maxHeight: 420, open: true, draftKey: "qa.memos.draft").padding(20).background(Palette.bg))
+        func swatch(_ hex: String) -> NSImage {
+            NSImage(size: NSSize(width: 34, height: 34), flipped: false) { r in NSColor(Color(hex: hex)).setFill(); r.fill(); return true }
+        }
+        let files = MemoUploads([
+            .init(filename: "白板照片.jpg", type: "image/jpeg", size: 1_240_000, preview: swatch("#C9B89A"), phase: .done("attachments/a")),
+            .init(filename: "任务页草图.pdf", type: "application/pdf", size: 320_000, phase: .uploading),
+            .init(filename: "录屏.mov", type: "video/quicktime", size: 90_000_000, phase: .failed("超过 64 MB，没有上传")),
+        ])
+        await shot("memo-composer-files", width: 860,
+                   MemoComposer(maxHeight: 420, open: true, draftKey: "qa.memos.draft", uploads: files).padding(20).background(Palette.bg))
+        UserDefaults.standard.removeObject(forKey: "qa.memos.draft")
+        await shot("markdown-reveal", width: 560, height: 660, VStack(spacing: 0) {
+            ForEach([0, 2, 5], id: \.self) { MarkdownRevealPreview(text: QASample.memoDraft, line: $0).frame(height: 220) }
+        }.background(Palette.card))
+        await shot("memo-composer-empty", width: 860, MemoComposer(maxHeight: 420, draftKey: "qa.memos.empty").padding(20).background(Palette.bg))
+        if let day = state.hub.skyDays.first {
+            await shot("sky-month", width: 280, SkyMonth(selected: day) { _ in })
+        }
         await shot("due-picker", width: 372, DuePickerPanel(picked: .constant(PickedDue(day: state.agenda.now, time: DateComponents(hour: 15, minute: 0))), now: state.agenda.now) {})
         if let history = state.hub.tokenHistory() {
             if let y = history.years().last.map({ history.year($0) }) {
@@ -190,6 +232,15 @@ enum QASample {
 
     两项都在下面，**确认后**才会写入 Google 日历和任务。
     """
+    static let memoDraft = """
+    ## 周三复盘
+    今天最大的收获是把任务页的**分类边界**理清了。
+    - [x] 逾期单独成类
+    - [ ] 菜单任务区渐进展开
+    - 参考 [Things 3](https://culturedcode.com/things/) 的列表动画
+    #工作 #复盘
+    """
+
     static let markdown = """
     # 第 42 周 · 周报
     ## 本周完成
@@ -252,6 +303,27 @@ enum QABench {
         }
         await measure("popover", width: 380, PopoverView())
     }
+}
+
+/// The editor's styling as if the caret sat on `line`, which offscreen windows can't otherwise show.
+private struct MarkdownRevealPreview: NSViewRepresentable {
+    var text: String
+    var line: Int
+
+    func makeNSView(context: Context) -> MarkdownTextView {
+        let view = MarkdownTextView(frame: NSRect(x: 0, y: 0, width: 560, height: 220))
+        view.size = 14
+        view.drawsBackground = false
+        view.textContainerInset = NSSize(width: 14, height: 12)
+        view.string = text
+        let ns = text as NSString
+        var start = 0
+        for _ in 0..<line { start = NSMaxRange(ns.lineRange(for: NSRange(location: start, length: 0))) }
+        MarkdownStyle(size: 14).apply(to: view, reveal: ns.lineRange(for: NSRange(location: start, length: 0)))
+        return view
+    }
+
+    func updateNSView(_ view: MarkdownTextView, context: Context) {}
 }
 
 extension CommandLine {

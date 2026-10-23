@@ -1,6 +1,6 @@
 """Bundles the Google Desktop OAuth client settings into the app; never a user's tokens.
 
-Usage: bundle-google.py "/path/Personal Hub.app"
+Usage: bundle-google.py "/path/Nook.app"
 Source: $HUB_GOOGLE_CONFIG, else the v0 config at
 ~/Library/Application Support/PersonalDataHub/google-desktop-config.json (read only).
 """

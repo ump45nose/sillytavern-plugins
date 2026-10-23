@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "PersonalHub",
+    name: "Nook",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "PersonalHub", targets: ["PersonalHub"])],
     targets: [

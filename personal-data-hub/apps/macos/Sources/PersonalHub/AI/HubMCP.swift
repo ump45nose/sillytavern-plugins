@@ -11,9 +11,9 @@ enum HubMCP {
     static let serverName = "personal_hub"
 
     static let instructions = """
-    Personal Hub 是用户的个人信息聚合中心：任务、日程、健康、账单、交流（CRM）、Token 用量、Memos、阶段目标等。
+    Nook 是用户的个人信息聚合中心：任务、日程、健康、账单、交流（CRM）、Token 用量、Memos、阶段目标等。
     读取类工具返回 App 最近一次同步的本地缓存（带 synced_at）。写入类工具（propose_*）只会生成待确认的变更，
-    需要用户在 Personal Hub 里确认后才会真正写入；调用后请告诉用户去确认，不要声称已经完成。
+    需要用户在 Nook 里确认后才会真正写入；调用后请告诉用户去确认，不要声称已经完成。
     """
 
     static func run() async -> Int32 {
@@ -126,7 +126,7 @@ enum HubMCP {
             throw MCPToolError("保存待确认变更失败")
         }
         return try json(["status": "pending_confirmation", "pending_id": change.id,
-                         "message": "已提交，等用户在 Personal Hub 里确认后才会写入。"])
+                         "message": "已提交，等用户在 Nook 里确认后才会写入。"])
     }
 
     private static func overview(_ data: Caches, now: Date) throws -> String {

@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
     <key>CFBundleIdentifier</key><string>com.yuwk.personal-hub</string>
-    <key>CFBundleName</key><string>Personal Hub</string>
-    <key>CFBundleDisplayName</key><string>Personal Hub</string>
+    <key>CFBundleName</key><string>Nook</string>
+    <key>CFBundleDisplayName</key><string>Nook</string>
     <key>CFBundleExecutable</key><string>PersonalHub</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
@@ -15,7 +15,7 @@
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
-    <key>NSHumanReadableCopyright</key><string>玮康 · Personal Hub</string>
+    <key>NSHumanReadableCopyright</key><string>玮康 · Nook</string>
     <key>NSAppTransportSecurity</key><dict>
         <key>NSAllowsLocalNetworking</key><true/>
         <key>NSAllowsArbitraryLoadsInWebContent</key><true/>

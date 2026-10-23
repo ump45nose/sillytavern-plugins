@@ -15,6 +15,19 @@ import Testing
         #expect(SkyArchive.parseName("2026-10-13T00-00-00-Ab12-1d-memory-summary.md") == nil)
     }
 
+    @Test func activityCountsEachSegmentOncePerDay() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let base = try #require(utc.date(from: "2026-10-19T00:00:00Z"))
+        func file(_ hours: Double, _ id: String, device: String = "macpro", span: SkySummary.Span = .tenMinutes) -> SkyFile {
+            SkyFile(device: device, url: URL(fileURLWithPath: "/tmp/\(id).md"), span: span, start: base.addingTimeInterval(hours * 3600), id: id)
+        }
+        let files = [file(1, "a"), file(1, "a"), file(2, "b"), file(2, "b", device: "macair"), file(0, "w", span: .sixHours), file(26, "c")]
+        let activity = SkyArchive.activity(files, calendar: cal)
+        #expect(activity[base] == 3)
+        #expect(activity[base.addingTimeInterval(86_400)] == 1)
+    }
+
     @Test func parsesFrontMatter() throws {
         let text = """
         ---

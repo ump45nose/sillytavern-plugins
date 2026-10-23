@@ -173,6 +173,46 @@ struct SectionTitle: View {
     }
 }
 
+/// One stop on the serif-clock timeline: time on the left, a dot on a hairline, content on the right.
+struct TimelineEntry<Content: View>: View {
+    var time: String
+    var first = false
+    var last = false
+    var dot: Color = Palette.ink4.opacity(0.75)
+    var timeColor: Color = Palette.ink3
+    var timeWidth: CGFloat = 48
+    var timeSize: CGFloat = 15
+    /// Background behind the dot, so the hairline stops short of it.
+    var ring: Color = Palette.card
+    var gap: CGFloat = 20
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, last ? 0 : gap)
+            .padding(.leading, timeWidth + 24)
+            .background(alignment: .topLeading) {
+                HStack(alignment: .top, spacing: 0) {
+                    Text(time).font(Typo.serif(timeSize)).monospacedDigit().foregroundStyle(timeColor).lineLimit(1)
+                        .frame(width: timeWidth, alignment: .trailing)
+                    ZStack(alignment: .top) {
+                        if !(first && last) {
+                            Rectangle().fill(Palette.line).frame(width: 1, height: last ? 9 : nil)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .padding(.top, first ? 9 : 0)
+                        }
+                        Circle().fill(dot).frame(width: 7, height: 7)
+                            .background(Circle().fill(ring).frame(width: 13, height: 13))
+                            .padding(.top, 6)
+                    }
+                    .frame(width: 24)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+            }
+    }
+}
+
 struct Stat: View {
     var label: String
     var value: String
@@ -290,12 +330,18 @@ struct Segmented<T: Hashable>: View {
     @Binding var selection: T
     var small = false
     @Namespace private var ns
+    /// What the pill shows; `@AppStorage` bindings drop the animation transaction, so the pill moves on its own.
+    @ViewState private var shown: T?
 
     var body: some View {
+        let current = shown ?? selection
         HStack(spacing: 2) {
             ForEach(options, id: \.0) { value, label in
-                let on = value == selection
-                Button { withAnimation(Motion.spring) { selection = value } } label: {
+                let on = value == current
+                Button {
+                    withAnimation(Motion.spring) { shown = value }
+                    selection = value
+                } label: {
                     Text(label).font(Typo.sans(small ? 11 : 12.5, on ? .semibold : .regular))
                         .foregroundStyle(on ? Palette.ink : Palette.ink3)
                         .lineLimit(1).fixedSize(horizontal: small, vertical: false)
@@ -314,6 +360,9 @@ struct Segmented<T: Hashable>: View {
         }
         .padding(small ? 2 : 3)
         .background(RoundedRectangle(cornerRadius: small ? 7 : 10).fill(Palette.sunk))
+        .onChange(of: selection) { _, value in
+            if value != shown { withAnimation(Motion.spring) { shown = value } }
+        }
     }
 }
 
@@ -341,50 +390,143 @@ extension ButtonStyle where Self == HubButton {
 
 /// A thin rounded knob with no slot. The system overlay scroller grows a grey track on hover.
 final class HubScroller: NSScroller {
+    /// Always shown while the content overflows, with a faint track: for wide boards a mouse can't easily scroll sideways.
+    var bar = false
+
+    /// Room a horizontal bar takes under the content.
+    static var barHeight: CGFloat { NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) }
+
     override class var isCompatibleWithOverlayScrollers: Bool { true }
 
-    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+    override func draw(_ dirtyRect: NSRect) {
+        guard bar else { return super.draw(dirtyRect) }
+        drawKnobSlot(in: rect(for: .knobSlot), highlight: false)
+        drawKnob()
+    }
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
+        guard bar else { return }
+        let vertical = bounds.height >= bounds.width
+        let r = vertical ? NSRect(x: slotRect.midX - 2, y: slotRect.minY + 3, width: 4, height: slotRect.height - 6)
+                         : NSRect(x: slotRect.minX + 3, y: slotRect.midY - 2, width: slotRect.width - 6, height: 4)
+        NSColor(Palette.line).setFill()
+        NSBezierPath(roundedRect: r, xRadius: 2, yRadius: 2).fill()
+    }
 
     override func drawKnob() {
         let knob = rect(for: .knob)
-        let vertical = bounds.height >= bounds.width, thickness: CGFloat = 5
-        let r = vertical ? NSRect(x: knob.maxX - thickness - 3, y: knob.minY + 3, width: thickness, height: max(knob.height - 6, thickness))
+        let vertical = bounds.height >= bounds.width, thickness: CGFloat = bar ? 6 : 5
+        let r: NSRect
+        if bar {
+            r = vertical ? NSRect(x: knob.midX - thickness / 2, y: knob.minY + 3, width: thickness, height: max(knob.height - 6, thickness))
+                         : NSRect(x: knob.minX + 3, y: knob.midY - thickness / 2, width: max(knob.width - 6, thickness), height: thickness)
+        } else {
+            r = vertical ? NSRect(x: knob.maxX - thickness - 3, y: knob.minY + 3, width: thickness, height: max(knob.height - 6, thickness))
                          : NSRect(x: knob.minX + 3, y: knob.maxY - thickness - 3, width: max(knob.width - 6, thickness), height: thickness)
-        NSColor(Palette.ink2).withAlphaComponent(0.32).setFill()
+        }
+        NSColor(Palette.ink2).withAlphaComponent(bar ? 0.42 : 0.32).setFill()
         NSBezierPath(roundedRect: r, xRadius: thickness / 2, yRadius: thickness / 2).fill()
     }
 
-    static func adopt(_ scroll: NSScrollView) {
-        scroll.scrollerStyle = .overlay
+    static func adopt(_ scroll: NSScrollView, bar: Bool = false) {
+        scroll.scrollerStyle = bar ? .legacy : .overlay
         if !(scroll.verticalScroller is HubScroller) { scroll.verticalScroller = HubScroller() }
-        if !(scroll.horizontalScroller is HubScroller) { scroll.horizontalScroller = HubScroller() }    }
+        if !(scroll.horizontalScroller is HubScroller) { scroll.horizontalScroller = HubScroller() }
+        guard bar else { return }
+        (scroll.horizontalScroller as? HubScroller)?.bar = true
+        scroll.hasHorizontalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        scroll.tile()
+        scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    /// A mouse wheel turned over a sideways board, outside any column that can scroll itself, moves the board.
+    /// Trackpads already scroll sideways and are left alone.
+    static func wheel(_ event: NSEvent, board scroll: NSScrollView) -> Bool {
+        guard !event.hasPreciseScrollingDeltas, abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+              let window = scroll.window, event.window === window,
+              let hit = window.contentView?.hitTest(event.locationInWindow), hit === scroll || hit.isDescendant(of: scroll),
+              let document = scroll.documentView else { return false }
+        if let inner = hit.enclosingScrollView, inner !== scroll, hit !== scroll.horizontalScroller,
+           let doc = inner.documentView, doc.frame.height > inner.contentView.bounds.height + 1 { return false }
+        let clip = scroll.contentView
+        let maxX = max(document.frame.width - clip.bounds.width, 0)
+        guard maxX > 0 else { return false }
+        var origin = clip.bounds.origin
+        origin.x = min(max(origin.x - event.scrollingDeltaY * 14, 0), maxX)
+        clip.scroll(to: origin)
+        scroll.reflectScrolledClipView(clip)
+        return true
+    }
 }
 
 /// `ScrollView` whose scrollers are `HubScroller`s.
 struct HubScroll<Content: View>: View {
     var axes: Axis.Set = .vertical
+    /// A persistent horizontal bar instead of the overlay knob (see `HubScroller.bar`).
+    var bar = false
     @ViewBuilder var content: Content
 
-    init(_ axes: Axis.Set = .vertical, @ViewBuilder content: () -> Content) {
+    init(_ axes: Axis.Set = .vertical, bar: Bool = false, @ViewBuilder content: () -> Content) {
         self.axes = axes
+        self.bar = bar
         self.content = content()
     }
 
-    var body: some View {
-        ScrollView(axes) { content.background(ScrollerProbe()) }
+    @ViewBuilder var body: some View {
+        if bar {
+            ScrollView(axes) { content.background(ScrollerProbe(bar: true)) }.scrollIndicators(.visible)
+        } else {
+            ScrollView(axes) { content.background(ScrollerProbe(bar: false)) }
+        }
     }
 }
 
 private struct ScrollerProbe: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { Probe() }
+    var bar: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let probe = Probe()
+        probe.bar = bar
+        return probe
+    }
+
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     final class Probe: NSView {
+        var bar = false
+        private var observer: NSObjectProtocol?
+        private var monitor: Any?
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                if let scroll = self?.enclosingScrollView { HubScroller.adopt(scroll) }
+            DispatchQueue.main.async { [weak self] in self?.adopt() }
+            if bar, window != nil, monitor == nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                    guard let scroll = self?.enclosingScrollView else { return event }
+                    return HubScroller.wheel(event, board: scroll) ? nil : event
+                }
+            } else if window == nil, let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
             }
+            if bar, observer == nil {
+                // The system resets the style when the "show scroll bars" preference changes.
+                observer = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
+                                                                  object: nil, queue: .main) { [weak self] _ in
+                    DispatchQueue.main.async { self?.adopt() }
+                }
+            }
+        }
+
+        private func adopt() {
+            if let scroll = enclosingScrollView { HubScroller.adopt(scroll, bar: bar) }
+        }
+
+        deinit {
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let monitor { NSEvent.removeMonitor(monitor) }
         }
     }
 }

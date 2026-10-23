@@ -168,7 +168,7 @@ public struct AIPendingStore: Sendable {
     }
 
     public func add(_ change: AIPendingChange) throws {
-        guard list().count < Self.limit else { throw MCPToolError("待确认的变更已有 \(Self.limit) 项，请先让用户在 Personal Hub 里处理") }
+        guard list().count < Self.limit else { throw MCPToolError("待确认的变更已有 \(Self.limit) 项，请先让用户在 Nook 里处理") }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent(change.id + ".json")
         try Self.encoder.encode(change).write(to: file, options: .atomic)

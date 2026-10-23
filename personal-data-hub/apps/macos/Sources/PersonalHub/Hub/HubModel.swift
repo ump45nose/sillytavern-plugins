@@ -25,6 +25,8 @@ final class HubModel {
     private(set) var skyLive = false
     /// Every local day the archive has, newest first, and the windows of the days opened so far.
     private(set) var skyDays: [Date] = []
+    /// 10-minute segments per day, for the date picker's shading.
+    private(set) var skyActivity: [Date: Int] = [:]
     private(set) var skyByDay: [Date: [SkyWindowItem]] = [:]
     @ObservationIgnored private var skyFiles: [SkyFile] = []
     @ObservationIgnored private var skyLoading: Set<Date> = []
@@ -118,6 +120,7 @@ final class HubModel {
             if files.count != skyFiles.count {
                 skyFiles = files
                 skyDays = SkyArchive.days(files)
+                skyActivity = SkyArchive.activity(files)
                 skyByDay = [:]
             }
             if windows != sky { sky = windows }
@@ -143,6 +146,7 @@ final class HubModel {
         let grouped = Dictionary(grouping: sky) { Calendar.hub.startOfDay(for: $0.start) }
         skyByDay = grouped
         skyDays = grouped.keys.sorted(by: >)
+        skyActivity = grouped.mapValues { $0.reduce(0) { $0 + $1.segments.count } }
     }
 
     // MARK: Account
@@ -176,7 +180,7 @@ final class HubModel {
             defer { signingIn = nil }
             do {
                 let state = UUID().uuidString, pkce = OAuth.PKCE.make()
-                let receiver = try LoopbackReceiver(state: state, success: "Personal Hub 已登录 hub")
+                let receiver = try LoopbackReceiver(state: state, success: "Nook 已登录 hub")
                 let name = Host.current().localizedName ?? "Mac"
                 let code = try await receiver.code { uri in
                     guard let url = HubSignIn.startURL(base: base, deviceName: name, redirect: uri + "/callback", pkce: pkce, state: state) else { return }
@@ -371,10 +375,10 @@ final class HubModel {
         return try await live(api)
     }
 
-    func postMemo(_ content: String, visibility: String = "PRIVATE") async throws {
+    func postMemo(_ content: String, visibility: String = "PRIVATE", attachments: [String] = []) async throws {
         guard let api else { throw WriteError.demo }
         do {
-            let created = try await api.createMemo(content: content, visibility: visibility)
+            let created = try await api.createMemo(content: content, visibility: visibility, attachments: attachments)
             await sync.inserted(memo: created.id, content: content, visibility: visibility)
         } catch let e as HubError {
             throw WriteError.hub(e)

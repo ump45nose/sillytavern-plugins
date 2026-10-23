@@ -58,6 +58,42 @@ if CommandLine.arguments.contains("--hub-smoke") {
     Task.detached { exit(await HubCLI.smoke()) }
     app.run()
 }
+if CommandLine.arguments.contains("--hub-subs-quota") {
+    app.setActivationPolicy(.prohibited)
+    Task.detached { exit(await HubCLI.subsQuota()) }
+    app.run()
+}
+// `PersonalHub --hub-probe PATH [k=v ...]` prints the response's key paths and counts, never values.
+if let i = CommandLine.arguments.firstIndex(of: "--hub-probe"), CommandLine.arguments.indices.contains(i + 1) {
+    app.setActivationPolicy(.prohibited)
+    let rest = CommandLine.arguments[(i + 2)...].prefix { !$0.hasPrefix("--") }
+    let query = Dictionary(rest.compactMap { kv -> (String, String)? in
+        let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
+        return p.count == 2 ? (p[0], p[1]) : nil
+    }, uniquingKeysWith: { $1 })
+    let path = CommandLine.arguments[i + 1]
+    Task.detached { exit(await HubCLI.probe(path, query: query)) }
+    app.run()
+}
+
+// `PersonalHub --hub-openapi FILTER` prints hub's API description for matching paths.
+if let i = CommandLine.arguments.firstIndex(of: "--hub-openapi"), CommandLine.arguments.indices.contains(i + 1) {
+    app.setActivationPolicy(.prohibited)
+    let filter = CommandLine.arguments[i + 1]
+    Task.detached { exit(await HubCLI.openAPI(filter)) }
+    app.run()
+}
+
+if let i = CommandLine.arguments.firstIndex(of: "--hub-preview"), CommandLine.arguments.indices.contains(i + 1) {
+    app.setActivationPolicy(.prohibited)
+    let path = CommandLine.arguments[i + 1]
+    let body = Dictionary(CommandLine.arguments[(i + 2)...].prefix { !$0.hasPrefix("--") }.compactMap { kv -> (String, String)? in
+        let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
+        return p.count == 2 ? (p[0], p[1]) : nil
+    }, uniquingKeysWith: { $1 })
+    Task.detached { exit(await HubCLI.preview(path, body: body)) }
+    app.run()
+}
 
 #if DEBUG
 if let dir = CommandLine.value(after: "--qa-render") {

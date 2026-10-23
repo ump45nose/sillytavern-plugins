@@ -897,7 +897,7 @@ struct NetModule: View {
             Label("管理订阅", systemImage: "slider.horizontal.3").font(Typo.sans(11.5)).foregroundStyle(Palette.ink3)
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $editing, arrowEdge: .bottom) { SubscriptionManager { editing = false }.environment(state) }
+        .popover(isPresented: $editing, arrowEdge: .bottom) { SubsPopover(category: "network") { editing = false }.environment(state) }
     }
 
     private func usageTone(_ pct: Double) -> Tone { pct >= 90 ? .rose : pct >= 75 ? .ochre : .sage }
@@ -907,14 +907,11 @@ struct NetModule: View {
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
                     ArcGauge(value: p.pct, color: usageTone(p.pct).color)
-                    VStack(spacing: 0) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            if let used = p.used { CountUp(value: used).font(Typo.serif(24)) } else { Text("—").font(Typo.serif(24)) }
-                            Text("/ \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3)
-                        }
-                        Text("已用").font(Typo.sans(10.5)).foregroundStyle(Palette.ink3)
-                    }
+                    Group { if let used = p.used { CountUp(value: used) } else { Text("—") } }
+                        .font(Typo.serif(26)).monospacedDigit().padding(.bottom, -3)
                 }
+                Text("已用 / \(Int(p.total.rounded())) GB").font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
+                    .padding(.top, 6)
                 Spacer(minLength: 4)
                 Text("\(p.name)\(p.remaining.map { " · 剩 \(HubFormat.gb($0 * 1_073_741_824, 0)) GB" } ?? "")\(p.daysLeft.map { " · \($0) 天后到期" } ?? "")")
                     .font(Typo.sans(12)).foregroundStyle(Palette.ink2).lineLimit(1)
@@ -986,154 +983,6 @@ struct NetModule: View {
     }
 }
 
-/// Traffic plans entered by hand and stored on hub-api.
-// MARK: - 订阅
-
-struct SubsModule: View {
-    var size: ModuleSize
-    @Environment(AppState.self) private var state
-    @ViewState private var editing = false
-
-    var body: some View {
-        HubGate(envelope: state.hub.data.subs, unconfigured: "独立订阅服务尚未接入") { s in
-            let items = (s.items ?? []).sorted { (Self.daysUntil($0) ?? .max) < (Self.daysUntil($1) ?? .max) }
-            let soon = items.filter { (Self.daysUntil($0) ?? .max) <= 7 }.count
-            if size == .compact {
-                VStack(alignment: .leading, spacing: 0) {
-                    monthly(s)
-                    Text("\(items.count) 项订阅 · 7 天内续费／到期 \(soon) 项").font(Typo.sans(12)).foregroundStyle(Palette.ink2).padding(.top, 6)
-                    HStack { Spacer(); Button("管理") { editing = true }.buttonStyle(.plain).font(Typo.sans(11)) }
-                    Spacer(minLength: 6)
-                    ForEach(items.prefix(2)) { sub in
-                        HStack(spacing: 8) {
-                            SubLogo(name: sub.name, size: 20, iconURL: sub.iconUrl, themeColor: sub.themeColor)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(sub.name).font(Typo.sans(12.5))
-                                if sub.category == "ai" {
-                                    Text("付费区域：" + (sub.billingRegion ?? "待确认")).font(Typo.sans(10)).foregroundStyle(Palette.ink3)
-                                }
-                            }
-                            Spacer()
-                            RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
-                        }
-                        .padding(.top, 6)
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .lastTextBaseline) {
-                        monthly(s)
-                        Spacer()
-                        Button("管理") { editing = true }.buttonStyle(.plain).font(Typo.sans(11))
-                    }
-                    .padding(.bottom, 10)
-                    ForEach(Array(items.enumerated()), id: \.1.id) { i, sub in
-                        HStack(spacing: 12) {
-                            SubLogo(name: sub.name, size: 30, iconURL: sub.iconUrl, themeColor: sub.themeColor)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(sub.name + ((sub.accountLabel ?? "").isEmpty ? "" : " · " + (sub.accountLabel ?? ""))).font(Typo.sans(13))
-                                Text(Self.priceText(sub)).font(Typo.sans(11)).foregroundStyle(Palette.ink3).monospacedDigit()
-                                if let converted = Self.conversionText(sub) {
-                                    Text(converted).font(Typo.sans(10)).foregroundStyle(Palette.ink3).monospacedDigit()
-                                        .help("参考汇率日期：" + (sub.exchangeRateDate ?? "未知") + "；实际扣款以账单为准")
-                                }
-                                if sub.category == "ai" {
-                                    Text("付费区域：" + (sub.billingRegion ?? "待确认") + (sub.renewalDay.map { " · 每月 \($0) 日续费" } ?? "")).font(Typo.sans(10)).foregroundStyle(Palette.ink3)
-                                }
-                                if let quota = sub.quota { Text(Self.quotaText(quota)).font(Typo.sans(10)).foregroundStyle(Palette.ink3) }
-                            }
-                            Spacer()
-                            if let raw = sub.subscriptionUrl, let url = URL(string: raw), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
-                                Link(destination: url) { Image(systemName: "arrow.up.right.square") }
-                                    .buttonStyle(.plain).foregroundStyle(Palette.ink3).help("购买订阅")
-                            }
-                            RenewBadge(text: Self.renewText(sub), soon: (Self.daysUntil(sub) ?? .max) <= 7)
-                        }
-                        .padding(.vertical, 9)
-                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.line2).frame(height: 1) } }
-                        .rise(i)
-                    }
-                    if let rates = s.exchangeRates {
-                        HStack(spacing: 4) {
-                            Text(Self.exchangeText(rates)).font(Typo.sans(9)).foregroundStyle(Palette.ink3)
-                            Link("ExchangeRate-API", destination: URL(string: "https://www.exchangerate-api.com")!).font(Typo.sans(9))
-                        }.padding(.top, 4)
-                    }
-                }
-            }
-        }
-        .popover(isPresented: $editing) { SubscriptionManager { editing = false }.environment(state) }
-    }
-
-    @ViewBuilder private func monthly(_ data: SubsData) -> some View {
-        let converted = data.monthlyConverted ?? [:]
-        let totals = converted.isEmpty ? (data.monthlyByCurrency ?? [:]) : converted
-        VStack(alignment: .leading, spacing: 3) {
-            if totals.isEmpty { Hero.empty("个人预计 / 月") }
-            else {
-                ForEach(totals.keys.sorted(), id: \.self) { currency in
-                    Hero(value: totals[currency] ?? 0, prefix: (converted.isEmpty ? "" : "≈ ") + currency + " ", unit: "/ 月")
-                }
-            }
-            if let count = data.unclassifiedPayerCount, count > 0 {
-                Text("\(count) 项付款方待确认，未计入个人费用").font(Typo.sans(10)).foregroundStyle(Palette.ink3)
-            }
-        }
-    }
-
-    static func quotaText(_ quota: SubscriptionQuota) -> String {
-        if quota.status == "error" { return "额度获取失败 · 保留上次读数" }
-        if quota.stale { return "额度读数已过期" }
-        return (quota.reading?.windows ?? []).prefix(3).map { w in
-            if let percent = w.usedPercent { return "\(w.label) 已用 \(Fmt.number(percent, 0))%" }
-            if let remaining = w.remaining { return "\(w.label) 剩余 \(Fmt.number(remaining, 0)) \(w.unit ?? "")" }
-            return w.label + " · 上限未知"
-        }.joined(separator: " · ")
-    }
-
-    static func daysUntil(_ s: SubsData.Item) -> Int? {
-        HubFormat.day(s.nextRenewal ?? s.expiresOn).flatMap { Calendar.hub.dateComponents([.day], from: Calendar.hub.startOfDay(for: HubFormat.current()), to: $0).day }
-    }
-
-    static func renewText(_ s: SubsData.Item) -> String {
-        guard let d = daysUntil(s), let date = HubFormat.day(s.nextRenewal ?? s.expiresOn) else {
-            return s.cycle == "one_time" && s.expiresOn == nil ? (s.plan == "永久会员" ? "永久" : "一次性") : "—"
-        }
-        let action = s.nextRenewal == nil ? "到期" : "续费"
-        switch d {
-        case ..<0: return "已过期"
-        case 0: return "今天" + action
-        case 1: return "明天" + action
-        case ...7: return "\(d) 天后"
-        default: return "\(Calendar.hub.component(.month, from: date))/\(Calendar.hub.component(.day, from: date))"
-        }
-    }
-
-    static func priceText(_ s: SubsData.Item) -> String {
-        let symbol = ["CNY": "¥", "USD": "$", "EUR": "€", "HKD": "HK$", "JPY": "JP¥", "BOB": "BOB ", "INR": "₹"][s.currency ?? "CNY"] ?? (s.currency ?? "")
-        let unit = ["day": "天", "week": "周", "month": "月", "year": "年", "one_time": "一次性"][s.cycle ?? ""] ?? "周期未设置"
-        let frequency = (s.frequency ?? 1) > 1 ? String(s.frequency ?? 1) : ""
-        let payer = ["self": "个人", "company": "公司", "other": "其他付款方", "none": "无需付费", "unknown": "付款方待确认"][s.payer ?? "unknown"] ?? ""
-        return (s.price.map { $0 == 0 ? "免费" : "\(symbol)\(Fmt.number($0, $0.rounded() == $0 ? 0 : 2)) / \(frequency)\(unit)" } ?? "金额未知") + " · " + payer
-    }
-
-    static func conversionText(_ s: SubsData.Item) -> String? {
-        guard let price = s.price, price > 0, s.currency != "CNY" else { return nil }
-        let values = ["USD", "CNY"].filter { $0 != s.currency }.compactMap { currency -> String? in
-            guard let amount = s.priceConverted?[currency] else { return nil }
-            return (currency == "USD" ? "$" : "¥") + Fmt.number(amount, 2)
-        }
-        guard !values.isEmpty else { return "汇率暂不可用" }
-        return "≈ " + values.joined(separator: " / ") + (s.exchangeRateStale == true ? " · 汇率已过期" : "")
-    }
-
-    static func exchangeText(_ rates: SubscriptionExchangeRates) -> String {
-        let date = rates.observedAt.map { Calendar.hub.dateComponents([.year, .month, .day], from: $0) }
-        let label = date.map { "\($0.year ?? 0)-\($0.month ?? 0)-\($0.day ?? 0)" } ?? "未知日期"
-        return "估算汇率 · " + label + (rates.stale == true ? " · 已过期" : "") + " · 来源"
-    }
-}
-
 struct SubLogo: View {
     var name: String
     var size: CGFloat
@@ -1144,15 +993,15 @@ struct SubLogo: View {
     var body: some View {
         let _ = state.hub.imageGeneration
         let color = themeColor.map { Color(hex: $0) } ?? HubFormat.tone(for: name).color
-        Group {
-            if let image = state.hub.subscriptionIcon(iconURL) {
-                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).padding(size * 0.12)
-            } else {
-                Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.48, .bold)).foregroundStyle(color)
-            }
+        if let image = state.hub.subscriptionIcon(iconURL) {
+            Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).padding(size * 0.12)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color.opacity(0.12)))
+        } else {
+            Text(String(name.prefix(1)).uppercased()).font(Typo.sans(size * 0.46, .semibold)).foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color))
         }
-        .frame(width: size, height: size)
-        .background(RoundedRectangle(cornerRadius: size * 0.3).fill(color.opacity(0.12)))
     }
 }
 

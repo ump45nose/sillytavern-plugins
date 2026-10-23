@@ -282,7 +282,7 @@ final class AppState {
     // MARK: Layout persistence and hub sync
 
     private func layoutChanged() {
-        do { try store.save(layout) } catch { NSLog("Personal Hub: layout save failed: \(error.localizedDescription)") }
+        do { try store.save(layout) } catch { NSLog("Nook: layout save failed: \(error.localizedDescription)") }
         if layout.page(currentPage) == nil, let first = layout.pages.first { currentPage = first.id }
         pagesChanged()
         guard !adopting, !Self.isQA else { return }
@@ -317,7 +317,7 @@ final class AppState {
                 layoutSync = outcome.state
                 saveLayoutSync()
             } catch {
-                NSLog("Personal Hub: layout sync skipped (\(type(of: error)))")
+                NSLog("Nook: layout sync skipped (\(type(of: error)))")
             }
             layoutRound = false
             if layoutAgain {

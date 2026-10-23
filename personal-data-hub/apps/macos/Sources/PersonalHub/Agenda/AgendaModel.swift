@@ -140,6 +140,11 @@ final class AgendaModel {
         await engine.requestSync()
     }
 
+    #if DEBUG
+    /// QA: shows `store` as demo data.
+    func preview(_ store: AgendaStore) { attach(AgendaSync(seed: store), mode: .demo) }
+    #endif
+
     private func attach(_ next: AgendaSync, mode: Mode) {
         generation += 1
         let mine = generation
