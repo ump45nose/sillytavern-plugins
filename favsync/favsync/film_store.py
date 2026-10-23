@@ -7,7 +7,7 @@ import sqlite3
 import time
 import unicodedata
 
-from .film_watchlist import country_info, film_titles, release_info
+from .film_watchlist import country_info, film_titles, release_info, film_season
 
 
 def init_schema(db: sqlite3.Connection):
@@ -205,16 +205,20 @@ def ingest_bilibili(db, account: str, items: list[dict]) -> dict:
 def _row_to_film(db, row, today: date):
     release = row["release_date"]
     sources = [dict(source) for source in db.execute(
-        "SELECT platform,external_id,url,active FROM film_sources WHERE film_id=? "
+        "SELECT platform,external_id,url,active,source_title FROM film_sources WHERE film_id=? "
         "ORDER BY active DESC,platform,external_id", (row["id"],))]
+    season, season_error = film_season(row["title"], [
+        source["source_title"] for source in sources if source["active"]])
     return {
+        "season": season, "season_error": season_error,
         "id": row["id"], "title": row["title"], "release_year": row["release_year"],
         "release_date": release,
         "country": row["country"], "media_type": row["media_type"],
         "released": date.fromisoformat(release) <= today if release else None,
         "downloaded": bool(row["downloaded"]),
         "active": any(source["active"] for source in sources),
-        "sources": [{**source, "active": bool(source["active"])} for source in sources],
+        "sources": [{key: (bool(value) if key == "active" else value)
+                     for key, value in source.items() if key != "source_title"} for source in sources],
     }
 
 

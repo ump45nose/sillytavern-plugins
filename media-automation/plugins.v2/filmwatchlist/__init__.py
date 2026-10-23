@@ -35,7 +35,7 @@ class FilmWatchlist(_PluginBase):
     plugin_name = "片单自动收藏"
     plugin_desc = "从 Favsync 片单比较公网和 M-Team 资源，按来源下载并在入库后回写。"
     plugin_icon = "Moviepilot_A.png"
-    plugin_version = "1.4.3"
+    plugin_version = "1.4.4"
     plugin_author = "yuwk"
     author_url = ""
     plugin_config_prefix = "filmwatchlist_"
@@ -287,98 +287,138 @@ class FilmWatchlist(_PluginBase):
 
     @staticmethod
     def _identify(item: dict, hint: dict | None = None):
-        """核对名称、年份，并在详情中核对类型、日期和国家。"""
+        """Verify the series identity separately from the requested season's release."""
+        from media_capabilities.acquisition.seasons import split_season_title
         title = str(item.get("title") or "").strip()
         if not title:
             return None, None, "片名为空"
+        try:
+            base_title, title_season = split_season_title(title)
+            season_value = item.get('season')
+            if season_value is not None and (type(season_value) is not int or not 1 <= season_value <= 999):
+                raise ValueError('片单季数无效')
+            if season_value and title_season and season_value != title_season:
+                raise ValueError('片单季数与标题冲突')
+            if item.get('season_error'):
+                raise ValueError(str(item['season_error']))
+            requested_season = season_value or title_season
+        except ValueError as exc:
+            return None, None, str(exc)
         year = item.get("release_year")
         chain = MediaChain()
-        wanted_type = item.get("media_type")
+        wanted_type = normalize_media_type(item['media_type']) if item.get('media_type') else None
+        if requested_season:
+            if wanted_type == 'movie':
+                return None, None, '电影片单不能指定电视剧季数'
+            wanted_type = 'tv'
 
-        def detail_matches(media) -> bool:
-            if not media or (year and str(media.year or "") != str(year)):
-                return False
-            media_type = media.type.value if isinstance(media.type, MediaType) else media.type
-            if wanted_type and media_type != {"movie": MediaType.MOVIE.value,
-                                              "tv": MediaType.TV.value,
-                                              "tv_show": MediaType.TV.value}.get(wanted_type):
-                return False
-            names = [media.title, media.original_title, *(media.names or [])]
-            if normalize_title(title) not in {normalize_title(str(name)) for name in names if name}:
-                return False
-            if item.get("release_date") and (media.release_date or media.first_air_date) != item["release_date"]:
-                return False
-            if item.get("country") and not FilmWatchlist._country_matches(media, item["country"]):
-                return False
-            return True
+        def match(media):
+            if not media:
+                return False, None
+            kind = normalize_media_type(media.type)
+            if wanted_type and wanted_type != kind:
+                return False, None
+            names = [media.title, getattr(media, 'original_title', None), *(getattr(media, 'names', None) or [])]
+            keys = set()
+            for name in names:
+                if name:
+                    try:
+                        keys.add(normalize_title(split_season_title(name)[0] if kind == 'tv' else name))
+                    except ValueError:
+                        continue
+            if normalize_title(base_title if kind == 'tv' else title) not in keys:
+                return False, None
+            if item.get('country') and not FilmWatchlist._country_matches(media, item['country']):
+                return False, None
+            release = item.get('release_date')
+            if kind != 'tv':
+                actual = getattr(media, 'release_date', None) or getattr(media, 'first_air_date', None)
+                return (not year or str(media.year or '') == str(year)) and (not release or actual == release), None
+            seasons = getattr(media, 'seasons', None) or {}
+            info = getattr(media, 'season_info', None) or []
+            dates = {int(s['season_number']): s.get('air_date') for s in info if s.get('season_number') is not None}
+            years = {int(k): str(v) for k, v in (getattr(media, 'season_years', None) or {}).items()}
+            # Douban's separate season entries have a season-specific release date.
+            _, named_season = split_season_title(media.title)
+            native_season = named_season or (getattr(media, 'season', None) if not media.tmdb_id else None)
+            if native_season:
+                actual = getattr(media, 'release_date', None) or getattr(media, 'first_air_date', None)
+                dates.setdefault(native_season, actual)
+                years.setdefault(native_season, str(media.year or ''))
+            for number, date in dates.items():
+                if date:
+                    years[number] = date[:4]
+            target = requested_season or named_season
+            if target is None:
+                matches = [int(s) for s, episodes in seasons.items() if int(s) > 0 and episodes
+                           and (not year or years.get(int(s)) == str(year))
+                           and (not release or dates.get(int(s)) == release)]
+                if len(matches) == 1:
+                    target = matches[0]
+                elif not dates and not years and (not year or str(media.year or '') == str(year)):
+                    target = 1  # Legacy single-season metadata; never infer a later season.
+                else:
+                    return False, None
+            if not (seasons.get(target) or seasons.get(str(target))):
+                return False, None
+            actual_date = dates.get(target)
+            actual_year = years.get(target)
+            if target == 1:
+                actual_date = actual_date or getattr(media, 'first_air_date', None) or getattr(media, 'release_date', None)
+                actual_year = actual_year or str(media.year or '')
+            if (year and actual_year != str(year)) or (release and actual_date != release):
+                return False, None
+            return True, target
 
-        if isinstance(hint, dict) and (hint.get("tmdb_id") or hint.get("douban_id")):
-            hint_type = hint.get("media_type") or wanted_type
+        if isinstance(hint, dict) and (hint.get('tmdb_id') or hint.get('douban_id')):
             try:
-                mtype = MediaType({"movie": MediaType.MOVIE.value,
-                                   "tv": MediaType.TV.value,
-                                   "tv_show": MediaType.TV.value}.get(hint_type, hint_type))
-                hinted = chain.recognize_media(mtype=mtype, tmdbid=hint.get("tmdb_id"),
-                                               doubanid=hint.get("douban_id"))
-                if detail_matches(hinted):
-                    season = None
-                    if mtype == MediaType.TV:
-                        season = 1
-                        hinted.season = season
-                    return hinted, season, ""
+                kind = normalize_media_type(hint.get('media_type') or wanted_type)
+                hinted = chain.recognize_media(mtype=MediaType.TV if kind == 'tv' else MediaType.MOVIE,
+                                              tmdbid=hint.get('tmdb_id'), doubanid=hint.get('douban_id'))
+                okay, season = match(hinted)
+                if okay:
+                    hinted.season = season
+                    return hinted, season, ''
             except (TypeError, ValueError):
                 pass
-
-        query = f"{title} ({year})" if year else title
-        # 已上映作品的元数据源偶发空响应时再试两次；未上映片单保持单次查询。
+        # A season's year must not be passed as the series' first-air year.
+        query = base_title if wanted_type == 'tv' else f'{title} ({year})' if year else title
         retry = bool(year and str(year).isdigit() and int(year) < datetime.now().year)
-        attempts = 3 if retry else 1
-        meta, candidates = None, []
-        for attempt in range(attempts):
+        candidates = []
+        for attempt in range(3 if retry else 1):
             if attempt:
                 sleep(2 * attempt)
-            meta, candidates = chain.search(query)
+            _, candidates = chain.search(query)
             if candidates:
                 break
+        if not candidates and year and query != base_title:
+            _, candidates = chain.search(base_title)
         if not candidates:
-            return None, None, "MoviePilot 元数据搜索暂未返回结果"
-        requested = normalize_title(meta.name if meta and meta.name else title)
-        exact = []
-        for media in candidates:
-            if year and str(media.year or "") != str(year):
-                continue
-            media_type = media.type.value if isinstance(media.type, MediaType) else media.type
-            if wanted_type and media_type != {"movie": MediaType.MOVIE.value,
-                                              "tv": MediaType.TV.value,
-                                              "tv_show": MediaType.TV.value}.get(wanted_type):
-                continue
-            names = [media.title, media.original_title, *(media.names or [])]
-            if requested in {normalize_title(str(name)) for name in names if name}:
-                exact.append(media)
-        detailed = []
-        for candidate in exact:
+            return None, None, 'MoviePilot 元数据搜索暂未返回结果'
+        verified = []
+        for candidate in candidates:
             try:
-                media_type = candidate.type if isinstance(candidate.type, MediaType) else MediaType(candidate.type)
-            except ValueError:
+                kind = normalize_media_type(candidate.type)
+                if wanted_type and kind != wanted_type:
+                    continue
+                media = chain.recognize_media(mtype=MediaType.TV if kind == 'tv' else MediaType.MOVIE,
+                                              tmdbid=candidate.tmdb_id, doubanid=candidate.douban_id,
+                                              bangumiid=getattr(candidate, 'bangumi_id', None))
+                okay, season = match(media)
+                if okay:
+                    verified.append((media, season))
+            except (TypeError, ValueError):
                 continue
-            media = chain.recognize_media(mtype=media_type, tmdbid=candidate.tmdb_id,
-                                          doubanid=candidate.douban_id,
-                                          bangumiid=candidate.bangumi_id)
-            if detail_matches(media):
-                detailed.append(media)
-        distinct = {(media.type.value if hasattr(media.type, "value") else str(media.type),
-                     media.tmdb_id or media.douban_id or media.title) for media in detailed}
+        # TMDB models the full series; Douban may also return separate season entries.
+        tv_tmdb = [(m, s) for m, s in verified if normalize_media_type(m.type) == 'tv' and m.tmdb_id]
+        if tv_tmdb:
+            verified = tv_tmdb
+        distinct = {(normalize_media_type(m.type), m.tmdb_id or m.douban_id, s) for m, s in verified}
         if len(distinct) != 1:
-            return None, None, "媒体识别不唯一或名称/上映时间/国家不匹配"
-        media = detailed[0]
-        media_type = media.type.value if isinstance(media.type, MediaType) else media.type
-        if media_type not in (MediaType.MOVIE.value, MediaType.TV.value):
-            return None, None, "不是电影或剧集"
-        season = None
-        if media_type == MediaType.TV.value:
-            season = meta.begin_season if meta and meta.begin_season else 1
-            media.season = season
-        return media, season, ""
+            return None, None, '媒体识别不唯一或名称/目标季上映时间/国家不匹配'
+        media, season = verified[0]
+        media.season = season
+        return media, season, ''
 
     @staticmethod
     def _expected_episodes(media, season: int | None) -> set[int] | None:

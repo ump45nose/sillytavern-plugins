@@ -3,8 +3,11 @@ from datetime import datetime
 
 
 def source_snapshot(item: dict) -> dict:
-    return {key: item.get(key) for key in
-            ('title', 'release_year', 'release_date', 'country', 'media_type')}
+    snapshot = {key: item.get(key) for key in
+                ('title', 'release_year', 'release_date', 'country', 'media_type')}
+    if item.get('season') is not None or item.get('season_error'):
+        snapshot.update(season=item.get('season'), season_error=item.get('season_error') or '')
+    return snapshot
 
 
 def pending_record(record: dict) -> bool:

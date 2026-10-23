@@ -15,6 +15,17 @@ from .p115_task_adapter import ShareEvidence
 from .public_index import IndexStatus, MediaQuery, Mini4KIndexer
 from .quality_selection import MediaCandidate, rank_candidates
 from .selection import normalize_title, quality_key
+from .media_types import normalize_media_type
+
+
+def matches_category(context, media_type):
+    """Animation can use a site's movie category after host TV identity matching."""
+    torrent = context.torrent_info
+    if torrent.category == media_type:
+        return True
+    media = getattr(context, 'media_info', None)
+    return media_type == MediaType.TV.value and media is not None and \
+        normalize_media_type(media.type) == 'tv'
 
 
 def store_reused_receipt(self, film_id, decision, records, receipt):
@@ -78,12 +89,15 @@ def process_unified(self, film_id: int, item: dict, media, media_type: str,
                      expected: set[int] | None, common: dict, records: dict):
     """Search both sources, verify playable bytes, then route one candidate."""
     target = download_target(media_type, expected, common['season'])
+    query_year = item.get('release_year') if media_type == MediaType.MOVIE.value else (
+        getattr(media, 'year', None) if media.tmdb_id else None)
     query = MediaQuery(
         title=str(item.get('title') or ''),
         aliases=tuple(dict.fromkeys(str(name) for name in
                    (getattr(media, 'original_title', None), *(getattr(media, 'names', None) or []))
                    if name and normalize_title(str(name)) != normalize_title(str(item.get('title') or ''))))[:3],
-        year=int(item['release_year']) if item.get('release_year') else None,
+        # A Douban season entry has the season's year, not the series' first year.
+        year=int(query_year) if str(query_year or '').isdigit() else None,
         country=item.get('country'), media_type='movie' if media_type == MediaType.MOVIE.value else 'tv',
         tmdb_id=getattr(media, 'tmdb_id', None), season=common['season'],
     )
@@ -114,7 +128,7 @@ def process_unified(self, film_id: int, item: dict, media, media_type: str,
     failed_hashes = set((records.get(str(film_id)) or {}).get('failed_hashes') or [])
     contexts = [context for context in contexts if context.torrent_info
                 and context.torrent_info.site == self._site_id
-                and context.torrent_info.category == media_type]
+                and matches_category(context, media_type)]
     contexts.sort(key=lambda context: quality_key(context.torrent_info.title,
                   context.torrent_info.seeders), reverse=True)
     for context in contexts[:12]:
@@ -326,7 +340,7 @@ def process_one(self, item: dict, client: RequestUtils, records: dict):
         return
     expected = self._expected_episodes(media, season)
     if season is not None and not expected:
-        self._store(records, film_id, **common, status="跳过", reason="无法核实第一季集数")
+        self._store(records, film_id, **common, status="跳过", reason="无法核实目标季集数")
         return
     if not self._dry_run:
         try:
@@ -345,7 +359,7 @@ def process_one(self, item: dict, client: RequestUtils, records: dict):
     contexts = SearchChain().process(mediainfo=media, sites=[self._site_id], rule_groups=[]) or []
     contexts = [context for context in contexts
                 if context.torrent_info and context.torrent_info.site == self._site_id
-                and context.torrent_info.category == media_type]
+                and matches_category(context, media_type)]
     contexts.sort(key=lambda context: quality_key(context.torrent_info.title,
                   context.torrent_info.seeders), reverse=True)
     rejected = []

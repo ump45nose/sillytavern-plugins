@@ -24,6 +24,7 @@ from urllib.parse import parse_qs, quote, urljoin, urlparse, urlunparse
 from bs4 import BeautifulSoup
 
 from .selection import normalize_title
+from .seasons import split_season_title
 from .access import download_requires_login, page_access_status
 from .evidence import magnet_hash, normalize_magnet
 from .torrent_metadata import parse_metadata
@@ -63,7 +64,10 @@ class MediaQuery:
 
     @property
     def names(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys(name.strip() for name in (self.title, *self.aliases) if name.strip()))
+        names = (self.title, *self.aliases)
+        if self.media_type == 'tv' and self.season is not None:
+            names = tuple(split_season_title(name)[0] for name in names)
+        return tuple(dict.fromkeys(name.strip() for name in names if name.strip()))
 
 
 @dataclass(frozen=True)
@@ -296,7 +300,7 @@ class LinuxBrowserTransport:
 
 
 SIZE_RE = re.compile(r"(?i)(\d+(?:\.\d+)?)\s*(TB|GB|MB)")
-YEAR_RE = re.compile(r"\((19\d{2}|20\d{2})\)")
+YEAR_RE = re.compile(r"\((19\d{2}|20\d{2})(?:\s*[-–—]\s*(?:19|20)\d{2})?\)")
 MEDIA_RE = re.compile(r"^/(movies|shows)/\d+(?:/)?$")
 COUNTRY_ALIASES = {
     "美国": ("美国", "usa", "united states"),
@@ -439,7 +443,8 @@ class Mini4KIndexer:
         if not heading:
             return False, "缺少影片标题"
         heading_text = heading.get_text(" ", strip=True)
-        year_match = YEAR_RE.search(heading_text)
+        year_node = heading.select_one(".node-year")
+        year_match = YEAR_RE.search(year_node.get_text(" ", strip=True) if year_node else heading_text)
         if query.year and (not year_match or int(year_match.group(1)) != query.year):
             return False, "年份不符或未知"
         page_type = "movie" if "/movies/" in url else "tv"
@@ -448,9 +453,12 @@ class Mini4KIndexer:
         body_text = soup.get_text(" ", strip=True)
         heading_at = body_text.find(heading_text)
         header_text = body_text[max(0, heading_at):max(0, heading_at) + 350]
-        heading_title = YEAR_RE.sub("", heading_text).strip()
+        # Current TV headings mix both names, a year range, and a live season badge.
+        title_nodes = heading.select('.ch-title, .en-title')
+        heading_title = re.sub(r'\((?:19|20)\d{2}(?:\s*[-–—]\s*(?:19|20)\d{2})?\)', '', heading_text).strip()
         title_keys = {normalize_title(name) for name in query.names}
-        title_parts = re.split(r"\s*[/|｜]\s*", heading_title)
+        title_parts = [node.get_text(' ', strip=True) for node in title_nodes] if title_nodes else \
+            re.split(r"\s*[/|｜]\s*", heading_title)
         title_parts.extend(name for part in tuple(title_parts)
                            for name in re.split(r"(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z])", part))
         if not any(normalize_title(part) in title_keys for part in title_parts):
@@ -562,6 +570,13 @@ class Mini4KIndexer:
                         if not title:
                             continue
                         row_text = row.get_text(" ", strip=True)
+                        if query.season is not None and '/shows/' in media_url:
+                            try:
+                                _, resource_season = split_season_title(row_text)
+                            except ValueError:
+                                continue
+                            if resource_season is not None and resource_season != query.season:
+                                continue
                         candidate_id = self._candidate_id(resource_url, direct_link)
                         item = IndexCandidate(
                             candidate_id=candidate_id, source_id=self.source_id, title=title,

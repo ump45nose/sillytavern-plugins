@@ -50,6 +50,40 @@ def film_titles(video_title: str) -> list[tuple[str, str]]:
     return result
 
 
+def film_season(title: str, source_titles: list[str]) -> tuple[int | None, str]:
+    """Recover only season labels inside this title or immediately beside its 《》."""
+    label = re.compile(r"第\s*([0-9一二三四五六七八九十百零〇两]+)\s*季|"
+                       r"(?<![A-Za-z0-9])(?:season\s*|s)([0-9]{1,3})(?![0-9]|[Ee][0-9])", re.I)
+    def number(value):
+        if value.isdecimal():
+            return int(value)
+        digits = {c: n for n, c in enumerate('零一二三四五六七八九')}
+        total = current = 0
+        for char in value.replace('两', '二').replace('〇', '零'):
+            if char in digits:
+                current = digits[char]
+            elif char in ('十', '百'):
+                total += (current or 1) * (10 if char == '十' else 100)
+                current = 0
+        return total + current
+    normalized = unicodedata.normalize('NFKC', title).strip()
+    labels = list(label.finditer(normalized))
+    for source in source_titles:
+        source = unicodedata.normalize('NFKC', source)
+        for match in TITLE.finditer(source):
+            if match[1].strip().casefold() != normalized.casefold():
+                continue
+            suffix = source[match.end():].lstrip()
+            prefix = source[:match.start()].rstrip()
+            after = label.match(suffix)
+            before = next((m for m in label.finditer(prefix) if m.end() == len(prefix)), None)
+            labels.extend(m for m in (before, after) if m)
+    seasons = {number(m[1] or m[2]) for m in labels}
+    if len(seasons) > 1 or any(s < 1 or s > 999 for s in seasons):
+        return None, '片单来源的季数冲突或无效'
+    return next(iter(seasons), None), ''
+
+
 def release_info(intro: str) -> tuple[str | None, int | None]:
     """Only dates immediately following a release cue are evidence."""
     text = unicodedata.normalize("NFKC", intro or "")
