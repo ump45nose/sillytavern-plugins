@@ -1,0 +1,598 @@
+/* Legacy mobile styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  body.wb-mobile .wb-mobile-header {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top));
+    left: 0;
+    right: 0;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-paper);
+    z-index: 5;
+    transition:
+      transform 240ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      border-radius 240ms;
+  }
+  .wb-mobile-header > button {
+    height: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    flex: none;
+  }
+  .wb-mobile-header .wb-mobile-nav,
+  .wb-mobile-header .wb-mobile-management {
+    width: 44px;
+    justify-content: center;
+  }
+  /* RP draws the header on the picture: its glyphs take the on-scene colour. This sits in the same
+     layer as the important control-ink rule for icons, which it has to outrank. */
+  body.wb-active.wb-mobile-rp .wb-mobile-header :is(svg, svg *) {
+    color: var(--wb-rp-on-scene) !important;
+  }
+  .wb-mobile-header .wb-mobile-person {
+    flex: 1;
+    min-width: 0;
+    gap: 9px;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .wb-mobile-person img,
+  .wb-mobile-person .wb-avatar-fallback {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+  }
+  .wb-mobile-person > span:not(.wb-avatar-fallback) {
+    min-width: 0;
+    flex: 1;
+  }
+  .wb-mobile-person strong {
+    font-size: 14px;
+    font-weight: 500;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-mobile-person small {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    color: var(--wb-muted);
+  }
+  body.wb-active.wb-mobile .wb-composer-actions {
+    grid-row: 3;
+    grid-column: 2;
+    gap: 0;
+  }
+  body.wb-mobile .wb-composer-actions button {
+    width: 38px;
+    min-width: 38px;
+    height: 44px;
+    min-height: 44px;
+    padding: 8px !important;
+  }
+  .wb-mobile-config {
+    grid-row: 1;
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin: 0 3px 4px;
+    border-bottom: 1px solid var(--wb-line);
+    padding-bottom: 4px;
+  }
+  .wb-mobile-config > div {
+    flex: 1;
+    min-width: 0;
+  }
+  body.wb-mobile .wb-contexts {
+    display: flex;
+    gap: 2px;
+    overflow: auto;
+    scrollbar-width: none;
+    width: 100%;
+    min-width: 0;
+    transform: none;
+  }
+  body.wb-mobile .wb-selector {
+    flex: 1 0 104px;
+    height: 44px;
+    max-width: none;
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+  }
+  body.wb-mobile .wb-selector > .wb-selector-value {
+    font-size: 11px;
+    gap: 2px;
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-selector > .wb-icon {
+    width: 26px;
+    height: 44px;
+    min-height: 44px;
+  }
+  body.wb-active.wb-mobile #wb-layout-root {
+    display: none;
+  }
+  .wb-mobile-shade,
+  .wb-mobile-sheet-shade {
+    position: fixed;
+    inset: var(--wb-mobile-top, 0px) 0 auto;
+    height: var(--wb-mobile-height, 100dvh);
+    border: 0;
+    background: #342a2338;
+    z-index: 24;
+    padding: 0;
+  }
+  body.wb-mobile .wb-left,
+  body.wb-mobile .wb-right {
+    position: fixed;
+    top: var(--wb-mobile-top, 0px);
+    bottom: auto;
+    height: var(--wb-mobile-height, 100dvh);
+    max-height: none;
+    z-index: 26;
+    margin: 0;
+    width: min(88vw, 360px);
+    padding-top: calc(var(--wb-safe-top) + 44px);
+    padding-bottom: var(--wb-safe-bottom);
+    transition:
+      transform 220ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      visibility 220ms;
+    box-shadow: 8px 0 30px #34291e16;
+  }
+  body.wb-mobile .wb-left {
+    left: 0;
+    transform: translateX(-100%);
+  }
+  body.wb-mobile .wb-right {
+    right: 0;
+    left: auto;
+    width: min(100%, 520px);
+    transform: translateX(100%);
+    background: var(--wb-paper);
+  }
+  body.wb-mobile :is(.wb-left, .wb-right).is-open {
+    transform: none;
+  }
+  body.wb-mobile .wb-right .wb-panel-content {
+    min-width: 0;
+    padding: 12px;
+  }
+  body.wb-mobile .wb-panel-header-row {
+    height: 44px;
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-resource-rail {
+    display: none;
+  }
+  body.wb-mobile .wb-mobile-drawer-close {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top));
+    right: 8px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    background: var(--wb-paper);
+    color: var(--wb-control-ink);
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    z-index: 27;
+  }
+  body.wb-mobile .wb-mobile-drawer-close.is-left {
+    right: auto;
+    left: min(calc(88vw - 50px), 310px);
+  }
+  body.wb-mobile .wb-panel-tabs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  body.wb-mobile .wb-panel-tabs > button {
+    min-height: 40px;
+  }
+  body.wb-mobile .wb-mobile-sheet-shade {
+    z-index: 10020;
+    animation: wb-mobile-shade-in 180ms ease both;
+  }
+  .wb-mobile-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - var(--wb-mobile-top, 0px) - var(--wb-mobile-height, 100dvh));
+    max-height: calc(var(--wb-mobile-height, 100dvh) - var(--wb-safe-top) - 24px);
+    z-index: 10021;
+    background: var(--wb-paper);
+    padding: 8px 16px max(16px, var(--wb-safe-bottom));
+    border: 1px solid var(--wb-line);
+    border-radius: 22px 22px 0 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    animation: wb-mobile-sheet-in 220ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+  }
+  .wb-mobile-sheet > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    margin-bottom: 8px;
+  }
+  .wb-mobile-sheet > header strong {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .wb-mobile-sheet > header button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .wb-mobile-sheet-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .wb-mobile-sheet-list > button {
+    min-height: 48px;
+    border: 0;
+    background: transparent;
+    justify-content: flex-start;
+    padding: 10px 8px;
+    gap: 12px;
+  }
+  .wb-mobile-mode-row {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0 12px;
+    border-bottom: 1px solid var(--wb-line);
+    margin-bottom: 8px;
+  }
+  .wb-mobile-mode-row > button {
+    flex: 1;
+    min-height: 44px;
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  .wb-mobile-mode-row > button[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--wb-accent) 32%, var(--wb-line));
+    background: var(--wb-selected);
+    color: var(--wb-accent);
+  }
+  .wb-mobile-tool-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 2px;
+    padding: 8px 0;
+  }
+  .wb-mobile-tool-grid > button {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 72px;
+    border: 0;
+    padding: 10px 3px;
+    background: transparent;
+    font-size: 11px;
+  }
+  .wb-mobile-tool-config {
+    border-bottom: 1px solid var(--wb-line);
+    padding-bottom: 8px;
+  }
+  .wb-mobile-candidates {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .wb-mobile-candidates > button {
+    flex: 1;
+    min-height: 44px;
+    background: var(--wb-soft);
+    border-color: var(--wb-line);
+  }
+  body.wb-mobile .wb-popover,
+  body.wb-mobile .wb-resource-menu:not(.is-rail) {
+    position: fixed !important;
+    top: auto !important;
+    left: 8px !important;
+    right: 8px;
+    bottom: calc(
+      100% - var(--wb-mobile-top, 0px) - var(--wb-mobile-height, 100dvh) + var(--wb-safe-bottom) + 8px
+    );
+    width: auto !important;
+    max-width: none;
+    min-width: 0;
+    max-height: calc(var(--wb-mobile-height, 100dvh) - var(--wb-safe-top) - 28px) !important;
+    z-index: 10030;
+    border-radius: 17px;
+    overflow: auto;
+  }
+  body.wb-mobile .wb-pop-dismiss {
+    z-index: 10029;
+  }
+  body.wb-mobile .wb-popover :is(.wb-quick-row, .wb-pop-row) {
+    min-height: 48px;
+  }
+  body.wb-mobile .wb-popover header {
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-popover header button {
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-mobile-editor-heading {
+    display: none;
+  }
+  .wb-mobile-editor-heading > button {
+    min-height: 44px;
+    background: transparent;
+    border: 0;
+    padding: 0 8px;
+    gap: 6px;
+  }
+  .wb-mobile-editor-heading strong {
+    font-weight: 500;
+    font-size: 14px;
+    flex: 1;
+  }
+  .wb-mobile-editor-heading small {
+    color: var(--wb-muted);
+    font-size: 11px;
+  }
+  body.wb-mobile-keyboard .wb-mobile-header {
+    transform: none !important;
+  }
+  body.wb-mobile .wb-mobile-plus {
+    grid-row: 1;
+    grid-column: 1;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 0;
+    padding: 0;
+    background: var(--wb-surface);
+  }
+  /* Existing editors and dialogs stack on phones, retaining their controls and handlers. */
+  body.wb-mobile .wb-settings-workspace {
+    top: var(--wb-mobile-top, 0px);
+    bottom: auto;
+    height: var(--wb-mobile-height, 100dvh);
+    padding-top: var(--wb-safe-top);
+    padding-bottom: var(--wb-safe-bottom);
+  }
+  body.wb-mobile .wb-settings-header {
+    gap: 5px;
+    padding: 6px 8px;
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+  }
+  body.wb-mobile .wb-settings-header > small,
+  body.wb-mobile .wb-settings-footer {
+    display: none;
+  }
+  body.wb-mobile .wb-settings-header > button {
+    min-height: 40px;
+    padding: 6px;
+    font-size: 11px;
+  }
+  body.wb-mobile .wb-settings-header > strong {
+    font-size: 13px;
+  }
+  body.wb-mobile .wb-settings-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  body.wb-mobile .wb-settings-nav {
+    display: flex;
+    flex-direction: row;
+    flex: none;
+    overflow-x: auto;
+    padding: 4px 8px;
+    gap: 3px;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  body.wb-mobile .wb-settings-nav > button {
+    flex: none;
+    min-height: 44px;
+    padding: 6px 9px;
+    white-space: nowrap;
+    width: auto;
+    font-size: 11px;
+  }
+  body.wb-mobile .wb-settings-nav footer {
+    display: none;
+  }
+  body.wb-mobile .wb-settings-layout > main {
+    flex: 1;
+    min-height: 0;
+  }
+  body.wb-mobile .wb-settings-subnav {
+    padding: 0 12px;
+    gap: 16px;
+  }
+  body.wb-mobile :is(.wb-manager-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.wb-mobile :is(.wb-manager-grid) {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  body.wb-mobile :is(.wb-manager-editor, .wb-persona-editor) {
+    min-height: 350px;
+    overflow: visible;
+  }
+  body.wb-mobile :is(.wb-resource-detail, .wb-resources) {
+    min-width: 0;
+  }
+  body.wb-mobile .wb-addon-editor {
+    top: var(--wb-mobile-top, 0px);
+    height: var(--wb-mobile-height, 100dvh);
+    padding-top: var(--wb-safe-top);
+  }
+  body.wb-mobile .wb-addon-editor > header {
+    min-height: 48px;
+    height: auto;
+    padding: 8px 12px;
+  }
+  body.wb-mobile .wb-addon-editor > header strong {
+    font-size: 13px;
+  }
+  body.wb-mobile .wb-addon-editor > header button {
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-dialog {
+    max-width: calc(100vw - 16px);
+    max-height: calc(var(--wb-mobile-height, 100dvh) - 16px);
+    min-width: 0;
+  }
+  body.wb-mobile .wb-toast {
+    left: 12px;
+    right: 12px;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 64px);
+    bottom: auto;
+    z-index: 10040;
+  }
+  body.wb-mobile .wb-addon-task-strip {
+    left: 12px;
+    right: 12px;
+    bottom: calc(100% - var(--wb-mobile-top, 0px) - var(--wb-mobile-height, 100dvh) + 230px);
+  }
+  body.wb-mobile.wb-image-input-mode :is(.wb-mobile-config, .wb-mobile-plus) {
+    display: none !important;
+  }
+  body.wb-mobile .wb-image-input-label {
+    min-height: 40px;
+  }
+  body.wb-mobile .wb-image-references {
+    flex: 1;
+    min-width: 34px;
+  }
+  body.wb-mobile .wb-image-input-actions {
+    margin-left: 0;
+  }
+  @keyframes wb-mobile-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes wb-mobile-sheet-out {
+    to {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+  }
+  @keyframes wb-mobile-shade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  body.wb-mobile .wb-mobile-sheet[data-wb-exiting="true"] {
+    animation: wb-mobile-sheet-out 200ms ease both;
+  }
+  body.wb-mobile .wb-mobile-sheet-shade[data-wb-exiting="true"] {
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body.wb-mobile * {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  body.wb-mobile.reduced-motion * {
+    animation: none !important;
+    transition: none !important;
+  }
+  body.wb-mobile #wb-root {
+    contain: paint;
+    overflow: clip;
+  }
+  body.wb-mobile #wb-root {
+    width: 100vw;
+    height: 100dvh;
+  }
+  body.wb-mobile .wb-mobile-resource-popup .wb-pop-dismiss {
+    inset: var(--wb-mobile-top, 0px) 0 auto !important;
+    width: 100vw !important;
+    height: var(--wb-mobile-height, 100dvh) !important;
+    padding: 0;
+    z-index: 10029;
+    background: #342a2326 !important;
+  }
+  body.wb-mobile .wb-mobile-resource-popup .wb-section-title {
+    gap: 5px;
+  }
+  body.wb-mobile .wb-mobile-resource-popup .wb-section-title button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-image-input-actions > button,
+  body.wb-mobile .wb-image-references.is-compact > button {
+    height: 44px;
+    min-height: 44px;
+    width: 36px;
+  }
+  body.wb-mobile .wb-image-references.is-compact figure > button {
+    width: 24px;
+    height: 24px;
+    top: -6px;
+    right: -5px;
+  }
+  body.wb-mobile .wb-ot-editor-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+  body.wb-mobile .wb-ot-editor-layout > aside {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--wb-line);
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
+  body.wb-mobile .is-editor .wb-ot-tree {
+    max-height: 200px;
+  }
+  body.wb-mobile .wb-addon-editor .wb-addon-view {
+    padding: 12px;
+  }
+  body.wb-mobile .wb-image-config-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  body.wb-mobile .wb-addon-task-strip {
+    top: auto;
+    transform: none;
+    max-width: calc(100vw - 24px);
+  }
+  body.wb-mobile-rp .wb-addon-task-strip {
+    bottom: calc(100% - var(--wb-mobile-top, 0px) - var(--wb-mobile-height, 100dvh) + 84px);
+  }
+  body[data-wb-covered] .wb-addon-task-strip {
+    bottom: calc(100% - var(--wb-mobile-top, 0px) - var(--wb-mobile-height, 100dvh) + 68px);
+  }
+}

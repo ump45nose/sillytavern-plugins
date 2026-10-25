@@ -1,0 +1,764 @@
+/* Legacy style styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  body.wb-active .wb-composer-tools {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 0 0 73px;
+    margin-top: -40px;
+    min-height: 40px;
+    margin-right: 54px;
+    pointer-events: auto;
+    z-index: 2;
+  }
+  body.wb-active .wb-composer-tools button {
+    padding: 6px 8px;
+    font-size: 12px;
+    background: transparent;
+    border: 0;
+    color: var(--wb-muted);
+    white-space: nowrap;
+  }
+  .wb-ui {
+    font:
+      14px/1.55 -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      "Noto Sans CJK SC",
+      sans-serif;
+    color: var(--wb-ink);
+    text-shadow: none;
+    text-align: left;
+    letter-spacing: normal;
+  }
+  .wb-ui * {
+    box-sizing: border-box;
+  }
+  .wb-ui button,
+  .wb-ui input,
+  .wb-ui select,
+  .wb-ui textarea {
+    font: inherit;
+    color: inherit;
+    box-shadow: none;
+    text-shadow: none;
+    letter-spacing: inherit;
+  }
+  .wb-ui button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      color 0.15s;
+    line-height: 1.4;
+    min-height: 34px;
+  }
+  .wb-ui button:hover {
+    background: var(--wb-soft);
+  }
+  .wb-ui button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .wb-ui button:focus-visible,
+  .wb-ui select:focus-visible,
+  .wb-ui input:focus-visible,
+  .wb-ui textarea:focus-visible {
+    outline: 2px solid var(--wb-accent);
+    outline-offset: 2px;
+  }
+  .wb-ui input:not([type="checkbox"]),
+  .wb-ui select,
+  .wb-ui textarea {
+    min-width: 0;
+    border: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+    border-radius: 8px;
+    padding: 9px 11px;
+    margin: 0;
+    outline-offset: 2px;
+  }
+  .wb-ui input[type="checkbox"] {
+    accent-color: var(--wb-accent);
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .wb-ui textarea {
+    resize: vertical;
+    line-height: 1.8;
+    min-height: 90px;
+    width: 100%;
+  }
+  .wb-ui h2,
+  .wb-ui h3,
+  .wb-ui p {
+    margin: 0;
+  }
+  .wb-ui h2 {
+    font:
+      500 23px/1.5 Georgia,
+      "Noto Serif CJK SC",
+      serif;
+  }
+  .wb-ui h3 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .wb-ui small {
+    font-size: 12px;
+    color: var(--wb-muted);
+  }
+  .wb-ui img {
+    object-fit: cover;
+  }
+  .wb-ui svg {
+    flex-shrink: 0;
+  }
+  .wb-ui strong {
+    font-weight: 550;
+  }
+  .wb-ui .wb-icon {
+    border: 0;
+    background: transparent;
+    padding: 8px;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+  .wb-ui .wb-primary {
+    background: var(--wb-accent);
+    color: white;
+    border-color: transparent;
+  }
+  .wb-ui .wb-primary:is(:hover, :focus-visible) {
+    filter: brightness(0.95);
+  }
+  .wb-ui .wb-link {
+    border: 0;
+    background: transparent;
+    color: var(--wb-muted);
+    padding: 6px 0;
+    justify-content: flex-start;
+    font-size: 12px;
+  }
+  .wb-grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-flex {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wb-eyebrow {
+    font-size: 10px;
+    letter-spacing: 1.6px;
+    color: var(--wb-muted);
+  }
+  .wb-caption {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: var(--wb-muted);
+    margin: 14px 0 8px !important;
+  }
+  #wb-root {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  #wb-root > * {
+    pointer-events: auto;
+  }
+  .wb-top {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 22px;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-paper);
+    z-index: 20;
+  }
+  .wb-avatar-fallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .wb-avatar-fallback {
+    background: var(--wb-selected);
+    display: grid;
+    place-items: center;
+    font-family: Georgia;
+  }
+  .wb-contexts {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .wb-selector {
+    position: relative;
+    display: flex;
+    border: 1px solid var(--wb-line);
+    border-radius: 10px;
+    min-width: 0;
+    max-width: 230px;
+    flex: 1;
+    background: var(--wb-surface);
+  }
+  .wb-selector > button:first-child {
+    border: 0;
+    background: transparent;
+    min-width: 0;
+    justify-content: flex-start;
+    flex: 1;
+    font-size: 13px;
+    padding: 9px 11px;
+  }
+  .wb-selector > button:first-child span:not(.wb-dot) {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-selector > .wb-icon {
+    border-left: 1px solid var(--wb-line);
+    border-radius: 0 9px 9px 0;
+    height: 38px;
+    width: 27px;
+    padding: 4px;
+  }
+  .wb-dot {
+    height: 7px;
+    width: 7px;
+    background: #aaa;
+    display: inline-block;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .wb-dot.online {
+    background: #5f8b6f;
+  }
+  .wb-pop-dismiss {
+    position: fixed;
+    inset: 70px 0 0;
+    background: transparent !important;
+    border: 0 !important;
+    z-index: 21;
+    border-radius: 0 !important;
+    cursor: default !important;
+  }
+  .wb-popover {
+    position: absolute;
+    top: 48px;
+    left: 0;
+    width: 320px;
+    max-height: 65vh;
+    overflow: auto;
+    background: var(--wb-surface);
+    border: 1px solid var(--wb-line);
+    border-radius: 12px;
+    box-shadow: 0 15px 55px #30201020;
+    padding: 12px;
+    z-index: 22;
+  }
+  .wb-quick-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-quick-row > button:not(.wb-icon) {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: none;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px;
+  }
+  .wb-quick-row strong {
+    white-space: normal;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .wb-left {
+    position: absolute;
+    top: 70px;
+    left: 0;
+    bottom: 0;
+    width: 220px;
+    padding: 26px 20px 16px;
+    background: var(--wb-paper);
+    border-right: 1px solid var(--wb-line);
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .wb-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .wb-left > .wb-section-title {
+    padding-top: 0;
+  }
+  .wb-outline {
+    flex: 1;
+    min-height: 100px;
+    overflow: auto;
+  }
+  .wb-outline > button {
+    display: flex;
+    width: 100%;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    justify-content: flex-start;
+    text-align: left;
+    font-size: 13px;
+    margin-bottom: 5px;
+    padding: 9px 5px;
+    overflow-wrap: anywhere;
+  }
+  .wb-outline > button span {
+    font: 11px Georgia;
+    color: var(--wb-muted);
+    margin-right: 6px;
+  }
+  .wb-left details {
+    border-top: 1px solid var(--wb-line);
+    padding: 13px 0;
+  }
+  .wb-left summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--wb-muted);
+  }
+  .wb-left summary small {
+    float: right;
+  }
+  .wb-right {
+    position: absolute;
+    right: 0;
+    top: 70px;
+    bottom: 0;
+    width: 450px;
+    background: var(--wb-surface);
+    border-left: 1px solid var(--wb-line);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: -5px 0 30px #30201003;
+  }
+  .wb-panel-tabs {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    border-bottom: 1px solid var(--wb-line);
+    flex-shrink: 0;
+  }
+  .wb-panel-tabs > button:not(.wb-icon) {
+    border: 0;
+    background: none;
+    font-size: 13px;
+    color: var(--wb-muted);
+  }
+  .wb-panel-tabs .is-active {
+    color: var(--wb-accent) !important;
+    background: var(--wb-selected) !important;
+  }
+  .wb-panel-tabs strong {
+    font-size: 12px;
+    margin-left: 12px;
+  }
+  .wb-empty {
+    padding: 28px 16px;
+    color: var(--wb-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+  }
+  .wb-search {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--wb-line);
+    background: var(--wb-paper);
+    border-radius: 8px;
+    padding-left: 10px;
+    color: var(--wb-muted);
+    min-width: 0;
+    flex: 1;
+  }
+  .wb-search input {
+    width: 100%;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: 12px !important;
+  }
+  .wb-note {
+    background: var(--wb-soft);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--wb-muted);
+    line-height: 1.8;
+    margin: 12px 0;
+  }
+  .wb-error {
+    background: #fff0e8;
+    color: #983c2a;
+    padding: 10px 14px;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+  .wb-success {
+    padding: 6px 16px;
+    color: #548366;
+    font-size: 12px;
+  }
+  .wb-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 80vw;
+    background: var(--wb-surface);
+    border: 1px solid var(--wb-accent);
+    box-shadow: 0 6px 30px #0002;
+    padding: 12px 18px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    z-index: 11000;
+  }
+  .wb-tabs {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid var(--wb-line);
+    flex-shrink: 0;
+  }
+  .wb-tabs > button {
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    color: var(--wb-muted);
+    padding: 12px 3px;
+    font-size: 13px;
+    border-bottom: 2px solid transparent;
+  }
+  .wb-tabs > button.is-active {
+    color: var(--wb-accent);
+    border-bottom-color: var(--wb-accent);
+  }
+  .wb-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin: 15px 0;
+    color: var(--wb-muted);
+    font-size: 12px;
+  }
+  .wb-field > input,
+  .wb-field > textarea,
+  .wb-field > select {
+    color: var(--wb-ink);
+    width: 100%;
+  }
+  .wb-fields {
+    padding: 12px 0;
+    overflow: auto;
+    min-height: 0;
+  }
+  .wb-fields > label:not(.wb-field) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 0;
+  }
+  .wb-editor-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+  }
+  .wb-code {
+    font-family: ui-monospace, monospace !important;
+    font-size: 12px !important;
+    tab-size: 2;
+  }
+  .wb-dialog {
+    color: var(--wb-ink);
+    background: var(--wb-paper);
+    border: 1px solid var(--wb-line);
+    border-radius: 16px;
+    box-shadow: 0 20px 90px #30201030;
+    padding: 0;
+    margin: auto;
+    width: min(720px, 94vw);
+    max-width: none;
+    max-height: 94vh;
+    overflow: hidden;
+  }
+  .wb-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  .wb-dialog::backdrop {
+    background: #30281e44;
+    backdrop-filter: blur(4px);
+  }
+  .wb-dialog.wb-wide {
+    width: calc(100vw - 64px);
+    height: calc(100dvh - 64px);
+    max-height: none;
+  }
+  .wb-dialog > header {
+    height: 82px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--wb-line);
+    flex-shrink: 0;
+  }
+  .wb-world {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+  .wb-mode option {
+    color: var(--wb-ink);
+    background: var(--wb-surface);
+  }
+  .wb-editor-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wb-editor-heading > input {
+    font-weight: 600;
+    min-width: 0;
+    flex: 1;
+    border: 0 !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+  .green {
+    color: #5d9970;
+  }
+  .blue {
+    color: #6286b5;
+  }
+  .purple {
+    color: #9472b4;
+  }
+  .wb-characters {
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0 20px;
+    overflow: hidden;
+  }
+  .wb-favorites {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding: 0 0 18px;
+    flex-shrink: 0;
+  }
+  .wb-favorites button {
+    padding: 0;
+    border: 0;
+    background: none;
+    flex-direction: column;
+    width: 56px;
+    flex-shrink: 0;
+    font-size: 11px;
+    gap: 7px;
+  }
+  .wb-favorites img {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+  }
+  .wb-favorites .is-active img {
+    border-color: var(--wb-accent);
+    padding: 2px;
+  }
+  .wb-favorites span {
+    width: 60px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wb-character-list {
+    overflow: auto;
+    flex: 1;
+  }
+  .wb-resource-footer {
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+    border-top: 1px solid var(--wb-line);
+    padding: 14px 0;
+    flex-shrink: 0;
+  }
+  .wb-resource-footer button {
+    font-size: 11px;
+    padding: 7px;
+    border: 0;
+    background: none;
+  }
+  .wb-characters.is-management {
+    display: grid;
+    grid-template-columns: 205px minmax(0, 1fr);
+    padding: 0;
+  }
+  .wb-batch {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 0;
+    border-top: 1px solid var(--wb-line);
+    font-size: 12px;
+  }
+  .wb-batch label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wb-batch button {
+    font-size: 12px;
+  }
+  .wb-resources {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    min-height: 0;
+    flex: 1;
+    padding: 16px 20px;
+  }
+  .wb-resource-detail {
+    padding-top: 12px;
+  }
+  .wb-resources.is-deep {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    padding: 0;
+    overflow: hidden;
+  }
+  .wb-resources.is-deep > .wb-resource-detail {
+    padding: 24px 40px;
+    overflow: auto;
+    max-width: 1100px;
+    width: 100%;
+  }
+  .wb-trace {
+    padding: 0 20px 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+  }
+  .wb-trace-body {
+    overflow: auto;
+    flex: 1;
+    margin: 16px 0;
+    min-height: 0;
+  }
+  .wb-trace-body details {
+    border: 1px solid var(--wb-line);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .wb-trace-body summary {
+    padding: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    background: var(--wb-soft);
+  }
+  .wb-trace pre {
+    padding: 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font:
+      12px/1.8 ui-monospace,
+      monospace;
+    color: var(--wb-ink);
+    background: transparent;
+  }
+  @media (max-width: 1280px) {
+    .wb-left {
+      width: 180px;
+      padding: 22px 14px;
+    }
+    .wb-top {
+      gap: 8px;
+      padding: 0 14px;
+    }
+    .wb-selector > button:first-child {
+      font-size: 12px;
+      padding: 8px;
+    }
+    .wb-contexts {
+      gap: 5px;
+    }
+    body.wb-active .wb-composer-tools button {
+      padding: 6px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wb-ui * {
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  body.wb-active .wb-composer-tools {
+    order: 26;
+    align-self: stretch;
+    min-width: 0;
+  }
+  body.wb-active .wb-composer-tools {
+    pointer-events: none;
+  }
+  body.wb-active .wb-composer-tools button {
+    pointer-events: auto;
+  }
+  .wb-ui fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-inline-size: 0;
+  }
+}

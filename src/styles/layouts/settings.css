@@ -1,0 +1,506 @@
+/* Settings workspace (boards Settings / Workspace): the desk with a quiet nav, and the page as one raised sheet. */
+@layer wb.layouts {
+  body:not(.wb-mobile) .wb-ui.wb-settings-workspace,
+  body:not(.wb-mobile) .wb-settings-workspace::backdrop {
+    background: var(--wb-surface-0);
+  }
+  body:not(.wb-mobile) .wb-settings-header {
+    gap: 10px;
+    height: 56px;
+    padding: 0 16px 0 14px;
+    border: 0;
+    background: transparent;
+  }
+  body:not(.wb-mobile) .wb-settings-header > button:first-child {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    min-height: 32px;
+    margin-right: 12px;
+    padding: 0 10px 0 6px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  body:not(.wb-mobile) .wb-settings-header > button:first-child::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: -12px;
+    width: 1px;
+    height: 16px;
+    background: var(--wb-line-1);
+  }
+  body:not(.wb-mobile) .wb-settings-header > button:first-child:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  body:not(.wb-mobile) .wb-settings-header > strong {
+    gap: 8px;
+    color: var(--wb-ink-1);
+    font-family: var(--wb-font-ui);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  body:not(.wb-mobile) .wb-settings-header > strong > svg {
+    width: 17px;
+    height: 17px;
+    color: var(--wb-ink-2);
+  }
+  body:not(.wb-mobile) .wb-settings-header > .wb-icon {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    color: var(--wb-ink-2);
+  }
+
+  body:not(.wb-mobile) .wb-settings-layout {
+    grid-template-columns: 236px minmax(0, 1fr);
+    padding: 0 var(--wb-gutter) var(--wb-gutter) 0;
+  }
+  body:not(.wb-mobile) .wb-settings-nav {
+    gap: 2px;
+    padding: 6px 12px 12px 16px;
+    border: 0;
+    background: transparent;
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-nav > button {
+    gap: 12px;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13.5px;
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-nav > button > svg {
+    width: 16px;
+    height: 16px;
+    color: var(--wb-ink-3);
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-nav > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-nav > button[aria-pressed="true"] {
+    background: var(--wb-selected-bg);
+    box-shadow: none;
+    color: var(--wb-accent);
+    font-weight: 600;
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-nav > button[aria-pressed="true"] > svg {
+    color: var(--wb-accent);
+  }
+  body:not(.wb-mobile) .wb-settings-nav > footer {
+    padding: 16px 12px 0;
+    color: var(--wb-ink-3);
+    font: 11px/1.8 var(--wb-font-ui);
+  }
+
+  /* The page is one sheet; its group tabs sit on the sheet's top edge. */
+  body:not(.wb-mobile) .wb-settings-layout > main {
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  body:not(.wb-mobile) .wb-settings-subnav {
+    gap: 22px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--wb-line-1);
+    background: transparent;
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-subnav > button {
+    height: 48px;
+    min-height: 48px;
+    padding: 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13.5px;
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-subnav > button:is(:hover, :focus-visible) {
+    background: transparent;
+    color: var(--wb-ink-1);
+  }
+  body:not(.wb-mobile) .wb-ui .wb-settings-subnav > button[aria-pressed="true"] {
+    border-bottom-color: var(--wb-accent);
+    color: var(--wb-ink-1);
+    font-weight: 600;
+  }
+  body:not(.wb-mobile) .wb-settings-subnav,
+  body:not(.wb-mobile) .wb-settings-body {
+    background: transparent;
+  }
+
+  /* ── Resource pages: the list column carries its title, keys and selection bar ── */
+  body:not(.wb-mobile) .wb-manager-grid {
+    grid-template-columns: 272px minmax(0, 1fr);
+  }
+  body.wb-active .wb-manager-resources {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 12px 12px;
+    border-right: 1px solid var(--wb-line-1);
+    background: transparent;
+  }
+  body.wb-active .wb-manager-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 32px;
+    padding-left: 6px;
+  }
+  body.wb-active .wb-manager-head h3 {
+    margin: 0;
+    color: var(--wb-ink-1);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  body.wb-active .wb-ui .wb-manager-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    cursor: pointer;
+  }
+  body.wb-active .wb-ui .wb-manager-icon:is(:hover, :focus-visible, :focus-within) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  body.wb-active .wb-ui .wb-manager-icon.is-raised {
+    background: var(--wb-surface-2);
+  }
+  body.wb-active .wb-batch-toolbar {
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 6px 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+  }
+  body.wb-active .wb-batch-toolbar.is-active {
+    background: var(--wb-selected-bg);
+  }
+  body.wb-active .wb-batch-toolbar .wb-check {
+    flex: 1;
+    gap: 8px;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  body.wb-active .wb-batch-toolbar.is-active .wb-check {
+    color: var(--wb-accent);
+    font-weight: 600;
+  }
+  body.wb-active .wb-batch-toolbar > small {
+    color: var(--wb-ink-3);
+    font-size: 11px;
+  }
+  body.wb-active .wb-batch-toolbar.is-active > small,
+  body.wb-active .wb-batch-toolbar:not(.is-active) .wb-batch-actions {
+    display: none;
+  }
+  body.wb-active .wb-batch-actions {
+    gap: 0;
+  }
+  body.wb-active .wb-ui .wb-batch-toolbar .wb-batch-actions button:not(.wb-manager-icon) {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 7px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  body.wb-active .wb-ui .wb-batch-toolbar .wb-batch-actions button:is(:hover, :focus-visible) {
+    color: var(--wb-ink-1);
+  }
+  body.wb-active .wb-ui .wb-batch-toolbar .wb-batch-actions button.is-danger {
+    color: var(--wb-danger);
+  }
+  body.wb-active .wb-ui .wb-batch-toolbar .wb-batch-actions .wb-manager-icon {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    min-height: 26px;
+  }
+  body.wb-active .wb-manager-resources > .wb-search {
+    flex: none;
+  }
+  body.wb-active .wb-manager-list {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: auto;
+  }
+  body.wb-active .wb-manager-row {
+    gap: 10px;
+    min-height: 54px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 10px;
+  }
+  body.wb-active .wb-manager-row:hover {
+    background: var(--wb-hover);
+  }
+  body.wb-active .wb-manager-row.is-editing {
+    background: var(--wb-selected-bg);
+  }
+  body.wb-active .wb-ui .wb-manager-row strong {
+    color: var(--wb-ink-1);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  body.wb-active .wb-manager-row small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  body.wb-active .wb-manager-resources > .wb-editor-slot {
+    flex: none;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    opacity: 0.7;
+  }
+  body:not(.wb-mobile) .wb-manager-editor {
+    background: transparent;
+  }
+  body:not(.wb-mobile) .wb-batch-status {
+    padding: 8px 20px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: 12px;
+  }
+
+  /* ── Phone: two levels. The index lists every page's groups as cards of rows; a group opens as one
+     single-column page under a header with back, the page name above the group's. ── */
+  body.wb-mobile .wb-ui.wb-settings-workspace {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: var(--wb-m-paper);
+    animation: wb-mobile-fade-in 200ms ease both;
+  }
+  body.wb-mobile .wb-settings-header {
+    flex: none;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    min-height: 56px;
+    padding: 6px 6px 6px 8px;
+    border-bottom: 0;
+    background: var(--wb-m-paper);
+  }
+  body.wb-mobile .wb-settings-header > button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile .wb-settings-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding-left: 6px;
+    overflow: hidden;
+    color: var(--wb-ink-1);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  body.wb-mobile .wb-settings-title small {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  body.wb-mobile .wb-settings-header .wb-save-state {
+    flex: none;
+    font-size: 12px;
+  }
+  body.wb-mobile .wb-settings-index {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 12px max(20px, var(--wb-safe-bottom));
+  }
+  body.wb-mobile .wb-settings-index section + section {
+    margin-top: 18px;
+  }
+  body.wb-mobile .wb-settings-index h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 0 6px;
+    color: var(--wb-ink-3);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  body.wb-mobile .wb-settings-index-rows {
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  body.wb-mobile .wb-settings-index-rows button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 12px 0 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    transition:
+      background-color 160ms,
+      scale 140ms var(--wb-ease-emphasized);
+  }
+  body.wb-mobile .wb-settings-index-rows button + button {
+    box-shadow: inset 0 1px 0 var(--wb-line-1);
+  }
+  body.wb-mobile .wb-settings-index-rows button span {
+    flex: 1;
+    min-width: 0;
+  }
+  body.wb-mobile .wb-settings-index-rows button svg {
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-settings-index-rows button:active {
+    background: var(--wb-surface-2);
+  }
+  body.wb-mobile .wb-settings-index footer {
+    margin-top: 20px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    text-align: center;
+  }
+  body.wb-mobile .wb-settings-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    animation: wb-mobile-fade-in 180ms ease both;
+  }
+  body.wb-mobile :is(.wb-settings-nav, .wb-settings-subnav, .wb-reading-row.is-pointer-only) {
+    display: none;
+  }
+  body.wb-mobile .wb-settings-layout > main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  body.wb-mobile .wb-settings-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 12px max(20px, var(--wb-safe-bottom));
+  }
+  /* Rows: a narrow label column; segmented choices fill the rest and never break their words. */
+  body.wb-mobile .wb-reading-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.wb-mobile .wb-reading-row {
+    grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+    gap: 12px;
+  }
+  body.wb-mobile .wb-reading-segment {
+    justify-self: stretch;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  body.wb-mobile .wb-reading-segment button {
+    height: 34px;
+    min-height: 34px;
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+  body.wb-mobile .wb-reading-row > .wb-select {
+    width: 100%;
+  }
+  body.wb-mobile .wb-reading-range {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 10px;
+  }
+  /* Resource managers: the shared list sits on the paper as a capped, scrolling block above the editor. */
+  body.wb-mobile .wb-manager-resources {
+    max-height: 44vh;
+    padding: 6px 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--wb-line-1);
+  }
+  body.wb-mobile .wb-ui .wb-manager-icon {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+  body.wb-mobile .wb-manager-resources > .wb-search {
+    min-height: 44px;
+  }
+  body.wb-mobile .wb-manager-resources > .wb-search input {
+    font-size: 16px;
+  }
+  body.wb-mobile .wb-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}

@@ -1,0 +1,750 @@
+/*
+ * The database plug-in's tables. Right panel: tables in the rail under a fill-status card, rows as
+ * quiet records, the open row as a warm card with its columns stacked. Settings page: a list column
+ * and the whole table as a grid whose open row unfolds into the same card, two fields across.
+ */
+@layer wb.components {
+  .wb-db {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* ── Fill status: a small card at the top of the rail (or under the chips on a phone) ── */
+  .wb-db-status {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-1);
+    box-shadow: inset 0 0 0 1px var(--wb-line-1);
+  }
+  .wb-db-status p {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-db-status p i {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wb-success);
+  }
+  .wb-db-status.is-filling p {
+    color: var(--wb-ink-1);
+    font-weight: var(--wb-weight-medium);
+  }
+  .wb-db-status.is-filling p i {
+    background: var(--wb-accent);
+    animation: wb-db-breathe 1.4s var(--wb-ease-standard) infinite;
+  }
+  @keyframes wb-db-breathe {
+    50% {
+      opacity: 0.35;
+      transform: scale(0.75);
+    }
+  }
+  .wb-db-status > div {
+    display: flex;
+    gap: 4px;
+  }
+  .wb-ui .wb-db-status button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-sm);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-xs);
+    cursor: pointer;
+  }
+  .wb-ui .wb-db-status button:first-child {
+    flex: 1;
+  }
+  .wb-ui .wb-db-status button:last-child {
+    width: 28px;
+    padding: 0;
+    color: var(--wb-ink-2);
+  }
+  .wb-ui .wb-db-status button:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--wb-ink-1) 7%, var(--wb-surface-2));
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-db-status button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .wb-db-status .wb-error {
+    margin: 0;
+    font-size: var(--wb-text-xs);
+  }
+
+  /* ── Table note: one line, the whole of it on a click ── */
+  .wb-ui .wb-db-note {
+    flex: none;
+    display: block;
+    margin: 0 16px 10px 18px;
+    padding: 7px 10px;
+    overflow: hidden;
+    border: 0;
+    border-left: 2px solid var(--wb-line-2);
+    border-radius: 0 var(--wb-radius-sm) var(--wb-radius-sm) 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+    line-height: 1.55;
+    text-align: left;
+    white-space: pre-wrap;
+    cursor: pointer;
+  }
+  .wb-db-note > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+  .wb-db-note.is-open > span {
+    -webkit-line-clamp: unset;
+  }
+  .wb-ui .wb-db-note:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-2);
+  }
+  .wb-ui .wb-db-note.is-open {
+    max-height: 40%;
+    overflow-y: auto;
+    color: var(--wb-ink-2);
+  }
+
+  /* ── Rows: number, title and a quiet summary ── */
+  .wb-db-rows {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0 10px 8px 12px;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+  .wb-db-rows.is-shared {
+    flex: 0 1 auto;
+    max-height: 38%;
+  }
+  .wb-db-rows > li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 10px;
+    border-radius: 9px;
+    transition: background-color var(--wb-duration-fast);
+  }
+  .wb-db-rows > li:hover {
+    background: var(--wb-hover);
+  }
+  .wb-db-rows > li.is-selected {
+    background: var(--wb-selected-bg);
+  }
+  .wb-ui .wb-db-rows > li > button {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 0 0 8px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .wb-db-no {
+    flex: none;
+    width: 22px;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .wb-db-rows strong {
+    flex: none;
+    max-width: 48%;
+    overflow: hidden;
+    font-size: var(--wb-text-md);
+    font-weight: var(--wb-weight-medium);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-db-rows li.is-selected strong {
+    font-weight: 600;
+  }
+  .wb-db-rows small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-db-row-lock {
+    flex: none;
+    color: var(--wb-accent);
+  }
+  .wb-db-empty {
+    margin: 0;
+    padding: 14px 8px;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-sm);
+    list-style: none;
+  }
+
+  /* ── Phone: tables as a scrolling chip row ── */
+  .wb-db-chips {
+    flex: none;
+    display: flex;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 0 16px 0 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .wb-ui .wb-db-chips button {
+    flex: none;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-ui .wb-db-chips button[aria-pressed="true"] {
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent);
+    font-weight: 600;
+  }
+  .wb-db:not(.is-deep) > .wb-db-status {
+    margin: 0 16px 10px 18px;
+  }
+
+  /* ── The open row ── */
+  .wb-db-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .wb-db:not(.is-deep) .wb-db-editor {
+    flex: 1;
+    margin: 8px 12px 0;
+    padding: 12px 14px 0;
+    border-radius: var(--wb-radius-lg) var(--wb-radius-lg) 0 0;
+    background: var(--wb-surface-2);
+  }
+  .wb-db-editor > header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+  }
+  .wb-db-editor > header > strong {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-ink-1);
+    font: 600 16px/1.3 var(--wb-font-reading);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-ui .wb-db-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-ui .wb-db-chip:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-db-chip.is-on {
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent);
+    font-weight: var(--wb-weight-medium);
+  }
+  .wb-ui .wb-db-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+  }
+  .wb-ui .wb-db-icon:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-db-icon.is-danger:is(:hover, :focus-visible) {
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger);
+  }
+  .wb-ui .wb-db-icon:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .wb-db-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px 0 10px;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-ui .wb-db-confirm button {
+    height: 24px;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-ui .wb-db-confirm button.is-danger {
+    background: var(--wb-danger);
+    color: #fff;
+  }
+  .wb-db-editor .wb-error {
+    margin: 0;
+  }
+
+  /* Fields: the column name over a field that grows with its text. */
+  .wb-db-fields {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 12px;
+    margin: 0 -14px;
+    padding: 2px 14px 14px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .wb-db-editor.is-grid .wb-db-fields {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px 16px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  .wb-db-editor.is-grid .wb-db-field.is-long {
+    grid-column: 1 / -1;
+  }
+  .wb-db-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .wb-db-field-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 22px;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-xs);
+    font-weight: var(--wb-weight-medium);
+  }
+  .wb-db-field-head > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-ui .wb-db-field textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 36px;
+    max-height: 260px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-1);
+    box-shadow: inset 0 0 0 1px var(--wb-line-1);
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    line-height: 1.55;
+    resize: none;
+    field-sizing: content;
+  }
+  .wb-ui .wb-db-field textarea:focus {
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--wb-ring),
+      var(--wb-shadow-ring);
+  }
+  .wb-ui .wb-db-field.is-locked textarea {
+    background: color-mix(in srgb, var(--wb-accent) 5%, var(--wb-surface-1));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wb-accent) 22%, transparent);
+    color: var(--wb-ink-2);
+    cursor: default;
+  }
+  .wb-db-field > small {
+    color: var(--wb-ink-3);
+    font-size: 11px;
+  }
+
+  /* Lock toggles: open padlocks show on hover; closed ones always, in the accent. */
+  .wb-ui .wb-db-lock {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+    opacity: 0;
+    transition:
+      opacity var(--wb-duration-fast),
+      background-color var(--wb-duration-fast);
+  }
+  .wb-ui .wb-db-lock[aria-pressed="true"] {
+    color: var(--wb-accent);
+    opacity: 1;
+  }
+  .wb-db-field:hover .wb-db-lock,
+  .wb-db-grid-row:hover .wb-db-lock,
+  .wb-ui .wb-db-lock:focus-visible {
+    opacity: 1;
+  }
+  .wb-ui .wb-db-lock:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  @media (hover: none) {
+    .wb-ui .wb-db-lock {
+      opacity: 0.6;
+    }
+  }
+
+  /* The save bar sits flush at the foot of the panel card. */
+  .wb-db:not(.is-deep) .wb-db-editor > .wb-savebar {
+    margin: 0 -14px;
+  }
+
+  /* ── Settings page: list column and grid ── */
+  .wb-db.is-deep {
+    display: grid;
+    grid-template-columns: 252px minmax(0, 1fr);
+    height: auto;
+    min-height: 100%;
+  }
+  .wb-db.is-deep > .wb-empty {
+    grid-column: 2;
+  }
+  .wb-db.is-deep > .wb-db-status {
+    align-self: start;
+    margin: 18px 12px;
+  }
+  .wb-db-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 12px;
+    border-right: 1px solid var(--wb-line-1);
+  }
+  .wb-db-column h3 {
+    margin: 0 0 0 6px;
+    color: var(--wb-ink-1);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .wb-db-tables {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wb-db-tables li {
+    border-radius: 10px;
+  }
+  .wb-db-tables li:hover {
+    background: var(--wb-hover);
+  }
+  .wb-db-tables li.is-active {
+    background: var(--wb-selected-bg);
+  }
+  .wb-ui .wb-db-tables button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    width: 100%;
+    height: auto;
+    min-height: 46px;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    text-align: left;
+  }
+  .wb-db-tables strong {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: var(--wb-weight-medium);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-db-tables li.is-active strong {
+    font-weight: 600;
+  }
+  .wb-db-tables small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+
+  .wb-db-sheet {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 22px 22px;
+  }
+  .wb-db-sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 34px;
+  }
+  .wb-db-sheet-head h2 {
+    margin: 0;
+    overflow: hidden;
+    color: var(--wb-ink-1);
+    font: 600 20px/1.3 var(--wb-font-reading);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-db-sheet-head > small {
+    flex: none;
+    color: var(--wb-ink-3);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-db-sheet-head > .wb-search {
+    flex: 0 1 240px;
+    min-width: 160px;
+  }
+  .wb-ui .wb-db-add {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+  }
+  .wb-ui .wb-db-add:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--wb-ink-1) 7%, var(--wb-surface-2));
+  }
+  .wb-db-sheet .wb-db-note {
+    margin: -4px 0 0;
+  }
+
+  /* The grid scrolls sideways as one; the number column and the header stay put. */
+  .wb-db-grid {
+    container-type: inline-size;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .wb-db-grid-row {
+    display: grid;
+    grid-template-columns: var(--wb-db-columns);
+    align-items: stretch;
+    width: max(100%, var(--wb-db-width));
+    border-bottom: 1px solid var(--wb-line-1);
+    color: var(--wb-ink-1);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color var(--wb-duration-fast);
+  }
+  .wb-db-grid-row > span {
+    min-width: 0;
+    padding: 10px 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  /* The clamp sits inside the cell's padding, which would otherwise show a third line. */
+  .wb-db-grid-row:not(.is-head) > span:not(:first-child) > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .wb-db-grid-row > span:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 4px 8px 10px;
+    background: var(--wb-surface-1);
+    line-height: 22px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-db-grid-row:not(.is-head):hover,
+  .wb-db-grid-row:not(.is-head):hover > span:first-child {
+    background: color-mix(in srgb, var(--wb-ink-1) 3%, var(--wb-surface-1));
+  }
+  .wb-db-grid-row.is-open,
+  .wb-db-grid-row.is-open > span:first-child,
+  .wb-db-grid-row.is-open:hover > span:first-child {
+    background: var(--wb-selected-bg);
+  }
+  .wb-db-grid-row:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: -2px;
+  }
+  .wb-db-grid-row > span.is-locked:not(:first-child) {
+    background: color-mix(in srgb, var(--wb-accent) 5%, transparent);
+    color: var(--wb-ink-2);
+  }
+  .wb-db-grid-row.is-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom-color: var(--wb-line-2);
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    cursor: default;
+  }
+  .wb-db-grid-row.is-head > span {
+    display: flex;
+    align-items: center;
+    line-height: 1.5;
+    gap: 4px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    background: var(--wb-surface-1);
+  }
+  .wb-db-grid-row.is-head > span > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-db-grid-row.is-head > span.is-locked {
+    color: var(--wb-accent);
+  }
+  .wb-db-grid > .wb-error {
+    margin: 0 0 8px;
+  }
+  .wb-db-grid > .wb-db-empty {
+    position: sticky;
+    left: 0;
+  }
+
+  /* The open row unfolds at the grid's visible width, however far it has scrolled. */
+  .wb-db-grid-editor {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
+    width: 100cqw;
+    padding: 6px 0 12px;
+    border-bottom: 1px solid var(--wb-line-1);
+  }
+  .wb-db-grid-editor .wb-db-editor {
+    padding: 14px 16px 16px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    animation: wb-db-open var(--wb-duration-base) var(--wb-ease-standard);
+  }
+  @keyframes wb-db-open {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+  .wb-db-grid-editor .wb-savebar {
+    margin: 4px -16px -16px;
+    border-radius: 0 0 14px 14px;
+  }
+
+  /* ── Composer tool: a breathing dot while the plug-in fills ── */
+  .wb-ui [data-wb-tool="builtin:database"][data-wb-busy],
+  .wb-mobile-tool-grid > [data-wb-busy] {
+    position: relative;
+  }
+  .wb-ui [data-wb-tool="builtin:database"][data-wb-busy]::after,
+  .wb-mobile-tool-grid > [data-wb-busy]::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wb-accent);
+    animation: wb-db-breathe 1.4s var(--wb-ease-standard) infinite;
+  }
+}

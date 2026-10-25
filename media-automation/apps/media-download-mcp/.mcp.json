@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "media-download-mcp": {
-      "type": "streamable-http",
-      "url": "https://media-download-home.172906573.xyz/mcp"
-    }
-  }
-}

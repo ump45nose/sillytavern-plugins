@@ -1,0 +1,307 @@
+/*
+ * Element defaults copied verbatim from SillyTavern 1.19.0 (public/style.css, public/css/st-tailwind.css;
+ * AGPL-3.0, https://github.com/SillyTavern/SillyTavern). The isolation rule shields workbench UI from
+ * native globals; these copies keep today's look until wb.base takes over in the redesign, then go away.
+ * They sit at the head of wb.legacy so their specificity contest with legacy rules is unchanged.
+ */
+@layer wb.legacy {
+  * {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -moz-osx-font-smoothing: grayscale;
+    text-shadow: 0px 0px calc(var(--shadowWidth) * 1px) var(--SmartThemeShadowColor);
+  }
+  ::-webkit-scrollbar {
+    width: 0.7rem;
+    scrollbar-gutter: stable;
+  }
+  ::-webkit-scrollbar-track {
+    cursor: default;
+  }
+  ::-webkit-scrollbar-track:hover {
+    /* Adaptive, but won't contrast with neutral-gray. */
+    background-color: rgba(126, 126, 126, 0.2);
+  }
+  ::-webkit-scrollbar-thumb {
+    cursor: grab;
+  }
+  ::-webkit-scrollbar-thumb:active {
+    cursor: grabbing;
+  }
+  ::-webkit-scrollbar-thumb:vertical {
+    background-color: var(--grey7070a);
+    box-shadow: inset 0 0 0 1px var(--black50a);
+    border-radius: 10px;
+    background-clip: content-box;
+    border: 2px solid transparent;
+    min-height: 40px;
+  }
+  ::-webkit-scrollbar-thumb:horizontal {
+    background-color: var(--grey7070a);
+    box-shadow: inset 0 0 0 1px var(--black50a);
+    border-radius: 10px;
+    background-clip: content-box;
+    border: 2px solid transparent;
+    min-width: 40px;
+  }
+  ::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+  select:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 1px solid var(--interactable-outline-color-faint);
+  }
+  input[type="checkbox"]:focus-visible {
+    outline: 1px solid var(--interactable-outline-color);
+  }
+  small {
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.7;
+  }
+  code {
+    font-family: var(--monoFontFamily);
+    white-space: pre-wrap;
+    /* word-wrap: break-word; */
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    background-color: var(--black70a);
+    padding: 0 3px;
+    /* max-width: calc(100dvw - 95px); */
+    line-height: var(--mainFontSize);
+    color: var(--white70a);
+  }
+  kbd {
+    display: inline-block;
+    padding: 2px 4px;
+    font-family: var(--monoFontFamily);
+    white-space: nowrap;
+    /* background-color: #eeeeee; */
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #333;
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+    box-shadow:
+      0 1px 1px rgba(0, 0, 0, 0.2),
+      0 2px 0 0 rgba(255, 255, 255, 0.7) inset;
+    font-size: 90%;
+    line-height: 1;
+  }
+  samp {
+    display: block;
+    font-family: var(--monoFontFamily);
+    white-space: pre-wrap;
+    text-align: start;
+    justify-content: left;
+  }
+  hr {
+    background-image: linear-gradient(
+      90deg,
+      var(--transparent),
+      var(--SmartThemeBodyColor),
+      var(--transparent)
+    );
+    margin: 5px 0;
+    height: 1px;
+    min-height: 1px;
+    border: 0;
+    opacity: 0.2;
+  }
+  br {
+    display: block;
+    margin: 2px 0;
+  }
+  textarea {
+    width: 100%;
+    resize: vertical;
+    display: block;
+    background-color: var(--black30a);
+    outline: none;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    color: var(--SmartThemeBodyColor);
+    font-size: var(--mainFontSize);
+    font-family: var(--mainFontFamily);
+    padding: 5px 10px;
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
+  input,
+  select,
+  button {
+    font-family: var(--mainFontFamily), sans-serif;
+    font-size: var(--mainFontSize);
+    color: var(--SmartThemeBodyColor);
+  }
+  textarea::placeholder {
+    color: var(--SmartThemeEmColor) !important;
+    opacity: 0.7;
+  }
+  h3 {
+    margin: 10px 0;
+  }
+  input[type="file"] {
+    display: none;
+  }
+  select {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 3px 5px;
+    background-color: var(--black30a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    margin-bottom: 5px;
+    height: min-content;
+    background-image: url("/img/down-arrow.svg");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 8px 5px;
+  }
+  select option {
+    /* works to highlight selected/active option */
+    background-color: var(--white50a);
+    color: var(--black70a);
+  }
+  select option:not(:checked) {
+    /* works to color unselected items */
+    background-color: var(--black70a);
+    color: var(--white70a);
+  }
+  select option[disabled]:not(:checked) {
+    color: var(--white30a);
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    height: 1em;
+    width: 1em;
+    border-radius: 50em;
+    background-color: var(--SmartThemeBodyColor);
+    mask: url("/img/times-circle.svg") no-repeat 50% 50%;
+    background-size: contain;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+  }
+  input[type="search"]:focus::-webkit-search-cancel-button {
+    opacity: 0.5;
+    pointer-events: all;
+  }
+  grammarly-extension {
+    z-index: 35;
+  }
+  input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: 1px solid var(--grey5020a);
+    position: relative;
+    width: var(--mainFontSize);
+    height: var(--mainFontSize);
+    overflow: hidden;
+    border-radius: 3px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background-color: var(--SmartThemeBodyColor);
+    box-shadow: inset 0 0 2px 0 var(--SmartThemeShadowColor);
+    cursor: pointer;
+    transform: translateY(-0.075em);
+    flex-shrink: 0;
+    place-content: center;
+    filter: brightness(1.2);
+    display: grid;
+  }
+  input[type="checkbox"]::before {
+    content: "";
+    width: 0.65em;
+    height: 0.65em;
+    transform: scale(0);
+    transition: var(--animation-duration) transform ease-in-out;
+    box-shadow: inset 1em 1em var(--SmartThemeCheckboxTickColor);
+    transform-origin: bottom left;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  }
+  input[type="checkbox"]:checked::before {
+    transform: scale(1);
+  }
+  input[type="checkbox"]:disabled {
+    color: grey;
+    cursor: not-allowed;
+  }
+  .neo-range-slider:hover,
+  input[type="range"]:hover {
+    filter: brightness(1.25);
+  }
+  .neo-range-slider:focus-visible,
+  input[type="range"]:focus-visible {
+    outline: 1px solid var(--interactable-outline-color);
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 5px;
+    background: var(--SmartThemeBodyColor);
+    border-radius: 15px;
+    background-size: 70% 100%;
+    background-repeat: no-repeat;
+    box-shadow: inset 0 0 2px black;
+    cursor: ew-resize;
+    transition: all var(--animation-duration-2x) ease-in-out;
+    filter: brightness(0.75);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    position: relative;
+    /*box-shadow: 0 0 5px 0 black;
+      box-shadow: inset 0 0 5px var(--black70a);*/
+    -webkit-appearance: none;
+    height: 15px;
+    width: 15px;
+    border-radius: 50%;
+    background: var(--SmartThemeCheckboxTickColor);
+    border: 2px solid var(--SmartThemeBodyColor);
+  }
+  h4 {
+    margin: 5px 0;
+  }
+  h5 {
+    margin: 5px 0;
+  }
+  p {
+    margin-bottom: 16px;
+    margin-top: 0;
+  }
+  h1 {
+    font-size: calc(var(--mainFontSize) + 1rem);
+    line-height: 32px;
+    margin-bottom: 22px;
+  }
+  h2 {
+    margin-top: 5px;
+    margin-bottom: 22px;
+  }
+  a {
+    color: orange;
+    color: var(--SmartThemeQuoteColor);
+    text-decoration: none;
+  }
+  a:hover {
+    filter: brightness(1.25);
+  }
+  @media (prefers-contrast: more) {
+    .interactable:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline-width: 2px;
+    }
+  }
+  input:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+    filter: brightness(0.5);
+  }
+}

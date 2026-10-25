@@ -1,0 +1,6 @@
+extension/dist/
+src/addons/image-gen/vendor/
+upstream/
+runtime/
+artifacts/
+docs/

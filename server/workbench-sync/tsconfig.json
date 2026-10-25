@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src", "../../src/sync", "../../src/addons/outline/model.ts", "../../src/host/ids.ts"]
+}

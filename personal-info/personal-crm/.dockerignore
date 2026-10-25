@@ -1,5 +1,0 @@
-*
-!dist/
-!dist/requirements.txt
-!dist/wheels/
-!dist/wheels/*.whl

@@ -1,4 +1,0 @@
-interface:
-  display_name: "MCP Member Contributor"
-  short_description: "严格筛选、准备并提交无重复的 MCP 官方社区贡献"
-  default_prompt: "Use $mcp-member-contributor to select only maintainer-ready, duplicate-free MCP contributions, then prepare, verify, and submit the best one."

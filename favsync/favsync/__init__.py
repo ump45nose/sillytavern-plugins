@@ -1,1 +1,0 @@
-"""Favorite media synchronization."""

@@ -1,0 +1,35 @@
+/* Board checkbox: a rounded square that fills with the accent and a drawn tick. Radios stay round (legacy). */
+@layer wb.components {
+  .wb-ui input[type="checkbox"] {
+    appearance: none;
+    flex: none;
+    margin: 0;
+    border: 1.5px solid color-mix(in srgb, var(--wb-ink-3) 55%, transparent);
+    border-radius: 4.5px;
+    background: var(--wb-surface-1) center / 100% no-repeat;
+    box-shadow: none;
+    cursor: pointer;
+    transition:
+      background-color var(--wb-duration-fast),
+      border-color var(--wb-duration-fast),
+      box-shadow var(--wb-duration-fast);
+  }
+  .wb-ui input[type="checkbox"]:is(:checked, :indeterminate) {
+    border-color: var(--wb-accent);
+    background-color: var(--wb-accent);
+  }
+  .wb-ui input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.3l2.6 2.5L12 5.4' fill='none' stroke='%23fffdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+  .wb-ui input[type="checkbox"]:indeterminate {
+    background-image: linear-gradient(#fffdf8, #fffdf8);
+    background-size: 8px 2px;
+  }
+  .wb-ui input[type="checkbox"]:hover:not(:disabled) {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-accent) 12%, transparent);
+  }
+  .wb-ui input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

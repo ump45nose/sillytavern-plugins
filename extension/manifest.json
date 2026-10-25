@@ -1,0 +1,12 @@
+{
+  "display_name": "Noval · Workbench",
+  "loading_order": 1000,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "dist/index.css",
+  "author": "Local",
+  "version": "0.4.0",
+  "minimum_client_version": "1.19.0",
+  "auto_update": false
+}

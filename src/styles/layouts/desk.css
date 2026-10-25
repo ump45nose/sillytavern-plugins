@@ -1,0 +1,996 @@
+/*
+ * The Noval desk (design board "Main"): a header on the desk, a left column, and the reading sheet.
+ * #sheld itself is native DOM and is shaped in native-bridge.css; this file draws everything around it.
+ * Geometry shared with the bridge: --wb-sheet-left / --wb-sheet-right / --wb-sheet-top / --wb-sheet-bottom.
+ */
+@layer wb.layouts {
+  body.wb-active {
+    --wb-sheet-gap-left: var(--wb-gutter);
+    --wb-sheet-gap-right: var(--wb-gutter);
+    --wb-sheet-left: calc(var(--wb-left) + max(var(--wb-lane-left), var(--wb-sheet-gap-left)));
+    --wb-sheet-right: calc(var(--wb-right) + max(var(--wb-lane-right), var(--wb-sheet-gap-right)));
+    --wb-sheet-top: var(--wb-header);
+    --wb-sheet-bottom: var(--wb-gutter);
+    --wb-reading-bar: 48px;
+  }
+  /* The left column ends where the sheet begins; its own padding is the gap. */
+  body.wb-active.wb-left-open {
+    --wb-sheet-gap-left: 0px;
+  }
+  body.wb-active.wb-focus:not(.wb-rp) {
+    --wb-sheet-top: var(--wb-space-4);
+    --wb-sheet-bottom: var(--wb-space-4);
+    --wb-sheet-gap-left: var(--wb-space-4);
+    --wb-sheet-gap-right: var(--wb-space-4);
+  }
+
+  /* ── Header: identity · resource pills · tools, on the desk with no rule under it ── */
+  body.wb-active:not(.wb-rp) .wb-top {
+    position: absolute;
+    inset: 0 0 auto;
+    height: var(--wb-header);
+    display: grid;
+    grid-template-columns: minmax(var(--wb-top-side), 1fr) minmax(0, auto) minmax(var(--wb-top-side), 1fr);
+    align-items: center;
+    gap: var(--wb-space-4);
+    padding: 0 var(--wb-space-5) 0 var(--wb-space-4);
+    border: 0;
+    background: transparent;
+    z-index: var(--wb-z-shell);
+  }
+  /*
+   * Both side columns keep the width of the tools group (Trace, focus or pin, and the switcher's
+   * space), so the pills stay centred and shrink to ellipses before anything overlaps. The RP bar
+   * shares the columns; its eye and history keys sit under the bar (layouts/rp.css).
+   */
+  body.wb-active .wb-top {
+    --wb-top-side: 242px;
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-top {
+    --wb-top-side: 252px;
+    grid-template-columns: minmax(var(--wb-top-side), 1fr) minmax(0, auto) minmax(var(--wb-top-side), 1fr);
+    padding: 0 var(--wb-space-5) 0 var(--wb-space-4);
+  }
+  body.wb-active .wb-top > .wb-top-pills {
+    justify-self: center;
+    max-width: 100%;
+  }
+
+  /* ── The sheet's top edge: breadcrumb, exit focus, typography ── */
+  body.wb-active:not(.wb-rp):not(.wb-mobile) .wb-reading-bar {
+    position: absolute;
+    top: var(--wb-sheet-top);
+    left: var(--wb-sheet-left);
+    right: var(--wb-sheet-right);
+    height: var(--wb-reading-bar);
+    padding: 0 var(--wb-space-3) 0 28px;
+    gap: var(--wb-space-1);
+    background: var(--wb-surface-1);
+    border-radius: var(--wb-radius-xl) var(--wb-radius-xl) 0 0;
+    box-shadow: var(--wb-shadow-2);
+    /* The sheet below carries the shadow's lower half; cut ours where they meet. */
+    clip-path: inset(-48px -48px 0 -48px);
+    transition:
+      top var(--wb-motion) var(--wb-ease-emphasized),
+      left var(--wb-motion) var(--wb-ease-emphasized),
+      right var(--wb-motion) var(--wb-ease-emphasized);
+  }
+  body.wb-active.wb-focus:not(.wb-rp):not(.wb-mobile) .wb-reading-bar {
+    padding: 0 var(--wb-space-3) 0 28px;
+  }
+
+  /* ── The left column: the open conversation's card, folding sections, footer ── */
+  body.wb-active:not(.wb-mobile) .wb-left.wb-nav {
+    top: var(--wb-header);
+    bottom: 0;
+    width: var(--wb-left-size);
+    padding: 2px 14px 0 16px;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
+    /* Slides and fades on the same curve as the sheet's edge, so the two move as one. */
+    transition:
+      transform var(--wb-motion) var(--wb-ease-emphasized),
+      opacity var(--wb-motion) var(--wb-ease-emphasized),
+      visibility var(--wb-motion),
+      background-color var(--wb-motion),
+      box-shadow var(--wb-motion);
+  }
+  /* A hover reveal lies over the sheet: the desk's own colour under it, a soft edge to the right. */
+  body.wb-active.wb-left-hover-open:not(.wb-mobile) .wb-left.wb-nav {
+    bottom: var(--wb-gutter);
+    border-radius: 0 var(--wb-radius-xl) var(--wb-radius-xl) 0;
+    background: var(--wb-surface-0);
+    box-shadow: var(--wb-shadow-3);
+  }
+}
+
+@layer wb.components {
+  /* ── Header ── */
+  .wb-top-identity {
+    justify-self: start;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+    height: 40px;
+    padding: 0 12px 0 4px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: transparent;
+    color: var(--wb-ink-1);
+    font: inherit;
+    cursor: pointer;
+    transition: background var(--wb-duration-fast);
+  }
+  .wb-top-identity:is(:hover, :focus-visible),
+  .wb-top-identity[aria-pressed="true"] {
+    background: var(--wb-hover);
+  }
+  .wb-top-avatar {
+    position: relative;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--wb-surface-3);
+    box-shadow: 0 0 0 2px var(--wb-surface-1);
+    color: var(--wb-accent-text);
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-strong);
+  }
+  .wb-top-avatar img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 20%;
+  }
+  .wb-top-identity strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 15px;
+    font-weight: var(--wb-weight-strong);
+  }
+
+  .wb-top-pills {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--wb-space-2);
+    min-width: 0;
+  }
+  .wb-pill-slot {
+    position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .wb-pill {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--wb-space-2);
+    width: 100%;
+    max-width: 220px;
+    height: 36px;
+    padding: 0 10px 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-md);
+    cursor: pointer;
+    transition:
+      box-shadow var(--wb-duration-fast),
+      background var(--wb-duration-fast);
+  }
+  .wb-pill:hover {
+    box-shadow: var(--wb-shadow-2);
+  }
+  .wb-pill[aria-expanded="true"],
+  .wb-pill[aria-current="true"] {
+    box-shadow:
+      var(--wb-shadow-1),
+      0 0 0 2px color-mix(in srgb, var(--wb-accent) 22%, transparent);
+  }
+  .wb-pill:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 2px;
+  }
+  .wb-pill-icon {
+    position: relative;
+    display: flex;
+    flex: none;
+    color: var(--wb-ink-3);
+    transition: color var(--wb-duration-fast);
+  }
+  .wb-pill-icon > svg {
+    position: relative;
+  }
+  /* The icon's own press target (.wb-pill-go) lies over it; its hover tints a square behind the icon. */
+  .wb-pill-icon::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 8px;
+    background: transparent;
+    transition: background var(--wb-duration-fast);
+  }
+  .wb-pill-slot:has(.wb-pill-go:is(:hover, :focus-visible)) .wb-pill-icon {
+    color: var(--wb-ink-1);
+  }
+  .wb-pill-slot:has(.wb-pill-go:is(:hover, :focus-visible)) .wb-pill-icon::before {
+    background: var(--wb-hover);
+  }
+  .wb-ui .wb-pill-go {
+    position: absolute;
+    z-index: 1;
+    top: 4px;
+    left: 6px;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .wb-ui .wb-pill-go:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 0;
+  }
+  .wb-pill-dot {
+    position: absolute;
+    right: -3px;
+    bottom: -2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wb-line-2);
+    box-shadow: 0 0 0 2px var(--wb-surface-1);
+  }
+  .wb-pill-dot.is-online {
+    background: var(--wb-success);
+  }
+  .wb-pill-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--wb-weight-medium);
+    animation: wb-pill-value var(--wb-duration-slow) ease;
+  }
+  .wb-pill-extra {
+    flex: none;
+    padding: 0 7px;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-xs);
+    line-height: 20px;
+  }
+  .wb-pill-caret {
+    flex: none;
+    color: var(--wb-ink-3);
+    transition: transform var(--wb-duration-base) var(--wb-ease-standard);
+  }
+  .wb-pill[aria-expanded="true"] .wb-pill-caret {
+    transform: rotate(180deg);
+  }
+  @keyframes wb-pill-value {
+    from {
+      opacity: 0.4;
+    }
+  }
+
+  /* Pill popover (board "Popovers"): choose here, edit in the panel. */
+  .wb-pill-pop {
+    position: absolute;
+    top: calc(100% + var(--wb-space-2));
+    left: 50%;
+    width: 320px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow:
+      var(--wb-shadow-3),
+      0 0 0 1px var(--wb-line-1);
+    color: var(--wb-ink-1);
+    transform: translateX(-50%);
+    transform-origin: top center;
+    animation: wb-pill-pop-in var(--wb-duration-base) var(--wb-ease-emphasized) both;
+    z-index: var(--wb-z-popover);
+  }
+  .wb-pill-slot:first-child .wb-pill-pop {
+    left: 0;
+    transform: none;
+  }
+  .wb-pill-slot:last-child .wb-pill-pop {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .wb-pill-pop[data-wb-exiting] {
+    animation: wb-pill-pop-out var(--wb-duration-fast) ease both;
+  }
+  @keyframes wb-pill-pop-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+  @keyframes wb-pill-pop-out {
+    to {
+      opacity: 0;
+      translate: 0 -3px;
+    }
+  }
+  .wb-pill-pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px;
+  }
+  .wb-pill-pop-head strong {
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-strong);
+  }
+  .wb-pill-pop-head small {
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-pill-pop-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: min(360px, 56vh);
+    margin: 0;
+    padding: 0 6px 6px;
+    overflow: auto;
+    list-style: none;
+  }
+  .wb-pill-pop-list li {
+    border-radius: 9px;
+    transition: background var(--wb-duration-fast);
+  }
+  .wb-pill-pop-list li:hover {
+    background: var(--wb-hover);
+  }
+  .wb-pill-pop-list li.is-on {
+    background: var(--wb-selected-bg);
+  }
+  .wb-pill-pop-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 50px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  .wb-pill-pop-list input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .wb-pill-mark {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--wb-line-2);
+    color: var(--wb-accent-ink);
+    transition:
+      background var(--wb-duration-fast),
+      box-shadow var(--wb-duration-fast);
+  }
+  .wb-pill-mark.is-check {
+    border-radius: 5px;
+  }
+  .wb-pill-mark svg {
+    opacity: 0;
+    transition: opacity var(--wb-duration-fast);
+  }
+  .is-on > label > .wb-pill-mark {
+    background: var(--wb-accent);
+    box-shadow: none;
+  }
+  .is-on > label > .wb-pill-mark svg {
+    opacity: 1;
+  }
+  .wb-pill-pop-list input:focus-visible + .wb-pill-mark {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 2px;
+  }
+  .wb-pill-pop-list input:disabled ~ * {
+    opacity: 0.6;
+  }
+  .wb-pill-pop-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: var(--wb-leading-tight);
+  }
+  .wb-pill-pop-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13.5px;
+    font-weight: var(--wb-weight-regular);
+  }
+  .is-on .wb-pill-pop-copy strong {
+    font-weight: var(--wb-weight-strong);
+  }
+  .wb-pill-pop-copy small {
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  .wb-pill-pop .wb-empty {
+    padding: var(--wb-space-3) var(--wb-space-4) var(--wb-space-4);
+  }
+  .wb-pill-pop-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 8px 14px;
+    border-top: 1px solid var(--wb-line-1);
+    background: var(--wb-surface-2);
+  }
+  .wb-pill-pop-foot small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-pill-pop-foot button {
+    display: flex;
+    align-items: center;
+    gap: var(--wb-space-1);
+    height: 30px;
+    margin-left: auto;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-accent-text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: var(--wb-weight-medium);
+    cursor: pointer;
+  }
+  .wb-pill-pop-foot button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+
+  .wb-top-tools {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: var(--wb-space-0_5);
+  }
+  .wb-top-tool {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--wb-ink-2);
+    cursor: pointer;
+    transition:
+      background var(--wb-duration-fast),
+      color var(--wb-duration-fast);
+  }
+  .wb-top-tool:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-top-tool[aria-pressed="true"] {
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent-text);
+  }
+  /* Room for the fixed layout switcher, which lines up with the tools. */
+  .wb-top-switcher-space {
+    flex: none;
+    width: 166px;
+  }
+
+  /* ── Layout switcher: a segmented control; only the current mode spells out its name ── */
+  .wb-layout-switcher {
+    position: fixed;
+    top: calc((var(--wb-header-size) - 36px) / 2);
+    right: var(--wb-space-5);
+    z-index: 10005;
+    font: var(--wb-text-sm) / var(--wb-leading-ui) var(--wb-font-ui);
+    color: var(--wb-ink-1);
+    text-shadow: none;
+    transition:
+      opacity var(--wb-duration-base),
+      visibility var(--wb-duration-base);
+  }
+  body.wb-active.wb-focus:not(.wb-rp) .wb-layout-switcher {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .wb-layout-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    padding: 3px;
+    border-radius: 11px;
+    background: var(--wb-well);
+  }
+  /* Over the native page there is no desk behind it, so it brings its own. */
+  body:not(.wb-active) .wb-layout-controls {
+    background: color-mix(in srgb, var(--wb-surface-2) 94%, transparent);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-layout-segment {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-3);
+    font: inherit;
+    cursor: pointer;
+    transition:
+      background var(--wb-duration-fast),
+      color var(--wb-duration-fast),
+      box-shadow var(--wb-duration-fast);
+  }
+  .wb-layout-segment:is(:hover, :focus-visible) {
+    color: var(--wb-ink-1);
+    background: var(--wb-hover);
+  }
+  .wb-layout-segment:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 1px;
+  }
+  .wb-layout-segment[aria-checked="true"] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 0 10px 0 8px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    color: var(--wb-ink-1);
+    font-weight: var(--wb-weight-medium);
+    cursor: default;
+  }
+  .wb-layout-segment[aria-checked="true"] span {
+    animation: wb-pill-value var(--wb-duration-slow) ease;
+  }
+  .wb-layout-segment:disabled {
+    opacity: 0.45;
+    cursor: progress;
+  }
+  .wb-layout-error {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-2);
+    color: var(--wb-danger);
+    font-size: var(--wb-text-xs);
+    cursor: pointer;
+  }
+  @media (max-width: 1023px) {
+    body:not(.wb-active) .wb-layout-switcher {
+      top: max(8px, env(safe-area-inset-top));
+      right: 8px;
+    }
+    body:not(.wb-active) .wb-layout-controls {
+      height: 50px;
+    }
+    body:not(.wb-active) .wb-layout-segment {
+      min-width: 44px;
+      height: 44px;
+    }
+  }
+
+  /* ── Reading bar ── */
+  .wb-reading-crumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-reading-crumbs > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-reading-crumbs > svg {
+    flex: none;
+  }
+  .wb-reading-crumbs > .wb-chat-name {
+    color: var(--wb-ink-2);
+  }
+  .wb-reading-bar .wb-icon {
+    width: var(--wb-control-md);
+    height: var(--wb-control-md);
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+  }
+  .wb-reading-bar .wb-icon:is(:hover, :focus-visible, .is-active) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-exit-focus {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    cursor: pointer;
+  }
+  .wb-exit-focus:is(:hover, :focus-visible) {
+    background: var(--wb-selected-bg);
+    color: var(--wb-ink-1);
+  }
+
+  /* ── Left column ── */
+  .wb-nav {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-md);
+  }
+  .wb-nav-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--wb-control-sm);
+    height: var(--wb-control-sm);
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+    cursor: pointer;
+  }
+  .wb-nav-icon.is-small {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--wb-radius-sm);
+    color: var(--wb-ink-3);
+  }
+  .wb-nav-icon:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-nav-icon:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: transparent;
+  }
+  .wb-nav-card {
+    flex: none;
+    padding: 12px 12px 12px 14px;
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-nav-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .wb-nav-card-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-nav-card-status i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wb-line-2);
+  }
+  .wb-nav-card-status i.is-live {
+    background: var(--wb-success);
+  }
+  .wb-nav-card-tools {
+    display: flex;
+    gap: 2px;
+    margin-right: -4px;
+  }
+  .wb-nav-card-title {
+    display: flex;
+    align-items: center;
+    gap: var(--wb-space-1);
+    min-width: 0;
+    margin-top: 6px;
+  }
+  .wb-nav-card-title strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--wb-font-reading);
+    font-size: 17px;
+    font-weight: var(--wb-weight-strong);
+    letter-spacing: 0.02em;
+  }
+  .wb-nav-card-meta {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+
+  .wb-nav-sections {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 14px -6px 0;
+    padding: 0 6px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wb-line-1) transparent;
+  }
+  .wb-nav-toggle {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--wb-space-2);
+    width: 100%;
+    height: 36px;
+    padding: 0 var(--wb-space-2);
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-medium);
+    cursor: pointer;
+  }
+  .wb-nav-toggle:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-nav-toggle > small {
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+    font-weight: var(--wb-weight-regular);
+  }
+  .wb-nav-caret {
+    margin-left: auto;
+    color: var(--wb-ink-3);
+    transform: rotate(-90deg);
+    transition: transform var(--wb-duration-base) var(--wb-ease-standard);
+  }
+  .wb-nav-toggle[aria-expanded="true"] .wb-nav-caret {
+    transform: none;
+  }
+  /* A section the column had no room for: its title row carries a dot until it gets the focus again. */
+  .wb-nav-auto {
+    width: 5px;
+    height: 5px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--wb-accent);
+    opacity: 0.7;
+  }
+  .wb-nav-auto + .wb-nav-caret {
+    margin-left: 0;
+  }
+  /* Planned by Navigation (planSections): without a limit a section shows its whole body. */
+  .wb-nav-section > .wb-fold-body.is-open > .wb-nav-scroll {
+    max-height: var(--wb-nav-max, none);
+    scrollbar-width: thin;
+    scrollbar-color: var(--wb-line-1) transparent;
+  }
+  .wb-nav-body {
+    padding-bottom: 6px;
+  }
+  .wb-nav-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wb-nav-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    /* Fixed: the floor list is windowed on this height (Navigation's FloorList). */
+    height: 30px;
+    min-height: 0;
+    padding: 0 var(--wb-space-2);
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+  .wb-nav-row:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-nav-row.is-current {
+    background: var(--wb-selected-bg);
+    color: var(--wb-ink-1);
+  }
+  .wb-nav-row:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .wb-nav-row-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-floor-list {
+    box-sizing: border-box;
+  }
+  .wb-floor-number {
+    flex: none;
+    width: 28px;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-nav-empty {
+    margin: 2px 0 6px;
+    padding: 0 var(--wb-space-2);
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-nav-footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 0 14px;
+  }
+  .wb-nav-foot {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 7px;
+    height: var(--wb-control-md);
+    padding: 0 10px 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    cursor: pointer;
+  }
+  .wb-nav-foot:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-nav-keys {
+    width: var(--wb-control-md);
+    height: var(--wb-control-md);
+    margin-left: auto;
+    color: var(--wb-ink-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wb-layout-switcher *,
+    .wb-pill-pop,
+    .wb-pill-value {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  /* ── Composer (board "Main"): thin rules group the native menus, built-in actions and pins ── */
+  body.wb-active:not(.wb-mobile) .wb-composer-actions::before {
+    content: "";
+    flex: none;
+    width: 1px;
+    height: 18px;
+    margin: 0 6px;
+    background: var(--wb-line-strong, var(--wb-line));
+  }
+  body.wb-active:not(.wb-mobile)
+    .wb-composer-actions
+    > [data-wb-tool^="builtin:"]
+    + button:not([data-wb-tool^="builtin:"]) {
+    position: relative;
+    margin-left: 13px;
+  }
+  body.wb-active:not(.wb-mobile)
+    .wb-composer-actions
+    > [data-wb-tool^="builtin:"]
+    + button:not([data-wb-tool^="builtin:"])::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    width: 1px;
+    height: 18px;
+    transform: translateY(-50%);
+    background: var(--wb-line-strong, var(--wb-line));
+  }
+
+  body.wb-active:not(.wb-mobile) .wb-edge-nav {
+    transition:
+      top var(--wb-motion) var(--wb-ease-emphasized),
+      left var(--wb-motion) var(--wb-ease-emphasized),
+      right var(--wb-motion) var(--wb-ease-emphasized),
+      opacity 160ms,
+      visibility 160ms;
+  }
+  /* ── Edge controls: a bare chevron on each side, no tab or shadow under it ── */
+  body.wb-active:not(.wb-rp):not(.wb-mobile) .wb-edge-arrow {
+    display: grid;
+    place-items: center;
+    color: var(--wb-ink-3);
+    opacity: 1;
+  }
+  body.wb-active:not(.wb-rp):not(.wb-mobile) .wb-edge-arrow svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+  }
+  body.wb-active:not(.wb-rp):not(.wb-mobile) .wb-edge-arrow:is(:hover, :focus-visible) {
+    color: var(--wb-ink-1);
+  }
+}

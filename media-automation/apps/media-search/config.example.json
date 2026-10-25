@@ -1,9 +1,0 @@
-{
-  "moviepilot_url": "http://moviepilot:3001",
-  "moviepilot_token_file": "/run/secrets/moviepilot.token",
-  "access_token_file": "/run/secrets/access.token",
-  "host": "0.0.0.0",
-  "port": 8090,
-  "public_hosts": ["localhost", "127.0.0.1"],
-  "secure_cookie": false
-}

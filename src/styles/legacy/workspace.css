@@ -1,0 +1,1340 @@
+/* Legacy workspace styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  /* Approved interaction layer: quiet paper surfaces, separate scroll regions. */
+  .wb-ui {
+    --wb-hover: color-mix(in srgb, var(--wb-selected) 38%, var(--wb-surface));
+  }
+  .wb-ui button {
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .wb-ui input[type="checkbox"],
+  .wb-ui input[type="radio"] {
+    appearance: none;
+    flex: none;
+    width: 15px !important;
+    height: 15px !important;
+    min-height: 15px !important;
+    padding: 0 !important;
+    border: 1.5px solid #b9b0a0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    transition:
+      background-color 180ms,
+      border-color 180ms,
+      box-shadow 180ms;
+    vertical-align: middle;
+  }
+  .wb-ui input:is([type="checkbox"], [type="radio"]):is(:checked, :indeterminate) {
+    border-color: var(--wb-entry-tone, var(--wb-accent));
+    background: var(--wb-entry-tone, var(--wb-accent));
+  }
+  .wb-ui input:is([type="checkbox"], [type="radio"]):indeterminate {
+    background: linear-gradient(var(--wb-accent), var(--wb-accent)) center/7px 2px no-repeat;
+  }
+  .wb-ui input:is([type="checkbox"], [type="radio"]):focus-visible {
+    outline: 2px solid var(--wb-line);
+    outline-offset: 3px;
+  }
+  .wb-ui input:is([type="checkbox"], [type="radio"])::before,
+  .wb-ui input:is([type="checkbox"], [type="radio"])::after {
+    display: none !important;
+  }
+  .wb-ui input[type="range"] {
+    appearance: none;
+    width: 100%;
+    height: 20px;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    cursor: pointer;
+    accent-color: var(--wb-accent);
+    box-shadow: none !important;
+  }
+  .wb-ui input[type="range"]::-moz-range-track {
+    height: 3px;
+    border-radius: 4px;
+    background: var(--wb-line);
+  }
+  .wb-ui input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--wb-surface);
+    border-radius: 50%;
+    background: var(--wb-accent);
+  }
+  .wb-ui .wb-select-trigger > span {
+    animation: wb-value-in 180ms ease;
+  }
+  @keyframes wb-value-in {
+    from {
+      opacity: 0.35;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  /* The outline uses the space released by the collapsible settings group. */
+  /* All composer tools use the same anchored, nonmodal paper panel. */
+  .wb-ui.wb-popover {
+    position: fixed;
+    z-index: 12100;
+    width: min(352px, calc(100vw - 20px));
+    max-height: calc(100vh - 24px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--wb-surface);
+    border: 1px solid var(--wb-line);
+    border-radius: 13px;
+    box-shadow:
+      0 12px 36px #493b2721,
+      0 2px 8px #493b2708;
+    animation: wb-menu 160ms ease both;
+  }
+  .wb-popover > header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 15px 10px;
+    border-bottom: 1px solid var(--wb-line);
+    flex: none;
+  }
+  .wb-popover > header strong {
+    font-size: 13px;
+    font-weight: 550;
+  }
+  .wb-popover > header > button:not(.wb-icon) {
+    border: 0;
+    background: transparent;
+    padding: 5px 7px;
+    min-height: 26px;
+    font-size: 11px;
+    color: var(--wb-accent);
+  }
+  .wb-popover > header .wb-icon {
+    width: 26px;
+    height: 26px;
+    min-height: 26px;
+    padding: 5px;
+  }
+  .wb-pop-list {
+    overflow: auto;
+    padding: 6px;
+    min-height: 0;
+    max-height: 390px;
+  }
+  .wb-popover .wb-pop-row {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+    border: 0;
+    gap: 12px;
+    padding: 11px;
+    min-height: 40px;
+    background: transparent;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .wb-popover .wb-pop-row:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-pop-list hr {
+    border: 0;
+    border-top: 1px solid var(--wb-line);
+    margin: 6px 9px;
+  }
+  .wb-pop-search {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 10px 12px 4px;
+    padding: 3px 10px;
+    background: var(--wb-paper);
+    border: 1px solid var(--wb-line);
+    border-radius: 8px;
+  }
+  .wb-popover .wb-pop-search input {
+    min-width: 0;
+    width: 0;
+    flex: 1;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    outline: 0;
+    font-size: 12px;
+    min-height: 30px;
+    padding: 4px 0;
+  }
+  .wb-pop-search:focus-within {
+    border-color: color-mix(in srgb, var(--wb-accent) 50%, var(--wb-line));
+  }
+  .wb-pop-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 7px 12px;
+    overflow: auto;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-pop-tabs button {
+    white-space: nowrap;
+    border: 0;
+    padding: 5px 8px;
+    font-size: 11px;
+    min-height: 26px;
+    background: transparent;
+  }
+  .wb-pop-tabs button[aria-pressed="true"] {
+    color: var(--wb-accent);
+    background: var(--wb-selected);
+  }
+  .wb-popover .wb-quick-row {
+    display: flex;
+    border: 0;
+    padding: 2px 7px;
+    border-radius: 8px;
+    align-items: center;
+    background: transparent;
+  }
+  .wb-popover .wb-quick-row > button:first-child {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    justify-content: flex-start;
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+  .wb-quick-row small {
+    display: block;
+    font-size: 10px;
+    margin-top: 5px;
+    color: var(--wb-muted);
+  }
+  .wb-popover .wb-quick-row > .wb-icon {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 6px;
+  }
+  .wb-chat-file {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 8px;
+    padding: 6px;
+    transition: background-color 180ms;
+  }
+  .wb-chat-file.is-active {
+    background: var(--wb-selected);
+  }
+  .wb-chat-file:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-chat-file.is-active:is(:hover, :focus-visible) {
+    background: var(--wb-selected);
+  }
+  .wb-chat-file > svg {
+    flex: none;
+    margin-right: 3px;
+  }
+  .wb-chat-file > button:not(.wb-icon) {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px 2px;
+    background: transparent;
+    border: 0;
+  }
+  .wb-chat-file strong {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .wb-chat-file small {
+    font-size: 10px;
+  }
+  .wb-chat-file > .wb-icon {
+    padding: 4px;
+    min-height: 24px;
+    width: 24px;
+    height: 24px;
+  }
+  .wb-chat-file button:is(:hover, :focus-visible) {
+    background: transparent;
+    color: var(--wb-accent);
+  }
+  .wb-pop-form {
+    padding: 10px 16px 17px;
+    overflow: auto;
+  }
+  .wb-pop-form .wb-field {
+    margin: 12px 0;
+    font-size: 12px;
+  }
+  .wb-pop-form .wb-field > span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .wb-pop-form output {
+    color: var(--wb-muted);
+    font:
+      11px ui-monospace,
+      monospace;
+  }
+  .wb-pop-label {
+    display: block;
+    font-size: 11px;
+    color: var(--wb-muted);
+    margin: 13px 0 8px;
+  }
+  .wb-font-choices,
+  .wb-meta-choices {
+    display: flex;
+    gap: 5px;
+  }
+  .wb-font-choices button,
+  .wb-meta-choices button {
+    flex: 1;
+    min-width: 0;
+    min-height: 31px;
+    border: 1px solid var(--wb-line);
+    padding: 6px 3px;
+    font-size: 11px;
+    background: transparent;
+  }
+  .wb-font-choices button[aria-pressed="true"],
+  .wb-meta-choices button[aria-pressed="true"] {
+    color: var(--wb-accent);
+    background: var(--wb-selected);
+    border-color: color-mix(in srgb, var(--wb-accent) 28%, var(--wb-line));
+  }
+  .wb-pop-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--wb-line);
+  }
+  .wb-pop-footer button,
+  .wb-upload-button {
+    font-size: 11px;
+    min-height: 29px;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    padding: 5px 7px;
+  }
+  .wb-upload-button {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    border-radius: 7px;
+  }
+  .wb-upload-button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-upload-button input {
+    display: none;
+  }
+  /* Independent workspace: full collections, native forms and explicit batch selection. */
+  .wb-ui.wb-settings-workspace {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: var(--wb-ink);
+    background: var(--wb-paper);
+    box-shadow: none;
+  }
+  .wb-settings-workspace[open] {
+    display: flex;
+    flex-direction: column;
+    animation: wb-workspace-in 200ms ease both;
+  }
+  @keyframes wb-workspace-in {
+    from {
+      opacity: 0.4;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .wb-settings-workspace::backdrop {
+    background: var(--wb-paper);
+  }
+  .wb-settings-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
+    height: 68px;
+    flex: none;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+  }
+  .wb-settings-header > strong {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .wb-settings-header > small {
+    font-size: 11px;
+  }
+  .wb-settings-header > button {
+    font-size: 12px;
+    gap: 7px;
+  }
+  .wb-settings-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 174px minmax(0, 1fr);
+    min-height: 0;
+  }
+  .wb-settings-nav {
+    background: var(--wb-soft);
+    border-right: 1px solid var(--wb-line);
+    padding: 18px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    overflow: auto;
+  }
+  .wb-settings-nav > button {
+    min-height: 42px;
+    padding: 10px 12px;
+    gap: 11px;
+    justify-content: flex-start;
+    font-size: 12px;
+    border: 0;
+    background: transparent;
+  }
+  .wb-settings-nav > button[aria-pressed="true"] {
+    background: var(--wb-surface);
+    color: var(--wb-accent);
+    box-shadow: 0 1px 5px #34291e05;
+  }
+  body.wb-active .wb-settings-nav > button[aria-pressed="true"] svg {
+    color: var(--wb-accent) !important;
+  }
+  .wb-settings-nav > footer {
+    margin-top: auto;
+    padding: 22px 10px 0;
+    color: var(--wb-muted);
+    font: 10px/1.9 system-ui;
+  }
+  .wb-settings-layout > main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .wb-settings-subnav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 24px;
+    height: 48px;
+    min-height: 48px;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+    overflow: auto;
+  }
+  .wb-settings-subnav > button {
+    height: 48px;
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--wb-muted);
+  }
+  .wb-settings-subnav > button[aria-pressed="true"] {
+    color: var(--wb-accent);
+    border-bottom-color: var(--wb-accent);
+  }
+  .wb-settings-subnav > button:is(:hover, :focus-visible) {
+    background: transparent;
+    color: var(--wb-accent);
+  }
+  .wb-settings-subnav > .wb-icon {
+    margin-left: auto;
+    flex: none;
+  }
+  .wb-settings-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    animation: wb-value-in 180ms ease both;
+  }
+  .wb-settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    height: 31px;
+    border-top: 1px solid var(--wb-line);
+    padding: 0 24px;
+    font: 10px system-ui;
+    color: var(--wb-muted);
+    background: var(--wb-surface);
+  }
+  .wb-resource-manager {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .wb-batch-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: none;
+    min-height: 55px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-paper);
+  }
+  .wb-batch-toolbar .wb-check {
+    font-size: 11px;
+  }
+  .wb-batch-toolbar > small {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .wb-batch-toolbar > small.is-selected {
+    color: var(--wb-accent);
+  }
+  .wb-batch-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .wb-batch-toolbar button {
+    font-size: 11px;
+    min-height: 30px;
+    padding: 5px 8px;
+    gap: 6px;
+    background: transparent;
+  }
+  .wb-batch-toolbar .wb-editor-slot {
+    color: var(--wb-muted);
+    font-size: 10px;
+    opacity: 0.65;
+    border: 1px dashed var(--wb-line);
+  }
+  .wb-batch-status {
+    margin: 0 !important;
+    padding: 6px 20px;
+    background: var(--wb-soft);
+    font-size: 11px;
+    color: var(--wb-control-ink);
+  }
+  .wb-manager-grid {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
+  }
+  .wb-manager-resources {
+    padding: 16px 12px;
+    overflow: auto;
+    border-right: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+  }
+  .wb-manager-caption {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--wb-muted);
+    margin: 15px 6px 8px;
+  }
+  .wb-manager-caption small {
+    font:
+      10px ui-monospace,
+      monospace;
+  }
+  .wb-manager-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 9px;
+    min-height: 59px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    transition:
+      background-color 180ms,
+      border-color 180ms;
+  }
+  .wb-manager-row:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-manager-row.is-editing {
+    background: var(--wb-selected);
+  }
+  .wb-manager-row.is-selected {
+    border-color: color-mix(in srgb, var(--wb-accent) 32%, var(--wb-line));
+  }
+  .wb-manager-row > label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .wb-manager-row > button {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    gap: 4px;
+  }
+  .wb-manager-row > button:is(:hover, :focus-visible) {
+    background: transparent;
+  }
+  .wb-manager-row strong {
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .wb-manager-row small {
+    font-size: 10px;
+    color: var(--wb-muted);
+  }
+  .wb-manager-editor {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--wb-surface);
+  }
+  .wb-manager-editor > :is(.wb-world) {
+    height: 100%;
+  }
+  .wb-manager-editor .wb-resource-v3.is-deep .wb-preset-editor {
+    grid-template-columns: minmax(230px, 1fr) minmax(320px, 1.65fr);
+  }
+  .wb-confirm-body {
+    padding: 22px;
+  }
+  .wb-confirm-body > p {
+    line-height: 1.9;
+    font-size: 13px;
+  }
+  .wb-confirm-names {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--wb-soft);
+    overflow-wrap: anywhere;
+  }
+  /* Leased native controls keep every original handler and unknown extension field. */
+  .wb-native-settings-slot {
+    min-height: 0;
+    padding: 24px 32px 36px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .wb-settings-body > .wb-characters.is-management {
+    height: 100%;
+  }
+  @media (max-width: 1400px) {
+    .wb-manager-grid {
+      grid-template-columns: 180px minmax(0, 1fr);
+    }
+    .wb-settings-layout {
+      grid-template-columns: 156px minmax(0, 1fr);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body.wb-active .wb-ui *,
+    body.wb-active #send_form * {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  .wb-ui.wb-popover {
+    padding: 0;
+  }
+  .wb-manager-editor > .wb-resources,
+  .wb-settings-body > .wb-resources {
+    height: 100%;
+    min-height: 0;
+  }
+  .wb-ui .wb-manager-row strong {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+  .wb-popover .wb-native-settings-slot {
+    padding: 12px 16px 18px;
+    overflow: auto;
+    width: 100%;
+  }
+  .wb-value-text {
+    animation: wb-value-in 180ms ease;
+  }
+  body.wb-active.reduced-motion .wb-ui * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  body.wb-active .wb-composer-actions button {
+    width: 34px;
+    height: 36px;
+    padding: 7px;
+    flex: none;
+  }
+  body.wb-active .wb-composer-actions {
+    gap: 5px;
+  }
+  .wb-ui input:is([type="checkbox"], [type="radio"]):checked {
+    animation: wb-check-in 180ms ease;
+  }
+  @keyframes wb-check-in {
+    0% {
+      transform: scale(0.82);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  /* Corrections compared with the approved reading and resource studies. */
+  .wb-panel-switch {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 8px 18px !important;
+    min-height: 34px;
+    background: var(--wb-side) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--wb-line) !important;
+    border-radius: 0 !important;
+    font-size: 11px;
+    color: var(--wb-muted);
+    flex: none;
+  }
+  .wb-panel-switch svg {
+    transition: transform 180ms;
+  }
+  .wb-panel-switch[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .wb-panel-tabs-fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 220ms,
+      opacity 160ms;
+    flex: none;
+  }
+  .wb-panel-tabs-fold.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .wb-panel-tabs-fold > .wb-panel-tabs {
+    min-height: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0 14px;
+  }
+  .wb-panel-tabs-fold.is-open > .wb-panel-tabs {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .wb-right .wb-resource-heading {
+    padding: 12px 16px;
+    min-height: 54px;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-right .wb-resource-title-copy > small {
+    display: none;
+  }
+  .wb-right .wb-resource-title {
+    font: 500 15px/1.5 system-ui;
+    min-height: 28px;
+    padding: 3px 0;
+  }
+  .wb-right .wb-resource-title-line {
+    gap: 8px;
+    min-height: 0;
+  }
+  .wb-right .kind-connection .wb-resource-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wb-right .kind-connection .wb-resource-title-line {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-right .wb-native-profile-actions {
+    margin: 0;
+    padding: 0;
+    gap: 3px;
+  }
+  .wb-right .wb-native-profile-actions button {
+    font-size: 0;
+    width: 27px;
+    min-height: 27px;
+    height: 27px;
+    padding: 5px;
+  }
+  .wb-world-scope {
+    display: flex;
+    gap: 3px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-world-scope button {
+    border: 0;
+    background: transparent;
+    min-height: 29px;
+    padding: 5px 9px;
+    font-size: 11px;
+    color: var(--wb-muted);
+  }
+  .wb-world-scope button[aria-pressed="true"] {
+    color: var(--wb-accent);
+    background: var(--wb-selected);
+  }
+  .wb-right .wb-world > .wb-editor-footer {
+    display: none;
+  }
+  .wb-resource-v3 .wb-parameter-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    align-items: center;
+    width: 100%;
+  }
+  .wb-resource-v3 .wb-parameter-strip .wb-field {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    margin: 0;
+    justify-content: space-between;
+    min-width: 0;
+    align-items: center;
+  }
+  .wb-resource-v3 .wb-parameter-strip .wb-field > span {
+    white-space: normal;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .wb-resource-v3 .wb-parameter-strip .wb-field input {
+    width: 64px;
+    flex: none;
+  }
+  .wb-resource-v3 .wb-prompt-row > .wb-icon {
+    width: 26px;
+    flex: none;
+    opacity: 0.35;
+  }
+  .wb-resource-v3 .wb-prompt-row:is(:is(:hover, :focus-visible), :focus-within, .is-active) > .wb-icon {
+    opacity: 1;
+  }
+  .wb-right .wb-resource-v3 .wb-preset-scroll {
+    max-height: 42px;
+    padding-top: 0;
+  }
+  /* Independent pages follow settings-workspace.fragment.html: 162px navigation,
+     compact two-column fields, 48px portraits and a single paper surface. */
+  .wb-settings-header {
+    background: var(--wb-soft);
+    height: 73px;
+  }
+  .wb-settings-header > button:first-child {
+    border: 0;
+    border-right: 1px solid var(--wb-line);
+    border-radius: 0;
+    background: transparent;
+    padding-right: 16px;
+  }
+  .wb-settings-header > strong {
+    font-family: "Noto Serif CJK SC", "Songti SC", serif;
+  }
+  .wb-settings-layout {
+    grid-template-columns: 162px minmax(0, 1fr);
+  }
+  .wb-settings-subnav,
+  .wb-settings-body {
+    background: var(--wb-paper);
+  }
+  .wb-settings-footer {
+    background: var(--wb-soft);
+    height: 42px;
+  }
+  .wb-settings-nav > button {
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 13px;
+    border: 1px solid transparent;
+  }
+  .wb-settings-nav > button[aria-pressed="true"] {
+    border-color: #e4d8c8;
+  }
+  .wb-settings-nav button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-settings-nav button[aria-pressed="true"]:is(:hover, :focus-visible) {
+    background: var(--wb-surface);
+  }
+  .wb-designed-settings {
+    position: relative;
+    max-width: 1244px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 29px 28px;
+  }
+  .wb-settings-source {
+    position: fixed !important;
+    top: 0;
+    left: -20000px;
+    width: 1100px;
+    height: auto;
+    clip-path: inset(50%);
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .wb-designed-page-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .wb-designed-page-head > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-designed-page-head h2 {
+    font:
+      500 20px/1.5 "Noto Serif CJK SC",
+      "Songti SC",
+      serif;
+    margin: 0;
+    color: var(--wb-ink);
+  }
+  .wb-designed-page-head small {
+    font-size: 12px;
+    display: block;
+    margin-top: 3px;
+  }
+  .wb-designed-page-head button,
+  .wb-designed-actions button {
+    font-size: 12px;
+    min-height: 32px;
+    padding: 6px 9px;
+    border: 0;
+    color: var(--wb-control-ink);
+    background: transparent;
+  }
+  .wb-designed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    margin: 0 0 20px;
+  }
+  .wb-designed-actions > button[aria-pressed="true"] {
+    background: var(--wb-selected);
+    color: var(--wb-accent);
+  }
+  .wb-designed-section {
+    margin-bottom: 25px;
+  }
+  .wb-designed-section > h3 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--wb-muted);
+  }
+  .wb-designed-section > h3::after {
+    content: "";
+    height: 1px;
+    background: var(--wb-line);
+    flex: 1;
+  }
+  .wb-designed-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px 22px;
+  }
+  .wb-designed-fields .wb-field {
+    position: relative;
+    margin: 0;
+    gap: 7px;
+    color: var(--wb-muted);
+    font-size: 12px;
+  }
+  .wb-designed-fields .wb-field > span {
+    font-size: 12px;
+  }
+  .wb-designed-fields .wb-field:has(textarea),
+  .wb-designed-field.is-full {
+    grid-column: 1/-1;
+  }
+  .wb-designed-fields .wb-field :is(input:not([type="range"]):not([type="checkbox"]), textarea) {
+    min-height: 39px;
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+  .wb-designed-fields .wb-field input[type="number"] {
+    width: 93px;
+    max-width: 100%;
+  }
+  .wb-designed-fields .wb-field textarea {
+    min-height: 100px;
+    line-height: 1.9;
+  }
+  .wb-designed-fields .wb-field:has(input[type="range"]) output {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 12px;
+    color: var(--wb-muted);
+  }
+  .wb-designed-fields .wb-check {
+    min-height: 30px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--wb-control-ink);
+    gap: 10px;
+  }
+  .wb-host-multiple,
+  .wb-world-binding-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+    padding: 10px 0;
+  }
+  .wb-host-multiple .wb-check,
+  .wb-world-binding-list .wb-check {
+    overflow-wrap: anywhere;
+  }
+  .wb-reading-sample {
+    padding: 20px 23px;
+    border: 1px solid var(--wb-line);
+    border-radius: 8px;
+    margin-top: 20px;
+    background: var(--wb-surface);
+  }
+  .wb-reading-sample small {
+    display: block;
+    font: 11px system-ui;
+    color: var(--wb-muted);
+  }
+  .wb-reading-sample p {
+    margin: 8px 0 0;
+  }
+  .wb-reading-sample p span {
+    color: var(--wb-accent);
+  }
+  .wb-designed-gallery {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 13px;
+  }
+  .wb-designed-gallery article {
+    overflow: hidden;
+    border: 1px solid var(--wb-line);
+    border-radius: 9px;
+    background: var(--wb-surface);
+  }
+  .wb-background-preview {
+    display: block;
+    width: 100%;
+    height: 154px;
+    min-height: 154px;
+    border: 0;
+    border-radius: 0;
+    background-size: cover;
+    background-position: center;
+    padding: 0;
+  }
+  .wb-designed-gallery strong {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 12px;
+    display: block;
+  }
+  .wb-designed-gallery .wb-designed-actions {
+    margin: 0;
+    padding: 0 8px 8px;
+  }
+  .wb-designed-gallery .wb-designed-actions button {
+    width: 28px;
+    padding: 5px;
+  }
+  .wb-designed-settings.page-extensions > .wb-search {
+    margin-bottom: 12px;
+  }
+  .wb-group-layout {
+    display: grid;
+    grid-template-columns: 182px minmax(0, 1fr);
+    gap: 23px;
+  }
+  .wb-group-layout > aside {
+    min-width: 0;
+    border-right: 1px solid var(--wb-line);
+    padding-right: 17px;
+  }
+  .wb-group-choice {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+    border: 0;
+    background: transparent;
+    padding: 11px 9px;
+    margin-top: 4px;
+  }
+  .wb-group-choice[aria-pressed="true"] {
+    background: var(--wb-selected);
+  }
+  .wb-group-choice > svg {
+    flex: none;
+  }
+  .wb-group-choice > span {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-group-choice strong {
+    font-weight: 500;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-group-choice small {
+    font-size: 11px;
+  }
+  .wb-group-editor {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .wb-group-avatar-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 17px;
+  }
+  .wb-group-avatar-tools img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .wb-group-avatar-tools > button {
+    font-size: 12px;
+  }
+  .wb-group-member {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-group-member img,
+  .wb-group-candidates img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .wb-group-member > strong {
+    flex: 1;
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .wb-group-member > .wb-check {
+    font-size: 11px;
+  }
+  .wb-group-candidates {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+  }
+  .wb-group-candidates button {
+    font-size: 12px;
+    gap: 7px;
+    padding: 5px 7px;
+    border: 0;
+    background: var(--wb-soft);
+  }
+  .wb-characters.is-management {
+    display: flex;
+    height: 100%;
+    padding: 24px 29px;
+  }
+  @media (max-width: 1100px) {
+    .wb-designed-gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wb-panel-tabs-fold,
+    .wb-panel-tabs-fold * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+  body.reduced-motion .wb-panel-tabs-fold,
+  body.reduced-motion .wb-panel-tabs-fold * {
+    transition: none !important;
+    animation: none !important;
+  }
+  body.wb-active .wb-ui input[type="range"] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    border: 0 !important;
+    outline: 0;
+    height: 22px;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .wb-host-widget {
+    padding: 7px 10px;
+    border: 1px solid var(--wb-line);
+    border-radius: 7px;
+    background: var(--wb-surface);
+    min-height: 39px;
+    display: flex;
+    align-items: center;
+  }
+  .wb-host-widget toolcool-color-picker {
+    --button-width: 20px;
+    --button-height: 20px;
+    --button-border-radius: 50%;
+  }
+  .wb-group-layout > aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100vh - 240px);
+    overflow: auto;
+  }
+  .wb-designed-gallery .wb-background-preview.is-current {
+    outline: 2px solid var(--wb-accent);
+    outline-offset: -3px;
+  }
+  .wb-designed-gallery .wb-background-preview:is(:hover, :focus-visible) {
+    filter: brightness(0.97);
+  }
+  .wb-ui .wb-designed-actions > button:is(:hover, :focus-visible),
+  .wb-ui .wb-group-member > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    box-shadow: none;
+  }
+  .wb-ui .wb-designed-fields input:is([type="checkbox"], [type="radio"]):checked {
+    animation: wb-check-fill 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @keyframes wb-check-fill {
+    0% {
+      transform: scale(0.9);
+    }
+    65% {
+      transform: scale(1.06);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  body.reduced-motion .wb-ui *,
+  body.reduced-motion .wb-ui *::before,
+  body.reduced-motion .wb-ui *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .wb-connection-detail > .wb-designed-settings {
+    padding: 18px 0 0;
+    max-width: none;
+  }
+  .wb-connection-detail > .wb-designed-settings > .wb-designed-page-head {
+    display: none;
+  }
+  .wb-connection-detail .wb-designed-fields {
+    gap: 14px 18px;
+  }
+  .wb-connection-detail .wb-designed-actions {
+    gap: 3px;
+  }
+  .wb-connection-detail .wb-designed-actions button {
+    font-size: 11px;
+  }
+  .wb-connection-detail .wb-designed-settings .wb-designed-section > h3 {
+    margin-top: 10px;
+  }
+  .wb-right .wb-connection-detail .wb-designed-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wb-connection-detail .wb-profile-editor {
+    border-top: 1px solid var(--wb-line);
+  }
+  .wb-resource-v3.kind-connection.is-deep .wb-resource-detail {
+    max-width: none;
+    padding: 24px 29px;
+  }
+  .kind-connection.is-deep .wb-resource-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kind-connection.is-deep .wb-resource-title-line {
+    flex: 1;
+    min-width: 0;
+  }
+  .kind-connection.is-deep .wb-native-profile-actions {
+    margin: 0;
+    flex: none;
+  }
+  .wb-settings-body .wb-resource-heading .wb-native-profile-actions {
+    border: 0;
+    background: transparent;
+  }
+  /* Keep the recent five floors visible at 768px, including a two-line chat name. */
+  /* Keep each collapsed heading available while its peer fills the navigation. */
+}

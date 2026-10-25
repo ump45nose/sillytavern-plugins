@@ -1,0 +1,327 @@
+/* Image generation (board PanelImage): target row, prompt cards, a gallery grid, and the auto card at the foot. */
+@layer wb.components {
+  .wb-image-target {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .wb-image-target label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--wb-ink-2);
+  }
+  .wb-image-target label > span {
+    flex: none;
+  }
+  .wb-addon-view .wb-image-target select {
+    flex: 1;
+    width: 100%;
+    height: 34px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+  }
+  .wb-image-target button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    cursor: pointer;
+  }
+  .wb-image-target button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-image-target button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .wb-image-source {
+    margin: 8px 0;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-image-source summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 12px;
+    list-style: none;
+    color: var(--wb-ink-2);
+    cursor: pointer;
+  }
+  .wb-image-source summary::-webkit-details-marker {
+    display: none;
+  }
+  .wb-image-source summary svg {
+    color: var(--wb-ink-3);
+    transition: transform var(--wb-duration-fast);
+  }
+  .wb-image-source[open] summary svg {
+    transform: rotate(90deg);
+  }
+  .wb-image-source p {
+    max-height: 180px;
+    margin: 0;
+    padding: 0 14px 12px;
+    overflow: auto;
+    color: var(--wb-ink-2);
+    font: 13px/1.75 var(--wb-font-reading);
+    white-space: pre-wrap;
+  }
+
+  /* A prompt is a soft card: the label as its head, the text borderless and monospaced. */
+  .wb-image-prompt {
+    display: flex;
+    flex-direction: column;
+    margin: 8px 0;
+    padding: 10px 12px 4px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    transition: box-shadow var(--wb-duration-fast);
+  }
+  .wb-image-prompt:focus-within {
+    box-shadow: 0 0 0 1px var(--wb-ring);
+  }
+  .wb-image-prompt > span {
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-addon-view .wb-image-prompt textarea {
+    width: 100%;
+    min-height: 0;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font:
+      12.5px/1.65 var(--wb-font-mono),
+      monospace;
+    resize: vertical;
+  }
+  .wb-addon-view .wb-image-prompt textarea:focus {
+    box-shadow: none;
+  }
+  .wb-image-prompt.is-negative textarea {
+    color: var(--wb-ink-2);
+  }
+
+  .wb-image-actions {
+    align-items: center;
+  }
+  .wb-addon-view .wb-image-actions > button:first-child {
+    border: 1px solid var(--wb-line-2);
+    background: var(--wb-surface-1);
+  }
+  .wb-addon-view .wb-image-actions > button:first-child:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+
+  .wb-image-results {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .wb-image-results:empty {
+    display: none;
+  }
+  .wb-image-results article {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-image-results img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    cursor: grab;
+  }
+  .wb-image-result-state {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 8px;
+    border-radius: var(--wb-radius-pill);
+    background: rgb(28 24 20 / 52%);
+    color: #fffaf2;
+    font-size: 11px;
+    backdrop-filter: blur(6px);
+  }
+  .wb-image-results article.is-attached .wb-image-result-state {
+    background: color-mix(in srgb, var(--wb-success) 82%, transparent);
+  }
+  .wb-image-results footer {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition:
+      opacity var(--wb-duration-fast),
+      transform var(--wb-duration-fast);
+  }
+  .wb-image-results article:is(:hover, :focus-within) footer {
+    opacity: 1;
+    transform: none;
+  }
+  .wb-image-results footer button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: rgb(255 253 248 / 90%);
+    box-shadow: 0 1px 3px rgb(30 22 14 / 18%);
+    color: var(--wb-ink-1);
+    cursor: pointer;
+  }
+  .wb-image-results footer button:is(:hover, :focus-visible) {
+    background: #fffdf8;
+  }
+  .wb-image-results footer button:disabled {
+    opacity: 0.5;
+  }
+  .wb-image-pending {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    aspect-ratio: 3 / 2;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+  }
+  .wb-image-pending i {
+    position: relative;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--wb-line-1);
+  }
+  .wb-image-pending i::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 36%;
+    border-radius: 2px;
+    background: var(--wb-accent);
+    animation: wb-image-pending 1.4s var(--wb-ease-standard) infinite;
+  }
+  @keyframes wb-image-pending {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(280%);
+    }
+  }
+
+  /* The auto card closes the workspace. */
+  .wb-image-auto {
+    margin-top: 12px;
+    padding: 2px 14px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-image-auto > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+  }
+  .wb-image-auto > div + div {
+    border-top: 1px solid var(--wb-line-1);
+  }
+  .wb-image-auto label:not(.wb-check) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--wb-ink-2);
+  }
+  .wb-addon-view .wb-image-auto input[type="number"] {
+    width: 54px;
+    height: 30px;
+    padding: 0 8px;
+    text-align: center;
+  }
+  .wb-addon-view .wb-image-auto select {
+    width: 140px;
+    height: 30px;
+    padding: 0 8px;
+  }
+  .wb-image-auto small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+
+  /* ── Full configuration ── */
+  .wb-image-config-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-image-config-grid label {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-image-config-grid :is(input, select, textarea) {
+    width: 100%;
+    min-width: 0;
+  }
+  .wb-image-config-grid small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  .wb-image-config-grid .span-two {
+    grid-column: span 2;
+  }
+  .wb-image-config-grid .span-all {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 1100px) {
+    .wb-image-config-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wb-image-pending i::after {
+      animation: none;
+    }
+  }
+}

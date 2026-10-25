@@ -1,0 +1,257 @@
+/* Legacy rework styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  .wb-resource-rail {
+    position: absolute;
+    top: var(--wb-header);
+    right: var(--wb-right-size);
+    bottom: 0;
+    width: 180px;
+    border-left: 1px solid var(--wb-line);
+    border-right: 1px solid var(--wb-line);
+    background: var(--wb-surface);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(12px);
+    transition:
+      opacity 160ms,
+      transform 200ms,
+      visibility 200ms;
+    z-index: 5;
+    overflow: hidden;
+  }
+  .wb-resource-rail.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
+  .wb-ui.wb-resource-menu.is-rail {
+    position: static;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    padding: 10px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+  .wb-rail-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 31px;
+    margin-bottom: 7px;
+    gap: 6px;
+    color: var(--wb-muted);
+  }
+  .wb-rail-heading strong {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .wb-rail-heading .wb-icon {
+    width: 26px;
+    height: 26px;
+    min-height: 26px;
+    padding: 5px;
+  }
+  .wb-resource-menu.is-rail > .wb-search {
+    min-height: 34px;
+    margin-bottom: 10px;
+  }
+  .wb-resource-menu.is-rail .wb-search input {
+    min-height: 32px;
+    padding: 6px 5px;
+    font-size: 11px;
+  }
+  .wb-resource-menu.is-rail .wb-search svg {
+    width: 14px;
+    height: 14px;
+    margin-left: 7px;
+    flex: none;
+  }
+  .wb-resource-menu.is-rail .wb-picker-list {
+    flex: 1;
+  }
+  .wb-resource-menu.is-rail .wb-resource-choice {
+    padding: 5px;
+    gap: 6px;
+    min-height: 49px;
+  }
+  .wb-resource-menu.is-rail .wb-picker-copy strong {
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .wb-resource-menu.is-rail .wb-picker-copy small {
+    font-size: 10px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .wb-resource-menu.is-rail .wb-resource-choice > svg {
+    display: none;
+  }
+  .wb-resource-menu.is-rail .wb-resource-choice img {
+    width: 24px;
+    height: 24px;
+  }
+  .wb-resource-menu.is-rail .wb-picker-apply {
+    width: 16px;
+  }
+  .wb-resource-menu.is-rail .wb-caption {
+    margin: 6px 3px 9px;
+    font-size: 10px;
+    line-height: 1.7;
+  }
+  .wb-right .wb-resource-title[aria-expanded="true"] > svg {
+    transform: none;
+  }
+  .wb-right .wb-resource-title-line > .wb-resource-title-copy {
+    flex: 1;
+  }
+  .wb-right .wb-preset-common .wb-check-pair {
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+  }
+  .wb-right .wb-preset-common .wb-check {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .wb-right .wb-parameter-strip {
+    margin: 5px 0 0;
+  }
+  .wb-parameter-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 10px;
+  }
+  /* Compact collection management and persistent hover/focus information. */
+  .wb-characters.is-management {
+    display: block;
+    height: auto;
+    min-height: 100%;
+    padding: 18px 24px;
+  }
+  .wb-characters.is-management .wb-designed-page-head {
+    margin-bottom: 8px;
+  }
+  .wb-character-rail {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    height: 100%;
+  }
+  .wb-group-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .wb-designed-settings:has(.wb-group-layout) {
+    padding: 18px 24px;
+  }
+  .wb-designed-page-head {
+    margin-bottom: 14px;
+  }
+  .wb-designed-actions {
+    margin-bottom: 14px;
+  }
+  .wb-designed-fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 18px;
+  }
+  .wb-designed-fields .wb-field :is(input:not([type="range"]):not([type="checkbox"]), textarea) {
+    min-height: 35px;
+    padding: 7px 9px;
+  }
+  .wb-designed-fields .wb-field:has(textarea),
+  .wb-designed-field.is-full {
+    grid-column: span 2;
+  }
+  .wb-settings-body {
+    container-type: inline-size;
+    container-name: settings-content;
+  }
+  @container settings-content (max-width:950px) {
+    .wb-designed-fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @container settings-content (max-width:570px) {
+    .wb-designed-fields {
+      grid-template-columns: 1fr;
+    }
+    .wb-designed-fields .wb-field:has(textarea),
+    .wb-designed-field.is-full {
+      grid-column: 1;
+    }
+  }
+  /* Whole component migration: theme locally without flattening lists or actions. */
+  .wb-component-settings {
+    padding: 18px 24px 26px;
+    width: 100%;
+    min-width: 0;
+  }
+  .wb-component-settings > .wb-native-settings-slot {
+    padding: 0;
+    max-width: none;
+    margin: 0;
+  }
+  .wb-component-extension-picker {
+    width: 280px;
+    max-width: 100%;
+    margin: 0 0 12px;
+  }
+  .wb-component-extension-picker .wb-field {
+    margin: 0;
+    font-size: 12px;
+  }
+  /* Native background nodes keep directory/file/video ownership and lazy loading. */
+  .wb-component-settings.page-background > .wb-designed-page-head {
+    margin-bottom: 8px;
+  }
+  .wb-component-settings .wb-native-bg-directory {
+    grid-column: 1;
+    align-self: start;
+    min-width: 0;
+    padding-right: 12px;
+    border-right: 1px solid var(--wb-line);
+  }
+  .wb-component-settings .wb-native-bg-directory > small {
+    display: block;
+    font-size: 11px;
+    color: var(--wb-muted);
+    padding: 8px;
+  }
+  .wb-component-settings .wb-native-bg-directory > .wb-background-all {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    background: var(--wb-selected);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  @container composer (max-width:480px) {
+    body.wb-active .wb-composer-actions button {
+      width: 28px;
+      min-width: 28px;
+      padding: 5px;
+    }
+  }
+  /* Native API owners use inline block/none; apply density only while that owner is shown. */
+  body.wb-active
+    .wb-component-settings
+    .page-generation
+    :is(
+      #range_block_openai,
+      #range_block,
+      #range_block_novel,
+      #kobold_api-settings,
+      #novel_api-settings,
+      #textgenerationwebui_api-settings,
+      #openai_settings
+    ).wb-component-grid:not([style*="display: none"]):not([style*="display:none"]):not([hidden]) {
+    display: grid !important;
+  }
+}

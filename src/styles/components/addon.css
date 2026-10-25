@@ -1,0 +1,138 @@
+/* Add-on view shell shared by the lazily loaded writing add-ons (生图, 大纲): heading, fields, buttons, notes. */
+@layer wb.components {
+  .wb-addon-view {
+    padding: 14px 16px 16px;
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-addon-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    margin-bottom: 12px;
+  }
+  .wb-addon-heading strong {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--wb-ink-1);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .wb-addon-heading strong > svg {
+    align-self: center;
+    color: var(--wb-ink-2);
+  }
+  .wb-addon-heading small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    font-weight: 400;
+  }
+  .wb-addon-heading > div {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .wb-addon-view :is(.wb-addon-heading button, .wb-addon-file, .wb-addon-actions button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--wb-duration-fast),
+      color var(--wb-duration-fast),
+      transform var(--wb-duration-fast);
+  }
+  .wb-addon-view .wb-addon-heading button {
+    padding: 0 10px;
+    background: transparent;
+    color: var(--wb-ink-2);
+  }
+  .wb-addon-view .wb-addon-heading button[aria-label]:not(:has(span)) {
+    width: 32px;
+    padding: 0;
+  }
+  .wb-addon-view
+    :is(.wb-addon-heading button, .wb-addon-file, .wb-addon-actions button):is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-addon-view :is(.wb-addon-heading button, .wb-addon-actions button):active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .wb-addon-view :is(.wb-addon-heading button, .wb-addon-actions button):disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .wb-addon-file input {
+    display: none;
+  }
+  .wb-addon-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .wb-addon-view .wb-addon-actions .wb-primary {
+    background: var(--wb-accent);
+    color: var(--wb-accent-ink);
+    font-weight: 600;
+  }
+  .wb-addon-view .wb-addon-actions .wb-primary:is(:hover, :focus-visible) {
+    background: var(--wb-accent-strong);
+    color: var(--wb-accent-ink);
+  }
+  .wb-addon-view :is(input:not([type="checkbox"], [type="radio"], [type="file"]), textarea, select) {
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 8px;
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-sm);
+    transition:
+      border-color var(--wb-duration-fast),
+      box-shadow var(--wb-duration-fast);
+  }
+  .wb-addon-view :is(input:not([type="checkbox"], [type="radio"], [type="file"]), textarea, select):focus {
+    outline: none;
+    border-color: var(--wb-ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-accent) 12%, transparent);
+  }
+  .wb-addon-hint {
+    margin: 10px 0;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+  .wb-addon-error {
+    margin: 10px 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--wb-danger-bg);
+    color: var(--wb-danger);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-addon-task {
+    margin: 8px 0 0;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  .wb-addon-task:empty {
+    display: none;
+  }
+}

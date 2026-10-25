@@ -1,0 +1,328 @@
+/* Preset settings page (board WsPreset): sampling parameters and prompt order as two cards side by side. */
+@layer wb.components {
+  .wb-preset-editor.is-desk {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0 20px 16px;
+  }
+  .wb-preset-desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .wb-preset-desk > section {
+    min-width: 0;
+    padding: 12px 16px 14px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-preset-desk h3,
+  .wb-preset-order .wb-prompts-head > span {
+    margin: 0 0 6px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* One row per parameter: name, slider (where it helps), value — the value column always lines up. */
+  .wb-preset-params .wb-preset-row {
+    display: grid;
+    grid-template-columns: 128px minmax(0, 1fr) 76px;
+    align-items: center;
+    gap: 14px;
+    min-height: 46px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid var(--wb-line-1);
+    background: transparent;
+  }
+  .wb-preset-params .wb-preset-row:last-of-type {
+    border-bottom: 0;
+  }
+  .wb-preset-params .wb-preset-row.has-slider .wb-preset-label {
+    margin: 0;
+  }
+  .wb-preset-params .wb-preset-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    width: auto;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .wb-preset-params .wb-preset-row > :last-child {
+    grid-column: 3;
+    justify-self: end;
+  }
+  .wb-preset-params .wb-preset-row > .wb-slider {
+    grid-column: 2;
+    width: 100%;
+    margin: 0;
+  }
+  .wb-ui .wb-preset-params .wb-preset-value {
+    width: 76px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 8px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .wb-ui .wb-preset-params .wb-preset-value:focus {
+    outline: none;
+    border-color: var(--wb-ring);
+  }
+  .wb-preset-params > .wb-fold {
+    margin-top: 6px;
+  }
+
+  /* The order card: a quiet head, the list, then the open prompt's sheet. */
+  .wb-preset-order .wb-prompts-head {
+    margin: 0 0 4px;
+    padding: 0;
+  }
+  .wb-preset-order .wb-prompts {
+    margin: 0;
+  }
+  .wb-preset-order .wb-prompt {
+    min-height: 40px;
+  }
+  .wb-prompt-tokens {
+    flex: none;
+    min-width: 40px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  @media (max-width: 1240px) {
+    .wb-preset-desk {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Preset file card: bindings on the left, file actions on the right, JSON folded below. */
+  .wb-preset-file {
+    padding: 12px 16px 8px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-preset-file-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 18px;
+    min-height: 40px;
+  }
+  .wb-preset-file-row > .wb-grow {
+    min-width: 12px;
+  }
+  .wb-ui .wb-preset-file-row > :is(button, .wb-upload-button) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0 -10px 0 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-ui .wb-preset-file-row > :is(button, .wb-upload-button):is(:hover, :focus-visible, :focus-within) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-preset-file > .wb-fold {
+    margin-top: 4px;
+    border-top: 1px solid var(--wb-line-1);
+  }
+  .wb-ui .wb-preset-file .wb-code {
+    height: 280px;
+    resize: vertical;
+  }
+
+  /* Prompts tab: the order list beside the open prompt; the prompt text takes the remaining height. */
+  .wb-preset-editor.is-studio {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 20px 16px;
+  }
+  .wb-prompt-studio {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 14px;
+    min-height: 0;
+  }
+  .wb-prompt-studio > section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-prompt-studio-list {
+    padding: 12px 8px 8px;
+  }
+  .wb-prompt-studio-list .wb-prompts-head {
+    margin: 0 0 4px;
+    padding: 0 8px;
+  }
+  .wb-prompt-studio-list .wb-prompts-head > span {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .wb-prompt-studio-list .wb-prompts {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
+  }
+  .wb-prompt-studio-list .wb-prompt {
+    min-height: 40px;
+  }
+  .wb-prompt-studio-editor {
+    gap: 12px;
+    padding: 14px 18px 12px;
+  }
+  .wb-prompt-studio-editor .wb-editor-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wb-ui .wb-prompt-studio-editor .wb-editor-heading > input {
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--wb-surface-1);
+    box-shadow: inset 0 0 0 1px var(--wb-line-1);
+    color: var(--wb-ink-1);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .wb-prompt-studio-editor .wb-editor-heading > .wb-select {
+    width: 120px;
+  }
+  .wb-ui .wb-prompt-studio-editor .wb-prompt-body {
+    flex: 1;
+    min-height: 200px;
+    margin: 0;
+    padding: 16px 18px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 12px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 14px;
+    line-height: 1.85;
+    resize: none;
+  }
+  .wb-ui
+    :is(.wb-prompt-studio-editor .wb-prompt-body, .wb-prompt-studio-editor .wb-editor-heading > input):focus {
+    outline: none;
+    border-color: var(--wb-ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-ring) 18%, transparent);
+  }
+  .wb-prompt-studio-editor > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-ui .wb-prompt-studio-editor > footer .wb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    color: var(--wb-danger);
+  }
+  .wb-ui .wb-prompt-studio-editor > footer .wb-link:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+
+  /* Placement and generation types: one row of fields, one row of toggles. */
+  .wb-prompt-inject {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .wb-prompt-inject-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 14px;
+  }
+  .wb-prompt-inject-row > .wb-field {
+    width: 150px;
+    margin: 0;
+  }
+  .wb-prompt-inject-row > .wb-check {
+    min-height: 34px;
+  }
+  .wb-prompt-triggers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .wb-prompt-triggers > span {
+    margin-right: 6px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-prompt-triggers > small {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-ui .wb-prompt-triggers > button {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--wb-surface-1);
+    box-shadow: inset 0 0 0 1px var(--wb-line-1);
+    color: var(--wb-ink-2);
+    font-size: 12.5px;
+  }
+  .wb-ui .wb-prompt-triggers > button[aria-pressed="true"] {
+    background: var(--wb-selected-bg);
+    box-shadow: none;
+    color: var(--wb-accent-text);
+  }
+
+  @media (max-width: 1100px) {
+    .wb-prompt-studio {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(200px, 40%) minmax(0, 1fr);
+    }
+  }
+}

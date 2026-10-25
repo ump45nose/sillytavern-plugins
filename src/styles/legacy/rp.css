@@ -1,0 +1,158 @@
+/* Legacy rp styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  /* RP changes only the homepage shell and native conversation presentation. */
+  .wb-header-shell,
+  .wb-panel-header-row {
+    display: contents;
+  }
+  body.wb-rp .wb-top {
+    z-index: 30;
+  }
+  body.wb-rp.wb-rp-top-collapsed .wb-top {
+    transform: translateY(-100%);
+    opacity: 0;
+    visibility: hidden;
+  }
+  body.wb-rp .wb-top {
+    transition:
+      transform 220ms,
+      opacity 160ms,
+      visibility 0s;
+  }
+  body.wb-rp.wb-rp-top-collapsed .wb-top {
+    transition:
+      transform 220ms,
+      opacity 160ms,
+      visibility 0s 220ms;
+  }
+  body.wb-rp .wb-rp-visibility {
+    position: fixed;
+    top: 18px;
+    right: 24px;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 8px;
+    z-index: 60;
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  body.wb-rp:is(.wb-focus, .wb-rp-top-collapsed) .wb-rp-visibility {
+    background: var(--wb-surface);
+    border-color: var(--wb-line);
+  }
+  .wb-ui .wb-rp-top-trigger {
+    position: fixed;
+    inset: 0 68px auto 0;
+    height: 14px;
+    min-height: 14px;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent !important;
+    box-shadow: none;
+    z-index: 31;
+  }
+  .wb-rp-top-trigger span {
+    width: 40px;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--wb-muted);
+    opacity: 0;
+    transition: opacity 160ms;
+  }
+  body.wb-rp-top-collapsed .wb-rp-top-trigger span {
+    opacity: 0.5;
+  }
+  body.wb-rp:not(.wb-rp-top-collapsed) .wb-rp-top-trigger {
+    pointer-events: none;
+  }
+  .wb-rp-top-trigger:focus-visible {
+    outline-offset: -3px;
+  }
+  body.wb-rp .wb-edge-nav {
+    top: calc(50vh + var(--wb-rp-chrome) / 2);
+  }
+  body.wb-rp .wb-edge-arrow svg {
+    filter: drop-shadow(0 1px 2px #fffefaaf);
+  }
+  body.wb-rp .wb-left {
+    top: var(--wb-rp-chrome);
+    z-index: 16;
+    transition:
+      transform 220ms,
+      opacity 160ms,
+      visibility 220ms,
+      top 220ms;
+  }
+  body.wb-rp .wb-right {
+    top: var(--wb-rp-chrome);
+    z-index: 18;
+    transition:
+      transform 220ms,
+      opacity 160ms,
+      visibility 220ms,
+      top 220ms;
+  }
+  body.wb-rp .wb-resource-rail {
+    top: var(--wb-rp-chrome);
+    z-index: 17;
+    transition:
+      transform 200ms,
+      opacity 160ms,
+      visibility 200ms,
+      top 220ms;
+  }
+  body.wb-rp .wb-panel-header-row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    border-bottom: 1px solid var(--wb-line);
+    background: var(--wb-soft);
+    padding-right: 12px;
+  }
+  body.wb-rp .wb-panel-header-row .wb-panel-switch {
+    flex: 1;
+    border-bottom: 0;
+  }
+  body.wb-rp .wb-panel-header-row > .wb-icon {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 5px;
+  }
+  body.wb-rp .wb-input-grip {
+    display: none !important;
+  }
+  @media (max-width: 1400px) {
+    body.wb-rp .wb-top {
+      grid-template-columns: minmax(110px, 1fr) minmax(0, 860px) minmax(94px, 1fr);
+      padding-left: 18px;
+      gap: 14px;
+    }
+  }
+  @media (max-width: 1100px) {
+    body.wb-rp .wb-top {
+      grid-template-columns: 130px minmax(0, 1fr) 92px;
+      gap: 8px;
+    }
+    body.wb-rp .wb-contexts {
+      gap: 5px;
+      transform: none;
+    }
+    body.wb-rp .wb-selector-value {
+      font-size: 12px !important;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body.wb-rp * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+  body.wb-rp.reduced-motion * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

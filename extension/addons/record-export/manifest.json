@@ -1,0 +1,12 @@
+{
+  "id": "record-export",
+  "display_name": "记录导出",
+  "description": "工作台右栏的聊天 XML 分析与筛选导出附加插件",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "entry": "../../dist/addons/record-export/index.js",
+  "css": "../../dist/addons/record-export/index.css",
+  "loading": "on-demand",
+  "requires": ["workbench"],
+  "author": "Local"
+}

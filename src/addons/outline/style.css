@@ -1,0 +1,675 @@
+/* Outline (board Outline): a quiet status tree, the node as a titled page, and the auto-writing card. */
+@layer wb.components {
+  /* ── Tree (left column section and full editor) ── */
+  .wb-outline-sidebar {
+    min-width: 0;
+    padding: 6px 0 4px;
+  }
+  .wb-ot-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .wb-addon-search {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-3);
+  }
+  .wb-ui .wb-addon-search input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-ui .wb-addon-search input:focus {
+    box-shadow: none;
+  }
+  .wb-ot-tree {
+    min-height: 36px;
+    max-height: 270px;
+    overflow: auto;
+  }
+  .wb-ot-row {
+    display: flex;
+    align-items: center;
+    min-height: 36px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    transition:
+      background-color var(--wb-duration-fast),
+      border-color var(--wb-duration-fast);
+  }
+  .wb-ot-row:hover {
+    background: var(--wb-hover);
+  }
+  .wb-ot-row.is-selected {
+    border-color: color-mix(in srgb, var(--wb-accent) 32%, transparent);
+    background: var(--wb-selected-bg);
+  }
+  .wb-ui .wb-ot-fold {
+    flex: none;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+  }
+  .wb-ot-fold svg {
+    transition: transform var(--wb-duration-fast);
+  }
+  .wb-ot-fold svg.is-closed {
+    transform: rotate(-90deg);
+  }
+  .wb-ui .wb-ot-select {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 0 10px 0 2px;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+  .wb-ot-select > span:nth-child(2) {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-ot-row.is-selected .wb-ot-select > span:nth-child(2) {
+    font-weight: 600;
+  }
+  .wb-ot-select small {
+    flex: none;
+    color: var(--wb-ink-3);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-ot-status {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--wb-ink-3) 45%, transparent);
+  }
+  .wb-ot-status.active {
+    background: var(--wb-warning);
+  }
+  .wb-ot-status.done {
+    background: var(--wb-success);
+  }
+  .wb-ot-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 230ms var(--wb-ease-standard),
+      opacity 200ms;
+  }
+  .wb-ot-collapse.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .wb-ot-collapse > div {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .wb-ot-children {
+    padding-left: 18px;
+  }
+  .wb-ot-excerpt {
+    margin: 2px 4px 6px 26px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ot-excerpt p {
+    max-height: 92px;
+    margin: 0;
+    overflow: auto;
+    color: var(--wb-ink-2);
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+  .wb-ot-excerpt footer {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .wb-ui .wb-ot-excerpt button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    color: var(--wb-ink-1);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-ot-excerpt button[aria-label] {
+    width: 26px;
+    padding: 0;
+    justify-content: center;
+  }
+  .wb-ui .wb-ot-excerpt button.is-primary {
+    margin-right: auto;
+    background: var(--wb-accent);
+    box-shadow: none;
+    color: var(--wb-accent-ink);
+  }
+  .wb-ot-current {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--wb-warning) 16%, transparent);
+    color: color-mix(in srgb, var(--wb-warning) 70%, var(--wb-ink-1));
+    font-size: 10.5px;
+    font-style: normal;
+    font-weight: 600;
+  }
+  /* The node the story is at, above the tree: one line that brings it into view. */
+  .wb-ui .wb-ot-now {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    height: 30px;
+    min-height: 30px;
+    margin-bottom: 4px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: color-mix(in srgb, var(--wb-warning) 10%, transparent);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-sm);
+    text-align: left;
+  }
+  .wb-ot-now svg {
+    flex: none;
+    color: var(--wb-warning);
+  }
+  .wb-ot-now span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-ot-inject > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    margin-top: 10px;
+  }
+  .wb-ot-inject > div > label:not(.wb-check) {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-addon-view .wb-ot-inject input[type="number"] {
+    width: 64px;
+    height: 30px;
+  }
+  .wb-addon-view .wb-ot-inject input[type="number"]:disabled {
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-3);
+    opacity: 0.6;
+  }
+  .wb-ot-inject code {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+    font-family: var(--wb-font-mono);
+    font-size: 11px;
+  }
+  .wb-ui .wb-ot-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    height: 32px;
+    min-height: 32px;
+    margin-top: 4px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-ui .wb-ot-add:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ot-add small {
+    margin-left: auto;
+    color: var(--wb-ink-3);
+    font-size: 11px;
+  }
+  /* In the left column the section is the one scroll box (Navigation sizes it), so the tree is not. */
+  .wb-outline-sidebar .wb-ot-tree {
+    max-height: none;
+    overflow: visible;
+  }
+  .wb-addon-empty {
+    padding: 8px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+
+  /* ── Node page ── */
+  .wb-ot-editor-layout {
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+  }
+  .wb-ot-editor-layout > main {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-ot-editor-layout > aside {
+    flex: none;
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-ot-editor-layout > aside > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-ot-editor-layout > aside > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .is-editor .wb-ot-tree {
+    flex: 1;
+    max-height: calc(100vh - 270px);
+  }
+  .wb-ot-node-heading {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 4px 0 6px;
+  }
+  .wb-addon-view .wb-ot-node-heading input {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    margin-left: -8px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-1);
+    font: 600 22px/1.3 var(--wb-font-reading);
+  }
+  .wb-addon-view .wb-ot-node-heading input:hover {
+    background: var(--wb-hover);
+  }
+  .wb-addon-view .wb-ot-node-heading input:focus {
+    background: var(--wb-surface-2);
+    box-shadow: none;
+  }
+  .wb-ui .wb-ot-node-heading button,
+  .wb-ui .wb-ot-node-controls button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+  }
+  .wb-ui :is(.wb-ot-node-heading, .wb-ot-node-controls) button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ot-node-heading button[aria-label="删除节点"]:is(:hover, :focus-visible) {
+    color: var(--wb-danger);
+  }
+  .wb-ui :is(.wb-ot-node-heading, .wb-ot-node-controls) button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .wb-ui .wb-ot-node-controls button[aria-pressed="true"] {
+    background: var(--wb-surface-2);
+  }
+  .wb-ot-node-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-addon-view .wb-ot-node-controls select {
+    width: 104px;
+    height: 32px;
+    border: 0;
+    background: var(--wb-surface-2);
+  }
+  .wb-ot-node-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 3px 0 10px;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+  }
+  .wb-addon-view .wb-ot-node-controls input {
+    width: 48px;
+    height: 26px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .wb-ot-node-controls > span {
+    margin-left: auto;
+  }
+  .wb-ot-markdown {
+    display: grid;
+    gap: 12px;
+  }
+  .wb-addon-view .wb-ot-markdown :is(textarea, .wb-md) {
+    min-height: 240px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    font:
+      13px/1.75 var(--wb-font-mono),
+      monospace;
+    resize: vertical;
+  }
+  .wb-addon-view .wb-ot-markdown :is(textarea:focus, .wb-md:focus-within) {
+    box-shadow: 0 0 0 1px var(--wb-ring);
+  }
+  .is-editor .wb-ot-markdown :is(textarea, .wb-md) {
+    height: calc(100vh - 440px);
+    min-height: 260px;
+  }
+  .is-editor .wb-ot-markdown.with-preview {
+    grid-template-columns: 1fr 1fr;
+  }
+  .wb-ot-preview {
+    max-height: calc(100vh - 440px);
+    padding: 14px 18px;
+    overflow: auto;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 12px;
+    color: var(--wb-ink-1);
+    font: 14px/1.8 var(--wb-font-reading);
+  }
+  .wb-ot-preview p {
+    margin: 0 0 4px;
+    white-space: pre-wrap;
+  }
+  .wb-ot-preview h4 {
+    margin: 10px 0 6px;
+    font-size: 16px;
+  }
+  .wb-ot-preview pre {
+    margin: 0;
+    padding: 3px 8px;
+    border: 0;
+    background: var(--wb-surface-2);
+    font: 12px var(--wb-font-mono);
+    white-space: pre-wrap;
+  }
+  .wb-ot-preview blockquote {
+    margin: 6px 0;
+    padding: 2px 12px;
+    border-left: 2px solid var(--wb-line-2);
+    color: var(--wb-ink-2);
+  }
+  .wb-ot-preview code {
+    padding: 1px 4px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--wb-surface-2);
+    font: 12px var(--wb-font-mono);
+  }
+  .wb-ot-preview .wb-ot-list-line {
+    padding-left: 10px;
+  }
+
+  /* ── Insert and auto-writing cards ── */
+  .wb-ot-insert-settings,
+  .wb-ot-inject,
+  .wb-ot-auto {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ot-insert-settings {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .wb-ot-insert-settings > label:not(.wb-check) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--wb-ink-2);
+  }
+  .wb-addon-view .wb-ot-insert-settings select {
+    width: 140px;
+    height: 32px;
+  }
+  :is(.wb-ot-inject, .wb-ot-auto) header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+  }
+  :is(.wb-ot-inject, .wb-ot-auto) header strong {
+    font-size: var(--wb-text-sm);
+  }
+  :is(.wb-ot-inject, .wb-ot-auto) header span {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-ot-auto .wb-addon-actions {
+    margin: 10px 0 4px;
+  }
+  .wb-addon-view .wb-ot-auto .wb-addon-actions button {
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-addon-view .wb-ot-auto .wb-addon-actions button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-ot-auto .wb-addon-hint {
+    margin-bottom: 0;
+  }
+  .wb-ot-import {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--wb-selected-bg);
+  }
+  .wb-ot-import p {
+    margin: 4px 0 10px;
+    color: var(--wb-ink-2);
+    font-size: 12px;
+  }
+  .wb-ui .wb-ot-import button {
+    height: 30px;
+    min-height: 30px;
+    margin-right: 6px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-outline-workspace .wb-addon-heading {
+    flex-wrap: wrap;
+  }
+  .wb-outline-workspace .wb-addon-heading strong {
+    flex: none;
+    white-space: nowrap;
+  }
+  .wb-outline-workspace .wb-addon-heading > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  /* Another way in: pasted text, or the outline of another chat. */
+  .wb-ot-source {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ui .wb-ot-source textarea {
+    width: 100%;
+    min-height: 140px;
+    resize: vertical;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .wb-ot-source footer {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .wb-ui .wb-ot-source footer button {
+    height: 30px;
+    min-height: 30px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-ui .wb-ot-source footer button.wb-primary {
+    background: var(--wb-accent);
+    color: var(--wb-accent-ink);
+  }
+  .wb-ot-source ul {
+    display: grid;
+    gap: 4px;
+    max-height: 240px;
+    margin: 0 0 6px;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+  }
+  .wb-ui .wb-ot-source li button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    text-align: left;
+  }
+  .wb-ui .wb-ot-source li button:is(:hover, :focus-visible) {
+    background: var(--wb-selected-bg);
+  }
+  .wb-ot-source li small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  .wb-addon-view .wb-addon-heading button[aria-pressed="true"] {
+    background: var(--wb-selected-bg);
+    color: var(--wb-ink-1);
+  }
+  .wb-ot-editor-layout > main > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+  }
+
+  @media (max-width: 1100px) {
+    .is-editor .wb-ot-editor-layout > aside {
+      width: 220px;
+    }
+    .is-editor .wb-ot-markdown.with-preview {
+      grid-template-columns: 1fr;
+    }
+    .is-editor .wb-ot-preview {
+      max-height: 200px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wb-ot-collapse,
+    .wb-ot-fold svg {
+      transition: none;
+    }
+  }
+}

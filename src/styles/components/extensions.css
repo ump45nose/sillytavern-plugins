@@ -1,0 +1,280 @@
+/* Installed extensions (board SettingsExt): a tool row, then one quiet row per extension. */
+@layer wb.components {
+  .wb-ext-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 8px;
+  }
+  .wb-ext-tools > .wb-search {
+    flex: 0 1 324px;
+    min-width: 200px;
+  }
+  .wb-ext-count {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-ext-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-ui .wb-ext-refresh:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ext-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--wb-accent);
+    box-shadow: none;
+    color: var(--wb-accent-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .wb-ui .wb-ext-install:is(:hover, :focus-visible) {
+    background: var(--wb-accent-strong);
+  }
+  .wb-ext-status {
+    margin: 0 0 8px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+
+  .wb-ext-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .wb-ext-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 8px 10px 8px 2px;
+    border-bottom: 1px solid var(--wb-line-1);
+  }
+  .wb-ext-row:last-child {
+    border-bottom: 0;
+  }
+  .wb-ext-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+  }
+  .wb-ext-row.is-on .wb-ext-icon {
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent-text);
+  }
+  .wb-ext-copy {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .wb-ext-copy strong {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    color: var(--wb-ink-1);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .wb-ext-copy strong small {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .wb-ext-copy > small {
+    overflow: hidden;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-ext-row :is(.wb-ext-open, .wb-ext-icon-button) {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-ui .wb-ext-row .wb-ext-icon-button {
+    width: 30px;
+    padding: 0;
+  }
+  .wb-ui .wb-ext-row .wb-ext-icon-button.is-danger {
+    color: var(--wb-danger);
+  }
+  .wb-ui .wb-ext-row :is(.wb-ext-open, .wb-ext-icon-button):is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ext-row .wb-ext-open:disabled {
+    opacity: 0.4;
+  }
+  .wb-ext-row > .wb-switch {
+    flex: none;
+    margin-left: 4px;
+  }
+  .wb-ext-empty {
+    margin: 24px 0;
+    color: var(--wb-ink-3);
+    font-size: 13px;
+    text-align: center;
+  }
+}
+
+/* Workbench add-ons (board SettingsAddons): three cards, icon tile and switch on one line. */
+@layer wb.components {
+  .wb-addon-settings {
+    width: 100%;
+    padding: 22px 24px 24px;
+  }
+  .wb-addon-intro {
+    margin: 0 0 14px;
+    color: var(--wb-ink-3);
+    font-size: 13px;
+  }
+  .wb-addon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .wb-addon-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 18px 12px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-addon-card > header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .wb-addon-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-3);
+  }
+  .wb-addon-card.is-enabled .wb-addon-icon {
+    color: var(--wb-accent-text);
+  }
+  .wb-addon-card strong {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    color: var(--wb-ink-1);
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .wb-addon-card strong > small {
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    font-weight: 400;
+  }
+  .wb-addon-card > p {
+    flex: 1;
+    margin: 14px 0 16px;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .wb-addon-card > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding-top: 10px;
+    border-top: 1px solid var(--wb-line-1);
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-addon-card > footer small {
+    font-size: 12px;
+    text-align: right;
+  }
+  .wb-addon-card.is-enabled > footer > span {
+    color: var(--wb-accent-text);
+  }
+}
+
+/* IDE sync card: the latest writes under the description, one line each. */
+@layer wb.components {
+  .wb-sync-card code {
+    margin: 0 2px;
+    font-size: 12px;
+  }
+  .wb-sync-recent {
+    display: grid;
+    gap: 6px;
+    margin: -6px 0 14px;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+  }
+  .wb-sync-recent li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    color: var(--wb-ink-2);
+  }
+  .wb-sync-recent time,
+  .wb-sync-recent small {
+    color: var(--wb-ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-sync-recent span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-sync-recent em {
+    grid-column: 2 / -1;
+    color: var(--wb-ink-3);
+    font-style: normal;
+  }
+  .wb-sync-recent li.is-error em,
+  .wb-sync-recent li.is-error small {
+    color: var(--wb-danger);
+  }
+}

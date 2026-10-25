@@ -1,0 +1,32 @@
+{
+  "name": "workbench-sync",
+  "displayName": "Noval · 酒馆同步",
+  "description": "在 VS Code 里以可读文件编辑 SillyTavern 的世界书、角色、预设、连接、用户设定和大纲。",
+  "version": "0.1.0",
+  "publisher": "noval-local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onFileSystem:sillytavern"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "workbenchSync.connect",
+        "title": "连接酒馆",
+        "category": "酒馆同步"
+      },
+      {
+        "command": "workbenchSync.disconnect",
+        "title": "断开酒馆",
+        "category": "酒馆同步"
+      }
+    ]
+  }
+}

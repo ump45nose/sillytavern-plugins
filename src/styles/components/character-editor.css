@@ -1,0 +1,545 @@
+/* Character card editor (board CharacterEdit). One column in the right panel; portrait | fields | budget when wide. */
+@layer wb.components {
+  .wb-character-detail-wrap {
+    container-type: inline-size;
+  }
+  .wb-settings-body .wb-character-detail-wrap {
+    padding: 0;
+  }
+  .wb-ui .wb-character-detail-wrap > .wb-link {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    min-height: 30px;
+    margin: 0 0 8px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-ui .wb-character-detail-wrap > .wb-link:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+
+  .wb-character-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "side" "main";
+    gap: 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .wb-character-editor > .wb-ce-insight {
+    display: none;
+  }
+
+  /* ── Side: the portrait, then the card's facts ── */
+  .wb-ce-side {
+    grid-area: side;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-content: start;
+    align-self: start;
+    gap: 12px;
+    align-items: start;
+  }
+  .wb-ce-portrait {
+    position: relative;
+    margin: 0;
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ce-portrait img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 12%;
+  }
+  .wb-ce-avatar {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wb-surface-1) 90%, transparent);
+    box-shadow: 0 1px 3px rgb(30 22 14 / 16%);
+    color: var(--wb-ink-1);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background-color var(--wb-duration-fast);
+  }
+  .wb-ce-avatar:is(:hover, :focus-within) {
+    background: var(--wb-surface-1);
+  }
+  /* Below the wide layout the portrait is a thumbnail: the key keeps only its icon. */
+  @container (max-width: 759px) {
+    .wb-ce-avatar {
+      right: 6px;
+      bottom: 6px;
+      width: 28px;
+      padding: 0;
+      justify-content: center;
+      font-size: 0;
+    }
+  }
+  .wb-ce-avatar input {
+    display: none;
+  }
+  .wb-ce-meta {
+    min-width: 0;
+    margin: 0;
+    padding: 2px 14px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ce-meta > div {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+  }
+  .wb-ce-meta > div + div {
+    border-top: 1px solid var(--wb-line-1);
+  }
+  .wb-ce-meta dt {
+    color: var(--wb-ink-3);
+    font-size: 12.5px;
+  }
+  .wb-ce-meta dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-ce-meta input {
+    width: 100%;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 6px;
+    margin-left: -6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+  }
+  .wb-ui .wb-ce-meta input:is(:hover, :focus) {
+    background: var(--wb-surface-1);
+  }
+  .wb-ce-meta dd > * {
+    width: 100%;
+  }
+  .wb-ce-meta .wb-select-trigger {
+    height: 30px;
+    min-height: 30px;
+    margin-left: -8px;
+    border: 0;
+    background: transparent;
+  }
+
+  /* ── Main: the name, tags, tabs and the fields as soft wells ── */
+  .wb-ce-main {
+    grid-area: main;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .wb-ce-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+  }
+  .wb-ui .wb-ce-name {
+    flex: 1 1 200px;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 8px;
+    margin-left: -8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: 600 24px/1.2 var(--wb-font-reading);
+  }
+  .wb-ui .wb-ce-name:is(:hover, :focus) {
+    background: var(--wb-surface-2);
+  }
+  .wb-ce-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .wb-ui .wb-ce-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-ce-actions button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ce-actions button.is-raised {
+    margin-left: 4px;
+    border: 1px solid var(--wb-line-2);
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ce-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .wb-ce-tags {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .wb-ce-tags > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 24px;
+    padding: 0 4px 0 10px;
+    border-radius: 7px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: 12px;
+  }
+  .wb-ui .wb-ce-tags > span > button {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-3);
+    opacity: 0;
+  }
+  .wb-ce-tags > span:is(:hover, :focus-within) > button {
+    opacity: 1;
+  }
+  .wb-ui .wb-ce-tags > span > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ce-tags > input {
+    width: auto;
+    min-width: 0;
+    height: 24px;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 1px dashed var(--wb-line-2);
+    border-radius: 7px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 12px;
+  }
+  .wb-ui .wb-ce-tags > input:focus {
+    border-style: solid;
+    border-color: var(--wb-ring);
+  }
+
+  .wb-ce-tabs {
+    display: flex;
+    gap: 22px;
+    margin: 14px 0 0;
+    border-bottom: 1px solid var(--wb-line-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .wb-ui .wb-ce-tabs > button {
+    flex: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13.5px;
+    line-height: 38px;
+  }
+  .wb-ui .wb-ce-tabs > button:is(:hover, :focus-visible) {
+    background: transparent;
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-ce-tabs > button[aria-selected="true"] {
+    border-bottom-color: var(--wb-accent);
+    color: var(--wb-ink-1);
+    font-weight: 600;
+  }
+  .wb-ce-tabs small {
+    color: var(--wb-ink-3);
+    font-size: 11px;
+    font-weight: 400;
+  }
+
+  .wb-ce-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 18px 0 16px;
+  }
+  .wb-ce-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .wb-ce-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .wb-ce-label small {
+    margin-left: auto;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-ce-dirty {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wb-accent);
+  }
+  .wb-ui .wb-ce-field :is(textarea, .wb-md) {
+    width: 100%;
+    min-height: 0;
+    padding: 12px 16px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font:
+      12.5px/1.7 var(--wb-font-mono),
+      monospace;
+    resize: vertical;
+    transition:
+      border-color var(--wb-duration-fast),
+      background-color var(--wb-duration-fast),
+      box-shadow var(--wb-duration-fast);
+  }
+  .wb-ui .wb-ce-field.is-reading :is(textarea, .wb-md) {
+    font: 14.5px/1.85 var(--wb-font-reading);
+  }
+  .wb-ui .wb-ce-field :is(textarea:focus, .wb-md:focus-within) {
+    outline: none;
+    border-color: var(--wb-ring);
+    background: var(--wb-surface-1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-accent) 10%, transparent);
+  }
+  .wb-ce-row {
+    display: grid;
+    grid-template-columns: 96px 140px minmax(160px, 1fr);
+    gap: 14px;
+    align-items: end;
+  }
+  .wb-ce-row .wb-field {
+    margin: 0;
+  }
+  .wb-ce-talk > span {
+    display: flex;
+    justify-content: space-between;
+  }
+  .wb-ce-talk output {
+    color: var(--wb-ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-character-editor .wb-savebar {
+    position: sticky;
+    bottom: 12px;
+    z-index: 1;
+    margin-top: auto;
+  }
+
+  /* ── Insight: the token budget and the greetings at a glance ── */
+  .wb-ce-insight {
+    grid-area: insight;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .wb-ce-card {
+    padding: 14px 16px 16px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-ce-card > header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .wb-ce-card h3 {
+    margin: 0;
+    color: var(--wb-ink-1);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .wb-ce-card > header small {
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-ce-budget {
+    display: flex;
+    gap: 2px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--wb-line-1);
+  }
+  .wb-ce-budget i {
+    flex-basis: 0;
+    min-width: 0;
+  }
+  .wb-ce-legend {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wb-ce-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--wb-ink-2);
+    font-size: 12.5px;
+  }
+  .wb-ce-legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .wb-ce-legend span {
+    margin-left: auto;
+    color: var(--wb-ink-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-ce-greetings {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wb-ui .wb-ce-greetings button {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-weight: 400;
+    text-align: left;
+  }
+  .wb-ui .wb-ce-greetings button:is(:hover, :focus-visible) {
+    border-color: var(--wb-line-2);
+  }
+  .wb-ui .wb-ce-greetings button.is-default {
+    border-color: color-mix(in srgb, var(--wb-accent) 40%, transparent);
+    background: var(--wb-selected-bg);
+  }
+  .wb-ce-greetings small {
+    color: var(--wb-ink-3);
+    font-size: 11px;
+  }
+  .wb-ce-greetings span {
+    display: -webkit-box;
+    overflow: hidden;
+    font: 13px/1.7 var(--wb-font-reading);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  /* Wide: portrait and facts on the left, the budget under them. */
+  @container (min-width: 760px) {
+    .wb-character-editor {
+      grid-template-columns: 232px minmax(0, 1fr);
+      grid-template-areas: "side main" "insight main";
+      grid-template-rows: auto 1fr;
+      gap: 16px 24px;
+    }
+    .wb-character-editor > .wb-ce-insight {
+      display: flex;
+      align-self: start;
+    }
+    .wb-ce-side {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wb-ce-portrait {
+      aspect-ratio: 10 / 11;
+    }
+  }
+  /* Widest: three columns, as the board. */
+  @container (min-width: 1080px) {
+    .wb-character-editor {
+      grid-template-columns: 248px minmax(0, 1fr) 272px;
+      grid-template-areas: "side main insight";
+      grid-template-rows: auto;
+    }
+    .wb-ce-side,
+    .wb-character-editor > .wb-ce-insight {
+      position: sticky;
+      top: 0;
+    }
+  }
+}

@@ -1,0 +1,39 @@
+/* Legacy selection styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  /* Only tune selected surfaces; solid circle indicators keep the approved primitives. */
+  .wb-ui {
+    --wb-selection-line: color-mix(in srgb, var(--wb-accent) 20%, var(--wb-line));
+    --wb-selection-fill: color-mix(in srgb, var(--wb-selected) 85%, var(--wb-surface));
+  }
+  /* Compact floor rows keep their existing height; draw the same line inside. */
+  .wb-ui :is(.wb-resource-choice, .wb-quick-row) strong {
+    font-weight: 500;
+  }
+  .wb-ui .wb-favorites .is-active .wb-portrait {
+    border-color: var(--wb-selection-line);
+  }
+  .wb-ui :is(.wb-font-choices, .wb-meta-choices, .wb-pop-tabs, .wb-world-scope) button[aria-pressed="true"] {
+    background: var(--wb-selection-fill);
+    box-shadow: inset 0 0 0 1px var(--wb-selection-line);
+    border-color: transparent;
+  }
+  .wb-ui.wb-select-menu > button {
+    border: 1px solid transparent;
+  }
+  .wb-ui.wb-select-menu > button.is-selected {
+    background: var(--wb-selection-fill);
+    border-color: var(--wb-selection-line);
+  }
+  .wb-ui :is(.wb-panel-tabs > button.is-active) {
+    background: var(--wb-selection-fill) !important;
+    box-shadow: inset 0 0 0 1px var(--wb-selection-line);
+  }
+  .wb-ui :is(.wb-designed-actions > button[aria-pressed="true"], #bg_tabs .bg_tab_button.ui-tabs-active) {
+    background: var(--wb-selection-fill);
+    box-shadow: inset 0 0 0 1px var(--wb-selection-line);
+  }
+  .wb-ui .wb-designed-gallery .wb-background-preview.is-current {
+    outline: 1px solid var(--wb-selection-line);
+    outline-offset: -1px;
+  }
+}

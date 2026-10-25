@@ -1,0 +1,11 @@
+{
+  "id": "outline",
+  "apiVersion": 2,
+  "version": "1.0.0",
+  "entry": "../../dist/addons/outline/index.js",
+  "css": "../../dist/addons/outline/index.css",
+  "loading": "on-demand",
+  "requires": [
+    "workbench"
+  ]
+}

@@ -1,0 +1,1174 @@
+/*
+ * PWA (boards "NovelPwa / RpPwa / RpPwaLight"): the chrome MobileShell draws on a phone. Noval is a
+ * single sheet of paper with a centred title, a quick-config card and a pill composer; RP is the scene
+ * with frosted panes floating on it. Native nodes (#sheld, #chat, #send_form) are restyled in
+ * native-bridge.css. Every rule is scoped to body.wb-mobile so desktop never changes.
+ */
+@layer wb.layouts {
+  /* The phone is one sheet of paper, lighter than the desk (board s0 #FAF9F5 / #1B1916); drawers,
+     panels and settings inherit it. Theme hooks still tint it. The legacy aliases are computed on
+     :root, so they are declared again here to follow. */
+  body.wb-active.wb-mobile {
+    --wb-surface-0: color-mix(in srgb, var(--wb-theme-surface, #fffefa) 74%, var(--wb-theme-paper, #eeebe3));
+    --wb-surface-2: var(--wb-theme-soft, #f2f0e9);
+    --wb-surface-3: color-mix(in srgb, var(--wb-selected-bg) 60%, var(--wb-surface-1));
+    --wb-paper: var(--wb-surface-0);
+    --wb-surface: var(--wb-surface-1);
+    --wb-soft: var(--wb-surface-2);
+    --wb-m-paper: var(--wb-surface-0);
+    --wb-m-scrim: rgb(40 30 20 / 32%);
+    --wb-m-sheet-shadow: 0 -12px 40px rgb(0 0 0 / 18%);
+  }
+  :root[data-wb-theme="dark"] body.wb-active.wb-mobile {
+    --wb-surface-0: color-mix(
+      in srgb,
+      var(--wb-theme-dark-surface, #221f1b) 45%,
+      var(--wb-theme-dark-paper, #161411)
+    );
+    --wb-surface-1: color-mix(in srgb, var(--wb-theme-dark-surface, #221f1b) 98.5%, #fff);
+    --wb-surface-2: color-mix(in srgb, var(--wb-theme-dark-soft, #2b2823) 98.5%, #fff);
+    --wb-m-scrim: rgb(0 0 0 / 50%);
+  }
+
+  /* ── Header: menu and ⋯ · title · person. The title is truly centred; pulling the header down
+     brings the session menu down from the top. ── */
+  body.wb-mobile .wb-mobile-header {
+    gap: 2px;
+    padding: 6px 4px 0;
+    border-bottom: 0;
+    background: var(--wb-m-paper);
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile .wb-mobile-header > button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    border-radius: 12px;
+    color: inherit;
+  }
+  body.wb-mobile .wb-mobile-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.25;
+    text-align: center;
+  }
+  body.wb-mobile .wb-mobile-title :is(strong, small) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.wb-mobile .wb-mobile-title strong {
+    font: 600 16px/1.3 var(--wb-font-reading);
+  }
+  body.wb-mobile .wb-mobile-title small {
+    font-size: 12px;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile:not(.wb-mobile-rp) .wb-mobile-header {
+    display: grid;
+    grid-template-columns: 44px 44px minmax(0, 1fr) 44px 44px;
+    touch-action: none;
+  }
+  /* The eye (RP) or the face (Noval) keeps the last column whatever else is shown. */
+  body.wb-mobile .wb-mobile-header .wb-mobile-person {
+    grid-column: 5;
+    justify-content: center;
+  }
+  /* The paper continues behind the quick-config card; the page never shows the desk between them. */
+  body.wb-mobile:not(.wb-mobile-rp) .wb-mobile-header::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 52px;
+    background: var(--wb-m-paper);
+    pointer-events: none;
+  }
+  body.wb-mobile .wb-mobile-person :is(.wb-mobile-face, .wb-avatar-fallback) {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--wb-surface-3);
+    font-size: 12px;
+  }
+  /* Card art is a portrait; the button shows the face, as the board crops it. */
+  body.wb-mobile .wb-mobile-person .wb-mobile-face img {
+    position: absolute;
+    top: -14%;
+    left: 50%;
+    width: 240%;
+    height: auto;
+    max-width: none;
+    border-radius: 0;
+    transform: translateX(-50%);
+  }
+
+  /* RP: nothing frames the scene. The menu, the place and time (a tap or a pull down opens the
+     session menu) and the eye, drawn straight on the picture in light glyphs with a soft shadow,
+     over a faint scrim at the top edge so they read on a bright scene. The title spans the middle
+     three of Noval's five columns, so it stays centred. */
+  body.wb-mobile-rp .wb-mobile-header {
+    top: var(--wb-mobile-top, 0px);
+    left: 0;
+    right: 0;
+    height: calc(var(--wb-safe-top) + 64px);
+    display: grid;
+    grid-template-columns: 44px 44px minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    gap: 2px;
+    padding: var(--wb-safe-top) 8px 0;
+    border: 0;
+    background: linear-gradient(to bottom, rgb(20 14 10 / 30%), rgb(20 14 10 / 12%) 60%, transparent);
+    color: var(--wb-rp-on-scene);
+    z-index: 7;
+    touch-action: none;
+    transition: background-color 180ms;
+  }
+  body.wb-mobile-rp .wb-mobile-header > button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    background: transparent;
+    filter: var(--wb-rp-on-scene-shadow);
+    transition:
+      opacity 180ms,
+      visibility 180ms,
+      background-color 160ms;
+  }
+  body.wb-mobile-rp .wb-mobile-header > button:active {
+    background: rgb(255 255 255 / 16%);
+  }
+  body.wb-mobile-rp .wb-mobile-header > .wb-mobile-title {
+    grid-column: 2 / 5;
+    width: auto;
+    min-width: 0;
+    height: 48px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 14px;
+    filter: none;
+    color: inherit;
+    font: inherit;
+    text-shadow: var(--wb-rp-on-scene-text);
+    cursor: pointer;
+  }
+  body.wb-mobile-rp .wb-mobile-title strong {
+    font: 600 15px/1.3 var(--wb-font-reading);
+    letter-spacing: 0.04em;
+  }
+  body.wb-mobile-rp .wb-mobile-title small {
+    font-size: 11px;
+    color: inherit;
+    opacity: 0.82;
+  }
+  /* Hidden interface: the scrim goes and only the eye stays, in its own place, to bring it back. */
+  body.wb-mobile-rp.wb-focus .wb-mobile-header {
+    background: transparent;
+  }
+  body.wb-mobile-rp.wb-focus .wb-mobile-header > :not(.wb-mobile-person) {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* ── Quick configuration: one raised card under the header — status, then the resource keys ── */
+  body.wb-mobile .wb-mobile-config {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 62px);
+    left: 12px;
+    right: 12px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    margin: 0;
+    padding: 0 4px 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    color: var(--wb-ink-1);
+  }
+  /* The editor page rises over the header, the quick config and RP's deck; they leave once it
+     covers them, at once: the page drops back under them as it settles. */
+  body.wb-mobile[data-wb-covered] :is(.wb-mobile-header, .wb-mobile-config, .wb-rp-deck),
+  body.wb-mobile[data-wb-covered] :is(.wb-mobile-header, .wb-mobile-config, .wb-rp-deck) * {
+    visibility: hidden;
+    transition: none;
+  }
+  body.wb-mobile .wb-mobile-status {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  body.wb-mobile .wb-mobile-status strong {
+    flex: none;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  body.wb-mobile .wb-mobile-status small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-mobile-status .wb-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-mobile-status .wb-dot.online {
+    background: var(--wb-success);
+  }
+  /* One quiet key per resource, divided from the status by a hairline; the open one is filled. */
+  body.wb-mobile .wb-mobile-keys {
+    flex: none;
+    display: flex;
+    gap: 2px;
+    padding-left: 6px;
+    border-left: 1px solid var(--wb-line-1);
+  }
+  body.wb-mobile .wb-mobile-keys > button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-mobile-keys > button[aria-pressed="true"] {
+    background: var(--wb-surface-3);
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile .wb-mobile-keys b {
+    position: absolute;
+    top: 3px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: var(--wb-accent);
+    color: var(--wb-accent-ink);
+    font: 600 9px/14px var(--wb-font-ui);
+    text-align: center;
+  }
+  /* RP's tools sheet keeps the four switches as tiles: icon and name, or the icon alone when the
+     name does not fit (ResourceControls measures). A tap opens that resource's chooser. */
+  body.wb-mobile .wb-mobile-tool-config .wb-contexts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+    padding: 0;
+    overflow: visible;
+  }
+  body.wb-mobile .wb-mobile-tool-config .wb-selector {
+    min-width: 0;
+    max-width: none;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: var(--wb-surface-2);
+    box-shadow: none;
+  }
+  body.wb-mobile .wb-mobile-tool-config .wb-selector {
+    height: 44px;
+  }
+  body.wb-mobile .wb-mobile-tool-config .wb-selector > .wb-selector-value {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--wb-ink-1);
+    font-size: 13px;
+  }
+  body.wb-mobile .wb-selector.is-iconic > .wb-selector-value {
+    justify-content: center;
+  }
+  body.wb-mobile .wb-selector .wb-value-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+  }
+  /* Kept in the layout, out of sight, so the tile can still measure whether the name fits. */
+  body.wb-mobile .wb-selector.is-iconic .wb-value-text {
+    position: absolute;
+    width: max-content;
+    flex: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  body.wb-mobile .wb-selector-icon {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-selector-icon .wb-dot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wb-ink-3);
+    box-shadow: 0 0 0 2px var(--wb-surface-2);
+  }
+  body.wb-mobile .wb-selector-icon .wb-dot.online {
+    background: var(--wb-success);
+  }
+  body.wb-mobile .wb-mobile-tool-config .wb-selector:is(.is-active, :has([aria-expanded="true"])) {
+    background: var(--wb-surface-3);
+  }
+
+  /* ── Composer chrome: ＋, and the handle that pulls the full editor up ── */
+  body.wb-mobile .wb-mobile-plus {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: end;
+    width: 44px;
+    height: 44px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile-rp .wb-mobile-plus {
+    grid-row: 2;
+    background: var(--wb-rp-field);
+    color: var(--wb-rp-ink-1);
+  }
+
+  /* ── Editor page (native-bridge.css lays out the page; this is its bar) ──
+     A grabber over one row: fold-down key, the title centred, the count. The whole bar pulls the
+     page back down into the pill. */
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-editor-heading {
+    position: relative;
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    align-items: center;
+    flex: none;
+    height: 60px;
+    padding: 10px 0 0;
+    border: 0;
+    touch-action: none;
+    cursor: grab;
+  }
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-editor-heading::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--wb-line-1);
+  }
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-editor-heading > button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 14px;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-editor-heading strong {
+    font: 600 15px/1.3 var(--wb-font-reading);
+    text-align: center;
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-editor-heading small {
+    justify-self: end;
+    padding-right: 16px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile #form_sheld[data-wb-page] .wb-mobile-plus {
+    grid-row: 2;
+  }
+
+  /* ── Focus (Noval): the header and quick config lift away, the reading takes the page and a quiet
+     "退出专注" sits where the title was ── */
+  body.wb-mobile:not(.wb-mobile-rp) .wb-mobile-config {
+    transition:
+      transform 260ms var(--wb-ease-emphasized),
+      opacity 200ms;
+  }
+  body.wb-mobile.wb-focus:not(.wb-mobile-rp) .wb-mobile-header {
+    transform: translateY(-110%);
+  }
+  body.wb-mobile.wb-focus:not(.wb-mobile-rp) .wb-mobile-config {
+    transform: translateY(-120px);
+    opacity: 0;
+    pointer-events: none;
+  }
+  body.wb-mobile .wb-mobile-focus-exit {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 8px);
+    left: 50%;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font: inherit;
+    font-size: 13px;
+    translate: -50% 0;
+    animation: wb-mobile-fade-in 220ms var(--wb-ease-emphasized) 80ms both;
+  }
+  body.wb-mobile .wb-mobile-focus-exit:active {
+    background: var(--wb-surface-3);
+    color: var(--wb-ink-1);
+  }
+
+  /* ── RP deck (RPStage) over the band: suggested replies float just above it; the speaker's name
+     where the band turns solid with the page marks beside it; the desktop's quick menu and the
+     reply key along its foot. The text itself turns the page (left half back, right half
+     forward), so there are no arrows on the phone. ── */
+  body.wb-mobile-rp .wb-rp-deck {
+    top: calc(var(--wb-rp-box-top) - var(--wb-rp-bar-height) - var(--wb-rp-bar-gap));
+    bottom: auto;
+    left: var(--wb-rp-dialog-left);
+    right: auto;
+    width: var(--wb-rp-dialog-width);
+    height: calc(var(--wb-rp-deck) + var(--wb-rp-bar-height) + var(--wb-rp-bar-gap));
+    transition:
+      top 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      height 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      opacity 180ms,
+      visibility 180ms;
+  }
+  body.wb-mobile-rp:is([data-wb-rp-pulling], [data-wb-band-drag]) .wb-rp-deck {
+    transition: none;
+  }
+  body.wb-mobile-rp[data-wb-band-lower] .wb-rp-deck {
+    translate: 0 var(--wb-rp-pull, 0px);
+  }
+  body.wb-mobile-rp .wb-rp-replies {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--wb-rp-bar-height);
+    align-items: flex-end;
+    padding: 0 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    pointer-events: auto;
+  }
+  body.wb-mobile-rp .wb-rp-replies button {
+    height: 34px;
+    min-height: 34px;
+    max-width: 70vw;
+    padding: 0 14px;
+    border-radius: 17px;
+    background: var(--wb-rp-glass);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: inset 0 0 0 1px var(--wb-rp-line);
+    font-size: 13px;
+  }
+  body.wb-mobile-rp .wb-rp-head {
+    top: calc(var(--wb-rp-bar-height) + var(--wb-rp-bar-gap) + var(--wb-rp-text-top) - 44px);
+    left: 22px;
+    right: 10px;
+    height: 34px;
+  }
+  /* The speaker: the accent stroke and the name, as on the desktop band. */
+  body.wb-mobile-rp .wb-rp-plate strong {
+    font-size: 16px;
+    letter-spacing: 0.1em;
+  }
+  /* No hover on a phone: the quick menu stays visible, in the quieter ink. */
+  body.wb-mobile-rp .wb-rp-tools {
+    opacity: 1;
+    gap: 0;
+  }
+  body.wb-mobile-rp .wb-rp-tool {
+    width: 36px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 18px;
+    color: var(--wb-rp-ink-2);
+  }
+  body.wb-mobile-rp .wb-rp-head .wb-rp-tool {
+    height: 34px;
+    min-height: 34px;
+    color: var(--wb-rp-ink-1);
+  }
+  body.wb-mobile-rp .wb-rp-tools-rule {
+    margin: 0 4px;
+  }
+  body.wb-mobile-rp .wb-rp-foot .wb-rp-tools {
+    margin-left: 0;
+  }
+  body.wb-mobile-rp .wb-rp-tool.is-labelled {
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 12px 0 8px;
+    background: var(--wb-rp-field);
+    font: 500 13px/1 var(--wb-font-ui);
+  }
+  body.wb-mobile-rp .wb-rp-tool.is-primary {
+    margin-left: 6px;
+    background: var(--wb-accent);
+    color: var(--wb-rp-on-accent);
+  }
+  body.wb-mobile-rp .wb-rp-foot {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--wb-rp-foot);
+    gap: 0;
+    padding: 0 10px max(4px, var(--wb-safe-bottom)) 10px;
+  }
+  body.wb-mobile-rp .wb-rp-dots button {
+    width: 14px;
+    height: 40px;
+    min-height: 40px;
+  }
+  body.wb-mobile-rp .wb-rp-dots button[aria-current="true"] {
+    width: 26px;
+  }
+  body.wb-mobile-rp .wb-rp-dots button[aria-current="true"]::before {
+    width: 18px;
+  }
+  body.wb-mobile-rp .wb-rp-reply {
+    flex: none;
+    margin-left: auto;
+    height: 36px;
+    min-height: 36px;
+    margin-left: auto;
+    padding: 0 14px 0 11px;
+    border-radius: 18px;
+    background: var(--wb-rp-field);
+    font-size: 13px;
+  }
+  /* Narrow phones: the quick menu closes up so it and the reply key share one line. */
+  @media (max-width: 374px) {
+    body.wb-mobile-rp .wb-rp-foot .wb-rp-tool {
+      width: 31px;
+    }
+    body.wb-mobile-rp .wb-rp-tools-rule {
+      display: none;
+    }
+    body.wb-mobile-rp .wb-rp-reply {
+      padding: 0 11px 0 9px;
+    }
+  }
+  /* The log's head rides on top of the history pane (native-bridge.css). */
+  body.wb-mobile-rp .wb-rp-log-head {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 66px);
+    left: 0;
+    right: 0;
+    z-index: 6;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 0 22px;
+    color: var(--wb-rp-ink-1);
+    font: 13px/1.4 var(--wb-font-ui);
+    transform: translateY(max(0px, var(--wb-rp-pull, 0px)));
+    animation: wb-rp-log-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  }
+  body.wb-mobile-rp .wb-rp-log-head::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 38px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--wb-rp-line);
+    transform: translateX(-50%);
+  }
+  body.wb-mobile-rp .wb-rp-log-head h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  body.wb-mobile-rp .wb-rp-log-head small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-rp-ink-3);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  body.wb-mobile-rp .wb-rp-log-head button {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 36px;
+    min-height: 36px;
+    margin-left: auto;
+    padding: 0 12px 0 8px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--wb-rp-field);
+    color: var(--wb-rp-ink-1);
+    font: inherit;
+  }
+  @keyframes wb-mobile-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* ── Drawers: the outline slides in as a sheet with a rounded edge; the scrim dims the page ── */
+  body.wb-mobile .wb-mobile-shade,
+  body.wb-mobile .wb-mobile-sheet-shade {
+    background: var(--wb-m-scrim);
+  }
+  body.wb-mobile .wb-left {
+    width: min(84vw, 330px);
+    padding-top: calc(var(--wb-safe-top) + 56px);
+    border-radius: 0 22px 22px 0;
+    background: var(--wb-m-paper);
+    box-shadow: 12px 0 40px rgb(0 0 0 / 16%);
+  }
+  body.wb-mobile .wb-right {
+    padding-top: var(--wb-safe-top);
+    background: var(--wb-m-paper);
+  }
+  body.wb-mobile .wb-right .wb-panel-content {
+    background: var(--wb-m-paper);
+    animation: wb-mobile-fade-in 180ms ease both;
+  }
+  /* Character page: one scrolling page — the card, its fields and the actions on equal footing, then
+     every character as a touch list ending in 新建. Import, groups and the library live in settings. */
+  body.wb-mobile .wb-right .wb-character-panel {
+    display: block;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: max(16px, var(--wb-safe-bottom));
+  }
+  body.wb-mobile .wb-right .wb-character-hero {
+    height: 196px;
+    margin: 4px 0 0;
+    border-radius: 18px;
+  }
+  body.wb-mobile .wb-right .wb-character-hero-tool {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+  }
+  body.wb-mobile .wb-right .wb-character-fields {
+    margin: 14px 0 0;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+  }
+  body.wb-mobile .wb-right .wb-character-fields button {
+    height: 36px;
+    min-height: 36px;
+    border-radius: 9px;
+    font-size: 14px;
+  }
+  body.wb-mobile .wb-right .wb-character-text {
+    flex: none;
+    min-height: 112px;
+    max-height: 42vh;
+    margin: 10px 0 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+  body.wb-mobile .wb-right .wb-character-world {
+    margin: 12px 0 0;
+    font-size: 13px;
+  }
+  body.wb-mobile .wb-right .wb-character-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 0;
+    border: 0;
+  }
+  body.wb-mobile .wb-right .wb-character-actions button {
+    justify-content: center;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+  body.wb-mobile .wb-right .wb-character-actions .wb-character-start.is-current {
+    display: none;
+  }
+  body.wb-mobile .wb-right .wb-character-actions .wb-character-quiet {
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+  }
+  body.wb-mobile .wb-right .wb-character-actions .wb-character-edit {
+    margin-left: 0;
+  }
+  body.wb-mobile .wb-right .wb-character-nav.is-inline {
+    width: auto;
+    height: auto;
+    max-height: none;
+    margin-top: 22px;
+    padding: 0;
+    gap: 8px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-search {
+    height: 44px;
+    border-radius: 12px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-search input {
+    font-size: 16px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-scroll {
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-open {
+    min-height: 56px;
+    gap: 12px;
+    padding: 6px 10px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-avatar {
+    width: 40px;
+    height: 40px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-name {
+    font-size: 15px;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-tool {
+    display: none;
+  }
+  body.wb-mobile .wb-right .wb-character-nav .wb-rail-new {
+    justify-content: center;
+    height: 48px;
+    min-height: 48px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+    font-size: 14px;
+  }
+  body.wb-mobile .wb-mobile-drawer-title {
+    position: fixed;
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 12px);
+    left: 22px;
+    z-index: 27;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    color: var(--wb-ink-3);
+    pointer-events: none;
+  }
+  body.wb-mobile .wb-mobile-drawer-close {
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 6px);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-mobile-drawer-close.is-left {
+    top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 12px);
+    left: calc(min(84vw, 330px) - 54px);
+  }
+  /* Current chat card: title with its tools on one line, the meta under it (board drawer). */
+  body.wb-mobile .wb-left .wb-nav-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    row-gap: 2px;
+    padding: 12px 8px 14px 14px;
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  body.wb-mobile .wb-left .wb-nav-card-head {
+    display: contents;
+  }
+  body.wb-mobile .wb-left .wb-nav-card-status {
+    display: none;
+  }
+  body.wb-mobile .wb-left .wb-nav-card-tools {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 0;
+  }
+  body.wb-mobile .wb-left .wb-nav-card-tools .wb-nav-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-left .wb-nav-card-title {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+  }
+  body.wb-mobile .wb-left .wb-nav-card-title strong {
+    font: 600 18px/1.3 var(--wb-font-reading);
+  }
+  body.wb-mobile .wb-left .wb-nav-card-title .wb-nav-icon {
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-left .wb-nav-card-meta {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-left .wb-nav-toggle {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-left :is(.wb-nav-toggle, .wb-nav-row) {
+    min-height: 44px;
+  }
+  /* Touch-height rows need the whole list; the drawer scrolls, so the desk's 170px cap is lifted. */
+  /* The drawer itself scrolls, so a section never becomes a scroll box of its own — not even while
+     its height animates open, which used to flash a scrollbar. */
+  body.wb-mobile .wb-left .wb-fold-body > div,
+  body.wb-mobile .wb-left .wb-fold-body.is-open > div {
+    max-height: none;
+    overflow: clip;
+  }
+  body.wb-mobile .wb-left .wb-nav-footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 0;
+  }
+  body.wb-mobile .wb-left .wb-nav-foot {
+    justify-content: center;
+    gap: 8px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+    font-size: 14px;
+  }
+  /* Keyboard shortcuts have no use on a touch screen. */
+  body.wb-mobile .wb-left .wb-nav-keys {
+    display: none;
+  }
+
+  /* ── Motion: drawers and sheets follow the finger and settle with one curve; the scrim fades with
+     them; presses answer at once and selections pop in. Reduced motion turns all of it off. ── */
+  body.wb-mobile :is(.wb-left, .wb-right) {
+    transition:
+      transform 300ms var(--wb-ease-emphasized),
+      visibility 300ms;
+    touch-action: pan-y;
+  }
+  body.wb-mobile .wb-left[data-wb-drag] {
+    transform: translateX(calc(var(--wb-drawer-x, 0px) - 100%));
+    transition: none;
+  }
+  body.wb-mobile .wb-right[data-wb-drag] {
+    transform: translateX(calc(100% - var(--wb-drawer-x, 0px)));
+    transition: none;
+  }
+  body.wb-mobile :is(#chat, .wb-mobile-shade) {
+    touch-action: pan-y;
+  }
+  body.wb-mobile-rp {
+    touch-action: pan-y;
+  }
+  body.wb-mobile .wb-mobile-shade {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 300ms var(--wb-ease-emphasized);
+  }
+  body.wb-mobile .wb-mobile-shade.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  body.wb-mobile .wb-mobile-shade[data-wb-drag] {
+    transition: none;
+  }
+  body.wb-mobile :is(.wb-mobile-drawer-title, .wb-mobile-drawer-close) {
+    animation: wb-mobile-fade-in 200ms ease 60ms both;
+  }
+  body.wb-mobile .wb-mobile-sheet {
+    translate: 0 var(--wb-sheet-pull, 0px);
+    transition: translate 260ms var(--wb-ease-emphasized);
+  }
+  body.wb-mobile .wb-mobile-sheet[data-wb-drag] {
+    transition: none;
+  }
+  body.wb-mobile :is(.wb-mobile-sheet-grip, .wb-mobile-sheet > header) {
+    touch-action: none;
+  }
+  body.wb-mobile
+    :is(
+      .wb-mobile-header button,
+      .wb-mobile-management,
+      .wb-mobile-plus,
+      .wb-mobile-config button,
+      .wb-mobile-focus-exit,
+      .wb-mobile-drawer-close,
+      .wb-mobile-sheet button,
+      .wb-left button,
+      .wb-right .wb-panel-tabs button
+    ) {
+    transition:
+      scale 140ms var(--wb-ease-emphasized),
+      background-color 180ms,
+      color 180ms,
+      box-shadow 180ms;
+  }
+  body.wb-mobile
+    :is(
+      .wb-mobile-header button,
+      .wb-mobile-management,
+      .wb-mobile-plus,
+      #send_but,
+      .wb-mobile-keys button,
+      .wb-mobile-focus-exit,
+      .wb-mobile-drawer-close,
+      .wb-mobile-sheet > header button,
+      .wb-mobile-mode-row button,
+      .wb-mobile-tool-grid button,
+      .wb-left .wb-nav-icon,
+      .wb-left .wb-nav-foot,
+      .wb-rp-deck button
+    ):active:not(:disabled) {
+    scale: 0.93;
+  }
+  body.wb-mobile
+    :is(.wb-mobile-sheet-list > button, .wb-left :is(.wb-nav-row, .wb-nav-toggle)):active:not(:disabled) {
+    scale: 0.98;
+    background: var(--wb-surface-2);
+  }
+  body.wb-mobile .wb-mobile-resource-popup .wb-popover {
+    animation: wb-mobile-pop-in 220ms var(--wb-ease-emphasized) both;
+  }
+  body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes.wb-mobile-actions .mes_buttons {
+    animation: wb-mobile-pop-in 180ms var(--wb-ease-emphasized) both;
+  }
+  body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .mes_block {
+    transition: outline-color 200ms;
+  }
+  @keyframes wb-mobile-pop-in {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+      scale: 0.96;
+    }
+  }
+
+  /* ── Bottom sheets: grab handle, a caption, the layout switch in a well, rows in one card ── */
+  body.wb-mobile .wb-mobile-sheet {
+    padding-top: 8px;
+    border: 0;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-m-sheet-shadow);
+  }
+  body.wb-mobile .wb-mobile-sheet-grip {
+    display: block;
+    width: 38px;
+    height: 5px;
+    margin: 2px auto 4px;
+    border-radius: 3px;
+    background: var(--wb-line-1);
+  }
+  body.wb-mobile .wb-mobile-sheet > header {
+    min-height: 40px;
+    margin: 0 -8px 4px 4px;
+  }
+  body.wb-mobile .wb-mobile-sheet > header strong {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-mobile-sheet > header button {
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--wb-ink-2);
+  }
+  /* The session menu hangs from the top of the window: it slides down over the header (or follows
+     a pull on it) and its grip, on the bottom edge, pushes it back up. It names itself by its
+     caption; the close key sits at its top right. */
+  body.wb-mobile .wb-mobile-sheet.is-management {
+    top: var(--wb-mobile-top, 0px);
+    bottom: auto;
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--wb-safe-top) + 16px) 16px 6px;
+    border-radius: 0 0 24px 24px;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 18%);
+    animation-name: wb-mobile-topsheet-in;
+  }
+  body.wb-mobile .wb-mobile-sheet.is-management[data-wb-exiting="true"] {
+    animation-name: wb-mobile-topsheet-out;
+  }
+  body.wb-mobile .wb-mobile-sheet.is-management > * {
+    flex: none;
+  }
+  body.wb-mobile .wb-mobile-sheet.is-management > header {
+    position: absolute;
+    top: calc(var(--wb-safe-top) + 4px);
+    right: 8px;
+    margin: 0;
+  }
+  body.wb-mobile .wb-mobile-sheet.is-management > header strong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  body.wb-mobile .wb-mobile-sheet.is-management .wb-mobile-sheet-grip {
+    order: 1;
+    flex: none;
+    margin: 12px auto 4px;
+  }
+  @keyframes wb-mobile-topsheet-in {
+    from {
+      transform: translateY(-100%);
+    }
+  }
+  @keyframes wb-mobile-topsheet-out {
+    to {
+      transform: translateY(-100%);
+    }
+  }
+  body.wb-mobile .wb-mobile-sheet-caption {
+    display: block;
+    margin: 0 4px 8px;
+    font-size: 12px;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-mobile-mode-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--wb-well);
+  }
+  body.wb-mobile .wb-mobile-mode-row > button {
+    gap: 6px;
+    height: 44px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--wb-ink-2);
+    font-size: 14px;
+  }
+  body.wb-mobile .wb-mobile-mode-row > button[aria-pressed="true"] {
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+    color: var(--wb-ink-1);
+    font-weight: 500;
+  }
+  body.wb-mobile .wb-mobile-sheet-list {
+    margin-top: 14px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+    overflow: hidden;
+  }
+  body.wb-mobile .wb-mobile-sheet-list > button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wb-ink-1);
+    font-size: 15px;
+    text-align: left;
+  }
+  body.wb-mobile .wb-mobile-sheet-list > button + button {
+    box-shadow: 0 -1px 0 var(--wb-line-1);
+  }
+  body.wb-mobile .wb-mobile-sheet-list > button > svg:first-child {
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-mobile-sheet-list > button > svg:last-child:not(:first-child) {
+    margin-left: auto;
+    color: var(--wb-ink-3);
+  }
+  body.wb-mobile .wb-mobile-sheet-list > button:disabled {
+    opacity: 0.45;
+  }
+  body.wb-mobile .wb-mobile-candidates {
+    padding: 8px 14px;
+    box-shadow: 0 -1px 0 var(--wb-line-1);
+  }
+  body.wb-mobile .wb-mobile-candidates > button {
+    border: 0;
+    border-radius: 12px;
+    background: var(--wb-surface-1);
+  }
+  body.wb-mobile .wb-mobile-tool-config {
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--wb-line-1);
+  }
+  body.wb-mobile .wb-mobile-tool-grid > button {
+    border-radius: 14px;
+    color: var(--wb-ink-1);
+    font-size: 12px;
+  }
+  body.wb-mobile .wb-mobile-tool-grid > button > svg {
+    color: var(--wb-ink-2);
+  }
+  body.wb-mobile .wb-mobile-tool-grid > button:disabled {
+    opacity: 0.4;
+  }
+}

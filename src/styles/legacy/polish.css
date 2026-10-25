@@ -1,0 +1,216 @@
+/* Legacy polish styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  /* Paper styling on the real desktop containers; no page scaling or ownership changes. */
+  .wb-ui {
+    --wb-hover: color-mix(in srgb, var(--wb-selected) 32%, var(--wb-surface));
+  }
+  .wb-ui svg:not(.wb-native-icon) {
+    stroke-width: 1.7;
+  }
+  body.wb-active .wb-ui .wb-designed-page-head h2 {
+    font:
+      400 22px/1.45 "Noto Serif CJK SC",
+      "Songti SC",
+      SimSun,
+      serif;
+    letter-spacing: 0.02em;
+  }
+  .wb-designed-page-head small {
+    font-size: 11px;
+    line-height: 1.65;
+    margin-top: 4px;
+  }
+  .wb-settings-header {
+    border-bottom-color: var(--wb-line);
+  }
+  .wb-settings-subnav {
+    gap: 18px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .wb-settings-subnav > button {
+    padding-left: 0;
+    padding-right: 0;
+    font-size: 12px;
+  }
+  .wb-settings-nav > button {
+    font-size: 12px;
+  }
+  .wb-settings-nav > button[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--wb-accent) 20%, var(--wb-line));
+  }
+  .wb-settings-footer {
+    font-size: 10px;
+  }
+  /* One quiet list surface, with complete names available on hover. */
+  .wb-resource-rail {
+    background: var(--wb-paper);
+  }
+  .wb-resource-menu.is-rail {
+    background: transparent;
+  }
+  .wb-resource-menu.is-rail .wb-rail-heading {
+    margin-bottom: 9px;
+  }
+  .wb-resource-menu.is-rail .wb-resource-choice {
+    border-radius: 7px;
+    margin-bottom: 3px;
+    padding: 7px 5px;
+  }
+  .wb-resource-menu.is-rail .wb-picker-copy {
+    min-width: 0;
+    gap: 3px;
+  }
+  .wb-resource-menu.is-rail .wb-picker-copy strong {
+    width: 100%;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    line-height: 1.6;
+  }
+  .wb-resource-menu.is-rail .wb-picker-copy small {
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wb-resource-menu.is-rail .wb-search {
+    background: var(--wb-surface);
+  }
+  .wb-right .wb-resource-heading {
+    gap: 10px;
+  }
+  .wb-right .wb-resource-title {
+    font-size: 16px;
+  }
+  .wb-right .wb-prompt-row {
+    border-radius: 8px;
+  }
+  .wb-right :is(.wb-prompt-row) .wb-icon:focus-visible {
+    background: transparent;
+    outline-offset: -2px;
+  }
+  body.wb-active .wb-ui input[type="range"] {
+    height: 22px !important;
+    margin: 0 !important;
+    filter: none !important;
+  }
+  body.wb-active .wb-ui input[type="range"]:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--wb-accent) 45%, transparent);
+    outline-offset: 2px;
+    border-radius: 5px;
+  }
+  body.wb-active .wb-ui input[type="range"]:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  body.wb-active .wb-ui input[type="range"]::-moz-range-track {
+    background: var(--wb-line);
+    height: 3px;
+  }
+  body.wb-active .wb-ui input[type="range"]::-moz-range-thumb {
+    background: var(--wb-accent);
+    border: 2px solid var(--wb-surface);
+  }
+  /* Compact page chrome; the native resource heading keeps its own local actions. */
+  .wb-settings-header {
+    height: 58px;
+    padding: 8px 24px;
+  }
+  .wb-settings-header > strong {
+    font-size: 16px;
+  }
+  .wb-settings-subnav {
+    height: 40px;
+    min-height: 40px;
+  }
+  .wb-settings-subnav > button {
+    height: 40px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .wb-component-settings {
+    padding-top: 12px;
+  }
+  .wb-settings-body .wb-designed-page-head {
+    margin-bottom: 10px;
+  }
+  .wb-settings-body .wb-designed-page-head > div {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  body.wb-active .wb-settings-body .wb-designed-page-head h2 {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+  .wb-settings-body .wb-designed-page-head small {
+    margin-top: 0;
+  }
+  /* One clay boundary per selected surface, without changing its dimensions. */
+  .wb-ui {
+    --wb-selection-line: color-mix(in srgb, var(--wb-accent) 65%, var(--wb-line));
+  }
+  .wb-ui :is(.wb-selector.is-active, .wb-settings-nav > button[aria-pressed="true"]) {
+    border-color: var(--wb-selection-line);
+  }
+  .wb-ui .wb-option-state,
+  .wb-ui .wb-choice-state {
+    transition:
+      background-color 180ms,
+      border-color 180ms;
+  }
+  /* Clicked editors stay mounted so both opening and closing can interpolate. */
+  .wb-prompt-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      grid-template-rows 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      opacity 180ms,
+      visibility 260ms;
+  }
+  .wb-prompt-collapse.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+  }
+  .wb-prompt-collapse-body {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .wb-right .wb-resource-v3 .wb-preset-scroll {
+    transition:
+      max-height 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+      padding-top 260ms;
+  }
+  /* The same paper transition in both directions, including portal menus. */
+  @keyframes wb-paper-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+  }
+  body.wb-active
+    :is(.wb-popover, .wb-select-menu, .wb-resource-menu, .wb-settings-workspace)[data-wb-exiting="true"] {
+    animation: wb-paper-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+    pointer-events: none;
+  }
+  .wb-settings-workspace[data-wb-exiting="true"]::backdrop {
+    background: transparent;
+  }
+  .wb-resource-menu.is-rail .wb-picker-list {
+    animation: wb-value-in 220ms ease;
+  }
+  .wb-prompt-editor .wb-editor-heading {
+    transition: color 180ms;
+  }
+}

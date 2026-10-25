@@ -1,0 +1,172 @@
+/* 用户设置 › 外观与阅读 (board "Settings"): label/control rows in soft cards beside a live page. */
+@layer wb.components {
+  .wb-reading-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr);
+    align-items: start;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+  .wb-reading-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .wb-reading-card {
+    padding: 2px 16px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-reading-row {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    min-height: 52px;
+    padding: 6px 0;
+  }
+  .wb-reading-row + .wb-reading-row {
+    border-top: 1px solid var(--wb-line-1);
+  }
+  .wb-reading-row > span {
+    color: var(--wb-ink-1);
+    font-size: var(--wb-text-sm);
+  }
+  .wb-reading-row > span small {
+    display: block;
+    margin-top: 1px;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+  }
+  .wb-reading-row:has(> .wb-switch) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .wb-reading-row > .wb-select {
+    width: min(240px, 100%);
+  }
+  .wb-reading-segment {
+    justify-self: start;
+    grid-template-columns: repeat(3, auto);
+    padding: 3px;
+    border-radius: 10px;
+  }
+  .wb-reading-segment button {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 14px;
+    font-size: var(--wb-text-sm);
+  }
+  .wb-reading-range {
+    display: grid;
+    grid-template-columns: minmax(0, 320px) 64px;
+    align-items: center;
+    gap: 16px;
+  }
+  .wb-reading-range input {
+    width: 100%;
+  }
+  .wb-reading-range output {
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* The live page: a paper sheet that follows every change. */
+  .wb-reading-preview {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+  }
+  .wb-reading-preview > header {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 2px 8px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-reading-settings .wb-reading-sample {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-reading-page {
+    min-height: 320px;
+    padding-block: 26px 28px;
+    color: var(--wb-ink-1);
+    transition:
+      font-size var(--wb-duration-fast),
+      line-height var(--wb-duration-fast),
+      padding var(--wb-duration-fast);
+  }
+  .wb-reading-settings .wb-reading-page small {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--wb-ink-3);
+    font: 12px var(--wb-font-ui);
+  }
+  .wb-reading-settings .wb-reading-page p {
+    margin: 0 0 0.7em;
+  }
+  .wb-reading-settings .wb-reading-page p span {
+    color: var(--wb-accent-text);
+  }
+  .wb-reading-user {
+    margin-top: 14px;
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font: 13px/1.7 var(--wb-font-ui);
+  }
+  .wb-reading-user-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .wb-reading-user-head svg {
+    flex: none;
+    color: var(--wb-ink-3);
+  }
+  .wb-reading-user-head svg.is-open {
+    transform: rotate(90deg);
+  }
+  .wb-reading-user-head small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-reading-settings .wb-reading-user p {
+    margin: 4px 0 0 22px;
+  }
+
+  .wb-reading-native .wb-native-settings-slot {
+    max-width: none;
+    padding: 0;
+  }
+  .wb-reading-native > h3 {
+    margin: 4px 0 10px;
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+    font-weight: 600;
+  }
+
+  @media (max-width: 1180px) {
+    .wb-reading-settings {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wb-reading-preview {
+      position: static;
+    }
+  }
+}

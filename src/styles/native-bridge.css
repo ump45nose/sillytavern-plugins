@@ -1,0 +1,4661 @@
+/*
+ * Native bridge: the only unlayered workbench stylesheet.
+ * Restyles SillyTavern's own DOM (#sheld, #chat, #send_form, leased settings) in place, so it must
+ * compete with native unlayered rules; this is the only place where !important is allowed.
+ * Everything inside workbench UI lives in @layer and is shielded by the isolation rule at the end.
+ */
+
+/* ── from style.css ── */
+/* Tokens live in tokens.css; this rule only carries open/closed geometry and native theme overrides. */
+body.wb-active {
+  --wb-left: 0px;
+  --wb-right: 0px;
+  --wb-lane-left: 0px;
+  --wb-lane-right: 0px;
+  background: var(--wb-paper) !important;
+  color: var(--wb-ink);
+  --SmartThemeBodyColor: var(--wb-ink);
+  --SmartThemeEmColor: var(--wb-muted);
+  --SmartThemeQuoteColor: var(--wb-accent);
+  --SmartThemeBlurTintColor: var(--wb-surface);
+  --SmartThemeBorderColor: var(--wb-line);
+  --SmartThemeShadowColor: transparent;
+}
+/* Edge reveal on: on each side whose sidebar is closed, a lane for the hover trigger and edge
+   arrow separates #chat (and its scrollbar) from the window edge. A pinned sidebar needs no
+   reveal, so it keeps the full reading width. */
+body.wb-active.wb-edge-hover:not(.wb-mobile) {
+  --wb-lane-left: var(--wb-edge-lane);
+  --wb-lane-right: var(--wb-edge-lane);
+}
+body.wb-active.wb-edge-hover.wb-left-open {
+  --wb-lane-left: 0px;
+}
+body.wb-active.wb-edge-hover.wb-right-open {
+  --wb-lane-right: 0px;
+}
+body.wb-left-open {
+  --wb-left: 220px;
+}
+body.wb-right-open {
+  --wb-right: 450px;
+}
+body.wb-active #bg1,
+body.wb-active #bg_custom {
+  opacity: 0 !important;
+}
+body.wb-active #sheld {
+  position: fixed !important;
+  inset: 70px calc(var(--wb-right) + var(--wb-lane-right)) 0 calc(var(--wb-left) + var(--wb-lane-left)) !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  background: var(--wb-paper) !important;
+  display: flex !important;
+  flex-direction: column;
+  z-index: 2;
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+}
+body.wb-active #sheldheader {
+  display: none !important;
+}
+body.wb-active #chat {
+  flex: 1;
+  min-height: 0;
+  width: 100% !important;
+  max-height: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 28px max(24px, calc((100% - 820px) / 2)) 24px !important;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wb-line) transparent;
+}
+body.wb-active #chat .mes {
+  max-width: 820px;
+  margin: 0 auto 18px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wb-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 12px 0 24px !important;
+}
+body.wb-active #chat .mes_text {
+  font-family: var(--wb-theme-reading-font, "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif);
+  font-size: 17px !important;
+  line-height: 2 !important;
+  color: var(--wb-ink);
+  text-shadow: none;
+  overflow-wrap: anywhere;
+}
+body.wb-active #chat .mes_text p {
+  margin: 0 0 1em;
+}
+body.wb-active #chat .mes .avatar {
+  width: 28px !important;
+  height: 28px !important;
+  margin-top: 5px;
+}
+body.wb-active #chat .mes .avatar img {
+  border-radius: 50%;
+  max-width: 28px !important;
+  max-height: 28px !important;
+}
+body.wb-active #chat .mes .ch_name {
+  color: var(--wb-muted);
+  font: 500 12px/1.5 system-ui;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+body.wb-active #chat .mes_block {
+  padding-left: 16px !important;
+  min-width: 0;
+}
+body.wb-active #chat .mes_buttons {
+  font-size: 13px;
+  opacity: 0.6;
+}
+body.wb-active #chat .mes[is_user="true"] {
+  background: color-mix(in srgb, var(--wb-selected) 35%, transparent) !important;
+  padding: 16px !important;
+  border-radius: 8px !important;
+}
+body.wb-active #chat .mes_text pre {
+  white-space: pre-wrap;
+  background: var(--wb-soft);
+  color: var(--wb-ink);
+  text-shadow: none;
+}
+body.wb-active #form_sheld {
+  flex: none;
+  padding: 0 24px 20px !important;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 900px;
+  z-index: 3;
+}
+body.wb-active #send_form {
+  display: flex !important;
+  flex-direction: column;
+  border: 1px solid var(--wb-line) !important;
+  border-radius: 16px !important;
+  background: var(--wb-surface) !important;
+  box-shadow: 0 6px 28px #34291e05 !important;
+  padding: 12px 16px 8px !important;
+  margin: 0 !important;
+  min-height: 150px;
+  backdrop-filter: none !important;
+}
+body.wb-active #nonQRFormItems {
+  display: grid !important;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-rows: minmax(66px, auto) 40px;
+  gap: 4px;
+  align-items: end;
+}
+body.wb-active #send_textarea {
+  grid-column: 1/-1;
+  grid-row: 1;
+  width: 100% !important;
+  min-height: 66px;
+  max-height: 35vh !important;
+  padding: 6px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--wb-ink) !important;
+  font: 16px/1.8 system-ui !important;
+  resize: vertical;
+  text-shadow: none !important;
+  outline: none !important;
+}
+body.wb-active #leftSendForm {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  width: auto !important;
+  height: 40px;
+}
+body.wb-active #rightSendForm {
+  grid-column: 3;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  margin: 0;
+}
+body.wb-active #options_button,
+body.wb-active #extensionsMenuButton {
+  font-size: 17px !important;
+  color: var(--wb-muted);
+  width: 32px;
+  height: 36px;
+  margin: 0;
+  align-items: center;
+  justify-content: center;
+}
+body.wb-active #send_but {
+  font-size: 18px;
+  width: 40px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  border-radius: 10px;
+  background: var(--wb-accent);
+  color: #fff;
+  margin: 0 !important;
+  text-align: center;
+}
+body.wb-active #mes_stop {
+  color: var(--wb-accent);
+}
+body.wb-active #top-settings-holder {
+  visibility: hidden;
+  z-index: 10010 !important;
+}
+body.wb-active #options,
+body.wb-active #extensionsMenu {
+  background: var(--wb-surface);
+  color: var(--wb-ink);
+  text-shadow: none;
+  z-index: 10015 !important;
+}
+.wb-ui * {
+  box-sizing: border-box;
+}
+.wb-ui button,
+.wb-ui input,
+.wb-ui select,
+.wb-ui textarea {
+  font: inherit;
+  color: inherit;
+  box-shadow: none;
+  text-shadow: none;
+  letter-spacing: inherit;
+}
+.wb-ui button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--wb-line);
+  background: var(--wb-surface);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  line-height: 1.4;
+  min-height: 34px;
+}
+.wb-ui button:hover {
+  background: var(--wb-soft);
+}
+.wb-ui button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.wb-ui button:focus-visible,
+.wb-ui select:focus-visible,
+.wb-ui input:focus-visible,
+.wb-ui textarea:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: 2px;
+}
+.wb-ui input:not([type="checkbox"]),
+.wb-ui select,
+.wb-ui textarea {
+  min-width: 0;
+  border: 1px solid var(--wb-line);
+  background: var(--wb-surface);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin: 0;
+  outline-offset: 2px;
+}
+.wb-ui input[type="checkbox"] {
+  accent-color: var(--wb-accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.wb-ui textarea {
+  resize: vertical;
+  line-height: 1.8;
+  min-height: 90px;
+  width: 100%;
+}
+.wb-ui h3 {
+  margin: 0;
+}
+.wb-ui h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.wb-ui small {
+  font-size: 12px;
+  color: var(--wb-muted);
+}
+.wb-ui svg {
+  flex-shrink: 0;
+}
+#wb-launcher {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 9999;
+  border: 1px solid #d7cfc1;
+  border-radius: 12px;
+  padding: 10px 18px;
+  background: #fffefa;
+  color: #704733;
+  font: 14px system-ui;
+  cursor: pointer;
+}
+#wb-launcher[hidden] {
+  display: none;
+}
+@media (max-width: 1280px) {
+  body.wb-left-open {
+    --wb-left: 180px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-ui * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Native composer children have ordering and wrapping rules of their own. */
+body.wb-active #send_form {
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+}
+body.wb-active #nonQRFormItems {
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+}
+body.wb-active #leftSendForm {
+  flex-wrap: nowrap !important;
+  width: 76px !important;
+}
+body.wb-active #send_textarea {
+  text-align: left !important;
+}
+body.wb-active:not(.wb-native-panel) #top-settings-holder .drawer-content {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+body.wb-active #top-bar {
+  display: none !important;
+}
+body.wb-active #send_textarea::placeholder {
+  text-align: left;
+  color: var(--wb-muted);
+}
+body.wb-active #chat .mes_text blockquote {
+  background: var(--wb-soft);
+  border-left: 3px solid var(--wb-accent);
+  padding: 10px 16px;
+  margin: 18px 0;
+  color: var(--wb-muted);
+  border-radius: 0 6px 6px 0;
+}
+body.wb-active #options_button:has(.wb-native-icon)::before,
+body.wb-active #extensionsMenuButton:has(.wb-native-icon)::before {
+  display: none;
+}
+body.wb-active .wb-native-icon {
+  pointer-events: none;
+  stroke-width: 1.6;
+}
+
+/* ── from home.css ── */
+/* Approved horizontal Noval scene. Resource editors share the base primitives. */
+body.wb-active.wb-left-open {
+  --wb-left: var(--wb-left-size);
+}
+body.wb-active.wb-right-open {
+  --wb-right: var(--wb-right-size);
+}
+body.wb-active #sheld {
+  inset: calc(var(--wb-header) + 52px) calc(var(--wb-right) + var(--wb-lane-right)) 0
+    calc(var(--wb-left) + var(--wb-lane-left)) !important;
+  transition: inset var(--wb-motion) ease;
+}
+body.wb-active #chat {
+  padding: 12px 32px 24px !important;
+}
+body.wb-active #chat .mes {
+  max-width: none;
+  padding: 10px 0 24px !important;
+}
+body.wb-active #chat .mes_block {
+  padding-left: 12px !important;
+}
+body.wb-active #chat .mes_buttons {
+  transition: opacity 120ms ease;
+}
+body.wb-active #chat .mes:hover .mes_buttons {
+  opacity: 1;
+}
+body.wb-active #form_sheld {
+  max-width: none;
+  padding: 0 32px 22px !important;
+  container-type: inline-size;
+  container-name: composer;
+}
+body.wb-active #send_form {
+  position: relative;
+  height: var(--wb-composer-height, 164px);
+  min-height: 152px;
+  padding: 22px 14px 10px !important;
+  border-radius: 13px !important;
+  transition:
+    border-color 160ms,
+    box-shadow 160ms;
+}
+body.wb-active #send_form:focus-within {
+  border-color: color-mix(in srgb, var(--wb-accent) 42%, var(--wb-line)) !important;
+  box-shadow: 0 4px 18px #34291e08 !important;
+}
+body.wb-active #nonQRFormItems {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) 40px;
+  column-gap: 8px;
+  row-gap: 8px;
+  align-items: center;
+}
+body.wb-active #send_textarea {
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  resize: none !important;
+  padding: 2px 8px !important;
+  font-size: 16px !important;
+  field-sizing: fixed;
+}
+body.wb-active #send_textarea::placeholder {
+  color: #a49a8a;
+}
+body.wb-active #leftSendForm {
+  width: 72px !important;
+  height: 40px;
+  gap: 2px;
+}
+body.wb-active #rightSendForm {
+  grid-row: 2;
+  grid-column: 3;
+  height: 40px;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+body.wb-active #options_button,
+body.wb-active #extensionsMenuButton {
+  display: flex;
+  color: var(--wb-control-ink) !important;
+  width: 34px;
+  height: 36px;
+  border-radius: 7px;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+body.wb-active #options_button:hover,
+body.wb-active #extensionsMenuButton:hover {
+  background: var(--wb-soft);
+}
+body.wb-active #send_but {
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  border-radius: 50%;
+  color: white !important;
+  background: var(--wb-accent);
+  transition:
+    background 120ms,
+    box-shadow 160ms;
+  padding: 0 !important;
+}
+body.wb-active #send_but:hover {
+  background: color-mix(in srgb, var(--wb-accent) 90%, #52382d);
+  box-shadow: 0 3px 10px #b7644925;
+}
+body.wb-active #send_but::before {
+  display: none;
+}
+body.wb-active #send_but .wb-send-icon {
+  vertical-align: middle;
+}
+body.wb-active #mes_stop {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+  font-size: 26px;
+}
+/* Board "Main": stop is a round ink key holding a small rounded square. */
+body.wb-active:not(.wb-mobile) #mes_stop {
+  position: relative;
+  border-radius: 50%;
+  background: var(--wb-ink-1);
+  color: var(--wb-surface-1) !important;
+  font-size: 0;
+  box-shadow: 0 1px 2px rgb(52 41 30 / 8%);
+}
+body.wb-active:not(.wb-mobile) #mes_stop > * {
+  display: none !important;
+}
+body.wb-active:not(.wb-mobile) #mes_stop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 12px;
+  height: 12px;
+  margin: auto;
+  border-radius: 2.5px;
+  background: currentColor;
+}
+body.wb-active #qr--bar {
+  display: none !important;
+}
+body.wb-resizing,
+body.wb-resizing * {
+  cursor: ns-resize !important;
+  user-select: none !important;
+}
+body.wb-resizing #sheld {
+  transition: none;
+}
+body.wb-active .wb-ui svg,
+body.wb-active .wb-ui svg *,
+body.wb-active .wb-native-icon,
+body.wb-active .wb-native-icon * {
+  stroke: currentColor !important;
+  fill: none !important;
+}
+/* Redesigned components (phase E) colour icons through their own text colour. */
+body.wb-active
+  .wb-ui
+  svg:not(
+    :where(
+        .wb-top,
+        .wb-nav,
+        .wb-layout-switcher,
+        .wb-reading-bar,
+        .wb-panel-head,
+        .wb-character-hero,
+        .wb-rail-row,
+        .wb-edge-nav,
+        .wb-rp-corner,
+        .wb-rp-visibility,
+        .wb-rp-scene
+      )
+      *
+  ),
+body.wb-active
+  .wb-ui
+  svg
+  *:not(
+    :where(
+        .wb-top,
+        .wb-nav,
+        .wb-layout-switcher,
+        .wb-reading-bar,
+        .wb-panel-head,
+        .wb-character-hero,
+        .wb-rail-row,
+        .wb-edge-nav,
+        .wb-rp-corner,
+        .wb-rp-visibility,
+        .wb-rp-scene
+      )
+      *
+  ),
+body.wb-active .wb-native-icon,
+body.wb-active .wb-native-icon * {
+  color: var(--wb-control-ink) !important;
+}
+body.wb-active #send_but .wb-native-icon,
+body.wb-active #send_but .wb-native-icon * {
+  color: white !important;
+}
+.wb-ui button {
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 160ms,
+    box-shadow 160ms;
+}
+.wb-ui button:hover {
+  background: color-mix(in srgb, var(--wb-soft) 65%, transparent);
+}
+.wb-ui button:active {
+  background: var(--wb-selected);
+}
+.wb-ui input[type="checkbox"] {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid #b9b0a0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    background-color 160ms,
+    border-color 160ms,
+    box-shadow 160ms;
+}
+.wb-ui input[type="checkbox"]:checked {
+  background: var(--wb-entry-tone, var(--wb-accent));
+  border-color: var(--wb-entry-tone, var(--wb-accent));
+}
+.wb-ui input[type="checkbox"]:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-entry-tone, var(--wb-accent)) 12%, transparent);
+}
+.wb-ui input[type="checkbox"]::before,
+.wb-ui input[type="checkbox"]::after {
+  display: none !important;
+}
+.wb-ui input[type="checkbox"]:disabled {
+  opacity: 0.5;
+}
+.wb-ui input,
+.wb-ui select,
+.wb-ui textarea {
+  transition:
+    border-color 160ms,
+    background-color 160ms;
+}
+body.wb-focus {
+  --wb-header: 0px;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.wb-active *,
+  body.wb-active *::before,
+  body.wb-active *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+body.wb-active #nonQRFormItems {
+  position: static;
+}
+body.wb-active #send_but,
+body.wb-active #options_button,
+body.wb-active #extensionsMenuButton {
+  opacity: 1;
+}
+body.wb-active #chat .mes_buttons,
+body.wb-active #chat .extraMesButtons {
+  color: var(--wb-control-ink) !important;
+  opacity: 0.7;
+}
+body.wb-active #chat .mes_buttons > *,
+body.wb-active #chat .extraMesButtons > * {
+  color: var(--wb-control-ink) !important;
+  text-shadow: none;
+}
+body.wb-active #chat .mes_button,
+body.wb-active #chat .extraMesButtons > div {
+  opacity: 0.8;
+  filter: none;
+  border-radius: 4px;
+  transition:
+    opacity 120ms,
+    background-color 120ms;
+}
+body.wb-active #chat .mes_button:hover,
+body.wb-active #chat .extraMesButtons > div:hover {
+  opacity: 1;
+  background: var(--wb-soft);
+}
+body.wb-active #chat .mes .avatar,
+body.wb-active #chat .mes .avatar img {
+  filter: none !important;
+  box-shadow: none !important;
+}
+body.wb-active #rm_api_block.wb-native-embedded {
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  transform: none !important;
+  margin: 0 !important;
+  padding: 0 0 24px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  backdrop-filter: none !important;
+  color: var(--wb-ink) !important;
+}
+
+/* ── from controls.css ── */
+.wb-ui button:hover {
+  background: color-mix(in srgb, var(--wb-selected) 24%, var(--wb-surface));
+}
+.wb-ui button:active {
+  background: color-mix(in srgb, var(--wb-selected) 65%, var(--wb-surface));
+}
+.wb-ui button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--wb-accent) 55%, var(--wb-line));
+  outline-offset: 2px;
+}
+.wb-ui input:not([type="checkbox"]):focus-visible,
+.wb-ui textarea:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb-accent) 9%, transparent);
+}
+body.wb-active #send_form:focus-within {
+  border-color: color-mix(in srgb, var(--wb-accent) 35%, var(--wb-line)) !important;
+  box-shadow: 0 4px 18px #34291e08 !important;
+}
+.wb-select {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  position: relative;
+  vertical-align: middle;
+}
+.wb-ui select.wb-select-native {
+  display: none;
+}
+.wb-ui .wb-select-trigger {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+}
+.wb-select-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-select-trigger > svg {
+  flex: none;
+  transition: transform 160ms;
+}
+.wb-select-trigger[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.wb-ui .wb-select-trigger:hover {
+  background: var(--wb-paper);
+  border-color: color-mix(in srgb, var(--wb-muted) 25%, var(--wb-line));
+}
+.wb-ui .wb-select-trigger:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb-accent) 9%, transparent);
+}
+/* Scrollbars stay out of sight until something scrolls; useScrollbars marks the scrolling element
+   with .wb-scrolling for a moment after each scroll. */
+body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea) {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea).wb-scrolling {
+  scrollbar-color: color-mix(in srgb, var(--wb-muted) 36%, var(--wb-line)) transparent;
+}
+@supports selector(::-webkit-scrollbar) {
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea)::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+  }
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea)::-webkit-scrollbar-thumb {
+    border-radius: 6px;
+    background: transparent;
+  }
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea).wb-scrolling::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--wb-muted) 32%, var(--wb-line));
+  }
+  body.wb-active :is(.wb-ui, .wb-ui *, #chat, #send_textarea).wb-scrolling::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--wb-muted) 62%, var(--wb-line));
+  }
+}
+
+/* ── from resources.css ── */
+.wb-resource-v3 h4 {
+  margin: 18px 0 12px;
+  font-size: 12px;
+  color: var(--wb-muted);
+  font-weight: 500;
+}
+body.wb-active .wb-connection-detail #title_api {
+  display: none;
+}
+body.wb-active .wb-native-slot .wb-connection-bridged,
+body.wb-active .wb-native-slot .wb-connection-bridged + .select2-container {
+  display: none !important;
+}
+body.wb-active .wb-native-slot .wb-connection-profile-original {
+  display: none !important;
+}
+body.wb-active
+  .wb-native-slot
+  .wb-connection-actions-original
+  > :is(#api_button_openai, #test_api_button, #api_button_textgenerationwebui) {
+  display: none !important;
+}
+body.wb-active .select2-dropdown {
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  color: var(--wb-ink);
+  box-shadow: 0 8px 26px #44392c1b;
+  font-size: 12px;
+}
+body.wb-active .select2-results__option--highlighted[aria-selected] {
+  background: var(--wb-selected);
+  color: var(--wb-ink);
+}
+
+/* ── from workspace.css ── */
+.wb-ui button {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.wb-ui input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: 15px !important;
+  height: 15px !important;
+  min-height: 15px !important;
+  padding: 0 !important;
+  border: 1.5px solid #b9b0a0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    background-color 180ms,
+    border-color 180ms,
+    box-shadow 180ms;
+  vertical-align: middle;
+}
+.wb-ui input:is([type="checkbox"], [type="radio"]):indeterminate {
+  background: linear-gradient(var(--wb-accent), var(--wb-accent)) center/7px 2px no-repeat;
+}
+.wb-ui input:is([type="checkbox"], [type="radio"]):focus-visible {
+  outline: 2px solid var(--wb-line);
+  outline-offset: 3px;
+}
+.wb-ui input:is([type="checkbox"], [type="radio"])::before,
+.wb-ui input:is([type="checkbox"], [type="radio"])::after {
+  display: none !important;
+}
+.wb-ui input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  cursor: pointer;
+  accent-color: var(--wb-accent);
+  box-shadow: none !important;
+}
+.wb-ui input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 4px;
+  background: var(--wb-line);
+}
+.wb-ui input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -5px;
+  border: 2px solid var(--wb-surface);
+  border-radius: 50%;
+  background: var(--wb-accent);
+  box-shadow: 0 0 0 1px var(--wb-accent);
+  transition: box-shadow 180ms;
+}
+.wb-ui input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-accent) 15%, transparent);
+}
+.wb-ui .wb-select-trigger > span {
+  animation: wb-value-in 180ms ease;
+}
+body.wb-active #options_button[aria-expanded="true"],
+body.wb-active #extensionsMenuButton[aria-expanded="true"] {
+  color: var(--wb-accent) !important;
+  background: var(--wb-selected);
+}
+body.wb-active #options_button[aria-expanded="true"] svg,
+body.wb-active #extensionsMenuButton[aria-expanded="true"] svg {
+  color: var(--wb-accent) !important;
+}
+/* Novel reading changes presentation only. Native messages and embeds are retained. */
+body.wb-active #chat .mes {
+  padding: 6px 0 25px !important;
+  margin-bottom: 14px;
+  transition: background-color 180ms;
+}
+body.wb-active #chat .mesAvatarWrapper,
+body.wb-active #chat .name_text,
+body.wb-active #chat .timestamp {
+  display: none !important;
+}
+body.wb-active #chat .mes_block {
+  padding: 0 !important;
+  min-width: 0;
+  width: 100%;
+}
+body.wb-active #chat .ch_name {
+  height: 28px;
+  min-height: 28px;
+  align-items: center;
+  padding: 0;
+}
+body.wb-active #chat .ch_name > .flex1 {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+body.wb-active #chat .wb-reading-meta {
+  opacity: 0;
+  font: 10px/1.5 system-ui;
+  color: var(--wb-muted);
+  transition: opacity 180ms;
+}
+body.wb-active[data-wb-meta="hover"] #chat .mes:hover .wb-reading-meta,
+body.wb-active[data-wb-meta="hover"] #chat .mes:focus-within .wb-reading-meta,
+body.wb-active[data-wb-meta="always"] #chat .wb-reading-meta {
+  opacity: 1;
+}
+body.wb-active[data-wb-meta="never"] #chat .wb-reading-meta {
+  display: none;
+}
+body.wb-active #chat .ch_name .icon-svg {
+  opacity: 0;
+  transition: opacity 180ms;
+}
+body.wb-active[data-wb-meta="hover"] #chat .mes:hover .ch_name .icon-svg,
+body.wb-active[data-wb-meta="hover"] #chat .mes:focus-within .ch_name .icon-svg,
+body.wb-active[data-wb-meta="always"] #chat .ch_name .icon-svg {
+  opacity: 1;
+}
+body.wb-active[data-wb-meta="never"] #chat .ch_name .icon-svg {
+  display: none;
+}
+body.wb-active #chat .mes_text {
+  font-family: var(--wb-reading-font) !important;
+  font-size: var(--wb-reading-size, 17px) !important;
+  line-height: var(--wb-reading-leading, 2) !important;
+  padding: 0 !important;
+}
+body.wb-active #chat .mes_text p {
+  margin: 0 0 1em;
+}
+body.wb-active #chat .mes_text p:last-child {
+  margin-bottom: 0;
+}
+body.wb-active #chat .mes_text em {
+  color: var(--wb-muted);
+}
+body.wb-active #chat .mes[is_user="true"] {
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--wb-soft) 42%, var(--wb-paper)) !important;
+  padding: 10px 14px 15px !important;
+}
+body.wb-active #chat .mes[is_user="true"].wb-user-collapsed {
+  padding: 7px 12px !important;
+  border-bottom: 0 !important;
+}
+body.wb-active #chat .wb-user-heading {
+  margin: 0 0 5px;
+}
+body.wb-active #chat .wb-user-heading button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  color: var(--wb-muted);
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  font: 11px/1.7 system-ui;
+  text-align: left;
+  padding: 3px 0;
+  cursor: pointer;
+  transition: color 180ms;
+}
+body.wb-active #chat .wb-user-heading button:hover {
+  color: var(--wb-accent);
+}
+body.wb-active #chat .wb-user-heading small {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--wb-muted);
+  opacity: 0.8;
+}
+body.wb-active #chat .wb-user-heading span {
+  flex: none;
+}
+body.wb-active #chat .wb-user-collapsed .ch_name {
+  height: 22px;
+  min-height: 22px;
+}
+body.wb-active #chat .wb-user-collapsed .wb-user-heading {
+  margin-bottom: 0;
+}
+body.wb-active #chat .mes_buttons {
+  opacity: 0;
+  gap: 7px;
+}
+body.wb-active #chat .mes:hover .mes_buttons,
+body.wb-active #chat .mes:focus-within .mes_buttons {
+  opacity: 1;
+}
+body.wb-active #chat .wb-reading-icon {
+  font-size: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  padding: 6px !important;
+  min-width: 29px;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+  color: var(--wb-control-ink) !important;
+  cursor: pointer;
+  transition:
+    background-color 180ms,
+    color 180ms;
+}
+/* Message actions: native glyph buttons, icon buttons and add-on slots share one 30px square. */
+body.wb-active:not(.wb-mobile) #chat :is(.mes_buttons, .mes_buttons .extraMesButtons) {
+  align-items: center;
+  gap: 4px;
+}
+body.wb-active:not(.wb-mobile) #chat .mes_buttons .extraMesButtons {
+  padding: 0;
+}
+body.wb-active:not(.wb-mobile) #chat .mes_buttons :is(.mes_button, .wb-image-slot),
+body.wb-active:not(.wb-mobile) #chat .mes_buttons .wb-image-message-button {
+  box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  margin: 0;
+  line-height: 30px;
+  text-align: center;
+}
+body.wb-active:not(.wb-mobile) #chat .mes_buttons .wb-image-message-button {
+  display: grid;
+  place-items: center;
+}
+body.wb-active:not(.wb-mobile) #chat .mes_buttons :is(.extraMesButtonsHint, .wb-image-message-button) {
+  padding: 0;
+}
+body.wb-active:not(.wb-mobile) #chat .mes_buttons .wb-image-message-button svg {
+  width: 17px;
+  height: 17px;
+}
+/* Actions without a workbench icon (other extensions) keep their glyph, centred in the same square. */
+body.wb-active:not(.wb-mobile) #chat .mes_buttons .mes_button:not(.wb-reading-icon) {
+  padding: 0 !important;
+  border-radius: 6px;
+  color: var(--wb-control-ink);
+  font-size: 15px;
+  transition:
+    background-color 180ms,
+    color 180ms;
+}
+/* One hover for every action in the row. */
+body.wb-active:not(.wb-mobile)
+  #chat
+  .mes_buttons
+  :is(.mes_button, .wb-image-message-button):is(:hover, :focus-visible) {
+  background: var(--wb-selected) !important;
+  color: var(--wb-accent) !important;
+  opacity: 1;
+  transform: none;
+}
+body.wb-active #chat .wb-reading-icon::before {
+  display: none !important;
+}
+body.wb-active #chat .wb-reading-icon:hover {
+  background: var(--wb-selected) !important;
+  color: var(--wb-accent) !important;
+}
+body.wb-active #chat .wb-reading-icon svg {
+  stroke: currentColor;
+  width: 17px;
+  height: 17px;
+}
+body.wb-active #chat .mes_edit_buttons {
+  display: none;
+  gap: 4px;
+  align-items: center;
+}
+body.wb-active #chat .mes_edit_buttons .mes_edit_done {
+  color: #628671 !important;
+}
+body.wb-active #chat .mes_edit_buttons .mes_edit_delete,
+body.wb-active #chat .mes_edit_buttons .mes_edit_cancel {
+  color: var(--wb-accent) !important;
+}
+body.wb-active #chat .edit_textarea {
+  color: var(--wb-ink) !important;
+  background: var(--wb-surface) !important;
+  border: 1px solid var(--wb-line) !important;
+  border-radius: 9px;
+  box-shadow: none !important;
+  font-family: var(--wb-reading-font) !important;
+  font-size: var(--wb-reading-size, 17px) !important;
+  line-height: var(--wb-reading-leading, 2) !important;
+  padding: 16px !important;
+  margin: 8px 0;
+  resize: vertical;
+  transition: border-color 180ms;
+}
+body.wb-active #chat .edit_textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--wb-accent) 50%, var(--wb-line)) !important;
+}
+body.wb-active .wb-native-settings-slot > .wb-native-embedded {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  transform: none !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--wb-ink) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  overflow: visible !important;
+}
+body.wb-active .wb-native-settings-slot * {
+  text-shadow: none !important;
+}
+body.wb-active .wb-native-settings-slot > .wb-native-embedded > .drawer-toggle {
+  display: none !important;
+}
+body.wb-active .wb-settings-native-group {
+  animation: wb-value-in 180ms ease both;
+  color: var(--wb-ink);
+}
+body.wb-active .wb-settings-native-group[hidden] {
+  display: none !important;
+}
+body.wb-active
+  .wb-native-settings-slot
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+body.wb-active .wb-native-settings-slot textarea,
+body.wb-active .wb-native-settings-slot select {
+  font: 12px/1.7 system-ui;
+  color: var(--wb-ink) !important;
+  background: var(--wb-surface) !important;
+  border: 1px solid var(--wb-line) !important;
+  border-radius: 7px;
+  box-shadow: none !important;
+  padding: 7px 9px;
+  min-height: 34px;
+  max-width: 100%;
+}
+body.wb-active .wb-native-settings-slot textarea {
+  font: 13px/1.9 var(--wb-reading-font, serif);
+  min-height: 110px;
+}
+body.wb-active .wb-native-settings-slot textarea:focus,
+body.wb-active .wb-native-settings-slot input:focus {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-line)) !important;
+}
+body.wb-active .wb-native-settings-slot :is(h3, h4) {
+  color: var(--wb-ink);
+  font: 500 15px/1.8 system-ui;
+  margin: 15px 0 12px;
+}
+body.wb-active .wb-native-settings-slot :is(.menu_button, button:not(.wb-select-trigger)) {
+  background: var(--wb-surface);
+  color: var(--wb-control-ink);
+  border: 1px solid var(--wb-line);
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 12px;
+  padding: 6px 9px;
+  min-height: 30px;
+  filter: none;
+  transition:
+    background-color 180ms,
+    color 180ms,
+    border-color 180ms;
+}
+body.wb-active .wb-native-settings-slot :is(.menu_button, button):hover {
+  background: var(--wb-hover);
+  color: var(--wb-accent);
+}
+body.wb-active .wb-native-settings-slot .checkbox_label {
+  gap: 9px;
+  padding: 6px 0;
+  font-size: 12px;
+  align-items: center;
+}
+body.wb-active .wb-native-settings-slot .flex-container {
+  min-width: 0;
+  gap: 10px;
+}
+body.wb-active .wb-native-settings-slot .range-block {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 0;
+}
+body.wb-active .wb-native-settings-slot .range-block-title {
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+body.wb-active .wb-native-settings-slot .range-block-range {
+  min-width: 0;
+  flex: 1;
+}
+body.wb-active .wb-native-settings-slot .range-block-counter {
+  min-width: 65px;
+  width: 75px;
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-toggle {
+  color: var(--wb-ink);
+  font-size: 13px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--wb-line);
+  background: transparent;
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-content {
+  padding: 10px 0;
+}
+body.wb-active .wb-native-settings-slot .extension_container {
+  border: 0;
+  border-bottom: 1px solid var(--wb-line);
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+}
+body.wb-active .wb-native-settings-slot .wb-leased-select {
+  display: none !important;
+}
+.wb-native-select-slot {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+.wb-native-select-slot .wb-select {
+  width: 100%;
+}
+.wb-native-select-slot .wb-select-trigger {
+  min-height: 34px;
+}
+body.wb-active .wb-native-settings-slot .standoutHeader {
+  background: transparent;
+  border: 0;
+  color: var(--wb-control-ink);
+}
+body.wb-active .wb-native-settings-slot #advanced-ai-config-block {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.wb-active .wb-ui *,
+  body.wb-active #chat *,
+  body.wb-active #send_form *,
+  body.wb-active #sheld {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+body.wb-active #chat .mes_ghost {
+  display: none !important;
+}
+body.wb-active #chat .mes.wb-user-collapsed {
+  position: relative;
+}
+body.wb-active #chat .mes.wb-user-collapsed .ch_name {
+  position: absolute;
+  inset: 5px 10px auto auto;
+  pointer-events: none;
+}
+body.wb-active #chat .mes.wb-user-collapsed .ch_name .mes_buttons {
+  pointer-events: auto;
+}
+body.wb-active #chat .mes.wb-user-collapsed .wb-user-heading {
+  padding-right: 65px;
+}
+body.wb-active .wb-native-settings-slot :is(#ContextSettings, #InstructSettingsColumn, #SystemPromptBlock) {
+  width: 100% !important;
+  max-width: none !important;
+}
+body.wb-active .wb-native-settings-slot :is(.inline-drawer-header, .inline-drawer-toggle) {
+  transition:
+    color 180ms,
+    background-color 180ms;
+}
+.wb-native-settings-slot :is(label, small, .range-block-title) {
+  color: var(--wb-control-ink) !important;
+}
+.wb-popover .wb-native-settings-slot .panelControlBar {
+  display: none;
+}
+.wb-popover .wb-native-settings-slot :is([name="floatingPromptHolder"], [name="cfgConfigHolder"]) {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.wb-popover .wb-native-settings-slot .inline-drawer-header {
+  background: transparent;
+}
+.wb-popover .wb-native-settings-slot textarea {
+  width: 100%;
+  min-height: 100px;
+}
+.wb-popover .wb-native-settings-slot small {
+  font-size: 10px;
+  line-height: 1.7;
+}
+body.wb-active.reduced-motion #chat *,
+body.wb-active.reduced-motion #sheld {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+body.wb-active #chat .mes {
+  position: relative;
+  padding: 22px 0 23px !important;
+}
+body.wb-active #chat .ch_name {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 22px;
+  min-height: 22px;
+  margin: 0 !important;
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wb-control-ink);
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-icon::before {
+  content: "" !important;
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 180ms;
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-icon.up::before {
+  transform: rotate(225deg);
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-toggle:hover {
+  color: var(--wb-accent);
+}
+body.wb-active .wb-native-settings-slot .inline-drawer-toggle:focus-visible {
+  outline: 1px solid var(--wb-accent);
+  outline-offset: 3px;
+}
+.wb-ui input:is([type="checkbox"], [type="radio"]):checked {
+  animation: wb-check-in 180ms ease;
+}
+body.wb-active #chat .wb-reading-icon:focus-visible {
+  outline: 1px solid var(--wb-accent);
+  outline-offset: 1px;
+  background: var(--wb-selected) !important;
+}
+body.wb-active #chat .mes[is_user="true"] {
+  padding: 9px 12px !important;
+}
+body.wb-active #chat .wb-user-heading {
+  margin: 0 !important;
+  padding-right: 65px;
+}
+body.wb-active #chat .wb-user-heading button {
+  min-height: 27px;
+  font-size: 12px;
+  gap: 9px;
+}
+body.wb-active #chat .wb-user-heading button[aria-expanded="true"] {
+  color: var(--wb-accent);
+  background: transparent;
+}
+body.wb-active #chat .wb-user-heading svg {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+body.wb-active #chat .wb-user-heading svg.is-open {
+  transform: rotate(90deg);
+}
+body.wb-active
+  #chat
+  .mes[is_user="true"]
+  :is(.mes_text, .mes_img_container, .mes_file_container, .mes_reasoning_details) {
+  overflow: clip;
+}
+body.wb-active #chat .mes[is_user="true"] .ch_name {
+  position: absolute;
+  inset: 6px 10px auto auto;
+}
+body.wb-active #chat .mes[is_user="true"] {
+  position: relative;
+}
+body.wb-active .wb-settings-source > .wb-native-embedded {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+body.wb-active .wb-ui input[type="range"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: 0 !important;
+  outline: 0;
+  height: 22px;
+  padding: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+body.wb-active .wb-ui input[type="range"]::-webkit-slider-runnable-track {
+  background: #e4dacc !important;
+  height: 4px !important;
+  border: 0 !important;
+  border-radius: 3px;
+  box-shadow: none !important;
+}
+body.wb-active .wb-ui input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: #fffefa !important;
+  margin-top: -6px !important;
+  box-shadow:
+    0 0 0 1px var(--wb-line-1),
+    0 1px 3px rgb(0 0 0 / 18%) !important;
+}
+
+/* ── from rework.css ── */
+/* Incremental migration, checked at 1496 × 817 CSS px. */
+body.wb-active.wb-right-open.wb-rail-open {
+  --wb-right: calc(var(--wb-right-size) + var(--wb-rail-size));
+}
+/* A fixed arrow slot makes expanded body and heading share the same text origin. */
+body.wb-active #chat .mes[is_user="true"],
+body.wb-active #chat .mes[is_user="true"].wb-user-collapsed {
+  padding: 10px 14px !important;
+}
+body.wb-active #chat .wb-user-heading button {
+  gap: 8px;
+  min-height: 28px;
+}
+body.wb-active #chat .wb-user-heading svg {
+  width: 14px;
+  min-width: 14px;
+  flex: none;
+}
+body.wb-active
+  #chat
+  .mes[is_user="true"]
+  :is(.mes_text, .mes_img_container, .mes_file_container, .mes_reasoning_details) {
+  margin-left: 22px !important;
+  width: calc(100% - 22px);
+  max-height: none;
+  overflow: hidden;
+}
+body.wb-active #chat .mes[is_user="true"] .mes_text {
+  height: auto;
+  margin-top: 6px;
+  font-weight: 400;
+}
+body.wb-active
+  #chat
+  .mes[is_user="true"].wb-user-collapsed
+  :is(.mes_text, .mes_img_container, .mes_file_container, .mes_reasoning_details) {
+  height: 0;
+  max-height: none;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+body.wb-active #chat .mes[is_user="true"] .ch_name {
+  top: 10px;
+  right: 14px;
+  height: 28px;
+  min-height: 28px;
+}
+body.wb-active #chat .mes[is_user="true"] .edit_textarea {
+  margin-left: 22px;
+  width: calc(100% - 22px);
+}
+.wb-component-settings .wb-native-settings-root {
+  --SmartThemeBodyColor: var(--wb-ink);
+  --SmartThemeEmColor: var(--wb-muted);
+  --SmartThemeBorderColor: var(--wb-line);
+  --SmartThemeBlurTintColor: var(--wb-surface);
+  --SmartThemeQuoteColor: var(--wb-accent);
+  --SmartThemeShadowColor: transparent;
+  --mainFontSize: 13px;
+  --fontScale: 1;
+  color: var(--wb-ink);
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot :is(.inline-drawer-header, .standoutHeader) {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  padding: 9px 0;
+  font-size: 13px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(.menu_button, button:not(.wb-select-trigger)) {
+  background: transparent;
+  border-color: transparent;
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot :is(.menu_button, button):hover {
+  background: var(--wb-hover);
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(.text_pole, .neo-range-slider, .neo-range-input) {
+  background-color: var(--wb-surface);
+  background-image: none;
+  box-shadow: none;
+  filter: none;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .inline-drawer-content {
+  margin: 0;
+  padding: 12px 0;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .wb-component-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: start;
+}
+.wb-component-grid > * {
+  min-width: 0;
+  width: auto !important;
+}
+.wb-component-grid > :is(h3, h4, hr, .inline-drawer, .wb-native-select-slot),
+.wb-component-grid > :has(textarea) {
+  grid-column: 1/-1;
+}
+.wb-component-grid > .flex-container:has(select) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.wb-component-grid .checkbox_label {
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 0 !important;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #advanced-ai-config-block {
+  display: block;
+}
+.wb-component-settings
+  .page-settings
+  :is(#UI-Theme-Block, #UI-Customization, [name="UserSettingsThirdColumn"]) {
+  width: 100% !important;
+  max-width: none !important;
+}
+.wb-component-settings .page-settings [name="themeElements"] {
+  gap: 14px;
+}
+.wb-component-settings .page-settings [name="AvatarAndChatDisplay"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.wb-component-settings .page-settings [name="AvatarAndChatDisplay"] > div {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.wb-component-settings .page-formatting :is(#ContextSettings, #InstructSettingsColumn, #SystemPromptBlock) {
+  gap: 12px;
+}
+.wb-component-settings .page-formatting .wb-native-select-slot {
+  flex: 1;
+  width: auto;
+}
+.wb-component-settings .page-formatting textarea {
+  width: 100%;
+}
+.wb-component-settings .page-extensions .extension_container[hidden] {
+  display: none !important;
+}
+.wb-component-settings .page-extensions .extension_container {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.wb-component-settings .page-extensions #qr--settings > .inline-drawer > .inline-drawer-header,
+.wb-component-settings .page-extensions #regex_container > .inline-drawer > .inline-drawer-header {
+  display: none;
+}
+.wb-component-settings
+  .page-extensions
+  #regex_container
+  > .regex_settings
+  > .inline-drawer
+  > .inline-drawer-content {
+  display: block !important;
+}
+.wb-component-settings
+  .page-extensions
+  #regex_container
+  > .regex_settings
+  > .inline-drawer
+  > .inline-drawer-header {
+  display: none;
+}
+.wb-component-settings #qr--settings > .inline-drawer > .inline-drawer-content {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.wb-component-settings #qr--settings .inline-drawer-content > label {
+  min-width: 0;
+  font-size: 12px;
+}
+.wb-component-settings #qr--settings .inline-drawer-content > hr {
+  display: none;
+}
+.wb-component-settings :is(#qr--global, #qr--chat, #qr--character) {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+}
+.wb-component-settings #qr--editor {
+  grid-column: 1/-1;
+  min-width: 0;
+  padding-top: 8px;
+}
+.wb-component-settings .qr--head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.wb-component-settings .qr--actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.wb-component-settings .qr--title {
+  font-size: 12px;
+  color: var(--wb-muted);
+}
+.wb-component-settings #qr--set-settings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px 16px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.wb-component-settings .qr--setList {
+  padding: 0;
+}
+.wb-component-settings .qr--qrList {
+  min-width: 0;
+}
+.wb-component-settings #qr--set-qrList > * {
+  border: 1px solid var(--wb-line);
+  background: var(--wb-surface);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.wb-component-settings #qr--set-qrList .qr--actions {
+  opacity: 0.75;
+}
+.wb-component-settings #qr--set-qrList > *:is(:hover, :focus-within) .qr--actions {
+  opacity: 1;
+}
+.wb-component-settings .page-extensions #tavern_helper {
+  font-size: 13px;
+}
+.wb-component-settings .page-extensions #tavern_helper :is(.TH-radio-button, .TH-reference-button) {
+  box-shadow: none;
+  text-shadow: none;
+  border-radius: 7px;
+}
+.wb-component-settings .page-extensions #tavern_helper .TH-radio-button--selected {
+  background: var(--wb-selected);
+  color: var(--wb-accent);
+}
+.wb-component-settings #bg-header-fixed {
+  position: static;
+  padding: 0;
+  background: transparent;
+}
+.wb-component-settings :is(.bg-header-row-1, .bg-header-row-2) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+  min-height: 34px;
+}
+.wb-component-settings .bg-header-row-1 > :is(h3, .expander) {
+  display: none;
+}
+.wb-component-settings .bg-header-row-1 #background_fitting {
+  width: 140px;
+}
+.wb-component-settings .bg-header-row-2 #bg_filter {
+  flex: 1;
+}
+.wb-component-settings .bg-header-row-2 :is(select, .wb-select) {
+  width: 140px;
+  flex: none;
+}
+.wb-component-settings #bg_tabs {
+  position: static;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  margin: 0 0 10px;
+  padding: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--wb-line);
+}
+.wb-component-settings #bg_tabs .bg_tab_button {
+  background: transparent;
+  box-shadow: none;
+}
+.wb-component-settings #bg_global_tab {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 14px;
+}
+.wb-component-settings #bg_folder_breadcrumb {
+  grid-column: 1/-1;
+  padding: 0;
+  background: transparent;
+  margin-bottom: 4px;
+}
+.wb-component-settings #bg_folder_grid {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-right: 1px solid var(--wb-line);
+  padding-right: 12px;
+  align-self: start;
+}
+.wb-component-settings #bg_folder_grid .bg_folder_tile {
+  width: 100%;
+  height: 40px;
+  aspect-ratio: auto !important;
+  min-height: 40px;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 7px;
+}
+.wb-component-settings #bg_folder_grid .bg_folder_tile_cover {
+  display: none;
+}
+.wb-component-settings #bg_folder_grid .bg_folder_tile_overlay {
+  inset: 0;
+  background: transparent;
+  color: var(--wb-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+}
+.wb-component-settings #bg_folder_grid .bg_folder_tile_name {
+  font-size: 12px;
+}
+.wb-component-settings :is(#bg_menu_content, #bg_custom_content) {
+  display: grid;
+  grid-template-columns: repeat(var(--bg-thumb-columns, 5), minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  padding: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+.wb-component-settings #bg_menu_content {
+  grid-column: 2;
+}
+.wb-component-settings .bg_example {
+  width: 100% !important;
+  min-height: 0;
+  height: auto !important;
+  max-height: none;
+  aspect-ratio: 16 / 10 !important;
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  margin: 0;
+  box-shadow: none;
+  background: var(--wb-surface);
+  overflow: hidden;
+  position: relative;
+}
+.wb-component-settings .bg_example.selected-background {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -2px;
+}
+.wb-component-settings .bg_example .thumbnail-clipper {
+  position: absolute;
+  inset: 0 0 24px;
+  width: 100%;
+  height: auto;
+  background-size: cover;
+  background-position: center;
+}
+.wb-component-settings .bg_example .BGSampleTitle {
+  position: absolute;
+  inset: auto 0 -24px;
+  height: 24px;
+  padding: 4px 8px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--wb-surface);
+  color: var(--wb-muted);
+  text-shadow: none;
+  opacity: 1;
+}
+.wb-component-settings .bg_example .mobile-only-menu-toggle {
+  display: flex;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 25px;
+  height: 25px;
+  justify-content: center;
+  align-items: center;
+  z-index: 4;
+  background: var(--wb-surface);
+  color: var(--wb-control-ink);
+  border-radius: 6px;
+  opacity: 0;
+}
+.wb-component-settings .bg_example:is(:hover, :focus-within, .mobile-menu-open) .mobile-only-menu-toggle {
+  opacity: 1;
+}
+.wb-component-settings .bg_example .jg-menu {
+  display: none !important;
+  position: absolute;
+  inset: 5px 33px auto auto;
+  width: auto;
+  height: auto;
+  padding: 4px;
+  gap: 3px;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 7px;
+  box-shadow: 0 3px 12px #34291e13;
+  z-index: 5;
+}
+.wb-component-settings .bg_example.mobile-menu-open .jg-menu {
+  display: flex !important;
+}
+.wb-component-settings .bg_example .jg-button {
+  margin: 0;
+  width: 25px;
+  height: 25px;
+  padding: 5px;
+  font-size: 12px;
+  color: var(--wb-control-ink);
+  background: transparent;
+  text-shadow: none;
+  box-shadow: none;
+}
+.wb-component-settings #bg-scroll-top {
+  display: none;
+}
+@container settings-content (max-width:950px) {
+  .wb-component-settings .wb-native-settings-slot .wb-component-grid,
+  .wb-component-settings .page-settings [name="AvatarAndChatDisplay"],
+  .wb-component-settings #qr--set-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@container settings-content (max-width:570px) {
+  .wb-component-settings .wb-native-settings-slot .wb-component-grid,
+  .wb-component-settings #qr--settings > .inline-drawer > .inline-drawer-content {
+    grid-template-columns: 1fr !important;
+  }
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .title_restorable {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: 32px;
+  height: auto;
+  margin: 4px 0 10px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--wb-muted);
+}
+.wb-component-settings .page-extensions .wb-settings-native-group[data-group="扩展设置"] > div[hidden] {
+  display: none !important;
+}
+.wb-component-settings #bg_tabs {
+  display: block;
+  height: auto;
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+}
+.wb-component-settings #bg_tabs :is(.bg_tab_panel, .bg_tabs_list) {
+  padding: 0;
+  height: auto;
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+}
+.wb-component-settings #bg_tabs .bg_tabs_list {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  min-height: 37px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--wb-line);
+}
+.wb-component-settings #bg_tabs .heading-controls {
+  position: static;
+  transform: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.wb-component-settings #bg_tabs .bg_tab_button {
+  border: 0;
+  margin: 0 6px 0 0;
+}
+.wb-component-settings #bg_tabs .bg_tab_button a {
+  color: var(--wb-muted);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.wb-component-settings #bg_tabs .bg_tab_button.ui-tabs-active {
+  background: var(--wb-selected);
+}
+.wb-component-settings #bg_tabs .bg_tab_button.ui-tabs-active a {
+  color: var(--wb-accent);
+}
+.wb-component-settings .bg_example .thumbnail-clipper {
+  overflow: visible !important;
+}
+.wb-component-settings .page-extensions #tavern_helper > .inline-drawer > .inline-drawer-header {
+  display: none;
+}
+.wb-component-settings .page-extensions #tavern_helper > .inline-drawer > .inline-drawer-content {
+  display: block !important;
+}
+.wb-component-settings .wb-native-bg-directory > #bg_folder_grid {
+  border: 0;
+  padding: 0;
+}
+.wb-component-settings #Backgrounds.in-folder-view .wb-background-all {
+  background: transparent;
+}
+.wb-component-settings .bg_example .jg-button:focus-visible,
+.wb-component-settings .mobile-only-menu-toggle:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -2px;
+}
+/* Simple helper options stay within their native fieldsets, arranged in four columns. */
+.wb-component-settings #tavern_helper .TH-fieldset > div.flex.flex-col {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.wb-component-settings
+  #tavern_helper
+  .TH-fieldset
+  > div.flex.flex-col
+  > div.flex.items-center.justify-between {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  min-width: 0;
+}
+.wb-component-settings
+  #tavern_helper
+  .TH-fieldset
+  > div.flex.flex-col
+  > div.flex.items-center.justify-between
+  > .flex-none {
+  align-self: flex-start;
+}
+.wb-component-settings #tavern_helper .TH-fieldset > div.flex.flex-col > div.flex.w-full {
+  display: none;
+}
+.wb-component-settings #tavern_helper .TH-fieldset {
+  margin-top: 14px;
+  padding: 12px;
+  border-color: var(--wb-line);
+}
+.wb-component-settings #tavern_helper .TH-radio-button {
+  min-height: 28px;
+}
+.wb-component-settings #qr--editor > .qr--head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wb-component-settings #qr--editor > .qr--head > .qr--title {
+  flex: none;
+}
+.wb-component-settings #qr--editor > .qr--head .qr--actions {
+  flex: 1;
+  justify-content: flex-end;
+}
+.wb-component-settings #qr--editor > .qr--head #qr--set {
+  max-width: 260px;
+}
+.wb-component-settings #qr--set-qrList > .qr--set-qrListContents {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.wb-component-settings #qr--set-qrList .qr--set-item {
+  position: relative;
+  padding: 8px;
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--wb-surface);
+}
+.wb-component-settings #qr--set-qrList .qr--content {
+  display: grid;
+  grid-template-columns: 20px 145px 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+}
+.wb-component-settings #qr--set-qrList .qr--content > .qr--actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  padding-top: 2px;
+}
+.wb-component-settings #qr--set-qrList .qr--set-itemLabelContainer {
+  width: 100%;
+  min-width: 0;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #qr--set-qrList .qr--set-itemMessage {
+  min-height: 34px;
+  height: 34px;
+  resize: vertical;
+  transition: height 180ms;
+  width: 100%;
+  margin: 0;
+  padding: 6px 9px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  #qr--set-qrList
+  .qr--set-item:focus-within
+  .qr--set-itemMessage {
+  height: 120px;
+}
+.wb-component-settings #qr--set-qrList .qr--set-itemAdder {
+  position: absolute;
+  inset: -15px auto auto 25px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.wb-component-settings #qr--set-qrList .qr--set-item:is(:hover, :focus-within) .qr--set-itemAdder {
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--wb-surface);
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .redWarningBG {
+  background: transparent !important;
+  color: var(--wb-accent) !important;
+}
+@container settings-content (max-width:950px) {
+  .wb-component-settings #tavern_helper .TH-fieldset > div.flex.flex-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .wb-component-settings #qr--set-qrList .qr--content {
+    grid-template-columns: 20px 120px 24px minmax(0, 1fr);
+  }
+  .wb-component-settings #qr--set-qrList .qr--content > .qr--actions {
+    grid-column: 2/-1;
+    justify-self: end;
+  }
+}
+@container composer (max-width:480px) {
+  body.wb-active #nonQRFormItems {
+    grid-template-columns: 60px minmax(0, 1fr) auto;
+  }
+  body.wb-active #leftSendForm {
+    width: 60px !important;
+  }
+  body.wb-active #options_button,
+  body.wb-active #extensionsMenuButton {
+    width: 28px;
+  }
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #qr--set-qrList .qr--set-item {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 8px !important;
+  margin: 0 0 8px !important;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #qr--set-qrList .qr--content {
+  min-height: 34px;
+  height: auto;
+  padding: 0;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #qr--set-qrList .qr--content > .qr--actions {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: auto !important;
+  min-width: 0;
+  gap: 3px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  #qr--set-qrList
+  .qr--content
+  > .qr--actions
+  .qr--action {
+  width: 25px;
+  min-width: 25px;
+  height: 28px;
+  min-height: 28px;
+  padding: 5px;
+}
+.wb-component-settings #tavern_helper .TH-custom-tailwind .cursor-pointer.flex-1[class*="bg-"] {
+  background: var(--wb-selected) !important;
+  color: var(--wb-accent);
+}
+.wb-component-settings #tavern_helper .TH-custom-tailwind .cursor-pointer.flex-1[class*="bg-"] > div {
+  color: var(--wb-accent) !important;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(#context_derived, #instruct_enabled, #sysprompt_enabled) {
+  display: inline-block !important;
+}
+.wb-component-settings
+  .wb-native-settings-slot
+  :is(label[for="context_derived"], label[for="instruct_enabled"], label[for="sysprompt_enabled"])
+  > small:has(.fa-bolt) {
+  display: none;
+}
+body.wb-active
+  .wb-component-settings
+  .page-generation
+  :is(
+    #range_block_openai,
+    #range_block,
+    #range_block_novel,
+    #kobold_api-settings,
+    #novel_api-settings,
+    #textgenerationwebui_api-settings,
+    #openai_settings
+  ).wb-component-grid:not([style*="display: none"]):not([style*="display:none"]):not([hidden]) {
+  display: grid !important;
+}
+
+/* Preset · 高级参数: the preset list, samplers and prompt list live on the first two tabs. */
+body.wb-active
+  .wb-component-settings.page-generation
+  :is(
+    #lm_button_panel_pin_div,
+    #clickSlidersTips,
+    .topRightInset,
+    #respective-presets-block,
+    .range-block:has(
+      #openai_max_context,
+      #openai_max_tokens,
+      #n_openai,
+      #stream_toggle,
+      #temp_openai,
+      #freq_pen_openai,
+      #pres_pen_openai,
+      #top_p_openai,
+      #top_k_openai,
+      #top_a_openai,
+      #min_p_openai,
+      #repetition_penalty_openai,
+      #seed_openai,
+      #openai_show_thoughts,
+      #completion_prompt_manager
+    ),
+    #range_block_openai > hr,
+    .inline-drawer:has(#main_prompt_quick_edit_textarea)
+  ) {
+  display: none !important;
+}
+
+/* What remains reads as tiles: one quiet card per option, drawers full width. */
+body.wb-active
+  .wb-component-settings.page-generation
+  :is(#range_block_openai, #openai_settings > .wb-component-grid) {
+  gap: 12px !important;
+  margin-bottom: 12px;
+}
+body.wb-active
+  .wb-component-settings.page-generation
+  :is(
+    :is(#range_block_openai, #openai_settings > .wb-component-grid)
+      > :is(.range-block, .inline-drawer, .flex-container),
+    #openai_settings > .range-block
+  ) {
+  align-self: stretch;
+  justify-content: flex-start !important;
+  align-content: flex-start;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 12px 14px !important;
+  border: 0 !important;
+  border-radius: 12px;
+  background: var(--wb-surface-2);
+  text-align: left;
+}
+
+body.wb-active
+  .wb-component-settings.page-generation
+  :is(#range_block_openai, #openai_settings > .wb-component-grid)
+  > .inline-drawer
+  > .inline-drawer-header {
+  border-bottom: 0 !important;
+}
+
+/* ── from polish.css ── */
+.wb-ui svg:not(.wb-native-icon) {
+  stroke-width: 1.7;
+}
+/* Original action nodes receive stroke icons as children; their handlers remain native. */
+body.wb-active .wb-component-settings .wb-native-settings-slot .wb-component-icon {
+  font-family: inherit !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.wb-component-settings .wb-component-icon::before {
+  display: none !important;
+}
+.wb-component-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  pointer-events: none;
+  vertical-align: middle;
+}
+.wb-component-glyph svg {
+  display: block;
+}
+.wb-component-settings .menu_button_icon {
+  gap: 6px;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .menu_button:hover {
+  background: var(--wb-hover);
+  color: var(--wb-accent);
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .inline-drawer-header b {
+  font-size: 12px;
+  font-weight: 500;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .title_restorable {
+  font-weight: 500;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #user-settings-block h4 {
+  background: transparent !important;
+  box-shadow: none;
+  border: 0;
+  border-bottom: 1px solid var(--wb-line);
+  border-radius: 0;
+  color: var(--wb-control-ink);
+  font: 500 12px/1.6 system-ui;
+  margin: 14px 0 10px;
+  padding: 7px 0;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot #AdvancedFormatting .disabled {
+  filter: none;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  #AdvancedFormatting
+  .disabled
+  :is(
+    textarea,
+    select,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    .wb-select-trigger
+  ) {
+  background: var(--wb-paper) !important;
+  color: var(--wb-control-ink) !important;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  #AdvancedFormatting
+  .disabled
+  input[type="checkbox"] {
+  opacity: 0.65;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot :is(input, textarea, select):disabled {
+  filter: none;
+  color: var(--wb-control-ink) !important;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .toggleEnabled {
+  color: var(--wb-accent) !important;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .togglable:not(.toggleEnabled) {
+  color: var(--wb-control-ink);
+}
+.wb-component-settings
+  .wb-native-settings-slot
+  :is(label[for="instruct_enabled"], label[for="sysprompt_enabled"])
+  > small:has(.fa-power-off) {
+  display: none;
+}
+.wb-component-settings .toggle-description {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--wb-muted);
+  margin-top: 4px;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .range-block-title {
+  text-align: left;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}
+.wb-component-settings .range-block-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wb-component-settings .range-block-range > input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .range-block .range-block-counter {
+  flex: none;
+  width: 82px;
+  min-width: 82px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  .range-block:has(#openai_max_context)
+  .range-block-counter {
+  width: 100px;
+  min-width: 100px;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot .range-block-counter > input {
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wb-component-settings .wb-component-grid {
+  row-gap: 14px;
+}
+.wb-component-settings .wb-component-grid > .range-block {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(input.text_pole, textarea.text_pole, select.text_pole) {
+  transition:
+    border-color 160ms,
+    box-shadow 160ms;
+}
+body.wb-active .wb-ui input[type="range"] {
+  height: 22px !important;
+  margin: 0 !important;
+  filter: none !important;
+}
+/* Board "PanelPreset": an accent fill up to the value (pages set --wb-fill), a white thumb on a hairline ring. */
+body.wb-active .wb-ui input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--wb-accent) var(--wb-fill, 0%),
+    color-mix(in srgb, var(--wb-ink-3) 28%, var(--wb-surface-2)) var(--wb-fill, 0%)
+  ) !important;
+}
+body.wb-active .wb-ui input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px var(--wb-ring),
+    0 0 0 4px color-mix(in srgb, var(--wb-accent) 14%, transparent) !important;
+}
+body.wb-active .wb-ui input[type="range"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--wb-accent) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+body.wb-active .wb-ui input[type="range"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot [name="FontBlurChatWidthBlock"] > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 6px 10px;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot [name="FontBlurChatWidthBlock"] > div > small {
+  grid-column: 1/-1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  [name="FontBlurChatWidthBlock"]
+  .neo-range-input {
+  width: 72px;
+  min-width: 0;
+  text-align: right;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* Keep template text whole, compact its adjacent short separators and position controls. */
+.wb-component-settings #ContextSettings > div > div:has(> div > textarea#context_story_string) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.wb-component-settings #ContextSettings > div > div > div:has(> textarea#context_story_string) {
+  grid-column: 1/-1;
+}
+.wb-component-settings #ContextSettings > div > div > div:has(#context_story_string_position),
+.wb-component-settings #ContextSettings > div > div > div:has(#context_example_separator) {
+  grid-column: span 2;
+}
+.wb-component-settings #ContextSettings > div > div > div:has(> .standoutHeader) {
+  grid-column: 1/-1;
+}
+.wb-component-settings #ContextSettings #context_story_string_inject_settings {
+  gap: 12px;
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(#context_example_separator, #context_chat_start) {
+  min-height: 70px;
+}
+.wb-component-settings #ContextSettings .wb-native-select-slot {
+  display: flex;
+  margin-top: 5px;
+}
+/* Scope, group and item actions remain together, with useful empty states. */
+.wb-component-settings #qr--settings .qr--title {
+  font-weight: 500;
+}
+.wb-component-settings #qr--settings .qr--item {
+  align-items: center;
+  gap: 7px;
+}
+.wb-component-settings #qr--settings .qr--item .qr--set {
+  min-width: 0;
+}
+.wb-component-settings #qr--settings .qr--item .qr--visible {
+  gap: 6px;
+  font-size: 11px;
+}
+.wb-component-settings #qr--settings :is(#qr--chat, #qr--character) .qr--setList:empty::after {
+  content: "尚未添加回复组";
+  display: block;
+  color: var(--wb-muted);
+  font-size: 11px;
+  line-height: 1.8;
+  padding: 12px 0;
+}
+.wb-component-settings #qr--editor > .qr--head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--wb-line);
+}
+.wb-component-settings #qr--set-qrList .qr--content {
+  display: grid !important;
+  grid-template-columns: 18px 150px 20px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+.wb-component-settings #qr--set-qrList .qr--content > * {
+  min-width: 0;
+}
+body.wb-active .wb-component-settings #qr--set-qrList .qr--set-itemLabel {
+  width: 100%;
+  min-width: 0;
+}
+body.wb-active .wb-component-settings #qr--set-qrList .qr--content > .drag-handle {
+  padding: 5px 0;
+  text-align: center;
+}
+.wb-component-settings #qr--set-qrList .qr--set-item .qr--actions {
+  opacity: 1;
+}
+.wb-component-settings #qr--set-qrList .qr--set-item .qr--action {
+  color: var(--wb-control-ink);
+}
+.wb-component-settings #qr--set-qrList .qr--set-item .qr--action:hover {
+  color: var(--wb-accent);
+}
+.wb-component-settings .bg_example .BGSampleTitle {
+  font-weight: 400;
+  text-align: left;
+  padding-left: 8px;
+}
+.wb-component-settings .bg_example {
+  transition: border-color 180ms;
+}
+.wb-component-settings .bg_example:hover {
+  border-color: color-mix(in srgb, var(--wb-accent) 35%, var(--wb-line));
+}
+.wb-component-settings .bg_example .jg-menu {
+  gap: 5px;
+  box-shadow: 0 4px 12px #34291e0b;
+}
+.wb-component-settings #tavern_helper :is(.TH-radio-button, .TH-fieldset) {
+  border-color: var(--wb-line);
+}
+.wb-component-settings #tavern_helper .TH-custom-tailwind [class*="border-gray"] {
+  border-color: var(--wb-line) !important;
+}
+.wb-component-settings #tavern_helper .TH-custom-tailwind .font-semibold {
+  font-weight: 500;
+}
+.wb-component-settings #tavern_helper .TH-fieldset {
+  border-radius: 8px;
+}
+@container settings-content (max-width:950px) {
+  .wb-component-settings #qr--set-qrList .qr--content {
+    grid-template-columns: 18px 125px 20px minmax(0, 1fr);
+  }
+}
+@container settings-content (max-width:570px) {
+  .wb-component-settings #ContextSettings > div > div:has(> div > textarea#context_story_string) {
+    grid-template-columns: 1fr;
+  }
+  .wb-component-settings #ContextSettings > div > div > div:has(#context_story_string_position),
+  .wb-component-settings #ContextSettings > div > div > div:has(#context_example_separator) {
+    grid-column: 1;
+  }
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  :is(.title_restorable, #user-settings-block h4):first-child {
+  margin-top: 0;
+}
+/* A single desktop toolbar, leaving every native node under its original tab owner. */
+.wb-component-settings #Backgrounds > .wb-settings-native-group {
+  display: grid;
+  grid-template-columns: 100px auto auto auto minmax(150px, 1fr) 84px auto auto auto;
+  align-items: center;
+  gap: 14px 8px;
+}
+body.wb-active
+  .wb-component-settings
+  #Backgrounds
+  :is(#bg-header-fixed, .bg-header-row-1, .bg-header-row-2, #bg_tabs, .bg_tabs_list) {
+  display: contents;
+}
+.wb-component-settings #background_fitting {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100px;
+}
+.wb-component-settings #auto_background {
+  grid-column: 2;
+  grid-row: 1;
+}
+.wb-component-settings #bg_add_folder_button {
+  grid-column: 3;
+  grid-row: 1;
+}
+.wb-component-settings #add_background_button_top {
+  grid-column: 4;
+  grid-row: 1;
+  white-space: nowrap;
+}
+.wb-component-settings #bg-filter {
+  grid-column: 5;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+}
+.wb-component-settings #bg-sort {
+  grid-column: 6;
+  grid-row: 1;
+  width: 84px;
+}
+.wb-component-settings #bg_tabs .bg_tab_button {
+  grid-column: 7;
+  grid-row: 1;
+  margin: 0;
+  border-radius: 7px;
+  min-width: 0;
+}
+.wb-component-settings #bg_tabs .bg_tab_button:nth-child(2) {
+  grid-column: 8;
+}
+.wb-component-settings #bg_tabs .bg_tab_button a {
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.wb-component-settings #bg_tabs .heading-controls {
+  grid-column: 9;
+  grid-row: 1;
+  margin: 0;
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+.wb-component-settings #bg_tabs :is(#bg_global_tab, #bg_chat_tab) {
+  grid-column: 1/-1;
+  grid-row: 2;
+}
+.wb-component-settings #bg_tabs .bg_tab_button.ui-tabs-active {
+  box-shadow: inset 0 0 0 1px var(--wb-selection-line);
+}
+.wb-component-settings #bg_tabs .bg_tab_button a:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -3px;
+  border-radius: 7px;
+}
+@container settings-content (max-width:1050px) {
+  .wb-component-settings #Backgrounds > .wb-settings-native-group {
+    grid-template-columns: 100px auto auto auto auto auto;
+    gap: 10px 8px;
+  }
+  .wb-component-settings #bg-filter {
+    grid-column: 1/4;
+    grid-row: 2;
+  }
+  .wb-component-settings #bg-sort {
+    grid-column: 4;
+    grid-row: 2;
+  }
+  .wb-component-settings #bg_tabs .bg_tab_button {
+    grid-column: 5;
+    grid-row: 2;
+  }
+  .wb-component-settings #bg_tabs .bg_tab_button:nth-child(2) {
+    grid-column: 6;
+  }
+  .wb-component-settings #bg_tabs .heading-controls {
+    grid-column: 5/7;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+  .wb-component-settings #bg_tabs :is(#bg_global_tab, #bg_chat_tab) {
+    grid-row: 3;
+  }
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot :is(.menu_button, button, select) {
+  transition:
+    background-color 180ms,
+    border-color 180ms,
+    color 180ms,
+    box-shadow 180ms;
+}
+/* Metadata shares the fold title's baseline; fading the preview avoids overlapping text. */
+body.wb-active #chat .wb-user-heading small {
+  transition: opacity 160ms;
+}
+body.wb-active[data-wb-meta="hover"]
+  #chat
+  .mes[is_user="true"]:is(:hover, :focus-within)
+  .wb-user-heading
+  small,
+body.wb-active[data-wb-meta="always"] #chat .mes[is_user="true"] .wb-user-heading small {
+  opacity: 0;
+}
+
+/* ── from selection.css ── */
+.wb-ui :is(.wb-designed-actions > button[aria-pressed="true"], #bg_tabs .bg_tab_button.ui-tabs-active) {
+  background: var(--wb-selection-fill);
+  box-shadow: inset 0 0 0 1px var(--wb-selection-line);
+}
+.wb-ui .bg_example.selected-background {
+  outline: none;
+  border-color: var(--wb-selection-line);
+}
+
+/* ── from preferences.css ── */
+/* A shared inset for paragraphs, message tools, metadata, and embedded content. */
+body.wb-active #chat {
+  padding-left: min(var(--wb-reading-inset, 64px), max(20px, calc((100% - 320px) / 2))) !important;
+  padding-right: min(var(--wb-reading-inset, 64px), max(20px, calc((100% - 320px) / 2))) !important;
+}
+/* Equal side gutters keep native swipe controls beside the last line, clear of text/media. */
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat .mes {
+  --wb-swipe-bottom: calc(25px + var(--wb-reading-size, 17px) * var(--wb-reading-leading, 2) / 2 - 32px);
+}
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat .mes_block {
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+}
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat .swipe_left {
+  left: 0;
+  bottom: calc(var(--wb-swipe-bottom) + 18px);
+}
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat .swipeRightBlock {
+  right: 0;
+  bottom: var(--wb-swipe-bottom);
+}
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat :is(.swipe_left, .swipe_right) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  font-size: 18px;
+  color: var(--wb-muted);
+  z-index: 1;
+}
+body.wb-active:is(:not(.wb-rp), [data-wb-rp-history]) #chat .swipes-counter {
+  height: 18px;
+  min-width: 24px;
+  padding: 0;
+  margin: 0;
+  font:
+    10px/18px system-ui,
+    sans-serif;
+  color: var(--wb-muted);
+}
+
+/* ── Desk reading (board "Main"): one centred measure, no rules between turns, the user's
+   turns as soft cards. Desktop Noval only; RP history and the PWA keep their own layouts. ── */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat {
+  /* 左右留白 sets the measure: the default 64px is the board's 44em, each step moves both sides. */
+  --wb-reading-measure: calc(var(--wb-reading-size, 17px) * 44 + (64px - var(--wb-reading-inset, 64px)) * 3);
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes {
+  max-width: var(--wb-reading-measure);
+  margin: 0 auto 6px !important;
+  padding: 8px 0 18px !important;
+  border-bottom: 0 !important;
+}
+/* The card sits on the text column (the turn's 32px gutters), not on the turn's outer edge. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes[is_user="true"] {
+  max-width: calc(var(--wb-reading-measure) - 64px);
+  margin: 14px auto 6px !important;
+  padding: 10px 18px 16px !important;
+  border-radius: 14px !important;
+  background: var(--wb-surface-2) !important;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes[is_user="true"] .mes_block {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+/* Folding changes only the bottom edge, so the heading never moves. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes[is_user="true"].wb-user-collapsed {
+  padding: 10px 18px !important;
+}
+/* Board "Main": a character turn keeps a strip above its text — floor, name and time on the left,
+   the turn's actions on the right — that becomes a soft pill while the turn is hovered or focused. */
+body.wb-active #chat .wb-reading-time::before {
+  content: " · ";
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes:not([is_user="true"]) {
+  padding: 40px 0 12px !important;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes:not([is_user="true"]) .wb-reading-time::before {
+  content: none;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes:not([is_user="true"]) .ch_name {
+  top: 0;
+  right: 22px;
+  left: 22px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: 9px;
+  background: transparent;
+  transition: background-color 160ms;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile)
+  #chat
+  .mes:not([is_user="true"]):is(:hover, :focus-within)
+  .ch_name {
+  background: var(--wb-surface-2);
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes:not([is_user="true"]) .wb-reading-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 11.5px/1.5 var(--wb-font-ui);
+  color: var(--wb-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .wb-reading-meta > b {
+  color: var(--wb-ink-2);
+  font-weight: 500;
+}
+
+/* ── from rp.css ── */
+body.wb-active.wb-rp {
+  --wb-header: 74px;
+  --wb-rp-chrome: 74px;
+  /* RP home v2: the dialogue is a gradient band along the bottom of the stage, its text in a
+     centred column (the RP dialogue width setting). */
+  --wb-rp-bottom: 0px;
+  --wb-rp-deck: clamp(252px, 35vh, 360px);
+  --wb-rp-width: 0.72;
+  --wb-rp-text: 19px;
+  --wb-rp-area: calc(100vw - var(--wb-left) - var(--wb-right));
+  /* Board "RpDesktop": 1080px at the default 72%; wider windows keep the line length. */
+  --wb-rp-dialog-width: min(calc(var(--wb-rp-area) * var(--wb-rp-width)), calc(1500px * var(--wb-rp-width)));
+  --wb-rp-dialog-left: calc(var(--wb-left) + (var(--wb-rp-area) - var(--wb-rp-dialog-width)) / 2);
+  --wb-rp-inset: max(40px, calc((var(--wb-rp-area) - var(--wb-rp-dialog-width)) / 2));
+}
+body.wb-rp.wb-rp-top-auto {
+  --wb-rp-chrome: 0px;
+}
+/* Side panels lie over the stage (layouts/rp.css), so it keeps the whole window. */
+body.wb-active.wb-rp:not(.wb-mobile) {
+  --wb-left: 0px;
+  --wb-right: 0px;
+}
+body.wb-active.wb-rp :is(#bg1, #bg_custom) {
+  opacity: 1 !important;
+}
+/* The original expression nodes remain connected and managed by their extension. */
+body.wb-rp :is(#expression-wrapper, #visual-novel-wrapper) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.wb-rp-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wb-rp-atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, transparent 52%, var(--wb-rp-scrim, #39362c38)), var(--wb-rp-tint, transparent);
+}
+/* Desktop: the band carries the bottom; one soft vignette along the top lets the caption and corner
+   icons (light, drawn on the picture) read on any scene, with or without the host's shadow and blur
+   settings. The sides stay open: nothing frames the picture. */
+body.wb-rp:not(.wb-mobile) .wb-rp-atmosphere {
+  background:
+    linear-gradient(to bottom, rgb(14 10 7 / 34%) 0, rgb(14 10 7 / 12%) 90px, transparent 170px),
+    var(--wb-rp-tint, transparent);
+}
+.wb-rp-actor,
+.wb-rp-user {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  transition:
+    left 220ms,
+    filter 260ms,
+    opacity 200ms;
+}
+/* Board "RpDesktop": the character stands left of centre, the user's figure to the right. */
+.wb-rp-actor {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.35);
+}
+.wb-rp-user {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.77);
+}
+/* History opens the middle of the scene for the log; the cast steps to the edges. */
+body.wb-rp[data-wb-rp-history] .wb-rp-actor {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.17);
+}
+body.wb-rp[data-wb-rp-history] .wb-rp-user {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.88);
+}
+.wb-rp-stage .is-sprite {
+  /* Framed from the knees up: the figure runs past the window's bottom edge. */
+  bottom: calc(min(var(--wb-rp-sprite, 91vh), calc(100vh - var(--wb-rp-chrome) - 20px)) * -0.19);
+  height: min(
+    var(--wb-rp-sprite, 91vh),
+    calc(100vh - var(--wb-rp-chrome) - 20px),
+    calc(var(--wb-rp-area) * 0.98)
+  );
+  /* A set ratio keeps a figure near the window edge from shrinking to the space left. */
+  aspect-ratio: 2 / 3;
+  max-width: calc(var(--wb-rp-area) * 0.57);
+}
+.wb-rp-stage .is-sprite img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+.wb-rp-stage .is-sprite span {
+  display: none;
+}
+.wb-rp-stage .is-sprite.is-speaking {
+  filter: drop-shadow(0 12px 30px rgb(0 0 0 / 25%));
+}
+.wb-rp-stage .is-listening {
+  filter: brightness(0.78) saturate(0.85);
+}
+/* Portrait cards are the deliberate fallback when no transparent sprite exists. */
+.wb-rp-stage .is-portrait {
+  top: calc(var(--wb-rp-chrome) + 70px);
+  bottom: auto;
+  height: min(
+    320px,
+    calc(var(--wb-rp-sprite, 91vh) * 0.43),
+    calc(100vh - var(--wb-rp-chrome) - 148px - var(--wb-rp-deck) - var(--wb-rp-bottom))
+  );
+  width: min(220px, calc(var(--wb-rp-sprite, 91vh) * 0.32), calc(var(--wb-rp-area) * 0.27));
+  border-radius: 16px;
+  background: var(--wb-rp-glass, var(--wb-soft));
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 18%),
+    inset 0 0 0 1px rgb(255 255 255 / 45%);
+  overflow: hidden;
+}
+.wb-rp-stage .is-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 24%;
+}
+.wb-rp-stage .is-portrait span {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 28px 16px 12px;
+  color: white;
+  font: 600 15px/1.5 var(--wb-font-reading);
+  letter-spacing: 0.06em;
+  background: linear-gradient(transparent, rgb(30 24 18 / 62%));
+}
+/* A cast tag (名字|表情:) leaves the speaker's name before the line, as in a script. On the RP band
+   the name plate names a page's first voice, so only the later ones keep theirs. */
+.mes_text [data-wb-speaker] {
+  display: inline-block;
+  margin-right: 0.5em;
+  padding: 0 0.45em;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  vertical-align: 0.08em;
+  color: var(--wb-accent, currentColor);
+  background: color-mix(in srgb, var(--wb-accent, currentColor) 10%, transparent);
+}
+/* Shrunk rather than removed: the stage reads each tag's position to tell its page. */
+body.wb-rp:not([data-wb-rp-history]) .mes.wb-rp-current [data-wb-speaker][data-wb-lead] {
+  margin: 0;
+  padding: 0;
+  font-size: 0;
+}
+/* A world book's cast: two places, as in a visual novel. Each figure keeps its place while the other
+   speaks; the one listening steps back a little and dims. */
+.wb-rp-stage .is-cast {
+  transform-origin: 50% 100%;
+  animation: wb-cast-enter 360ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+  transition:
+    left 220ms,
+    filter 260ms,
+    scale 260ms,
+    opacity 200ms;
+}
+.wb-rp-stage .is-cast.is-right {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.77);
+}
+body.wb-rp[data-wb-rp-history] .wb-rp-stage .is-cast.is-right {
+  left: calc(var(--wb-left) + var(--wb-rp-area) * 0.88);
+}
+.wb-rp-stage .is-cast.is-speaking {
+  z-index: 1;
+}
+.wb-rp-stage .is-cast.is-listening {
+  scale: 0.95;
+}
+@keyframes wb-cast-enter {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-rp-stage .is-cast {
+    animation: none;
+    transition: none;
+  }
+}
+/* The band runs the whole window width, under the columns, so it never ends in an edge beside
+   them; its text column follows the space between them. */
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history]) #sheld {
+  inset: auto 0 0 0 !important;
+  width: auto !important;
+  height: var(--wb-rp-deck) !important;
+  min-height: 0;
+  display: block !important;
+  background: linear-gradient(
+    to top,
+    var(--wb-rp-band-1) 0%,
+    var(--wb-rp-band-1) 52%,
+    var(--wb-rp-band-2) 76%,
+    transparent 100%
+  ) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  transition:
+    height 280ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    opacity 160ms,
+    visibility 160ms;
+  z-index: 2;
+}
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history]) #chat {
+  position: absolute;
+  inset: 64px calc(var(--wb-right) + var(--wb-rp-inset)) 58px calc(var(--wb-left) + var(--wb-rp-inset));
+  width: auto !important;
+  height: auto;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  transition:
+    left 220ms,
+    right 220ms,
+    opacity 160ms,
+    transform 200ms,
+    visibility 160ms;
+}
+body.wb-rp:not([data-wb-rp-history]) #chat > .mes:not(.wb-rp-current),
+body.wb-rp:not([data-wb-rp-history]) #show_more_messages {
+  display: none !important;
+}
+body.wb-active.wb-rp:not([data-wb-rp-history]) #chat .mes {
+  flex: none;
+  width: 100%;
+  max-width: none;
+  border: 0 !important;
+  background: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+body.wb-active.wb-rp:not([data-wb-rp-history]) #chat .mes_block {
+  padding: 0 !important;
+  width: 100%;
+}
+body.wb-rp:not([data-wb-rp-history])
+  #chat
+  :is(.mes > .avatar, .ch_name, .mes_buttons, .swipe_left, .swipe_right, .swipes-counter) {
+  display: none !important;
+}
+body.wb-active.wb-rp:not([data-wb-rp-history]) #chat .mes_text {
+  font: var(--wb-rp-text) / 1.85 var(--wb-rp-font, serif) !important;
+  letter-spacing: 0.02em;
+  color: var(--wb-rp-ink-1) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.wb-rp:not([data-wb-rp-history]) #chat .mes_text p {
+  margin: 0 0 0.65em;
+}
+/* Paging (RPStage): the current message's block is laid out in columns one page wide and turned
+   with scrollLeft, so lines never split and nothing scrolls inside the box. Media stay whole and
+   no taller than a page. Editing returns to a plain block. */
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history]) #chat {
+  overflow: hidden !important;
+}
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history]) #chat > .mes.wb-rp-current {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history]) #chat .wb-rp-current .mes_block {
+  display: block !important;
+  height: 100%;
+  overflow: hidden;
+  column-width: var(--wb-rp-column, auto);
+  column-gap: var(--wb-rp-gap, normal);
+  column-fill: auto;
+}
+/* A page fills to its last whole line instead of pushing paragraph ends over. */
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history]) #chat .wb-rp-current .mes_block * {
+  orphans: 1;
+  widows: 1;
+}
+body:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history])
+  #chat
+  .wb-rp-current
+  .mes_block
+  :is(img, video, iframe, pre, table, details, .mes_img_container, .mes_file_container) {
+  break-inside: avoid;
+  max-height: var(--wb-rp-page, none);
+}
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history])
+  #chat
+  .wb-rp-current:has(.edit_textarea)
+  .mes_block {
+  column-width: auto;
+  overflow: auto;
+}
+body.wb-active.wb-rp #form_sheld {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(20px);
+  pointer-events: none;
+  transition:
+    opacity 160ms,
+    transform 240ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    visibility 160ms;
+}
+/* Replying or editing: the band grows and its text column becomes a field. */
+body.wb-active.wb-rp:is([data-wb-rp-compose], [data-wb-rp-editing]):not(.wb-mobile) {
+  --wb-rp-deck: clamp(300px, 42vh, 440px);
+}
+/* The field sits on solid band; only the strip above the name fades into the picture. */
+body.wb-active.wb-rp:is([data-wb-rp-compose], [data-wb-rp-editing]):not(.wb-mobile):not([data-wb-rp-history])
+  #sheld {
+  background: linear-gradient(
+    to top,
+    var(--wb-rp-band-1) 0,
+    var(--wb-rp-band-1) calc(100% - 90px),
+    var(--wb-rp-band-2) calc(100% - 44px),
+    transparent 100%
+  ) !important;
+}
+/* Composing: the text column becomes one soft field — the draft on top, the tool row along its
+   foot with the RP keys and send at its end. The field's padding keeps the draft on the reading
+   column's edges. */
+body.wb-active.wb-rp:not(.wb-mobile) #form_sheld {
+  inset: 60px calc(var(--wb-right) + var(--wb-rp-inset) - 20px) 14px
+    calc(var(--wb-left) + var(--wb-rp-inset) - 20px);
+  width: auto;
+  height: auto;
+}
+body.wb-active.wb-rp #send_form {
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 34px 32px 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+body.wb-active.wb-rp:not(.wb-mobile) #send_form {
+  padding: 16px 20px 10px !important;
+  border-radius: 18px !important;
+  background: var(--wb-rp-compose-field) !important;
+  box-shadow: inset 0 0 0 1px var(--wb-rp-line) !important;
+  outline: none !important;
+  transition: box-shadow 160ms;
+}
+body.wb-active.wb-rp:not(.wb-mobile) #send_form:focus-within {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--wb-accent) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--wb-accent) 10%, transparent) !important;
+}
+body.wb-rp #send_textarea {
+  font: var(--wb-rp-text) / 1.8 var(--wb-rp-font, serif) !important;
+  padding: 4px 8px !important;
+}
+body.wb-rp:not(.wb-mobile) #send_textarea {
+  padding: 0 !important;
+  color: var(--wb-rp-ink-1) !important;
+  caret-color: var(--wb-accent);
+}
+body.wb-rp:not(.wb-mobile) #send_textarea::placeholder {
+  color: var(--wb-rp-ink-3);
+}
+body.wb-rp #nonQRFormItems {
+  height: 100%;
+}
+body.wb-rp[data-wb-rp-compose] #chat {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-14px);
+}
+body.wb-rp[data-wb-rp-compose] #form_sheld {
+  opacity: 1;
+  visibility: visible;
+  /* Visible at once on entry so the reply key can focus the input. */
+  transition-duration: 160ms, 240ms, 0s;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+body.wb-active.wb-rp:not(.wb-mobile) #send_but {
+  background: var(--wb-accent);
+}
+body.wb-active.wb-rp:not(.wb-mobile) #send_but :is(.wb-native-icon, .wb-native-icon *) {
+  color: var(--wb-rp-on-accent) !important;
+}
+body.wb-active.wb-rp[data-wb-rp-compose][data-wb-rp-expanded] {
+  --wb-rp-deck: clamp(360px, 74vh, 900px);
+}
+/* Editing a line: the same soft field as replying, filling the text column (its padding keeps
+   the words on the column's edges), with save and cancel on the band's bottom line. */
+body.wb-active.wb-rp[data-wb-rp-editing]:not(.wb-mobile) #chat {
+  overflow: visible !important;
+}
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history])
+  #chat
+  .wb-rp-current:has(.edit_textarea)
+  .mes_block {
+  display: flex !important;
+  flex-direction: column;
+  overflow: visible;
+}
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history])
+  #chat
+  .wb-rp-current:has(.edit_textarea)
+  .mes_text {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: visible !important;
+}
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history]) #chat .edit_textarea {
+  flex: 1 1 auto;
+  width: calc(100% + 40px) !important;
+  height: auto !important;
+  min-height: 0;
+  max-height: none;
+  margin: 0 -20px !important;
+  padding: 14px 20px !important;
+  border: 0 !important;
+  border-radius: 18px;
+  background: var(--wb-rp-compose-field) !important;
+  box-shadow: inset 0 0 0 1px var(--wb-rp-line) !important;
+  color: var(--wb-rp-ink-1) !important;
+  caret-color: var(--wb-accent);
+  font: var(--wb-rp-text) / 1.85 var(--wb-rp-font, serif) !important;
+  letter-spacing: 0.02em;
+  resize: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wb-rp-dot) transparent;
+  transition: box-shadow 160ms;
+}
+body.wb-active.wb-rp:not(.wb-mobile):not([data-wb-rp-history]) #chat .edit_textarea:focus {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--wb-accent) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--wb-accent) 10%, transparent) !important;
+}
+/* History, board "RpHistory" v2 — a visual-novel backlog: the band rises over the whole stage,
+   and the conversation reads down one centred column, each speaker's name in a narrow column to
+   the left of their lines. The line you came from carries the accent stroke. */
+body.wb-active.wb-rp[data-wb-rp-history] #sheld {
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  display: block !important;
+  border-radius: 0 !important;
+  background: linear-gradient(to bottom, var(--wb-rp-band-2) 0, var(--wb-rp-band-1) 180px) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none !important;
+}
+body.wb-rp[data-wb-rp-history] #chat {
+  position: absolute;
+  inset: calc(var(--wb-rp-chrome) + 92px) var(--wb-right) 0 var(--wb-left);
+  width: auto !important;
+  height: auto;
+  overflow-y: auto;
+  padding: 18px calc((var(--wb-rp-area) - var(--wb-rp-log-width)) / 2) 64px !important;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes {
+  position: relative;
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
+  display: block !important;
+  padding: 0 0 0 calc(var(--wb-rp-log-name) + 32px) !important;
+  margin: 0 0 30px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes.wb-rp-current::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: calc(var(--wb-rp-log-name) + 14px);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--wb-accent);
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .mesAvatarWrapper {
+  display: none !important;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .mes_block {
+  min-width: 0;
+  padding: 0 !important;
+}
+/* The name row spans the entry so its actions can sit at the far end; only its pieces take pointers. */
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .ch_name {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  display: block !important;
+  height: 0;
+  min-height: 0;
+  margin: 0 !important;
+  pointer-events: none;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .ch_name > .flex1 {
+  width: var(--wb-rp-log-name);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-height: 0;
+  text-align: right;
+  pointer-events: auto;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .name_text {
+  display: block !important;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--wb-accent-text, var(--wb-accent));
+  font: 600 15px / 1.5 var(--wb-rp-font, var(--wb-font-reading));
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes[is_user="true"] .name_text {
+  color: var(--wb-rp-ink-2);
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .wb-reading-meta {
+  display: flex;
+  gap: 6px;
+  opacity: 1;
+  color: var(--wb-rp-ink-3);
+  font: 11.5px / 1.5 var(--wb-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .wb-reading-meta > b,
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes :is(.timestamp, .wb-reading-time),
+body.wb-rp[data-wb-rp-history] #chat .mes .wb-user-heading {
+  display: none !important;
+}
+/* Message actions surface at the line's top-right only while it is pointed at. */
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .ch_name .mes_buttons {
+  position: absolute;
+  top: -10px;
+  right: 0;
+  height: auto;
+  padding: 2px;
+  pointer-events: auto;
+  border-radius: 10px;
+  background: var(--wb-rp-band-1);
+  box-shadow: 0 0 0 1px var(--wb-rp-line);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 160ms,
+    visibility 160ms;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes:is(:hover, :focus-within) .ch_name .mes_buttons {
+  opacity: 1;
+  visibility: visible;
+}
+body.wb-active.wb-rp[data-wb-rp-history]
+  #chat
+  .mes
+  :is(.mes_text, .mes_img_container, .mes_file_container, .mes_reasoning_details) {
+  width: auto;
+  margin: 0 !important;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .mes_text {
+  padding: 0 !important;
+  font: 17px / 1.9 var(--wb-rp-font, var(--wb-font-reading)) !important;
+  letter-spacing: 0.02em;
+  color: var(--wb-rp-ink-1) !important;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes[is_user="true"] .mes_text {
+  color: var(--wb-rp-ink-2) !important;
+}
+body.wb-active.wb-rp[data-wb-rp-history] #chat .mes .mes_text p {
+  margin: 0 0 0.5em;
+}
+body.wb-rp[data-wb-rp-history] #form_sheld {
+  display: none;
+}
+body.wb-rp.wb-focus #sheld,
+body.wb-rp.wb-rp-overlay-open #sheld {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+@media (max-width: 1100px) {
+  body.wb-rp {
+    --wb-left: 0px !important;
+    --wb-right: 0px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.wb-rp *,
+  body.wb-rp #sheld,
+  body.wb-rp #form_sheld {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+body.wb-rp.reduced-motion *,
+body.wb-rp.reduced-motion #sheld,
+body.wb-rp.reduced-motion #form_sheld {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── from layout.css ── */
+/* Native expression containers can be transparent yet intercept the input
+   toolbar on wide screens. They stay connected for the extension to manage. */
+body.wb-active :is(#expression-wrapper, #visual-novel-wrapper) {
+  pointer-events: none !important;
+}
+/* Its resize grip would otherwise float over the desk's left column. */
+body.wb-active #expression-holder {
+  resize: none !important;
+}
+
+/* ── from addon-shell.css ── */
+/* Always light: feature engines and their editor styles remain separate chunks. */
+.wb-image-slot {
+  display: inline-flex;
+  align-items: center;
+}
+.wb-image-message-button {
+  color: inherit;
+  border: 0;
+  background: none;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  transition:
+    color 0.18s,
+    transform 0.18s;
+}
+.wb-image-message-button:hover {
+  color: #c46a49;
+  transform: translateY(-1px);
+}
+.wb-image-message-button:active {
+  transform: scale(0.9);
+}
+.wb-image-input-anchor:empty {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-image-message-button {
+    transition: none;
+  }
+}
+body.wb-active.wb-image-input-mode #send_but {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+/* Keep the original textarea and send button; only the existing tool row changes. */
+body.wb-active.wb-image-input-mode .wb-image-input-anchor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1/3;
+  grid-row: 2;
+  min-width: 0;
+  height: 40px;
+}
+body.wb-active.wb-image-input-mode #leftSendForm {
+  display: none !important;
+}
+@container composer (max-width:500px) {
+  body.wb-active.wb-image-input-mode .wb-image-input-anchor {
+    gap: 5px;
+  }
+}
+
+/* ── PWA (boards "NovelPwa / RpPwa / RpPwaLight") ──
+   Phones use the actual visible viewport, no mock frame. Noval is one sheet of paper: a header, the
+   quick-config card, the reading and a pill composer. RP is the scene itself with frosted panes on it.
+   Chrome drawn by the workbench lives in layouts/pwa.css; this file only restyles native nodes. */
+body.wb-active.wb-mobile {
+  --wb-header: 58px;
+  --wb-left: 0px;
+  --wb-right: 0px;
+  --wb-mobile-lower: 0px;
+  /* Everything above #sheld: the header plus, in Noval, the quick-config card under it. */
+  --wb-mobile-chrome: 110px;
+  --wb-safe-top: env(safe-area-inset-top, 0px);
+  --wb-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Dialogue quotes stay in the reading ink, as on the boards. */
+  --SmartThemeQuoteColor: var(--wb-ink-1);
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body.wb-active.wb-mobile-rp {
+  --wb-mobile-chrome: 64px;
+}
+/* Focus keeps a strip for "退出专注" only. */
+body.wb-active.wb-mobile.wb-focus:not(.wb-mobile-rp) {
+  --wb-mobile-chrome: 48px;
+}
+body.wb-active.wb-mobile #sheld {
+  inset: auto 0 auto 0 !important;
+  top: calc(
+    var(--wb-mobile-top, 0px) + var(--wb-safe-top) + var(--wb-mobile-chrome) + var(--wb-mobile-lower)
+  ) !important;
+  height: calc(
+    var(--wb-mobile-height, 100dvh) - var(--wb-safe-top) - var(--wb-mobile-chrome) - var(--wb-mobile-lower)
+  ) !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  background: var(--wb-m-paper) !important;
+  transition:
+    top 240ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    height 240ms cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+/* ── Noval reading ── */
+body.wb-active.wb-mobile #chat {
+  padding: 14px 22px 40px !important;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  background: transparent !important;
+}
+body.wb-active.wb-mobile #chat .mes {
+  position: relative;
+  max-width: 730px;
+  padding: 4px 0 6px !important;
+  margin: 0 auto 10px !important;
+  border: 0 !important;
+}
+body.wb-active.wb-mobile #chat .mes_block {
+  padding: 0 !important;
+}
+body.wb-active.wb-mobile #chat .mes_text {
+  font-size: var(--wb-reading-size, 17px) !important;
+  line-height: var(--wb-reading-leading, 1.9) !important;
+  letter-spacing: 0.01em;
+  padding: 0 !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes_text p {
+  margin: 0 0 0.9em;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .mes_block {
+  display: flex !important;
+  flex-direction: column;
+}
+/* The user's turns are soft cards, as on the desk. */
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"] {
+  margin: 4px auto 22px !important;
+  padding: 10px 14px 12px !important;
+  border-radius: 12px !important;
+  background: var(--wb-surface-2) !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"].wb-user-collapsed {
+  padding: 8px 14px !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"] .mes_text {
+  font-size: calc(var(--wb-reading-size, 17px) - 2px) !important;
+  line-height: 1.75 !important;
+  color: var(--wb-ink-2);
+}
+/* Folded, a turn reads as its label and one line of what was written. */
+body.wb-active.wb-mobile #chat .wb-user-heading button {
+  min-height: 32px;
+  gap: 6px;
+  font: 12px/1.6 var(--wb-font-ui);
+  color: var(--wb-ink-3);
+}
+body.wb-active.wb-mobile #chat .wb-user-heading small {
+  font-size: 14px;
+  color: var(--wb-ink-2);
+  opacity: 1;
+}
+/* Lines slide under the config card through a short fade instead of being cut. */
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+}
+/* No hover on a phone: a message's tools float over its corner after a tap (MobileShell). */
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name {
+  position: absolute !important;
+  inset: -46px 0 auto auto !important;
+  z-index: 2;
+  display: none !important;
+  height: auto !important;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 2px 4px !important;
+  border-radius: 12px;
+  background: var(--wb-surface-1);
+  box-shadow:
+    var(--wb-shadow-2),
+    0 0 0 1px var(--wb-line-1);
+  pointer-events: auto !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes:is(.wb-mobile-actions, :has(.edit_textarea)) .ch_name {
+  display: flex !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes:has(.edit_textarea) .ch_name {
+  position: static !important;
+  align-self: flex-end;
+  margin-bottom: 8px !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp)
+  #chat
+  .mes
+  .ch_name
+  :is(.name_text, .timestamp, .wb-reading-meta) {
+  display: none !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes.wb-mobile-actions .mes_block {
+  outline: 2px solid color-mix(in srgb, var(--wb-accent) 22%, transparent);
+  outline-offset: 6px;
+  border-radius: 6px;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"].wb-mobile-actions .mes_block {
+  outline: 0;
+}
+body.wb-mobile #chat .mes_buttons {
+  opacity: 1 !important;
+  gap: 0;
+}
+body.wb-mobile #chat .mes .mes_buttons > .mes_button,
+body.wb-mobile #chat .wb-image-message-button {
+  min-width: 40px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+/* The ellipsis is a font glyph: centre it on the same 40px square as the drawn icons. */
+body.wb-active.wb-mobile #chat .mes_buttons .extraMesButtonsHint {
+  padding: 0;
+  line-height: 40px;
+  text-align: center;
+}
+body.wb-active.wb-mobile #chat .swipe_left,
+body.wb-active.wb-mobile #chat .swipeRightBlock {
+  bottom: -6px;
+}
+body.wb-active.wb-mobile #chat .swipe_left {
+  left: -10px;
+}
+body.wb-active.wb-mobile #chat .swipeRightBlock {
+  right: -10px;
+}
+body.wb-active.wb-mobile #chat :is(.swipe_left, .swipe_right) {
+  width: 36px;
+  height: 36px;
+}
+body.wb-mobile #chat .swipes-counter {
+  display: none;
+}
+
+/* ── Composer: a raised pill. ＋ opens the tools sheet; pulling the pill up opens the full editor ── */
+body.wb-active.wb-mobile #form_sheld {
+  position: relative !important;
+  inset: auto !important;
+  flex: none;
+  width: 100% !important;
+  padding: 10px 12px max(22px, var(--wb-safe-bottom)) !important;
+  background: var(--wb-m-paper) !important;
+  container-type: normal;
+  z-index: 4;
+}
+/* Reading fades into the composer instead of meeting a rule. */
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #form_sheld:where(:not([data-wb-page]))::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--wb-m-paper));
+  pointer-events: none;
+}
+body.wb-active.wb-mobile #send_form {
+  display: flex !important;
+  flex-direction: column;
+  position: relative;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 6px !important;
+  border: 0 !important;
+  border-radius: 24px !important;
+  background: var(--wb-surface-1) !important;
+  box-shadow:
+    var(--wb-shadow-2),
+    0 0 0 1px var(--wb-line-1) !important;
+  gap: 0 !important;
+}
+body.wb-active.wb-mobile #nonQRFormItems {
+  width: 100%;
+  height: auto;
+  flex: none;
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-rows: auto;
+  gap: 0 6px;
+  align-items: end;
+}
+body.wb-active.wb-mobile #send_textarea {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  height: auto !important;
+  min-height: 44px !important;
+  max-height: calc(var(--wb-mobile-height, 100dvh) * 0.3) !important;
+  padding: 10px 2px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: var(--wb-ink-1) !important;
+  font: 16px/1.5 var(--wb-font-ui) !important;
+  field-sizing: content;
+}
+body.wb-active.wb-mobile #send_textarea::placeholder {
+  color: var(--wb-ink-3);
+  opacity: 1;
+}
+body.wb-active.wb-mobile :is(#leftSendForm, .wb-composer-actions) {
+  display: none !important;
+}
+body.wb-active.wb-mobile #leftSendForm {
+  grid-column: 1;
+  grid-row: 2;
+  width: 88px !important;
+  height: 44px !important;
+  gap: 0;
+}
+body.wb-active.wb-mobile :is(#options_button, #extensionsMenuButton) {
+  width: 44px;
+  height: 44px;
+}
+body.wb-active.wb-mobile #rightSendForm {
+  grid-row: 1;
+  grid-column: 3;
+  height: 44px;
+  width: auto;
+  gap: 0;
+}
+body.wb-active.wb-mobile :is(#send_but, #mes_stop) {
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  border-radius: 50% !important;
+}
+body.wb-active.wb-mobile:not(.wb-native-panel) #top-settings-holder {
+  display: none !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-busy) #send_but {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+body.wb-mobile-offline #send_but {
+  opacity: 0.45;
+}
+body.wb-mobile-busy #send_but {
+  display: none !important;
+}
+
+/* ── The pill (Noval) and the full-screen page it and RP's compose band open into (MobileShell
+   drives the motion) ──
+   The pill's card is drawn behind its content so it can grow upward with the finger (--wb-rise)
+   while the content rides its top edge. Letting go turns #form_sheld into a page fixed over the
+   window ([data-wb-page]): a grabber bar to pull it back down, the draft in the reading face, and
+   ＋ / send at the bottom. */
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #send_form {
+  background: transparent !important;
+  box-shadow: none !important;
+  isolation: isolate;
+  touch-action: none;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #form_sheld:not([data-wb-page]) #send_form::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--wb-rise, 0px)) 0 0;
+  z-index: -1;
+  border-radius: 24px;
+  background: var(--wb-surface-1);
+  box-shadow:
+    var(--wb-shadow-2),
+    0 0 0 1px var(--wb-line-1);
+  pointer-events: none;
+  transition: top 260ms var(--wb-ease-emphasized);
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #form_sheld:not([data-wb-page]) #nonQRFormItems {
+  translate: 0 calc(-1 * var(--wb-rise, 0px));
+  opacity: calc(1 - var(--wb-rise-fade, 0));
+  transition:
+    translate 260ms var(--wb-ease-emphasized),
+    opacity 200ms;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-drag] #send_form::before,
+body.wb-active.wb-mobile #form_sheld[data-wb-drag] #nonQRFormItems {
+  transition: none;
+}
+body.wb-active.wb-mobile #form_sheld:not([data-wb-page]) #send_textarea:not([data-wb-overflow]) {
+  touch-action: none;
+}
+body.wb-active.wb-mobile #sheld[data-wb-rise] {
+  z-index: 6 !important;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-page] {
+  position: fixed !important;
+  inset: var(--wb-mobile-top, 0px) 0 auto 0 !important;
+  height: var(--wb-mobile-height, 100dvh) !important;
+  display: flex;
+  flex-direction: column;
+  padding: var(--wb-safe-top) 0 0 !important;
+  background: var(--wb-surface-1) !important;
+  /* #chat is a flex item of #sheld with z-index 30. */
+  z-index: 31;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-page] #send_form {
+  flex: 1;
+  min-height: 0 !important;
+  padding: 0 12px max(12px, var(--wb-safe-bottom)) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  touch-action: auto;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-page] #nonQRFormItems {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) 44px;
+  row-gap: 8px;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-page] #send_textarea {
+  grid-row: 1;
+  grid-column: 1/-1;
+  align-self: stretch;
+  height: 100% !important;
+  max-height: none !important;
+  padding: 4px 10px 24px !important;
+  font: 17px/1.95 var(--wb-font-reading) !important;
+  letter-spacing: 0.01em;
+  touch-action: pan-y;
+  field-sizing: fixed;
+}
+body.wb-active.wb-mobile #form_sheld[data-wb-page] #rightSendForm {
+  grid-row: 2;
+}
+/* The page covers the reading; once it has risen, what lies under it leaves the accessibility tree. */
+body.wb-active.wb-mobile[data-wb-covered] #chat {
+  visibility: hidden;
+}
+
+/* ── RP (board "RpPwa"): the scene is the page. RPStage, shared with the desk, shows one page of one
+   message in a frosted box above the bottom edge. Reading has no input field: 回应, or "轮到你回应"
+   on the last page, turns the box itself into the input ([data-wb-rp-compose]). Pulling the box up past
+   the end of its text opens the log ([data-wb-rp-history]). Panes hang from the top of the visible
+   viewport (SillyTavern's translateZ on <html>, which is 0px tall here, would pin anything placed
+   by `bottom` to the page top), so the box rides up with the keyboard while the scene keeps the
+   large viewport and nothing shrinks. ── */
+body.wb-active.wb-mobile-rp {
+  --wb-rp-ink-1: #2f2c27;
+  --wb-rp-ink-2: #5f574b;
+  --wb-rp-ink-3: #7a7266;
+  --wb-rp-line: rgb(60 45 30 / 10%);
+  --wb-rp-glass: rgb(255 253 248 / 76%);
+  --wb-rp-box: rgb(255 253 248 / 88%);
+  --wb-rp-field: rgb(60 45 30 / 6%);
+  --wb-rp-plate: #2f2c27;
+  --wb-rp-plate-ink: #fffefa;
+  --wb-rp-dot: rgb(60 45 30 / 22%);
+  --wb-rp-on-accent: #fffefa;
+  --wb-rp-tint: rgb(255 250 240 / 6%);
+  --wb-rp-scrim: rgb(250 246 238 / 50%);
+  --wb-rp-shadow: 0 8px 24px rgb(52 41 30 / 12%);
+  --wb-rp-plate-shadow: 0 1px 2px rgb(52 41 30 / 8%);
+  /* The dialogue band: lighter than the desktop's so more of the scene shows through. */
+  --wb-rp-band-1: rgb(251 248 242 / 84%);
+  --wb-rp-band-2: rgb(251 248 242 / 58%);
+  --wb-rp-on-scene: #fffaf2;
+  --wb-rp-on-scene-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 55%)) drop-shadow(0 0 8px rgb(0 0 0 / 28%));
+  --wb-rp-on-scene-text: 0 1px 2px rgb(0 0 0 / 60%), 0 0 12px rgb(0 0 0 / 30%);
+  --wb-rp-chrome: 0px;
+  --wb-rp-bottom: 0px;
+  /* Where the band's top edge sits: the visible viewport's bottom, less the band. */
+  --wb-rp-box-top: calc(
+    var(--wb-mobile-top, 0px) + var(--wb-mobile-height, 100dvh) - var(--wb-rp-bottom) - var(--wb-rp-deck)
+  );
+  /* Pulling the box up (RPStage writes a negative --wb-rp-pull) stretches it with the finger. */
+  --wb-rp-deck: calc(
+    clamp(256px, 36lvh, 336px) + var(--wb-safe-bottom) + max(0px, -1 * var(--wb-rp-pull, 0px))
+  );
+  /* The band fades in over its first rows; the name sits where it turns solid, the text below. */
+  --wb-rp-text-top: 66px;
+  --wb-rp-foot: calc(44px + max(4px, var(--wb-safe-bottom)));
+  --wb-rp-dialog-left: 0px;
+  --wb-rp-dialog-width: 100vw;
+  --wb-rp-bar-height: 36px;
+  --wb-rp-bar-gap: 0px;
+  --wb-reading-size: 17px;
+  --wb-reading-leading: 1.8;
+}
+:root[data-wb-theme="dark"] body.wb-active.wb-mobile-rp {
+  --wb-rp-ink-1: #f3eee5;
+  --wb-rp-ink-2: #d2c8b8;
+  --wb-rp-ink-3: #a89e8f;
+  --wb-rp-line: rgb(255 255 255 / 10%);
+  --wb-rp-glass: rgb(30 26 22 / 58%);
+  --wb-rp-box: rgb(26 22 19 / 76%);
+  --wb-rp-field: rgb(255 255 255 / 8%);
+  --wb-rp-plate: #f3eee5;
+  --wb-rp-plate-ink: #2a2420;
+  --wb-rp-dot: rgb(255 255 255 / 30%);
+  --wb-rp-on-accent: #1b1916;
+  --wb-rp-tint: rgb(20 14 10 / 18%);
+  --wb-rp-scrim: rgb(16 12 9 / 60%);
+  --wb-rp-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  --wb-rp-plate-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+  --wb-rp-band-1: rgb(22 19 16 / 80%);
+  --wb-rp-band-2: rgb(22 19 16 / 54%);
+}
+body.wb-active.wb-mobile-rp.no-blur {
+  --wb-rp-glass: rgb(255 253 248 / 92%);
+  --wb-rp-box: rgb(255 253 248 / 95%);
+}
+:root[data-wb-theme="dark"] body.wb-active.wb-mobile-rp.no-blur {
+  --wb-rp-glass: rgb(30 26 22 / 90%);
+  --wb-rp-box: rgb(26 22 19 / 93%);
+}
+body.wb-active.wb-mobile-rp :is(#bg1, #bg_custom) {
+  opacity: 1 !important;
+}
+body.wb-mobile-rp :is(#expression-wrapper, #visual-novel-wrapper) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+/* The scene is sized by the large viewport: a keyboard or a collapsing toolbar never rescales it. */
+body.wb-mobile-rp .wb-rp-stage {
+  inset: 0 0 auto;
+  height: 100lvh;
+}
+body.wb-mobile-rp .wb-rp-atmosphere {
+  background: var(--wb-rp-tint);
+}
+body.wb-mobile-rp .wb-rp-actor {
+  left: 50%;
+}
+body.wb-mobile-rp .wb-rp-stage .is-sprite {
+  bottom: 17lvh;
+  height: 71lvh;
+  max-width: 100vw;
+}
+body.wb-mobile-rp .wb-rp-stage .is-portrait {
+  top: calc(var(--wb-safe-top) + 84px);
+  height: min(300px, 38lvh);
+  width: min(220px, 58vw);
+}
+/* The dialogue is a band across the bottom of the scene, as in a visual novel: no frame, no frost,
+   a gradient that turns solid where the text starts and runs under the home indicator. */
+body.wb-active.wb-mobile.wb-mobile-rp #sheld {
+  inset: var(--wb-rp-box-top) 0 auto 0 !important;
+  top: var(--wb-rp-box-top) !important;
+  width: auto !important;
+  height: var(--wb-rp-deck) !important;
+  display: block !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--wb-rp-band-2) 32px,
+    var(--wb-rp-band-1) 88px,
+    var(--wb-rp-band-1) 100%
+  ) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  z-index: 2;
+  transition:
+    height 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    top 260ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    border-radius 260ms,
+    opacity 180ms,
+    visibility 180ms;
+}
+body.wb-mobile-rp:is([data-wb-rp-pulling], [data-wb-band-drag]) #sheld {
+  transition: none !important;
+}
+/* Pulling the compose band down (MobileShell) slides it after the finger, back toward the dialogue. */
+body.wb-mobile-rp[data-wb-band-lower] #sheld {
+  translate: 0 var(--wb-rp-pull, 0px);
+}
+body.wb-mobile-rp.wb-focus #sheld {
+  opacity: 0;
+  visibility: hidden;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #chat {
+  position: absolute;
+  inset: var(--wb-rp-text-top) 0 var(--wb-rp-foot);
+  height: auto;
+  display: block !important;
+  padding: 0 22px !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-mask-image: none;
+  mask-image: none;
+  transition:
+    opacity 160ms,
+    transform 220ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    visibility 160ms;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history])
+  :is(#chat > .mes:not(.wb-rp-current), #chat > #show_more_messages) {
+  display: none !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #chat .mes {
+  display: block !important;
+  width: 100%;
+  max-width: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #chat .mes_block {
+  padding: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+/* On the band the head carries 取消 / 保存, so editing shows no native row either. */
+body.wb-mobile-rp:not([data-wb-rp-history]) #chat .mes :is(.mesAvatarWrapper, .ch_name, .mes_buttons) {
+  display: none !important;
+}
+body.wb-mobile-rp
+  #chat
+  .mes
+  :is(.wb-user-heading, .swipe_left, .swipeRightBlock, .swipe_right, .swipes-counter) {
+  display: none !important;
+}
+/* RP 外观 sets the dialogue's face and size; the phone reads it 2px smaller than the desk. */
+body.wb-active.wb-mobile.wb-mobile-rp #chat .mes_text {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--wb-rp-ink-1) !important;
+  font: calc(var(--wb-rp-text, 19px) - 2px) / 1.8 var(--wb-rp-font, var(--wb-font-reading)) !important;
+  letter-spacing: 0.01em;
+}
+body.wb-mobile-rp #chat .mes_text :is(q, em, i) {
+  color: inherit;
+}
+body.wb-mobile-rp:not([data-wb-rp-history]) #chat .mes_text p {
+  margin: 0 0 0.6em;
+}
+/* Editing in the log keeps the native row (save, cancel, copy, move, delete) over the field. */
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes:has(.edit_textarea) .ch_name {
+  display: flex !important;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history]
+  #chat
+  .mes:has(.edit_textarea)
+  :is(.name_text, .timestamp, .wb-reading-meta) {
+  display: none !important;
+}
+body.wb-mobile-rp[data-wb-rp-history] #chat .mes:has(.edit_textarea) .mes_buttons {
+  display: flex !important;
+}
+body.wb-mobile-rp[data-wb-rp-history] #chat .edit_textarea {
+  min-height: 120px;
+  width: 100%;
+  font: 16px / 1.7 var(--wb-font-reading);
+  color: var(--wb-rp-ink-1);
+}
+/* Editing on the band: one field filling the text's place, in the dialogue's face, like the desk. */
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history])
+  #chat
+  .wb-rp-current:has(.edit_textarea)
+  .mes_block {
+  display: flex !important;
+  flex-direction: column;
+  overflow: visible;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history])
+  #chat
+  .wb-rp-current:has(.edit_textarea)
+  .mes_text {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: visible !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #chat .edit_textarea {
+  flex: 1 1 auto;
+  width: calc(100% + 24px) !important;
+  height: auto !important;
+  min-height: 0;
+  max-height: none;
+  margin: 0 -12px !important;
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-radius: 14px;
+  background: var(--wb-rp-field) !important;
+  box-shadow: inset 0 0 0 1px var(--wb-rp-line) !important;
+  color: var(--wb-rp-ink-1) !important;
+  caret-color: var(--wb-accent);
+  font: calc(var(--wb-rp-text, 19px) - 2px) / 1.8 var(--wb-rp-font, var(--wb-font-reading)) !important;
+  resize: none;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #chat .edit_textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wb-accent) 45%, transparent) !important;
+}
+
+/* Compose: the box is the input — the field fills it, ＋ and send on its bottom row. */
+body.wb-active.wb-mobile.wb-mobile-rp #form_sheld:not([data-wb-page]) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(16px);
+  transition:
+    opacity 160ms,
+    transform 240ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    visibility 160ms;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-compose]:not([data-wb-rp-history]) #chat {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-14px);
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-compose]:not([data-wb-rp-history])
+  #form_sheld:not([data-wb-page]) {
+  opacity: 1;
+  visibility: visible;
+  /* Visible at once on entry so the reply key can focus the input. */
+  transition-duration: 160ms, 240ms, 0s;
+  pointer-events: auto;
+  transform: none;
+}
+body.wb-active.wb-mobile.wb-mobile-rp #form_sheld:not([data-wb-page]) #send_form {
+  height: 100% !important;
+  padding: var(--wb-rp-text-top) 10px max(10px, var(--wb-safe-bottom)) 18px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  /* Pulling the band up opens the full editor (MobileShell). */
+  touch-action: none;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not(.wb-image-input-mode)
+  #form_sheld:not([data-wb-page])
+  #nonQRFormItems {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) 44px;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not(.wb-image-input-mode)
+  #form_sheld:not([data-wb-page])
+  #send_textarea {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: stretch;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 4px !important;
+  field-sizing: fixed;
+  color: var(--wb-rp-ink-1) !important;
+  font: 17px / 1.8 var(--wb-font-reading) !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp #send_textarea::placeholder {
+  color: var(--wb-rp-ink-3);
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not(.wb-image-input-mode)
+  #form_sheld:not([data-wb-page])
+  #rightSendForm {
+  grid-row: 2;
+}
+body.wb-active.wb-mobile.wb-mobile-rp #send_but {
+  background: var(--wb-accent) !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp #send_but :is(.wb-native-icon, .wb-native-icon *) {
+  color: var(--wb-rp-on-accent) !important;
+}
+/* History (board "RpHistory" on a phone): one frosted pane from under the header to the bottom,
+   each line its own box with the speaker's plate; the user's lines mirror to the right. */
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #sheld {
+  inset: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 66px) 0 auto 0 !important;
+  top: calc(var(--wb-mobile-top, 0px) + var(--wb-safe-top) + 66px) !important;
+  height: calc(var(--wb-mobile-height, 100dvh) - var(--wb-safe-top) - 66px) !important;
+  border-radius: 22px 22px 0 0 !important;
+  background: var(--wb-rp-box) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 0 0 1px var(--wb-rp-line) !important;
+  transform: translateY(max(0px, var(--wb-rp-pull, 0px)));
+  /* The pane takes its place at once and rises into view on the compositor; the band, coming back,
+     does the same (RPStage drops the band's geometry transitions for that switch). */
+  transition: none !important;
+  animation: wb-rp-log-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+body.wb-active.wb-mobile.wb-mobile-rp:not([data-wb-rp-history]) #sheld {
+  animation: wb-rp-band-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+@keyframes wb-rp-log-in {
+  from {
+    translate: 0 36vh;
+    opacity: 0;
+  }
+}
+@keyframes wb-rp-band-in {
+  from {
+    translate: 0 24px;
+    opacity: 0;
+  }
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat {
+  position: absolute;
+  inset: 56px 0 0;
+  height: auto;
+  display: flex !important;
+  flex-direction: column;
+  padding: 16px 12px max(24px, var(--wb-safe-bottom)) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat > .mes:first-of-type {
+  margin-top: auto !important;
+}
+body.wb-mobile-rp[data-wb-rp-history] #form_sheld {
+  display: none !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes {
+  position: relative;
+  display: block !important;
+  width: 100%;
+  max-width: 650px;
+  padding: 0 !important;
+  margin: 26px auto 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes_block {
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  padding: 24px 16px 12px !important;
+  border-radius: 18px;
+  background: var(--wb-rp-field);
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes_text {
+  font-size: 16px !important;
+  line-height: 1.75 !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes:not(:has(.edit_textarea)) .ch_name {
+  position: absolute !important;
+  top: -16px;
+  left: 14px;
+  z-index: 1;
+  display: flex !important;
+  align-items: center;
+  right: auto !important;
+  width: max-content !important;
+  height: 32px;
+  max-width: calc(100% - 28px);
+  padding: 0 14px 0 34px !important;
+  border-radius: 16px;
+  background: var(--wb-rp-plate);
+  color: var(--wb-rp-plate-ink);
+  box-shadow: var(--wb-rp-plate-shadow);
+  font: 600 14px/1 var(--wb-font-ui);
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes .ch_name div {
+  flex: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes .ch_name .name_text {
+  display: block !important;
+  color: inherit !important;
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history]
+  #chat
+  .mes:not(:has(.edit_textarea))
+  .ch_name
+  :is(.timestamp, .wb-reading-meta, .mes_ghost, .mes_buttons) {
+  display: none !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes .mesAvatarWrapper {
+  position: absolute;
+  top: -13px;
+  left: 17px;
+  z-index: 2;
+  display: block !important;
+  width: 26px !important;
+  min-width: 0 !important;
+  height: 26px !important;
+  min-height: 0 !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes .mesAvatarWrapper > .avatar {
+  display: block !important;
+  width: 26px !important;
+  height: 26px !important;
+  margin: 0 !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes .mesAvatarWrapper > .avatar img {
+  display: block;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 0 !important;
+  border-radius: 50%;
+  object-fit: cover;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mesAvatarWrapper > :not(.avatar) {
+  display: none !important;
+}
+/* The row stays a reversed flex row so the avatar keeps its place for native layouts. */
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes[is_user="true"] {
+  display: flex !important;
+  flex-direction: row-reverse;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes[is_user="true"] .mes_block {
+  flex: 1;
+  background: color-mix(in srgb, var(--wb-accent) 12%, var(--wb-rp-field));
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history]
+  #chat
+  .mes[is_user="true"]:not(:has(.edit_textarea))
+  .ch_name {
+  left: auto !important;
+  right: 14px !important;
+  padding: 0 34px 0 14px !important;
+}
+body.wb-active.wb-mobile.wb-mobile-rp[data-wb-rp-history] #chat .mes[is_user="true"] .mesAvatarWrapper {
+  left: auto;
+  right: 17px;
+}
+body.wb-mobile-rp[data-wb-rp-history] #chat .mes:not(:has(.edit_textarea)) .mes_buttons {
+  display: none !important;
+}
+
+/* ── Manual image mode stays inside the native composer, including reference uploads ── */
+body.wb-active.wb-mobile.wb-image-input-mode #send_form {
+  padding: 10px 8px !important;
+  border-radius: 20px !important;
+}
+body.wb-active.wb-mobile.wb-image-input-mode #nonQRFormItems {
+  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-rows: 66px auto;
+}
+body.wb-active.wb-mobile.wb-image-input-mode #send_textarea {
+  grid-row: 1;
+  grid-column: 1/-1;
+  height: 66px !important;
+  padding: 0 8px !important;
+}
+body.wb-active.wb-mobile.wb-image-input-mode #rightSendForm {
+  grid-row: 2;
+  grid-column: 2;
+  align-self: end;
+}
+body.wb-mobile .wb-image-input-anchor {
+  grid-row: 2;
+  grid-column: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0 3px;
+}
+body.wb-active.wb-mobile.wb-image-input-mode .wb-image-input-anchor {
+  grid-column: 1;
+  height: auto;
+  min-height: 44px;
+  gap: 3px;
+}
+body.wb-mobile.wb-mobile-rp.wb-image-input-mode #send_form {
+  background: var(--wb-surface-1) !important;
+}
+body.wb-mobile.wb-mobile-rp.wb-image-input-mode #send_textarea {
+  color: var(--wb-ink-1) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.wb-mobile *,
+  body.wb-mobile #sheld {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+body.wb-mobile.reduced-motion *,
+body.wb-mobile.reduced-motion #sheld {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ── phase E · the Noval desk (board "Main") ──
+   #sheld is the lower part of the paper sheet whose top edge is .wb-reading-bar; geometry comes
+   from --wb-sheet-* in layouts/desk.css. RP and PWA keep their own #sheld rules above. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #sheld {
+  inset: calc(var(--wb-sheet-top) + var(--wb-reading-bar)) var(--wb-sheet-right) var(--wb-sheet-bottom)
+    var(--wb-sheet-left) !important;
+  background: var(--wb-surface-1) !important;
+  border-radius: 0 0 var(--wb-radius-xl) var(--wb-radius-xl) !important;
+  box-shadow: var(--wb-shadow-2) !important;
+  /* The reading bar carries the upper half of the shadow. */
+  clip-path: inset(0 -100vw -100vh -100vw);
+  transition: inset var(--wb-motion) var(--wb-ease-emphasized);
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #form_sheld {
+  position: relative;
+  max-width: none;
+  padding: 10px 28px 18px !important;
+}
+/* Text scrolls under a short fade instead of meeting the composer's edge. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #form_sheld::before {
+  content: "";
+  position: absolute;
+  inset: -36px 0 auto;
+  height: 46px;
+  background: linear-gradient(to bottom, transparent, var(--wb-surface-1));
+  pointer-events: none;
+}
+/* The composer floats on the sheet as its own card. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form {
+  width: 100%;
+  max-width: 780px;
+  height: var(--wb-composer-height, 132px);
+  min-height: 124px;
+  margin: 0 auto !important;
+  padding: 16px 10px 10px 18px !important;
+  border: 0 !important;
+  border-radius: var(--wb-radius-xl) !important;
+  background: var(--wb-surface-1) !important;
+  box-shadow:
+    var(--wb-shadow-2),
+    0 0 0 1px var(--wb-line-1) !important;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form:focus-within {
+  box-shadow:
+    var(--wb-shadow-2),
+    0 0 0 1px color-mix(in srgb, var(--wb-accent) 38%, var(--wb-line-1)) !important;
+}
+/* Keyboard steps and the double-click reset glide; a drag follows the pointer directly. */
+body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form {
+  transition:
+    height var(--wb-motion) var(--wb-ease-emphasized),
+    box-shadow 160ms;
+}
+body.wb-active.wb-resizing:not(.wb-rp):not(.wb-mobile) #send_form {
+  transition: box-shadow 160ms;
+}
+body.wb-active.wb-focus:not(.wb-rp):not(.wb-mobile) #send_form {
+  max-width: 800px;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #send_textarea {
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+}
+
+/*
+ * Isolation: inside workbench UI, revert every unlayered (native) declaration back to the layered
+ * workbench styles. The impossible #wb-x argument lifts specificity to (5,1,0) so native ID selectors
+ * cannot outrank it. Leased native controls (.wb-native-embedded) keep their native styles.
+ */
+:is(#wb-root, #wb-layout-root, .wb-ui, #wb-x#wb-x#wb-x#wb-x#wb-x):not(
+  .wb-native-embedded,
+  .wb-native-embedded *
+),
+:is(#wb-root, #wb-layout-root, .wb-ui, #wb-x#wb-x#wb-x#wb-x#wb-x)
+  *:not(.wb-native-embedded, .wb-native-embedded *) {
+  all: revert-layer;
+}
+
+/* Board "Main": the send button keeps its place at the end of the tool row. SillyTavern hides it
+   while no model is connected; on the desk it stays as a quiet, inert circle instead of vanishing. */
+body.wb-active:not(.wb-mobile):not(.wb-image-input-mode) #send_but.displayNone {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Settings page skeleton for leased native forms: quiet section titles, each control grid and
+   drawer on its own card, the same cards the designed pages use. */
+body.wb-active .wb-component-settings .wb-native-settings-slot :is(h3, h4, #user-settings-block h4) {
+  margin: 18px 0 8px;
+  padding: 0 2px;
+  border: 0;
+  color: var(--wb-ink-3);
+  font: 600 12px/1.6 system-ui;
+}
+body.wb-active .wb-component-settings .wb-native-settings-slot hr {
+  display: none;
+}
+body.wb-active
+  .wb-component-settings:not(.page-generation)
+  .wb-native-settings-slot
+  .wb-component-grid:not(.wb-component-grid .wb-component-grid) {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--wb-surface-2);
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  .inline-drawer:not(.inline-drawer .inline-drawer) {
+  margin: 0 0 10px;
+  padding: 0 16px;
+  border: 0 !important;
+  border-radius: 14px;
+  background: var(--wb-surface-2);
+}
+body.wb-active
+  .wb-component-settings:not(.page-generation)
+  .wb-native-settings-slot
+  .wb-component-grid
+  .inline-drawer:not(.inline-drawer .inline-drawer) {
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--wb-surface-1);
+}
+body.wb-active
+  .wb-component-settings
+  .wb-native-settings-slot
+  .inline-drawer:not(.inline-drawer .inline-drawer)
+  > .inline-drawer-header {
+  min-height: 44px;
+  border: 0 !important;
+}

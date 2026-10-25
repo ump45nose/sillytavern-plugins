@@ -1,0 +1,61 @@
+/* Markdown fields: the live-preview editor (src/ui/md). Its insides are styled by the editor's own
+   theme; here are the field box and the composer overlay on SillyTavern's textarea. */
+@layer wb.components {
+  /* A field box: each context gives it its textarea's look (:is(textarea, .wb-md) in its sheet),
+     which this zero-specificity baseline yields to. */
+  :where(.wb-md) {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    max-height: var(--wb-md-max, 60vh);
+    overflow: hidden;
+    cursor: text;
+  }
+  .wb-md[hidden] {
+    display: none !important;
+  }
+
+  /* The composer: the editor lies on the textarea's box (placed by composer.ts), whose own text is
+     kept but not painted; its background, border and size stay the composer's. */
+  .wb-composer-md {
+    position: absolute;
+    z-index: 1;
+    max-height: none;
+    margin: 0;
+    background: transparent;
+  }
+  #send_textarea[data-wb-md] {
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent !important;
+  }
+  #send_textarea[data-wb-md]::placeholder {
+    -webkit-text-fill-color: transparent !important;
+  }
+  #send_textarea[data-wb-md]::selection {
+    background: transparent !important;
+  }
+  /* Placeholders follow the textarea's per mode. */
+  .wb-composer-md .cm-placeholder {
+    color: var(--wb-muted) !important;
+  }
+  body.wb-mobile .wb-composer-md .cm-placeholder {
+    color: var(--wb-ink-3) !important;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-composer-md .cm-placeholder,
+  body.wb-mobile.wb-mobile-rp .wb-composer-md .cm-placeholder {
+    color: var(--wb-rp-ink-3) !important;
+  }
+  /* A short draft on the phone's pill lets the pill be pulled up, as the bare textarea does. */
+  body.wb-active.wb-mobile
+    #form_sheld:not([data-wb-page])
+    #send_textarea:not([data-wb-overflow])
+    + .wb-composer-md,
+  body.wb-active.wb-mobile
+    #form_sheld:not([data-wb-page])
+    #send_textarea:not([data-wb-overflow])
+    + .wb-composer-md
+    * {
+    touch-action: none;
+  }
+}

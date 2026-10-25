@@ -1,0 +1,717 @@
+/*
+ * RP desktop, home v2: the scene and figures fill the window with no panel cutting them; the
+ * dialogue is a gradient band along the bottom (the native #sheld, restyled in native-bridge.css),
+ * and every control stays faint until the pointer reaches it. This file draws what sits on the band
+ * and around the scene.
+ */
+@layer wb.layouts {
+  body.wb-active.wb-rp {
+    --wb-rp-ink-1: #2f2c27;
+    --wb-rp-ink-2: #5f574b;
+    --wb-rp-ink-3: #7a7266;
+    --wb-rp-line: rgb(60 45 30 / 10%);
+    --wb-rp-glass: rgb(255 253 248 / 78%);
+    --wb-rp-glass-soft: rgb(255 253 248 / 55%);
+    --wb-rp-box: rgb(255 253 248 / 86%);
+    --wb-rp-field: rgb(60 45 30 / 5%);
+    --wb-rp-plate: #2f2c27;
+    --wb-rp-plate-ink: #fffefa;
+    --wb-rp-dot: rgb(60 45 30 / 22%);
+    --wb-rp-bar: rgb(250 249 245 / 82%);
+    --wb-rp-chip: #fffefa;
+    --wb-rp-on-accent: #fffefa;
+    --wb-rp-tint: rgb(255 250 240 / 6%);
+    --wb-rp-scrim: rgb(250 246 238 / 42%);
+    --wb-rp-shadow: 0 8px 24px rgb(52 41 30 / 12%);
+    --wb-rp-box-shadow: 0 24px 60px rgb(0 0 0 / 22%);
+    --wb-rp-band-1: rgb(251 248 242 / 93%);
+    --wb-rp-band-2: rgb(251 248 242 / 72%);
+    --wb-rp-faint: 0.62;
+    --wb-rp-compose-field: rgb(255 253 248 / 72%);
+    /* What is drawn straight on the picture: light glyphs with a dark shadow read on any scene. */
+    --wb-rp-on-scene: #fffaf2;
+    --wb-rp-on-scene-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 55%)) drop-shadow(0 0 8px rgb(0 0 0 / 28%));
+    --wb-rp-on-scene-text: 0 1px 2px rgb(0 0 0 / 60%), 0 0 12px rgb(0 0 0 / 30%);
+  }
+  :root[data-wb-theme="dark"] body.wb-active.wb-rp {
+    --wb-rp-ink-1: #f3eee5;
+    --wb-rp-ink-2: #d2c8b8;
+    --wb-rp-ink-3: #a89e8f;
+    --wb-rp-line: rgb(255 255 255 / 10%);
+    --wb-rp-glass: rgb(30 26 22 / 62%);
+    --wb-rp-glass-soft: rgb(30 26 22 / 38%);
+    --wb-rp-box: rgb(26 22 19 / 74%);
+    --wb-rp-field: rgb(255 255 255 / 7%);
+    --wb-rp-plate: #f3eee5;
+    --wb-rp-plate-ink: #2a2420;
+    --wb-rp-dot: rgb(255 255 255 / 28%);
+    --wb-rp-bar: rgb(27 25 22 / 72%);
+    --wb-rp-chip: rgb(255 255 255 / 8%);
+    --wb-rp-on-accent: #1b1916;
+    --wb-rp-tint: rgb(20 14 10 / 18%);
+    --wb-rp-scrim: rgb(16 12 9 / 55%);
+    --wb-rp-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+    --wb-rp-box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+    --wb-rp-band-1: rgb(22 19 16 / 90%);
+    --wb-rp-band-2: rgb(22 19 16 / 66%);
+    --wb-rp-compose-field: rgb(255 255 255 / 6%);
+  }
+
+  /* SillyTavern's "no blur" setting removes every backdrop filter; without the frost the panes
+     would show the sprites through them, so they turn nearly opaque instead. */
+  body.wb-active.wb-rp.no-blur {
+    --wb-rp-glass: rgb(255 253 248 / 92%);
+    --wb-rp-glass-soft: rgb(255 253 248 / 78%);
+    --wb-rp-box: rgb(255 253 248 / 95%);
+    --wb-rp-bar: rgb(250 249 245 / 95%);
+  }
+  :root[data-wb-theme="dark"] body.wb-active.wb-rp.no-blur {
+    --wb-rp-glass: rgb(30 26 22 / 90%);
+    --wb-rp-glass-soft: rgb(30 26 22 / 72%);
+    --wb-rp-box: rgb(26 22 19 / 93%);
+    --wb-rp-bar: rgb(27 25 22 / 94%);
+  }
+
+  /* ── Top bar when pinned: frosted, one hairline under it ── */
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-top {
+    background: var(--wb-rp-bar);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 1px 0 var(--wb-rp-line);
+  }
+
+  /* The layout switcher belongs to the top bar: while the bar waits above the scene, so does it,
+     unless a keyboard switch into RP left focus on it. */
+  body.wb-active.wb-rp.wb-rp-top-collapsed .wb-layout-switcher:not(:focus-within) {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* ── Scene caption: day, place and weather written on the picture, no card ── */
+  .wb-rp-scene {
+    position: fixed;
+    top: calc(var(--wb-rp-chrome) + 22px);
+    left: calc(var(--wb-left) + 56px);
+    z-index: 3;
+    width: 220px;
+    max-width: 24vw;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--wb-rp-on-scene);
+    font: var(--wb-text-sm) / 1.45 var(--wb-font-ui);
+    text-shadow: var(--wb-rp-on-scene-text);
+    transition:
+      top var(--wb-duration-base),
+      left var(--wb-duration-base),
+      opacity var(--wb-duration-fast),
+      visibility var(--wb-duration-fast);
+  }
+  .wb-rp-scene-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .wb-rp-scene-head strong {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--wb-font-reading);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-rp-scene-head span {
+    flex: none;
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-rp-scene > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.9;
+    overflow-wrap: anywhere;
+  }
+  .wb-rp-scene svg {
+    flex: none;
+    filter: var(--wb-rp-on-scene-shadow);
+  }
+
+  /* ── Deck: what sits on the dialogue band — suggestions above it, the name and quick menu on its
+     top line, page turning and "reply" on its bottom line. Positions follow the text column. ── */
+  .wb-rp-deck {
+    position: fixed;
+    left: var(--wb-left);
+    right: var(--wb-right);
+    bottom: 0;
+    z-index: 6;
+    height: calc(var(--wb-rp-deck) + 48px);
+    color: var(--wb-rp-ink-1);
+    font: var(--wb-text-sm) / 1.45 var(--wb-font-ui);
+    pointer-events: none;
+    transition:
+      left 220ms,
+      right 220ms,
+      height 280ms var(--wb-ease-emphasized),
+      opacity var(--wb-duration-fast),
+      visibility var(--wb-duration-fast);
+  }
+  .wb-rp-deck.is-hidden,
+  .wb-rp-scene.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .wb-rp-deck :is(button, .wb-rp-replies, .wb-rp-tools) {
+    pointer-events: auto;
+  }
+  .wb-rp-replies {
+    position: absolute;
+    top: 4px;
+    left: var(--wb-rp-inset);
+    right: var(--wb-rp-inset);
+    min-width: 0;
+    display: flex;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .wb-rp-replies button {
+    flex: none;
+    max-width: 260px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 14px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-rp-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 0 0 1px var(--wb-rp-line);
+    color: var(--wb-rp-ink-1);
+    font: inherit;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .wb-rp-replies button:is(:hover, :focus-visible) {
+    background: var(--wb-rp-box);
+  }
+  .wb-rp-deck.is-compact .wb-rp-replies {
+    display: none;
+  }
+  .wb-rp-head {
+    position: absolute;
+    top: 64px;
+    left: var(--wb-rp-inset);
+    right: calc(var(--wb-rp-inset) - 6px);
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    pointer-events: none;
+  }
+  /* The speaker: a short accent stroke and the name, no plate. */
+  .wb-rp-plate {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .wb-rp-plate::before {
+    content: "";
+    flex: none;
+    width: 3px;
+    height: 18px;
+    border-radius: 2px;
+    background: var(--wb-accent);
+  }
+  .wb-rp-plate img {
+    display: none;
+  }
+  .wb-rp-plate strong {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--wb-font-reading);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  /* Quick menu: bare icons on the band's bottom line, quiet until the pointer or focus reaches them. */
+  .wb-rp-tools {
+    flex: none;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: var(--wb-rp-faint);
+    transition: opacity var(--wb-duration-base);
+  }
+  .wb-rp-tools:is(:hover, :focus-within),
+  .wb-rp-deck:is(.is-compose, .is-editing) .wb-rp-tools {
+    opacity: 1;
+  }
+  .wb-rp-tools-rule {
+    flex: none;
+    width: 1px;
+    height: 16px;
+    margin: 0 6px;
+    background: var(--wb-rp-line);
+  }
+  .wb-rp-tool {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-rp-ink-2);
+    cursor: pointer;
+    transition:
+      background-color var(--wb-duration-fast),
+      color var(--wb-duration-fast);
+  }
+  .wb-rp-tool.is-labelled {
+    display: flex;
+    gap: 4px;
+    width: auto;
+    padding: 0 10px 0 6px;
+    font: inherit;
+  }
+  .wb-rp-tool:is(:hover, :focus-visible),
+  .wb-rp-tool[aria-expanded="true"] {
+    background: var(--wb-rp-field);
+    color: var(--wb-rp-ink-1);
+  }
+  .wb-rp-tool.is-primary {
+    margin-left: 4px;
+    padding: 0 12px 0 9px;
+    background: var(--wb-accent);
+    color: var(--wb-rp-on-accent);
+    --wb-control-ink: var(--wb-rp-on-accent);
+  }
+  .wb-rp-tool.is-primary:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--wb-accent) 88%, black);
+    color: var(--wb-rp-on-accent);
+  }
+  .wb-rp-tool[aria-pressed="true"] {
+    color: var(--wb-accent-text);
+  }
+  .wb-rp-tool:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .wb-rp-foot {
+    position: absolute;
+    left: calc(var(--wb-rp-inset) - 8px);
+    right: calc(var(--wb-rp-inset) - 8px);
+    bottom: 12px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  /* Composing, the keys sit in the native input's right-hand row, ahead of anything the host puts
+     there and of send. */
+  #rightSendForm > .wb-rp-tools {
+    order: -1;
+    /* SillyTavern sizes every block in this row as one icon. */
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    margin: 0 6px 0 0;
+    opacity: 1;
+  }
+  .wb-rp-dots {
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+  }
+  .wb-rp-dots button {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 24px;
+    min-width: 0;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .wb-rp-dots button::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wb-rp-dot);
+    transition:
+      width var(--wb-duration-base) var(--wb-ease-standard),
+      background-color var(--wb-duration-fast);
+  }
+  .wb-rp-dots button[aria-current="true"] {
+    width: 26px;
+  }
+  .wb-rp-dots button[aria-current="true"]::before {
+    width: 18px;
+    border-radius: 3px;
+    background: var(--wb-accent);
+  }
+  .wb-rp-dots button:not([aria-current]):hover::before {
+    background: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-rp-dot));
+  }
+  .wb-rp-reply {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    margin-left: 6px;
+    padding: 0 12px 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-accent-text);
+    font: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: background-color var(--wb-duration-fast);
+  }
+  .wb-rp-reply:is(:hover, :focus-visible) {
+    background: var(--wb-rp-field);
+  }
+  /* ── History: a backlog over the whole stage (native-bridge.css draws the wash and entries);
+     its title and the way back head the same centred column ── */
+  body.wb-active.wb-rp {
+    /* Clear of the corner keys on each side (they reach 128px in from the stage's right edge). */
+    --wb-rp-log-width: min(860px, calc(var(--wb-rp-area) - 280px));
+    --wb-rp-log-name: 120px;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-rp-log-head {
+    position: fixed;
+    top: calc(var(--wb-rp-chrome) + 30px);
+    left: calc(var(--wb-left) + (var(--wb-rp-area) - var(--wb-rp-log-width)) / 2);
+    z-index: 6;
+    width: var(--wb-rp-log-width);
+    height: 44px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-left: calc(var(--wb-rp-log-name) + 32px);
+    color: var(--wb-rp-ink-1);
+    font: var(--wb-text-sm) / 1.45 var(--wb-font-ui);
+    transition: left 220ms;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-rp-log-head h2 {
+    margin: 0;
+    font: 600 22px / 44px var(--wb-rp-font, var(--wb-font-reading));
+    letter-spacing: 0.16em;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-rp-log-head small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-rp-ink-3);
+    font-size: var(--wb-text-sm);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-rp-log-head button {
+    flex: none;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    margin-left: auto;
+    padding: 0 14px 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--wb-rp-line);
+    color: var(--wb-rp-ink-1);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color var(--wb-duration-fast);
+  }
+  body.wb-rp:not(.wb-mobile) .wb-rp-log-head button:is(:hover, :focus-visible) {
+    background: var(--wb-rp-field);
+  }
+  body.wb-rp.wb-focus .wb-rp-log-head {
+    opacity: 0;
+    visibility: hidden;
+  }
+  /* Over the backlog's wash the corner keys and edge arrows take the band's ink. */
+  body.wb-rp[data-wb-rp-history]:not(.wb-mobile) :is(.wb-rp-corner, .wb-rp-visibility, .wb-edge-arrow) {
+    color: var(--wb-rp-ink-2) !important;
+    filter: none;
+  }
+  body.wb-rp[data-wb-rp-history]:not(.wb-mobile)
+    :is(.wb-rp-corner, .wb-rp-visibility):is(:hover, :focus-visible),
+  body.wb-rp[data-wb-rp-history]:not(.wb-mobile) .wb-rp-corner[aria-pressed="true"] {
+    background: var(--wb-rp-field);
+  }
+
+  /* ── Top-right corner: history and show/hide, icons only, faint until reached ── */
+  body.wb-rp :is(.wb-rp-corner, .wb-rp-visibility) {
+    position: fixed;
+    top: calc(var(--wb-rp-chrome) + 18px);
+    z-index: 29;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-rp-on-scene);
+    opacity: 0.55;
+    filter: var(--wb-rp-on-scene-shadow);
+    cursor: pointer;
+    transition:
+      top var(--wb-duration-base),
+      right var(--wb-duration-base),
+      opacity var(--wb-duration-base),
+      background-color var(--wb-duration-fast);
+  }
+  body.wb-rp :is(.wb-rp-corner, .wb-rp-visibility):is(:hover, :focus-visible),
+  body.wb-rp .wb-rp-corner[aria-pressed="true"] {
+    opacity: 1;
+    background: rgb(0 0 0 / 18%);
+  }
+  body.wb-rp .wb-rp-visibility {
+    right: calc(var(--wb-right) + 52px);
+  }
+  body.wb-rp .wb-rp-visibility svg {
+    width: 18px;
+    height: 18px;
+  }
+  .wb-rp-corner {
+    right: calc(var(--wb-right) + 52px + 40px);
+  }
+
+  /* ── Side panels: two matching frosted cards laid over the stage, pinned or revealed alike; the
+     stage never moves for them. Both hang below the corner keys and keep one gutter to the window,
+     and each edge arrow keeps the same gap to its card. ── */
+  body.wb-active.wb-rp:not(.wb-mobile) {
+    --wb-rp-panel-top: max(calc(var(--wb-rp-chrome) + var(--wb-gutter)), 64px);
+    --wb-edge-gap-left: var(--wb-gutter);
+    --wb-edge-gap-right: var(--wb-gutter);
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) :is(.wb-left.wb-nav, .wb-right) {
+    top: var(--wb-rp-panel-top);
+    bottom: var(--wb-gutter);
+    border-radius: var(--wb-radius-xl);
+    background: var(--wb-rp-glass);
+    backdrop-filter: blur(24px) saturate(1.15);
+    -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    box-shadow:
+      inset 0 0 0 1px var(--wb-rp-line),
+      var(--wb-rp-box-shadow);
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-left.wb-nav {
+    left: var(--wb-gutter);
+    padding-top: 12px;
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-left.wb-nav:not(.is-open) {
+    transform: translateX(calc(-100% - var(--wb-gutter)));
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-right :is(.wb-panel-head, .wb-resource-rail) {
+    border-color: var(--wb-rp-line);
+  }
+  body.wb-active.wb-rp:not(.wb-mobile) .wb-right .wb-resource-rail {
+    background: var(--wb-rp-field);
+  }
+  /* The caption would sit half under the left card; it waits for the card to go. */
+  body.wb-rp:not(.wb-mobile):is(.wb-left-open, .wb-left-hover-open) .wb-rp-scene {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* ── Edge arrows: light bare chevrons drawn on the picture ── */
+  body.wb-rp:not(.wb-mobile) .wb-edge-arrow {
+    display: grid;
+    place-items: center;
+    background: transparent;
+    color: var(--wb-rp-on-scene) !important;
+    opacity: 0.7;
+    filter: var(--wb-rp-on-scene-shadow);
+    transition: opacity var(--wb-duration-fast);
+  }
+  body.wb-rp:not(.wb-mobile) .wb-edge-arrow:is(:hover, :focus-visible) {
+    opacity: 1;
+  }
+  body.wb-rp:not(.wb-mobile) .wb-edge-arrow svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+  }
+}
+
+/* RP 外观 › 立绘来源 and the cast page: entries as soft rows, each chosen one with its image count
+   and a way to its portraits in the world-book entry. */
+@layer wb.layouts {
+  .wb-ui.wb-popover.is-wide {
+    width: min(460px, calc(100vw - 20px));
+  }
+  .wb-cast-source {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .wb-cast-source > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-cast-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 31px;
+    padding: 5px 8px 5px 10px;
+    border: 1px solid var(--wb-line);
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .wb-cast-open:is(:hover, :focus-visible) {
+    color: var(--wb-accent);
+    border-color: color-mix(in srgb, var(--wb-accent) 28%, var(--wb-line));
+  }
+  .wb-cast {
+    max-height: min(560px, calc(100vh - 120px));
+  }
+  .wb-cast-note {
+    margin: 0 0 10px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--wb-muted);
+  }
+  .wb-cast-note:last-child {
+    margin: 12px 0 0;
+  }
+  .wb-cast-note.is-error {
+    margin-top: 8px;
+    color: var(--wb-danger, #b4432f);
+  }
+  .wb-cast-note code {
+    font:
+      11px ui-monospace,
+      monospace;
+    color: var(--wb-ink-2, var(--wb-ink));
+    border: 0;
+    padding: 1px 4px;
+    border-radius: var(--wb-radius-xs);
+    background: var(--wb-soft);
+    word-break: break-all;
+  }
+  .wb-cast-note button {
+    margin-left: 6px;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: var(--wb-accent);
+    font-size: 11.5px;
+  }
+  .wb-cast-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wb-cast-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 6px 6px 6px 10px;
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-soft);
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: box-shadow 160ms;
+  }
+  .wb-cast-list li.is-on {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wb-accent) 30%, var(--wb-line));
+  }
+  .wb-cast-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .wb-cast-entry input {
+    align-self: center;
+    margin: 0;
+  }
+  .wb-cast-entry strong {
+    flex: none;
+    font-size: 13px;
+    font-weight: 560;
+  }
+  .wb-cast-entry small {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 11px;
+    color: var(--wb-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wb-cast-entry:has(input:disabled) {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .wb-cast-hint {
+    grid-column: 1 / -1;
+    display: block;
+    margin: 0 0 2px 22px;
+    font-size: 11px;
+    color: var(--wb-muted);
+  }
+  .wb-cast-count {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--wb-muted);
+    white-space: nowrap;
+  }
+  .wb-cast-manage {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0 4px 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-muted);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .wb-cast-manage:is(:hover, :focus-visible) {
+    background: var(--wb-surface);
+    color: var(--wb-accent);
+  }
+}

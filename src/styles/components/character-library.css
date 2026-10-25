@@ -1,0 +1,432 @@
+/* Character library (board Characters): a head with import/new, chip filters, a tinted selection bar and portrait cards. */
+@layer wb.components {
+  .wb-settings-body > .wb-characters.is-management {
+    display: block;
+    height: auto;
+    min-height: 100%;
+    padding: 20px 24px 28px;
+  }
+  .wb-library-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .wb-library-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-height: 36px;
+  }
+  .wb-library-head h2 {
+    margin: 0;
+    color: var(--wb-ink-1);
+    font-family: var(--wb-font-ui);
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .wb-library-head > small {
+    color: var(--wb-ink-3);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-library-head > :is(.wb-library-import, .wb-library-create) {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: var(--wb-radius-md);
+    font: inherit;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--wb-duration-fast),
+      transform var(--wb-duration-fast);
+  }
+  .wb-library-import {
+    border: 1px solid var(--wb-line-2);
+    background: var(--wb-surface-1);
+    color: var(--wb-ink-1);
+  }
+  .wb-library-import:is(:hover, :focus-within) {
+    background: var(--wb-hover);
+  }
+  .wb-library-import input {
+    display: none;
+  }
+  .wb-ui .wb-library-create {
+    border: 0;
+    background: var(--wb-accent);
+    box-shadow: none;
+    color: var(--wb-accent-ink);
+    font-weight: 600;
+  }
+  .wb-ui .wb-library-create:is(:hover, :focus-visible) {
+    background: var(--wb-accent-strong);
+    color: var(--wb-accent-ink);
+  }
+  .wb-library-head > :is(.wb-library-import, .wb-library-create):active {
+    transform: scale(0.97);
+  }
+
+  /* Search, then chips that scroll sideways, then the sort at the far edge. */
+  .wb-character-search-row.is-management {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+  .wb-character-search-row > .wb-search {
+    flex: 0 1 300px;
+    min-width: 200px;
+  }
+  .wb-character-search-row > :last-child {
+    flex: none;
+    width: 124px;
+  }
+  .wb-library-chips {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .wb-library-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .wb-ui .wb-library-chips > button {
+    flex: none;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: var(--wb-radius-pill);
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+    font-weight: 400;
+    white-space: nowrap;
+    transition:
+      background-color var(--wb-duration-fast),
+      color var(--wb-duration-fast);
+  }
+  .wb-ui .wb-library-chips > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-library-chips > button[aria-checked="true"] {
+    background: var(--wb-ink-1);
+    color: var(--wb-surface-1);
+    font-weight: 600;
+  }
+
+  /* The selection bar is quiet until something is picked, then tints and shows its actions. */
+  .wb-character-bulk {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 40px;
+    padding: 0 8px 0 12px;
+    border-radius: 10px;
+    background: transparent;
+    transition: background-color var(--wb-duration-fast);
+  }
+  .wb-character-bulk.is-active {
+    background: var(--wb-selected-bg);
+  }
+  .wb-character-bulk .wb-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-character-bulk.is-active .wb-check {
+    color: var(--wb-accent);
+    font-weight: 600;
+  }
+  .wb-ui .wb-character-bulk > button {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--wb-radius-sm);
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity var(--wb-duration-fast),
+      background-color var(--wb-duration-fast);
+  }
+  .wb-ui .wb-character-bulk.is-active > button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .wb-ui .wb-character-bulk > button:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--wb-ink-1) 6%, transparent);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-character-bulk > button.is-danger {
+    color: var(--wb-danger);
+  }
+
+  /* ── Portrait cards ── */
+  .wb-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
+    gap: 14px;
+    margin: 0;
+  }
+  .wb-character-card {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    overflow: hidden;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    transition:
+      border-color var(--wb-duration-fast),
+      box-shadow var(--wb-duration-base) var(--wb-ease-standard),
+      transform var(--wb-duration-base) var(--wb-ease-standard);
+  }
+  .wb-character-card:is(:hover, :focus-within) {
+    box-shadow: var(--wb-shadow-2);
+    transform: translateY(-1px);
+  }
+  .wb-character-card.is-selected {
+    border-color: var(--wb-accent);
+    box-shadow: 0 0 0 1px var(--wb-accent);
+  }
+  .wb-ui .wb-character-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .wb-ui .wb-character-main:is(:hover, :focus-visible) {
+    background: transparent;
+  }
+  .wb-ui .wb-character-main:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: -2px;
+    border-radius: 14px;
+  }
+  .wb-character-card .wb-portrait {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 10 / 11;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: var(--wb-surface-2);
+    box-shadow: none;
+  }
+  .wb-ui .wb-character-card .wb-portrait img {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    object-fit: cover;
+    object-position: 50% 12%;
+    transition: transform var(--wb-duration-slow) var(--wb-ease-standard);
+  }
+  .wb-character-card:hover .wb-portrait img {
+    transform: scale(1.025);
+  }
+  .wb-character-card .wb-portrait.is-initial b {
+    color: color-mix(in srgb, var(--wb-ink-1) 34%, transparent);
+    font: 400 64px/1 var(--wb-font-reading);
+  }
+  .wb-portrait.is-initial[data-tint="0"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #d49a8a 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #d49a8a 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-portrait.is-initial[data-tint="1"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #8fa3bb 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #8fa3bb 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-portrait.is-initial[data-tint="2"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #9fb08c 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #9fb08c 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-portrait.is-initial[data-tint="3"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #c9b088 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #c9b088 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-portrait.is-initial[data-tint="4"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #ab97be 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #ab97be 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-portrait.is-initial[data-tint="5"] {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, #d8a47c 30%, var(--wb-surface-2)),
+      color-mix(in srgb, #d8a47c 44%, var(--wb-surface-2))
+    );
+  }
+  .wb-character-card .wb-portrait > em {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 2px 9px;
+    border-radius: var(--wb-radius-pill);
+    background: color-mix(in srgb, var(--wb-surface-1) 90%, transparent);
+    box-shadow: 0 1px 3px rgb(30 22 14 / 14%);
+    color: var(--wb-accent);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    backdrop-filter: blur(6px);
+  }
+
+  .wb-character-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 11px 13px 13px;
+  }
+  .wb-character-card-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .wb-character-card-title strong {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--wb-ink-1);
+    font: 500 15.5px/1.35 var(--wb-font-reading);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-character-card-title time {
+    flex: none;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-character-card-desc {
+    display: -webkit-box;
+    min-height: calc(12.5px * 1.65 * 2);
+    overflow: hidden;
+    color: var(--wb-ink-2);
+    font-size: 12.5px;
+    line-height: 1.65;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .wb-character-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: auto;
+    padding-top: 2px;
+  }
+  .wb-character-card-tags i {
+    max-width: 100%;
+    overflow: hidden;
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.6;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Select and star float on the portrait; both appear on hover, and stay once in use. */
+  .wb-ui .wb-character-card > input[type="checkbox"] {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    margin: 0;
+    box-shadow: 0 1px 3px rgb(30 22 14 / 22%);
+    opacity: 0;
+    transition: opacity var(--wb-duration-fast);
+  }
+  .wb-ui .wb-character-star {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--wb-surface-1) 82%, transparent);
+    box-shadow: 0 1px 3px rgb(30 22 14 / 16%);
+    color: var(--wb-ink-2);
+    opacity: 0;
+    backdrop-filter: blur(6px);
+    transition:
+      opacity var(--wb-duration-fast),
+      color var(--wb-duration-fast);
+  }
+  .wb-ui .wb-character-star.is-on {
+    color: #c08a2c;
+    opacity: 1;
+  }
+  .wb-ui .wb-character-star:is(:hover, :focus-visible) {
+    background: var(--wb-surface-1);
+    color: #c08a2c;
+  }
+  .wb-ui .wb-character-card:is(:hover, :focus-within) > :is(input[type="checkbox"], .wb-character-star),
+  .wb-ui .wb-card-grid.has-selection .wb-character-card > input[type="checkbox"] {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wb-character-card,
+    .wb-character-card .wb-portrait img {
+      transition: none;
+    }
+    .wb-character-card:is(:hover, :focus-within),
+    .wb-character-card:hover .wb-portrait img {
+      transform: none;
+    }
+  }
+}

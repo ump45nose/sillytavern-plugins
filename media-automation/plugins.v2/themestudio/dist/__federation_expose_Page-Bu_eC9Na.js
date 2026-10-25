@@ -1,1 +1,0 @@
-import{importShared as t}from"./__federation_fn_import-YrFTgSGK.js";import a from"./__federation_expose_AppPage-BGeS4MSw.js";const{openBlock:i,createBlock:p}=await t("vue"),l={__name:"PageEntry",props:{api:Object,pluginId:{type:String,default:"ThemeStudio"}},setup(e){return(n,o)=>(i(),p(a,{api:e.api,"plugin-id":e.pluginId},null,8,["api","plugin-id"]))}};export{l as default};

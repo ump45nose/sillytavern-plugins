@@ -1,2 +1,0 @@
-# Development/test containers that may be running but must not autostart.
-sillytavern-workbench-*

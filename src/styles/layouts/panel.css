@@ -1,0 +1,162 @@
+/*
+ * The right panel as a card on the desk (boards "Panel*"): icon tabs on top, then the resource
+ * rail and the panel side by side. App sets --wb-panel-rail while the rail shows; the card keeps
+ * one gutter to the window edge and the sheet keeps another to the card.
+ */
+@layer wb.layouts {
+  body.wb-active.wb-right-open:not(.wb-mobile) {
+    --wb-sheet-gap-right: calc(var(--wb-gutter) * 2);
+  }
+  body.wb-active:not(.wb-mobile) .wb-right {
+    top: var(--wb-header);
+    right: var(--wb-gutter);
+    bottom: var(--wb-gutter);
+    width: calc(var(--wb-right-size) + var(--wb-panel-rail, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--wb-radius-xl);
+    background: var(--wb-surface-1);
+    box-shadow: var(--wb-shadow-2);
+    transform: translateX(calc(100% + var(--wb-gutter)));
+    transition:
+      transform var(--wb-motion) var(--wb-ease-standard),
+      opacity var(--wb-duration-base),
+      visibility var(--wb-motion),
+      width var(--wb-motion) var(--wb-ease-standard);
+  }
+  body.wb-active:not(.wb-mobile) .wb-right.is-open {
+    transform: none;
+  }
+  /* The rail now lives inside the card, beside the panel. */
+  body.wb-active:not(.wb-mobile) .wb-right .wb-resource-rail {
+    position: relative;
+    inset: auto;
+    flex: none;
+    width: 0;
+    border: 0;
+    background: var(--wb-surface-2);
+    transform: none;
+    transition:
+      width var(--wb-motion) var(--wb-ease-standard),
+      opacity var(--wb-duration-base),
+      visibility var(--wb-motion);
+  }
+  body.wb-active:not(.wb-mobile) .wb-right .wb-resource-rail.is-open {
+    width: var(--wb-rail-size);
+  }
+}
+
+@layer wb.components {
+  .wb-panel-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 52px;
+    padding: 0 10px 0 12px;
+    border-bottom: 1px solid var(--wb-line-1);
+  }
+  .wb-panel-head .wb-panel-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+  }
+  .wb-panel-tab {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-3);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-medium);
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .wb-panel-tab:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-panel-tab.is-active {
+    padding: 0 10px 0 8px;
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent-text);
+    box-shadow: none;
+  }
+  .wb-panel-tab-label {
+    white-space: nowrap;
+  }
+  .wb-panel-tab-gap {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    margin: 0 6px;
+    background: var(--wb-line-1);
+  }
+  .wb-panel-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-2);
+    cursor: pointer;
+  }
+  .wb-panel-close:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-panel-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .wb-panel-body > .wb-panel-content {
+    flex: 1;
+    min-width: 0;
+    background: var(--wb-surface-1);
+  }
+  /* PWA drawer: one row — the tabs scroll under a soft edge, close stays at the end; touch-sized. */
+  body.wb-mobile .wb-panel-head {
+    height: auto;
+    min-height: 56px;
+    padding: 6px 6px 6px 10px;
+    border-bottom: 0;
+  }
+  body.wb-mobile .wb-panel-head .wb-panel-tabs {
+    flex: 1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  }
+  body.wb-mobile .wb-panel-tab {
+    height: 40px;
+    min-width: 40px;
+    justify-content: center;
+  }
+  body.wb-mobile .wb-panel-close {
+    width: 44px;
+    height: 44px;
+    margin-left: 2px;
+    border-radius: 12px;
+  }
+}

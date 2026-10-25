@@ -1,6 +1,0 @@
-tensorflow-cpu==2.20.0
-numpy==2.2.6
-pandas==2.3.2
-scikit-image==0.25.2
-pytextgrid==0.1.4
-soundfile==0.13.1

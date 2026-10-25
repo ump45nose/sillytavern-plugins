@@ -1,0 +1,45 @@
+/* Legacy layout styles (0.4.0), layered. Shrinks as screens move to wb.components. */
+@layer wb.legacy {
+  /* Equal side columns keep resource selectors centered and reserve room for the entry. */
+  body.wb-active .wb-top {
+    padding-right: 24px;
+    grid-template-columns: minmax(212px, 1fr) minmax(0, 860px) minmax(212px, 1fr);
+  }
+  body.wb-active.wb-rp .wb-top {
+    grid-template-columns: minmax(244px, 1fr) minmax(0, 860px) minmax(244px, 1fr);
+  }
+  body.wb-rp .wb-contexts {
+    transform: none;
+  }
+  @media (max-width: 1400px) {
+    body.wb-active .wb-top {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+  }
+  @media (max-width: 1150px) {
+    body.wb-active .wb-top {
+      grid-template-columns: minmax(212px, 1fr) minmax(0, 860px) minmax(212px, 1fr);
+    }
+    body.wb-active.wb-rp .wb-top {
+      grid-template-columns: minmax(244px, 1fr) minmax(0, 860px) minmax(244px, 1fr);
+    }
+  }
+  /* Mouse reveals overlay the reading area without changing its width. */
+  body.wb-left-hover-open .wb-left {
+    z-index: 25;
+    box-shadow: 8px 0 24px #34291e0d;
+  }
+  body.wb-right-hover-open .wb-right {
+    z-index: 25;
+    box-shadow: -8px 0 24px #34291e0d;
+  }
+  body.wb-right-hover-open .wb-resource-rail {
+    right: var(--wb-right-size);
+    z-index: 24;
+  }
+  body.wb-left-hover-open .wb-edge-nav,
+  body.wb-right-hover-open .wb-edge-nav {
+    z-index: 26;
+  }
+}

@@ -1,0 +1,273 @@
+/* Persona settings page (board WsPersona): the shared list column, then face and scope on the left,
+   name and description on the right. */
+@layer wb.components {
+  .wb-persona-page,
+  .wb-persona-manager {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* List rows: avatar, name with the current dot, one quiet line. */
+  .wb-persona-row {
+    padding: 0;
+  }
+  .wb-ui .wb-persona-row > button {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 54px;
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .wb-persona-row-avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-persona-row-avatar img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .wb-persona-row-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .wb-ui .wb-persona-row-copy strong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-persona-row .wb-choice-state.is-current {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--wb-success);
+    box-shadow: none;
+  }
+  .wb-ui .wb-persona-row .wb-choice-state.is-current::after {
+    content: none;
+  }
+
+  /* The desk: a 300px side column beside the writing surface. */
+  .wb-persona-desk {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 20px 16px;
+    border: 0;
+  }
+  .wb-persona-desk-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 14px;
+    min-height: 0;
+  }
+  .wb-persona-side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .wb-persona-portrait {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 16px 16px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-persona-face {
+    display: grid;
+    place-items: center;
+    width: 100px;
+    height: 100px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--wb-surface-1);
+    box-shadow:
+      0 0 0 3px var(--wb-surface-1),
+      var(--wb-shadow-1);
+    color: var(--wb-ink-2);
+    font-size: 32px;
+  }
+  .wb-persona-face img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .wb-ui .wb-persona-portrait > button {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--wb-surface-1);
+    box-shadow: 0 0 0 1px var(--wb-line-1);
+    color: var(--wb-ink-1);
+    font-size: 12px;
+  }
+  .wb-ui .wb-persona-portrait > button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+
+  .wb-persona-card {
+    padding: 10px 16px 6px;
+    border-radius: 14px;
+    background: var(--wb-surface-2);
+  }
+  .wb-persona-card-title {
+    margin: 0 0 2px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-persona-card-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    margin: 0;
+    border-bottom: 1px solid var(--wb-line-1);
+    color: var(--wb-ink-1);
+    font-size: 13px;
+  }
+  .wb-persona-card-row:last-child {
+    border-bottom: 0;
+  }
+  .wb-persona-card-row > :is(.wb-select, input) {
+    width: 156px;
+  }
+  .wb-ui .wb-persona-card-row input {
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 8px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    font-size: 13px;
+  }
+
+  .wb-persona-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    padding: 0 4px;
+  }
+  .wb-ui .wb-persona-tools button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 12px;
+  }
+  .wb-ui .wb-persona-tools button:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-persona-tools button.is-danger {
+    color: var(--wb-danger);
+  }
+
+  /* The writing side: two short lines, then the description takes the rest of the height. */
+  .wb-persona-main {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+  }
+  .wb-persona-line {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    color: var(--wb-ink-2);
+    font-size: 13px;
+  }
+  .wb-ui .wb-persona-line input {
+    height: 36px;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font-size: 13.5px;
+  }
+  .wb-ui .wb-persona-desc {
+    flex: 1;
+    min-height: 320px;
+    margin: 4px 0 0;
+    padding: 18px 20px 30px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 14px;
+    background: var(--wb-surface-1);
+    box-shadow: none;
+    color: var(--wb-ink-1);
+    font: 15px/1.95 var(--wb-font-reading);
+    resize: none;
+    max-height: none;
+  }
+  .wb-ui :is(.wb-persona-line input:focus, .wb-persona-desc:is(:focus, :focus-within)) {
+    outline: none;
+    border-color: var(--wb-ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-ring) 18%, transparent);
+  }
+  .wb-persona-count {
+    position: absolute;
+    right: 14px;
+    bottom: 10px;
+    color: var(--wb-ink-3);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+
+  @container (max-width: 760px) {
+    .wb-persona-desk-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
