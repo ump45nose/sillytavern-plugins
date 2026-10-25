@@ -51,7 +51,8 @@ class Archive:
                 cutoff=datetime.fromisoformat(data['cutoff'].replace('Z','+00:00'))
                 if cutoff.tzinfo is None:
                     raise ValueError('cutoff must include timezone')
-                received=datetime.fromtimestamp(manifest.stat().st_mtime, timezone.utc).isoformat()
+                checked=datetime.fromtimestamp(manifest.stat().st_mtime, timezone.utc)
+                received=checked.isoformat()
                 missing=0
                 for name, entry in data['entries'].items():
                     match=NAME.fullmatch(name)
@@ -103,7 +104,9 @@ class Archive:
                     'last_window_at':max((b for _,b in intervals),default=None).isoformat() if intervals else None,
                     'gaps':gaps,'missing_objects':missing,'completeness':'unknown',
                     'unconfirmed_removals':unconfirmed,
-                    'stale':(self.now()-max((b for _,b in intervals),default=cutoff)).total_seconds()>86400})
+                    # The daily 09:00 job publishes a manifest even when the device is idle.
+                    # Give publication two hours of grace and its midnight cutoff three.
+                    'stale':self.now()-checked>timedelta(hours=26) or self.now()-cutoff>timedelta(hours=36)})
                 snapshots.append([instance,hashlib.sha256(raw).hexdigest(),self.opaque_id(json.dumps(current,sort_keys=True))])
                 stamps.append(received)
                 windows.update({r['id']:r for r in device_windows})
