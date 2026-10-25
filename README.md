@@ -60,7 +60,7 @@ npm run start
 
 官方 release、镜像 digest 和酒馆助手资产快照由 `baseline.lock.json` 固定。准备脚本检查版本，不初始化覆盖现有数据；需要本机已有锁定镜像，可按 lock 中的 reference 获取。`WB_HELPER_SOURCE` 可指定另一台机器上的同版本酒馆助手资产。
 
-验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支；`npm run release` 检查、测试、构建后，把 `extension/` 的内容提交到 `release` 分支（根目录即扩展目录，可直接按 Git 地址安装）。推送到 `workbench` 后 GitHub Actions 会自动执行该流程并发布 `release` 分支，酒馆内「扩展 → 安装扩展」填入仓库地址 `https://github.com/ump45nose/SillyTavern`、分支填 `release` 即可安装；IDE 同步需另行部署 `server/workbench-sync` 服务端插件。没有必需的服务端插件、核心补丁或额外数据库。
+验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支；`npm run release` 检查、测试、构建后，把 `extension/` 的内容提交到 `release` 分支（根目录即扩展目录，可直接按 Git 地址安装）。本仓库是开发与本地调试环境，不直接对外安装。发布产物在两个独立仓库，由 GitHub Actions 自动跟随本仓库 `workbench` 分支构建：前端扩展 [ump45nose/noval-workbench](https://github.com/ump45nose/noval-workbench)（酒馆「扩展 → 安装扩展」直接填该地址即可）；服务端插件 [ump45nose/workbench-sync](https://github.com/ump45nose/workbench-sync)（克隆到酒馆 `plugins/` 目录，开启 `enableServerPlugins` 后重启，供 IDE 同步使用）。没有必需的服务端插件、核心补丁或额外数据库。
 
 ```bash
 npm run check              # TypeScript、观察器与测试模型语法
