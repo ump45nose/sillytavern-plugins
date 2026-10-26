@@ -166,6 +166,7 @@ export const resourcesMethods = {
     } finally {
       // One rebuild for the whole batch.
       this.resourceAction = false;
+      if (action === "delete" && kind !== "preset") this.pruneOrganization();
       this.invalidate("resources", "session");
     }
   },

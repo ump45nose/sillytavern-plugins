@@ -1,7 +1,8 @@
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { HostAdapter, nativeNodes } from "./host/adapter";
-import { internal } from "./host/internals";
+import { ctx, internal } from "./host/internals";
+import { trimContext } from "./host/context-limit";
 import { disposeAddons } from "./addons/runtime";
 import App, { beforeClose } from "./App";
 import { LayoutSwitcher, type LayoutMode } from "./ui/LayoutSwitcher";
@@ -223,6 +224,9 @@ window.workbench = {
 };
 // Keep the verified diagnostics interface available for regression tooling.
 window.workbenchProbe = window.workbench;
+// The manifest's generate_interceptor; it applies in every layout, including the native one.
+(window as any).workbenchContextLimit = (chat: unknown[], _size: number, _abort: unknown, type: string) =>
+  trimContext(chat, ctx().extensionSettings.workbench?.contextLimit, type);
 window.addEventListener(
   "pagehide",
   () => {

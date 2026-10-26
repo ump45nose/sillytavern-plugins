@@ -1,0 +1,37 @@
+/* Elements created only during a world info drag (worldinfo-drag.js); removed on release. */
+.wb-perf-drag-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 2147483647;
+    padding: 6px 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+    background: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.9;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    will-change: transform;
+}
+
+.wb-perf-drop-line {
+    position: fixed;
+    z-index: 2147483647;
+    height: 2px;
+    background: var(--SmartThemeQuoteColor);
+    pointer-events: none;
+}
+
+#wb-perf-settings .wb-perf-modules {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 0 16px;
+}
+
+#wb-perf-settings .wb-perf-problem {
+    opacity: 0.7;
+}

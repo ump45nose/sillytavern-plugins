@@ -35,6 +35,8 @@
 @import "./components/story-options.css";
 @import "./components/database.css";
 @import "./components/md-editor.css";
+@import "./components/placeholders.css";
+@import "./components/organize.css";
 @import "./layouts/rp.css";
 @import "./layouts/settings.css";
 @import "./layouts/pwa.css";

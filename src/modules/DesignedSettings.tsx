@@ -15,6 +15,7 @@ import {
   Upload,
   Volume2,
 } from "../ui/icons";
+import { defaultContextLimit } from "../host/context-limit";
 import type { HostAdapter } from "../host/adapter";
 import { Dialog, Field, Notice, SearchBox, useTask } from "../ui/common";
 import { HostControl, HostWidget, type FormControl } from "../ui/HostControl";
@@ -688,7 +689,8 @@ export function ReadingForm({ host }: { host: HostAdapter }) {
   const p = host.prefs(),
     size = p.readingSize ?? 17,
     leading = p.readingLeading ?? 2,
-    inset = p.readingInset ?? 64;
+    inset = p.readingInset ?? 64,
+    limit = p.contextLimit ?? defaultContextLimit;
   return (
     <div className="wb-reading-settings">
       <div className="wb-reading-cards">
@@ -799,6 +801,43 @@ export function ReadingForm({ host }: { host: HostAdapter }) {
               onChange={(v) => host.preference({ mdLive: v })}
             />
           </div>
+          <div className="wb-reading-row">
+            <span>
+              只发送最近的楼层
+              <small>生成时只带最近 {limit.limit} 条消息，更早的楼层在列表里标出，不删除</small>
+            </span>
+            <Switch
+              label="只发送最近的楼层"
+              checked={limit.enabled}
+              onChange={(enabled) => host.preference({ contextLimit: { ...limit, enabled } })}
+            />
+          </div>
+          {limit.enabled && (
+            <>
+              <div className="wb-reading-row">
+                <span>发送条数</span>
+                <Range
+                  label="发送条数"
+                  value={limit.limit}
+                  min={1}
+                  max={60}
+                  step={1}
+                  onChange={(n) => host.preference({ contextLimit: { ...limit, limit: n } })}
+                />
+              </div>
+              <div className="wb-reading-row">
+                <span>
+                  后台生成也限制
+                  <small>扩展和斜杠命令发起的生成</small>
+                </span>
+                <Switch
+                  label="后台生成也限制"
+                  checked={limit.quiet}
+                  onChange={(quiet) => host.preference({ contextLimit: { ...limit, quiet } })}
+                />
+              </div>
+            </>
+          )}
         </section>
       </div>
       <aside className="wb-reading-preview" aria-label="实时预览">

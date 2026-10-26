@@ -6,9 +6,13 @@ import { ctx } from "../internals";
 /** World books: global activation, character books, bindings and entry persistence. */
 export const worldMethods = {
   async toggleBook(this: HostAdapter, name: string, on: boolean) {
+    await this.toggleBooks([name], on);
+  },
+  /** One native change for any number of books, e.g. a whole group. */
+  async toggleBooks(this: HostAdapter, names: string[], on: boolean) {
     const select = window.jQuery("#world_info");
     const values = new Set<string>(this.world.selected_world_info);
-    on ? values.add(name) : values.delete(name);
+    for (const name of names) on ? values.add(name) : values.delete(name);
     select.val([...values].map((value) => String(this.world.world_names.indexOf(value)))).trigger("change");
     // SillyTavern's WORLDINFO_SETTINGS_UPDATED is not awaited by the change trigger; callers read at once.
     this.invalidate("resources", "session");
@@ -28,12 +32,15 @@ export const worldMethods = {
     ];
   },
   async toggleCharacterBook(this: HostAdapter, name: string, on: boolean) {
+    await this.toggleCharacterBooks([name], on);
+  },
+  async toggleCharacterBooks(this: HostAdapter, names: string[], on: boolean) {
     const character = this.snapshot().character;
     if (!character) throw new Error("请先选择角色，再设置角色卡世界书。");
     const books = new Set(this.characterBooks());
-    on ? books.add(name) : books.delete(name);
+    for (const name of names) on ? books.add(name) : books.delete(name);
     const primary = character.data?.data?.extensions?.world;
-    if (!on && primary === name) {
+    if (!on && names.includes(primary)) {
       const data = await this.characterData(character.id);
       await this.saveCharacter(character.id, data.data, {
         ...data.data,

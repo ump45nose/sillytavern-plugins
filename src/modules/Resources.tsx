@@ -25,6 +25,7 @@ import { useTask, Notice, Empty, Field, IconButton, useHostSlices, withoutChat }
 import { useTokenCounts } from "../ui/tokens";
 import { Check, Fold, SaveBar, Switch, useDraft } from "../ui/ResourceControls";
 import { actionLabels, resourceLabels } from "../host/labels";
+import { SpeakerColor } from "../ui/SpeakerColor";
 import { ResourcePicker, type RailExtras } from "../ui/ResourcePicker";
 import { ConnectionRuntime } from "./Connection";
 import { bus, guards } from "../host/bus";
@@ -103,6 +104,7 @@ export default function Resources({
     },
     connection: {
       grouped: true,
+      restore: (id) => task.run(() => host.archiveResources("connection", [id], false)),
       create: { label: "新建连接配置", run: () => nativeAction("#create_connection_profile") },
     },
     persona: {
@@ -250,10 +252,10 @@ function ProfileEditor({ host, id }: { host: HostAdapter; id: string }) {
         <button disabled={edit.dirty} onClick={() => task.run(() => host.select("connection", id))}>
           应用此{actionLabels.connectionProfile}
         </button>
-        <Field label="模型分组">
+        <Field label="分组">
           <input
             value={host.prefs().groups[id] || ""}
-            placeholder="按模型自动分组"
+            placeholder="未分组"
             onChange={(e) => host.preference({ groups: { ...host.prefs().groups, [id]: e.target.value } })}
           />
         </Field>
@@ -547,6 +549,10 @@ function PersonaEditor({ host, id, deep }: { host: HostAdapter; id: string; deep
                 ))}
               </Select>
             </div>
+            <div className="wb-card-row">
+              <span className="wb-card-label">对白颜色</span>
+              <SpeakerColor host={host} kind="persona" id={id} />
+            </div>
           </section>
           <Fold title="管理与偏好" hint="导出 · 统计 · 删除">
             <div className="wb-persona-manage">{manage}</div>
@@ -641,6 +647,10 @@ function PersonaEditor({ host, id, deep }: { host: HostAdapter; id: string; deep
                 ))}
               </Select>
             </label>
+            <div className="wb-persona-card-row">
+              <span>对白颜色</span>
+              <SpeakerColor host={host} kind="persona" id={id} />
+            </div>
           </section>
           <div className="wb-persona-tools">{manage}</div>
         </div>

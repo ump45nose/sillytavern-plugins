@@ -1,3 +1,4 @@
+import { firstSentFloor } from "../host/context-limit";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -303,6 +304,7 @@ export function Navigation({
             row={mobile ? 44 : 30}
             scroller={mobile ? ".wb-nav-sections" : ".wb-nav-scroll"}
             view={mobile ? null : layout("floors").max}
+            firstSent={firstSentFloor(messages, host.prefs().contextLimit)}
             jump={(id) => run(() => host.jump(id))}
           />
           {!messages.length && <p className="wb-nav-empty">开始聊天后，楼层会显示在这里。</p>}
@@ -339,9 +341,12 @@ function FloorList({
   row,
   scroller,
   view,
+  firstSent,
   jump,
 }: {
   messages: { id: number; preview: string }[];
+  /** The oldest floor a generation still sends (-1: none trimmed); older ones are dimmed. */
+  firstSent: number;
   reading: number;
   active: boolean;
   row: number;
@@ -437,8 +442,11 @@ function FloorList({
       {messages.slice(first, last).map((m) => (
         <li key={m.id}>
           <button
-            className={`wb-nav-row ${m.id === reading ? "is-current" : ""}`}
+            className={`wb-nav-row ${m.id === reading ? "is-current" : ""} ${m.id < firstSent ? "is-unsent" : ""} ${m.id === firstSent ? "is-first-sent" : ""}`}
             aria-current={m.id === reading ? "true" : undefined}
+            title={
+              m.id < firstSent ? "不在发送范围内" : m.id === firstSent ? "从这里起发送给模型" : undefined
+            }
             onClick={() => jump(m.id)}
           >
             <span className="wb-floor-number">{m.id + 1}</span>

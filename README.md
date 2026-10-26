@@ -60,7 +60,31 @@ npm run start
 
 官方 release、镜像 digest 和酒馆助手资产快照由 `baseline.lock.json` 固定。准备脚本检查版本，不初始化覆盖现有数据；需要本机已有锁定镜像，可按 lock 中的 reference 获取。`WB_HELPER_SOURCE` 可指定另一台机器上的同版本酒馆助手资产。
 
-验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支；`npm run release` 检查、测试、构建后，把 `extension/` 的内容提交到 `release` 分支（根目录即扩展目录，可直接按 Git 地址安装）。本仓库是开发与本地调试环境，不直接对外安装。发布产物在两个独立仓库，由 GitHub Actions 自动跟随本仓库 `workbench` 分支构建：前端扩展 [ump45nose/noval-workbench](https://github.com/ump45nose/noval-workbench)（酒馆「扩展 → 安装扩展」直接填该地址即可）；服务端插件 [ump45nose/workbench-sync](https://github.com/ump45nose/workbench-sync)（克隆到酒馆 `plugins/` 目录，开启 `enableServerPlugins` 后重启，供 IDE 同步使用）。没有必需的服务端插件、核心补丁或额外数据库。
+验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支。本仓库是开发与本地调试环境，不直接对外安装。发布产物在三个独立仓库，由 GitHub Actions 每 4 小时自动跟随本仓库 `workbench` 分支构建（也可在发布仓手动运行 publish）：
+
+- 前端扩展 [ump45nose/noval-workbench](https://github.com/ump45nose/noval-workbench)：酒馆「扩展 → 安装扩展」直接填该地址。
+- 性能扩展 [ump45nose/wb-perf](https://github.com/ump45nose/wb-perf)：同样按地址安装，来自 `perf-extension/`，无构建步骤；替代 cocktail，二者不要同时启用。
+- 服务端插件 [ump45nose/workbench-sync](https://github.com/ump45nose/workbench-sync)：克隆到酒馆 `plugins/` 目录，开启 `enableServerPlugins` 后重启；提供 IDE 同步与设置 / 角色列表响应缓存。
+
+三者都不修改酒馆源码；工作台不依赖另外两个也能运行。没有核心补丁或额外数据库。
+
+## 部署到生产（fn 192.168.31.201）
+
+生产实例 http://192.168.31.201:32001（容器 `sillytavern`，官方 1.19.0 镜像，编排 `/vol2/1000/Docker/stacks/ai/compose.yaml`）。数据卷 `/vol2/1000/Docker/sillytavern/{config,data,extensions,plugins,backups}` 与本仓库分离，部署不触碰数据与凭据。
+
+```bash
+npm run deploy             # 构建 → check 门禁 → 两个前端扩展 rsync → 插件按内容更新（变更则重启容器）→ 探活
+npm run deploy -- --dry    # 只打印将执行的命令
+npm run deploy -- --skip-build --skip-check   # 产物已就绪时跳过构建与门禁
+npm run deploy -- --no-restart                # 插件更新但不重启（下次容器重启生效）
+```
+
+- 前端扩展部署到 `extensions/workbench/`，性能扩展 `perf-extension/` 部署到 `extensions/wb-perf/`（静态副本，刷新页面生效；验证实例 32012 走 Git 检出挂载，不经此脚本）。
+- 服务端插件部署 `server/workbench-sync/dist/index.mjs` 到 `plugins/workbench-sync/`，sha256 有变化才同步并 `docker restart sillytavern`。
+- 探活：等服务端可连接后，两个扩展的 manifest 返回 200/401、`/api/plugins/workbench-sync/info` 非 404、容器 running。
+- 覆盖目标用环境变量：`WB_DEPLOY_SSH`（默认 `nas`）、`WB_DEPLOY_ROOT`、`WB_DEPLOY_CONTAINER`、`WB_DEPLOY_URL`。
+- 清理归档与历史备份在 `/vol2/1000/Docker/sillytavern/{archive,backups}`；回滚 = 归档目录搬回 + `git checkout` 旧产物重跑 deploy。
+
 
 ```bash
 npm run check              # TypeScript、观察器与测试模型语法

@@ -1,3 +1,4 @@
+import type { ContextLimit } from "./context-limit";
 export type Resource = "connection" | "preset" | "world" | "persona";
 export type Panel = Resource | "character" | "trace" | "export" | "outline" | "database" | "image-gen" | null;
 export type SettingsPage =
@@ -19,6 +20,10 @@ export interface Item {
   active?: boolean;
   image?: string;
   data?: Data;
+  /** The list group the user chose; "" when it has none. */
+  group?: string;
+  /** Hidden from the side rail, top choosers and "next"; listed under 已归档 in the manager. */
+  archived?: boolean;
 }
 export interface Preferences {
   left: boolean;
@@ -51,8 +56,19 @@ export interface Preferences {
   edgeHover?: boolean;
   /** Markdown fields (composer, outline, long character / world / persona text) preview as you type (default on). */
   mdLive?: boolean;
+  /** How many chat messages a generation sends (replaces Extension-MessageLimit). */
+  contextLimit?: ContextLimit;
+  /** Dialogue (quote) colors by `character:<avatar>` / `persona:<avatar>`; unset speakers follow the theme. */
+  speakerColors?: Record<string, string>;
   bindings: Record<string, string>;
+  /** Connection profile id → group name; profiles without one group by model. */
   groups: Record<string, string>;
+  /** Placeholder variables by scope: a character's avatar file, `group:<id>`, or "default". */
+  placeholders?: Record<string, { name: string; vars: Record<string, string> }>;
+  /** World book name → group name (one group per book). */
+  worldGroups?: Record<string, string>;
+  /** Archived connection profile ids and world book names. */
+  archived?: { connection?: string[]; world?: string[] };
 }
 /** One chat floor as the workbench lists it; the message body stays in SillyTavern's chat array. */
 export interface MessageIndex {
@@ -60,6 +76,7 @@ export interface MessageIndex {
   name: string;
   is_user: boolean;
   send_date?: string | number;
+  hidden?: boolean;
   /** Plain text start of the message (tags stripped, whitespace collapsed), at most 120 characters. */
   preview: string;
 }

@@ -5,8 +5,9 @@ import { CastRuntime } from "./cast-runtime";
 import { OptionsRuntime } from "./options-runtime";
 import { DatabaseRuntime } from "./database-runtime";
 import { SyncRelay } from "./sync-relay";
+import { PlaceholderRuntime } from "./placeholder-runtime";
 import { guards, type Guard } from "./bus";
-import { HostCore, defaults, sliceNames } from "./core";
+import { HostCore, defaults } from "./core";
 import type { Slice } from "./types";
 import { draftsMethods } from "./domains/drafts";
 import { chatMethods } from "./domains/chat";
@@ -19,6 +20,7 @@ import { extensionsMethods } from "./domains/extensions";
 import { personaMethods } from "./domains/persona";
 import { connectionMethods } from "./domains/connection";
 import { nativeMethods } from "./domains/native";
+import { organizeMethods } from "./domains/organize";
 export { nativeNodes } from "./internals";
 
 /** Domain methods are written with `this: HostAdapter`; the mixed-in surface drops that parameter. */
@@ -31,6 +33,8 @@ type Mixin<T> = { [K in keyof T]: OmitThisParameter<T[K]> };
 export class HostAdapter extends HostCore {
   /** IDE sync through the workbench-sync server plug-in; idle when the plug-in is not loaded. */
   sync!: SyncRelay;
+  /** `{@变量}` placeholders in the composer and `/inject`. */
+  placeholders!: PlaceholderRuntime;
   async init() {
     this.generating = Boolean(ctx().streamingProcessor);
     [this.world, this.personas, this.openai] = await Promise.all([
@@ -65,8 +69,6 @@ export class HostAdapter extends HostCore {
       CHARACTER_RENAMED: ["characters"],
       CHARACTER_DELETED: ["characters"],
       CHARACTER_SELECTED: ["characters"],
-      // Settings never touch ctx().chat; rebuilding the chat index on every settings save is waste.
-      SETTINGS_UPDATED: sliceNames.filter((name) => name !== "chat"),
       MAIN_API_CHANGED: resource,
       OAI_PRESET_CHANGED_AFTER: resource,
       PRESET_CHANGED: resource,
@@ -102,6 +104,9 @@ export class HostAdapter extends HostCore {
         if (name === "CONNECTION_PROFILE_UPDATED") this.resourceVersions.connection++;
         this.invalidate(...slices);
       });
+    // Fired after every settings write, debounced ones included, which mostly change nothing shown:
+    // rebuild what a write may have touched and notify only what changed. Settings never touch ctx().chat.
+    this.listen("SETTINGS_UPDATED", () => this.revalidate("characters", "prefs", "session", "resources"));
     // These carry the floor id, so only that entry of the chat index is rebuilt.
     for (const name of [
       "MESSAGE_SENT",
@@ -143,6 +148,31 @@ export class HostAdapter extends HostCore {
     );
     // Same settings object as the host; this contains no connection credentials.
     c.extensionSettings.workbench ??= clone(defaults);
+    // The context limit replaces Extension-MessageLimit: its setting comes over once.
+    const messageLimit = c.extensionSettings.messageLimit;
+    if (messageLimit && !c.extensionSettings.workbench.contextLimit) {
+      c.extensionSettings.workbench.contextLimit = {
+        enabled: !!messageLimit.enabled,
+        limit: Number(messageLimit.limit) || 10,
+        quiet: !!messageLimit.quietPrompts,
+      };
+      c.saveSettingsDebounced();
+    }
+    // Speaker colors replace Dialogue-Colorizer: its per-character / per-persona colors come over once.
+    const colorizer = c.extensionSettings["SillyTavern-Dialogue-Colorizer"];
+    if (colorizer && !c.extensionSettings.workbench.speakerColors) {
+      const speakerColors: Record<string, string> = {};
+      for (const [kind, settings] of [
+        ["character", colorizer.charColorSettings],
+        ["persona", colorizer.personaColorSettings],
+      ])
+        for (const [id, color] of Object.entries<string>(settings?.colorOverrides ?? {}))
+          speakerColors[`${kind}:${id}`] = color;
+      c.extensionSettings.workbench.speakerColors = speakerColors;
+      c.saveSettingsDebounced();
+    }
+    this.placeholders = new PlaceholderRuntime(this);
+    this.cleanup.push(() => this.placeholders.dispose());
     const guard: Guard = ({ preserveDrafts }) => {
       if (this.resourceAction) return false;
       if (preserveDrafts || !this.dirtyDraftKeys().length) return true;
@@ -156,6 +186,7 @@ export class HostAdapter extends HostCore {
       guards.hold(() => this.resourceAction || this.dirtyDraftKeys().length > 0),
     );
     this.refresh();
+    this.pruneOrganization();
   }
   destroy() {
     this.cleanup.forEach((fn) => fn());
@@ -174,7 +205,8 @@ export interface HostAdapter
     Mixin<typeof extensionsMethods>,
     Mixin<typeof personaMethods>,
     Mixin<typeof connectionMethods>,
-    Mixin<typeof nativeMethods> {}
+    Mixin<typeof nativeMethods>,
+    Mixin<typeof organizeMethods> {}
 
 // Non-enumerable, like methods declared in the class body.
 for (const methods of [
@@ -189,6 +221,7 @@ for (const methods of [
   personaMethods,
   connectionMethods,
   nativeMethods,
+  organizeMethods,
 ])
   for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(methods)))
     Object.defineProperty(HostAdapter.prototype, name, { ...descriptor, enumerable: false });

@@ -37,7 +37,9 @@ import { addonManager } from "./addons/runtime";
 import { AddonTasks, MessageImageControls, ImageInputMode } from "./ui/AddonControls";
 import AddonWorkspace from "./ui/AddonWorkspace";
 import { ResourceRailContext } from "./ui/ResourcePicker";
+import { listOrder } from "./host/organize";
 import { ClickFeedback, usePresence } from "./ui/Motion";
+import { PlaceholderPrompt } from "./ui/PlaceholderPrompt";
 import { Header } from "./ui/Header";
 import { Composer } from "./ui/Composer";
 import { ComposerOptions, OptionsPopover } from "./ui/StoryOptions";
@@ -50,6 +52,7 @@ import { Operations, shortcutAction, shortcutHint } from "./host/operations";
 import { Shortcuts } from "./ui/Shortcuts";
 import { RPStage } from "./ui/RPStage";
 import { MobileShell } from "./ui/MobileShell";
+import { useSpeakerColors } from "./ui/SpeakerColor";
 import { useMobileViewport } from "./ui/useMobileViewport";
 import { useDatabase } from "./ui/useDatabase";
 import type { LayoutMode } from "./ui/LayoutSwitcher";
@@ -121,6 +124,7 @@ export default function App({
     [worldEntry, setWorldEntry] = useState<{ title: string; n: number }>(),
     [optionsAnchor, setOptionsAnchor] = useState<HTMLElement | null>(null);
   const database = useDatabase(host);
+  useSpeakerColors(host, snap);
   const prefs = host.prefs(),
     mobile = width < 1024,
     rp = prefs.layout === "rp";
@@ -285,7 +289,8 @@ export default function App({
   };
   const next = (kind: Resource) =>
     task.run(async () => {
-      const items = snap.resources[kind];
+      // Archived items are skipped; books and profiles follow their list groups.
+      const items = listOrder(snap.resources[kind]);
       if (!items.length) {
         goPanel(kind);
         return;
@@ -500,6 +505,7 @@ export default function App({
   return (
     <>
       <ClickFeedback />
+      <PlaceholderPrompt host={host} />
       <AddonTasks host={host} />
       <MessageImageControls host={host} />
       <ImageInputMode host={host} />
@@ -520,7 +526,9 @@ export default function App({
           open={openPopup}
           activate={activateTool}
           select={(kind, id, enabled) => {
-            void task.run(() => (kind === "world" ? host.toggleBook(id, enabled) : host.select(kind, id)));
+            void task.run(() =>
+              kind === "world" ? host.toggleBooks([id].flat(), enabled) : host.select(kind, String(id)),
+            );
           }}
           focus={focus}
           toggleFocus={toggleFocus}
@@ -572,8 +580,8 @@ export default function App({
             }
             select={(kind, id, enabled) =>
               task.run(async () => {
-                if (kind === "world") await host.toggleBook(id, enabled);
-                else await host.select(kind, id);
+                if (kind === "world") await host.toggleBooks([id].flat(), enabled);
+                else await host.select(kind, String(id));
               })
             }
           />

@@ -44,6 +44,33 @@ test("slices are cached until invalidated, and dependents go stale with them", (
   assert.notEqual(host.slice("resources"), resources, "connection grouping reads prefs");
 });
 
+test("revalidate notifies only the slices whose content changed", () => {
+  const host = new HostCore();
+  const heard = { session: 0, characters: 0, resources: 0, prefs: 0, all: 0 };
+  for (const name of ["session", "characters", "resources", "prefs"]) {
+    host.slice(name);
+    host.subscribeSlice(name, () => heard[name]++);
+  }
+  host.subscribe(() => heard.all++);
+  const characters = host.slice("characters");
+  host.revalidate("characters", "prefs", "session", "resources");
+  assert.deepEqual(
+    heard,
+    { session: 0, characters: 0, resources: 0, prefs: 0, all: 0 },
+    "a save that changed nothing",
+  );
+  assert.equal(host.slice("characters"), characters);
+  st.characters[0].data.extensions = { fav: true };
+  host.revalidate("characters", "prefs", "session", "resources");
+  assert.equal(heard.characters, 1, "a favourite lives in the card object but shows in lists");
+  assert.equal(heard.all, 1);
+  st.characterId = "";
+  host.revalidate("characters", "prefs", "session", "resources");
+  assert.equal(heard.session, 1, "the active character moved");
+  st.characterId = "0";
+  delete st.characters[0].data.extensions;
+});
+
 test("slice subscribers only hear their own slices; global subscribers hear everything", () => {
   const host = new HostCore();
   const heard = { session: 0, chat: 0, all: 0 };

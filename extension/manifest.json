@@ -8,5 +8,6 @@
   "author": "Local",
   "version": "0.4.0",
   "minimum_client_version": "1.19.0",
-  "auto_update": false
+  "auto_update": false,
+  "generate_interceptor": "workbenchContextLimit"
 }

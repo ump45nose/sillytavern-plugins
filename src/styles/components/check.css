@@ -33,3 +33,32 @@
     cursor: default;
   }
 }
+/* Dialogue color: a swatch and, when set, a quiet clear link (character editor, persona panels). */
+@layer wb.components {
+  .wb-speaker-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+  }
+  .wb-ui .wb-speaker-color input[type="color"] {
+    flex: none;
+    width: 28px;
+    height: 22px;
+    min-height: 0;
+    padding: 0;
+    border: 1px solid var(--wb-line-1);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+  }
+  .wb-ui .wb-speaker-color button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--wb-ink-3);
+    font-size: 12px;
+    cursor: pointer;
+  }
+}

@@ -1,0 +1,81 @@
+/* Placeholder variables: the input dialog and 「用户设置 → 占位符变量」. */
+@layer wb.components {
+  /* Fields scroll; the buttons stay in view however many placeholders a menu asks for. */
+  .wb-ui .wb-placeholder-prompt {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .wb-ui .wb-placeholder-fields {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 18px 22px 4px;
+  }
+  .wb-ui .wb-placeholder-prompt .wb-field {
+    margin: 0 0 16px;
+  }
+  .wb-ui .wb-placeholder-prompt .wb-field > strong {
+    color: var(--wb-ink);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .wb-ui .wb-placeholder-prompt > footer {
+    gap: 10px;
+    padding: 12px 22px;
+    border-top: 1px solid var(--wb-line-1);
+  }
+  .wb-ui .wb-placeholder-settings {
+    padding: 24px 28px;
+    max-width: 960px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .wb-ui .wb-placeholder-name {
+    font:
+      12px/1.5 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
+    color: var(--wb-ink);
+    overflow-wrap: anywhere;
+  }
+  .wb-ui .wb-placeholder-scope {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .wb-ui .wb-placeholder-scope > .wb-select {
+    flex: 1;
+    min-width: 0;
+  }
+  .wb-ui .wb-placeholder-scope > button {
+    gap: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .wb-ui .wb-placeholder-table {
+    display: grid;
+    gap: 8px;
+  }
+  .wb-ui .wb-placeholder-row {
+    display: grid;
+    grid-template-columns: minmax(96px, 200px) minmax(0, 1fr) 36px;
+    gap: 10px;
+    align-items: center;
+  }
+  .wb-ui .wb-placeholder-row.is-new {
+    padding-top: 10px;
+    border-top: 1px solid var(--wb-line-1);
+  }
+  @media (max-width: 640px) {
+    .wb-ui .wb-placeholder-settings {
+      padding: 16px;
+    }
+    .wb-ui .wb-placeholder-row {
+      grid-template-columns: minmax(72px, 32%) minmax(0, 1fr) 36px;
+    }
+  }
+}

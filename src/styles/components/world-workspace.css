@@ -1,5 +1,7 @@
-/* World workspace (board Workspace): a header with status, filter chips with counts, and an entries table whose
-   open row unfolds into the editor and its injection parameters. */
+/* World workspace (board Workspace): a header with status, filter chips with counts, and an entries table beside
+   the open entry's detail (editor and injection parameters). The table and the detail scroll on their own, so
+   the rest of the book stays in view while an entry is edited; a narrow workspace or a phone lays the detail
+   over the table instead. */
 @layer wb.components {
   .wb-world.is-deep {
     display: grid;
@@ -72,10 +74,36 @@
 
   .wb-wt {
     min-width: 0;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 12px;
     padding: 18px 22px 16px;
+    container: wb-wt / inline-size;
+  }
+  .wb-wt-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .wb-wt-body.has-detail {
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  }
+  .wb-ui .wb-wt-count {
+    height: 26px;
+    min-height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--wb-surface-2);
+    box-shadow: none;
+    color: var(--wb-ink-2);
+    font-size: 12px;
   }
   .wb-wt-head {
     display: flex;
@@ -213,15 +241,24 @@
   /* ── The entries table ── */
   .wb-wt-table {
     min-width: 0;
-    display: flex;
-    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: 36px;
+    scrollbar-width: thin;
+  }
+  .wb-wt-table:focus {
+    outline: none;
   }
   .wb-wt-row {
     display: grid;
     grid-template-columns: 54px minmax(120px, 1.2fr) minmax(120px, 1.6fr) minmax(96px, 0.9fr) 52px 56px 64px;
     align-items: center;
     gap: 0 12px;
+    /* Exactly the windowed row height (TABLE_ROW in World.tsx). */
+    height: 46px;
     min-height: 46px;
+    box-sizing: border-box;
     padding: 0 12px 0 8px;
     border-radius: 10px;
     color: var(--wb-ink-1);
@@ -230,7 +267,12 @@
     transition: background-color var(--wb-duration-fast);
   }
   .wb-wt-row.is-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: 36px;
     min-height: 36px;
+    background: var(--wb-surface-1);
     border-bottom: 1px solid var(--wb-line-1);
     border-radius: 0;
     color: var(--wb-ink-3);
@@ -305,23 +347,35 @@
     font-weight: 600;
   }
 
-  /* ── The open row: editor on the left, injection parameters on the right ── */
-  .wb-wt-editor {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 18px;
-    margin: 4px 0 10px;
+  /* While the detail is open the table keeps the entry, its order and tokens. */
+  .wb-wt-body.has-detail .wb-wt-row {
+    grid-template-columns: 54px minmax(0, 1fr) 48px 56px;
+  }
+  .wb-wt-body.has-detail .wb-wt-row > :is(:nth-child(3), :nth-child(4), :nth-child(5)) {
+    display: none;
+  }
+
+  /* ── The open entry: editor above its injection parameters ── */
+  .wb-wt-detail {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     padding: 14px 16px 16px;
     border: 1px solid var(--wb-line-1);
     border-radius: 14px;
     background: var(--wb-surface-1);
     box-shadow: var(--wb-shadow-1);
+    scrollbar-width: thin;
     animation: wb-wt-open var(--wb-duration-base) var(--wb-ease-standard);
   }
   @keyframes wb-wt-open {
     from {
       opacity: 0;
-      transform: translateY(-4px);
+      transform: translateX(6px);
     }
   }
   .wb-wt-editor-main {
@@ -332,11 +386,12 @@
   }
   .wb-wt-editor-main > header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
+    gap: 8px 14px;
   }
   .wb-ui .wb-wt-name {
-    flex: 1;
+    flex: 1 1 140px;
     min-width: 0;
     height: 34px;
     min-height: 34px;
@@ -390,8 +445,16 @@
     color: var(--wb-ink-3);
   }
   .wb-ui .wb-wt-icon:is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+    color: var(--wb-ink-1);
+  }
+  .wb-ui .wb-wt-icon.is-danger:is(:hover, :focus-visible) {
     background: var(--wb-danger-bg);
     color: var(--wb-danger);
+  }
+  .wb-ui .wb-wt-back {
+    display: none;
+    margin-left: -6px;
   }
   .wb-ui .wb-wt-content {
     width: 100%;
@@ -468,8 +531,8 @@
 
   .wb-wt-params {
     min-width: 0;
-    padding-left: 18px;
-    border-left: 1px solid var(--wb-line-1);
+    padding-top: 14px;
+    border-top: 1px solid var(--wb-line-1);
   }
   .wb-wt-params h4 {
     margin: 2px 0 10px;
@@ -480,7 +543,7 @@
   }
   .wb-wt-param-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
     gap: 10px 10px;
   }
   .wb-wt-param-grid > .wb-field:first-child {
@@ -505,7 +568,7 @@
   }
   .wb-wt-flags {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 8px 10px;
     margin-top: 14px;
     padding-top: 12px;
@@ -521,27 +584,78 @@
   }
 
   .wb-wt > .wb-savebar {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
+    flex: none;
     margin-top: auto;
   }
 
-  @media (max-width: 1280px) {
-    .wb-wt-editor {
-      grid-template-columns: minmax(0, 1fr);
+  /* A narrower workspace keeps the list beside the detail, down to the entry and its tokens. */
+  @container wb-wt (max-width: 860px) {
+    .wb-wt-body.has-detail {
+      grid-template-columns: minmax(200px, 0.75fr) minmax(0, 1.25fr);
+      gap: 12px;
     }
-    .wb-wt-params {
-      padding: 14px 0 0;
-      border-top: 1px solid var(--wb-line-1);
-      border-left: 0;
+    .wb-wt-body.has-detail .wb-wt-row {
+      grid-template-columns: 54px minmax(0, 1fr) 56px;
     }
-    .wb-wt-param-grid {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+    .wb-wt-body.has-detail .wb-wt-row > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6)) {
+      display: none;
     }
   }
+  /* Only where the two cannot sit side by side does the detail cover the list, with a way back. */
+  @container wb-wt (max-width: 520px) {
+    .wb-wt-body.has-detail {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wb-wt-detail {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+    .wb-ui .wb-wt-back {
+      display: grid;
+    }
+    .wb-ui .wb-wt-close {
+      display: none;
+    }
+  }
+  @container wb-wt (max-width: 620px) {
+    .wb-wt-row,
+    .wb-wt-body.has-detail .wb-wt-row {
+      grid-template-columns: 54px minmax(0, 1fr) 64px;
+    }
+    .wb-wt-row > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6)),
+    .wb-wt-body.has-detail .wb-wt-row > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6)) {
+      display: none;
+    }
+  }
+  /* Phones scroll the whole settings page, so the table grows with the book and the detail covers the screen. */
+  body.wb-mobile .wb-world.is-deep,
+  body.wb-mobile .wb-wt,
+  body.wb-mobile .wb-wt-table {
+    height: auto;
+    overflow: visible;
+  }
+  body.wb-mobile .wb-wt {
+    padding: 12px 4px;
+  }
+  body.wb-mobile .wb-wt-detail {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    padding: calc(var(--wb-safe-top, 0px) + 10px) 14px 84px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  body.wb-mobile .wb-wt:has(.wb-wt-detail) > .wb-savebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 31;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .wb-wt-editor {
+    .wb-wt-detail {
       animation: none;
     }
   }

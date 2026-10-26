@@ -117,8 +117,9 @@ try {
   // Board PanelCharacter: the panel opens on the current character's card; editing is one click away.
   await page.locator(".wb-character-profile").waitFor();
   await page.getByRole("button", { name: "编辑角色", exact: true }).click();
-  await page.getByLabel("角色描述", { exact: true }).waitFor();
+  await page.locator(".wb-character-editor").getByLabel("角色描述", { exact: true }).waitFor();
   await page
+    .locator(".wb-character-editor")
     .getByLabel("角色描述", { exact: true })
     .fill("首版编辑验证：**Markdown** <xml>保留</xml> {{char}} " + Date.now());
   await page.getByRole("button", { name: "保存", exact: true }).click();

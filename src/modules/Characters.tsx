@@ -35,6 +35,7 @@ import { SaveBar } from "../ui/ResourceControls";
 import { useTokenCounts } from "../ui/tokens";
 import { guards } from "../host/bus";
 import { MdField } from "../ui/md/MdField";
+import { SpeakerColor } from "../ui/SpeakerColor";
 
 export default function Characters(props: {
   host: HostAdapter;
@@ -695,6 +696,12 @@ function CharacterEditor({ host, id }: { host: HostAdapter; id: string }) {
                   <option key={w.id}>{w.name}</option>
                 ))}
               </Select>
+            </dd>
+          </div>
+          <div>
+            <dt>对白颜色</dt>
+            <dd>
+              <SpeakerColor host={host} kind="character" id={id} />
             </dd>
           </div>
           <div>

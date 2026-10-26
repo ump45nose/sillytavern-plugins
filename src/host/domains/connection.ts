@@ -30,7 +30,9 @@ export const connectionMethods = {
                 : [],
           }
         : null;
-    let model: HTMLSelectElement | HTMLInputElement | null = null;
+    let model: HTMLSelectElement | HTMLInputElement | null = null,
+      // Sources with a free model ID also list the models the endpoint reported; choosing one fills the ID.
+      pick: HTMLSelectElement | null = null;
     const root = document.getElementById(
       api === "openai"
         ? "openai_api"
@@ -38,11 +40,13 @@ export const connectionMethods = {
           ? "textgenerationwebui_api"
           : "rm_api_block",
     );
-    if (api === "openai" && source === "custom")
+    if (api === "openai" && source === "custom") {
       model = document.getElementById("custom_model_id") as HTMLInputElement;
-    else if (api === "textgenerationwebui" && source === "generic")
+      pick = document.getElementById("model_custom_select") as HTMLSelectElement;
+    } else if (api === "textgenerationwebui" && source === "generic") {
       model = document.getElementById("generic_model_textgenerationwebui") as HTMLInputElement;
-    else if (api === "novel") model = document.getElementById("model_novel_select") as HTMLSelectElement;
+      pick = document.getElementById("generic_model_select") as HTMLSelectElement;
+    } else if (api === "novel") model = document.getElementById("model_novel_select") as HTMLSelectElement;
     else if (api === "openai" || api === "textgenerationwebui") {
       model =
         [...(root?.querySelectorAll<HTMLSelectElement>("select") || [])].find((n) => {
@@ -73,6 +77,7 @@ export const connectionMethods = {
       main: control(main)!,
       provider: api === "openai" || api === "textgenerationwebui" ? control(provider) : null,
       model: control(model),
+      pick: pick && [...pick.options].some((o) => o.value) ? control(pick) : null,
       connect,
       test: api === "openai" ? "test_api_button" : null,
       connecting: !!loading && getComputedStyle(loading).display !== "none",
@@ -80,7 +85,7 @@ export const connectionMethods = {
   },
   setConnectionControl(this: HostAdapter, id: string, value: string) {
     const allowed = this.connectionControls();
-    if (![allowed.main, allowed.provider, allowed.model].some((x) => x?.id === id))
+    if (![allowed.main, allowed.provider, allowed.model, allowed.pick].some((x) => x?.id === id))
       throw new Error("当前连接不支持此字段");
     const node = document.getElementById(id) as HTMLSelectElement | HTMLInputElement;
     node.value = value;
@@ -126,7 +131,7 @@ export const connectionMethods = {
   decorateConnectionControls(this: HostAdapter) {
     const state = this.connectionControls(),
       marked: HTMLElement[] = [];
-    for (const field of [state.main, state.provider, state.model]) {
+    for (const field of [state.main, state.provider, state.model, state.pick]) {
       const node = field && document.getElementById(field.id);
       if (!node) continue;
       const heading = node.previousElementSibling?.matches("h4")

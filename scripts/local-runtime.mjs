@@ -97,11 +97,7 @@ extensions:
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     }
   }
-  // Validation and visual instances load this checkout's extension as a user-scoped third-party extension.
-  for (const name of ["validation", "visual"]) {
-    const probe = path.join(runtime, name, "data/default-user/extensions/workbench-probe");
-    if (!fs.existsSync(probe)) fs.symlinkSync(path.join(root, "extension"), probe, "dir");
-  }
+  linkExtensions();
   const helperSource = process.env.WB_HELPER_SOURCE;
   const helperTarget = path.join(runtime, "validation/data/default-user/extensions/JS-Slash-Runner");
   if (!fs.existsSync(helperTarget)) {
@@ -116,6 +112,17 @@ extensions:
     }
   }
   console.log(`Prepared official ${lock.upstream.release} (${commit.slice(0, 12)}) on 127.0.0.1:${Object.values(instances).join("/")}.`);
+}
+
+// Validation and visual instances load this checkout's extensions as user-scoped third-party extensions.
+// Also run on start, so runtimes prepared before wb-perf existed pick it up.
+function linkExtensions() {
+  const links = { "workbench-probe": "extension", "wb-perf": "perf-extension" };
+  for (const name of ["validation", "visual"])
+    for (const [id, source] of Object.entries(links)) {
+      const target = path.join(runtime, name, "data/default-user/extensions", id);
+      if (!fs.existsSync(target)) fs.symlinkSync(path.join(root, source), target, "dir");
+    }
 }
 
 // Re-applied on every start so changing WB_BIND_ADDRESS, the credentials in .env or the plug-in switch needs no reprepare;
@@ -168,6 +175,7 @@ async function waitFor(url, headers) {
 
 async function start() {
   if (!fs.existsSync(path.join(runtime, "validation/config/config.yaml"))) prepare();
+  linkExtensions();
   const pids = running();
   if (!pids.mock) pids.mock = launch("mock", process.execPath, [path.join(root, "fixtures/mock-model.mjs")], { env: { ...process.env, PORT: String(mockPort), HOST: "127.0.0.1" } });
   const only = process.argv.slice(3).filter((arg) => !arg.startsWith("--"));

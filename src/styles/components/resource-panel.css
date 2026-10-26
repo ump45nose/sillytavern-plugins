@@ -52,20 +52,13 @@
     font: inherit;
     font-size: var(--wb-text-sm);
   }
-  .wb-rail-caption,
-  .wb-rail-group {
+  .wb-rail-caption {
     margin: 0;
     padding: 2px 4px 0;
     color: var(--wb-ink-3);
     font-size: var(--wb-text-xs);
   }
-  .wb-rail-group {
-    padding: 6px 10px 2px;
-    letter-spacing: 0.04em;
-  }
-  .wb-rail-group:first-child {
-    padding-top: 0;
-  }
+  /* Group headers: components/organize.css. */
   .wb-rail-scroll {
     flex: 1;
     min-height: 0;
@@ -444,11 +437,14 @@
     list-style: none;
     scrollbar-width: thin;
   }
+  /* Rows are exactly PANEL_ROW (World.tsx) tall, so a long book's list can be windowed. */
   .wb-entry {
     display: flex;
     align-items: center;
     gap: 10px;
+    height: 42px;
     min-height: 42px;
+    box-sizing: border-box;
     padding: 0 8px;
     border-radius: 9px;
     --wb-mode-tone: var(--wb-success);
@@ -550,6 +546,10 @@
     font-size: var(--wb-text-xs);
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .wb-entries-gap {
+    margin: 0;
+    padding: 0;
   }
   .wb-entries-empty {
     padding: 14px 8px;
@@ -1415,7 +1415,14 @@
     flex: 1;
     min-width: 0;
   }
+  .wb-connection-models {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
   .wb-connection-pick > :is(input, .wb-select),
+  .wb-connection-pick .wb-connection-models > :is(input, .wb-select),
   .wb-connection-pick .wb-select-trigger {
     font-family: var(--wb-font-mono);
   }

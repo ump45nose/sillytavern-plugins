@@ -4659,3 +4659,45 @@ body.wb-active
   min-height: 44px;
   border: 0 !important;
 }
+
+/* ── /buttons quick-reply toolbar (placeholder-runtime `buttonsToolbar`, from 「占位符系统」 v4.5) ──
+   The buttons before a `--------` label share one row that stays on top while the list scrolls. */
+body.wb-active .scrollable-buttons-container.wb-buttons-toolbar > .flex-container {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-content: flex-start;
+  gap: 4px;
+}
+body.wb-active .wb-buttons-toolbar .menu_button:not(.wb-buttons-tool, .wb-buttons-sep) {
+  flex: 0 0 100% !important;
+}
+body.wb-active .wb-buttons-toolbar .menu_button.wb-buttons-tool {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: 0 0 var(--wb-tool-width) !important;
+  width: var(--wb-tool-width) !important;
+  min-width: 0 !important;
+  overflow: hidden;
+  white-space: nowrap;
+  justify-content: center;
+  background-color: var(--SmartThemeBlurTintColor);
+}
+body.wb-active .wb-buttons-toolbar .menu_button.wb-buttons-sep {
+  position: sticky;
+  top: calc(var(--mainFontSize, 15px) * 2.6);
+  z-index: 1;
+  flex: 0 0 100% !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  margin: 4px 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: var(--SmartThemeBorderColor) !important;
+  font-size: 0 !important;
+  pointer-events: none;
+}
+body.wb-active .popup-controls > .menu_button.wb-buttons-send {
+  width: auto !important;
+  white-space: nowrap;
+}

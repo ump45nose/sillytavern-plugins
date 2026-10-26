@@ -150,6 +150,15 @@
   body:not(.wb-mobile) .wb-manager-grid {
     grid-template-columns: 272px minmax(0, 1fr);
   }
+  /* An open world-book entry needs the room for its list beside the detail; closing it brings the books back. */
+  @media (max-width: 1279px) {
+    body:not(.wb-mobile) .wb-manager-grid:has(.wb-wt-detail) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    body:not(.wb-mobile) .wb-manager-grid:has(.wb-wt-detail) > .wb-manager-resources {
+      display: none;
+    }
+  }
   body.wb-active .wb-manager-resources {
     display: flex;
     flex-direction: column;

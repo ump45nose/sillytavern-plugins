@@ -32,6 +32,7 @@ const ComponentSettings = lazyChunk(() => import("./ComponentSettings")),
   Database = lazyChunk(() => import("./Database"));
 const AddonSettings = lazyChunk(() => import("./AddonSettings"));
 const ToolSettings = lazyChunk(() => import("./ToolSettings")),
+  PlaceholderSettings = lazyChunk(() => import("./PlaceholderSettings")),
   StartupDiagnostics = lazyChunk(() => import("./StartupDiagnostics"));
 export const settingsPages = (
   [
@@ -112,7 +113,7 @@ export default function SettingsWorkspace({
                 : [
                     ...nativePages[page].sections.map((s) => s.label),
                     ...(page === "settings"
-                      ? ["常用工具", "加载诊断"]
+                      ? ["常用工具", "占位符变量", "加载诊断"]
                       : page === "extensions"
                         ? ["工作台附加功能"]
                         : []),
@@ -283,6 +284,8 @@ export default function SettingsWorkspace({
                   <AddonSettings host={host} />
                 ) : page === "settings" && active === "常用工具" ? (
                   <ToolSettings host={host} />
+                ) : page === "settings" && active === "占位符变量" ? (
+                  <PlaceholderSettings host={host} />
                 ) : page === "settings" && active === "加载诊断" ? (
                   <StartupDiagnostics host={host} />
                 ) : resource && active !== "绑定与全局设置" && active !== "高级参数" ? (

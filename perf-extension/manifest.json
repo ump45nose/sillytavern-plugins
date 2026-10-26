@@ -1,0 +1,12 @@
+{
+    "display_name": "Workbench · Perf",
+    "loading_order": 1,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Local (modules from cocktail by Limerence and ST-BaiBai-Tools by 柏柏)",
+    "version": "0.1.0",
+    "minimum_client_version": "1.19.0",
+    "auto_update": false
+}

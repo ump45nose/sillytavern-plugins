@@ -39,6 +39,20 @@ export function st() {
   })());
 }
 
+/**
+ * SillyTavern's settings and characters routers. Node resolves the server's imports to real paths,
+ * so the same file URL yields the module instances server-startup already mounted.
+ */
+export async function stRouters() {
+  const root = serverRoot(),
+    load = (file: string) => import(pathToFileURL(path.join(root, file)).href);
+  const [settings, characters] = await Promise.all([
+    load("src/endpoints/settings.js"),
+    load("src/endpoints/characters.js"),
+  ]);
+  return { settings: settings.router, characters: characters.router };
+}
+
 /** Writes through a temporary file in the same directory, so readers never see half a file. */
 export async function writeAtomic(file: string, data: string | Buffer) {
   const temp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.wbsync`);

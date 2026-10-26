@@ -25,6 +25,27 @@ const dependents: Partial<Record<Slice, Slice[]>> = {
   characters: ["session"],
   prefs: ["resources"],
 };
+/** Sources before the slices built from them. */
+const buildOrder: Slice[] = ["characters", "prefs", "session", "resources", "chat"];
+/**
+ * What a slice shows, taken when it is built, so a rebuild can tell whether anything changed. Items carry
+ * the host's own object as `data` (a character card, a connection profile): those count by identity,
+ * everything else by value. The host edits those objects in place, so a character's favourite and bound
+ * book, which lists show, are read into the signature; other in-place card edits arrive with
+ * CHARACTER_EDITED, which invalidates.
+ */
+type Signature = { text: string; refs: unknown[] };
+function signature(name: Slice, value: unknown): Signature {
+  const refs: unknown[] = [];
+  const text = JSON.stringify(value, function (key, v) {
+    if (key !== "data" || !v || typeof v !== "object") return v;
+    refs.push(v);
+    return name === "characters" ? [v.data?.extensions?.fav ?? v.fav, v.data?.extensions?.world] : undefined;
+  });
+  return { text, refs };
+}
+const sameSignature = (a: Signature, b: Signature) =>
+  a.text === b.text && a.refs.length === b.refs.length && a.refs.every((v, i) => v === b.refs[i]);
 
 export const messagePreview = (text: unknown) =>
   String(text ?? "")
@@ -37,6 +58,8 @@ const indexMessage = (m: Data, id: number): MessageIndex => ({
   name: m.name,
   is_user: m.is_user,
   send_date: m.send_date,
+  // Hidden floors (/hide, system notes) are never sent to the model.
+  ...(m.is_system ? { hidden: true } : {}),
   preview: messagePreview(m.mes),
 });
 
@@ -58,6 +81,8 @@ export class HostCore {
   sliceListeners = new Map(sliceNames.map((name) => [name, new Set<() => void>()]));
   sliceVersions = Object.fromEntries(sliceNames.map((name) => [name, 0])) as Record<Slice, number>;
   sliceCache: Partial<Slices> = {};
+  /** Signatures of the cached slices that rebuilds compare against (all but the chat index). */
+  private signatures: Partial<Record<Slice, Signature>> = {};
   version = 0;
   cache: HostSnapshot | null = null;
   world: any;
@@ -118,6 +143,32 @@ export class HostCore {
     }
     this.notify(stale);
   }
+  /**
+   * Rebuilds cached slices and notifies only those that changed, for events that may or may not have
+   * touched them (SillyTavern's settings save fires after every debounced write).
+   */
+  revalidate(...names: Slice[]) {
+    const changed = this.rebuild(buildOrder.filter((name) => names.includes(name)));
+    if (changed.size) this.notify(changed);
+  }
+  /** Rebuilds the cached ones among `names`, in build order; returns the ones that changed. */
+  private rebuild(names: Slice[]) {
+    const changed = new Set<Slice>(),
+      cache = this.sliceCache as Slices;
+    for (const name of names) {
+      // A slice nobody has read since it went stale rebuilds on its next read anyway.
+      const before = this.signatures[name];
+      if (!(name in this.sliceCache) || !before) continue;
+      const next = this.build(name),
+        after = signature(name, next);
+      if (sameSignature(before, after)) continue;
+      (cache as Record<Slice, unknown>)[name] = next;
+      this.signatures[name] = after;
+      this.sliceVersions[name]++;
+      changed.add(name);
+    }
+    return changed;
+  }
   /** Re-indexes one floor after send, receive, edit or swipe without rebuilding the others. */
   updateMessage(id: number) {
     const chat = this.sliceCache.chat,
@@ -139,7 +190,10 @@ export class HostCore {
   }
   slice<K extends Slice>(name: K): Slices[K] {
     const cache = this.sliceCache as Slices;
-    if (!(name in this.sliceCache)) cache[name] = this.build(name);
+    if (!(name in this.sliceCache)) {
+      cache[name] = this.build(name);
+      if (name !== "chat") this.signatures[name] = signature(name, cache[name]);
+    }
     return cache[name];
   }
   private build<K extends Slice>(name: K): Slices[K] {
@@ -237,14 +291,20 @@ export class HostCore {
     const c = ctx(),
       manager = c.getPresetManager(),
       profiles = c.extensionSettings.connectionManager?.profiles ?? [],
-      groups = this.slice("prefs").groups,
+      prefs = this.slice("prefs"),
+      groups = prefs.groups,
+      worldGroups = prefs.worldGroups ?? {},
+      archivedConnections = new Set(prefs.archived?.connection),
+      archivedBooks = new Set(prefs.archived?.world),
       personas = c.powerUserSettings.personas ?? {};
     return {
       connection: profiles
         .map((p: Data) => ({
           id: p.id,
           name: p.name,
-          detail: groups[p.id] || p.model || p.api || "其他模型",
+          detail: p.model || p.api || "",
+          group: groups[p.id] || "",
+          archived: archivedConnections.has(p.id),
           data: p,
         }))
         .sort(
@@ -260,6 +320,8 @@ export class HostCore {
         id: name,
         name,
         active: this.world?.selected_world_info.includes(name),
+        group: worldGroups[name] || "",
+        archived: archivedBooks.has(name),
       })),
       persona: Object.entries(personas).map(([id, name]) => ({
         id,

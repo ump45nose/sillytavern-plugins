@@ -9,11 +9,12 @@ export function ConnectionRuntime({ host }: { host: HostAdapter }) {
   const snap = useHostSlices(host, withoutChat),
     task = useTask(),
     [, redraw] = useReducer((n) => n + 1, 0);
-  const state = host.connectionControls();
+  const state = host.connectionControls(),
+    typed = state.model?.value ?? "";
   useEffect(() => host.watchConnectionControls(redraw), [host]);
   useEffect(
     () => host.decorateConnectionControls(),
-    [host, state.main.id, state.provider?.value, state.model?.id],
+    [host, state.main.id, state.provider?.value, state.model?.id, state.pick?.id],
   );
   const field = (control: NonNullable<typeof state.model>, label: string) =>
     control.type === "select" ? (
@@ -25,7 +26,7 @@ export function ConnectionRuntime({ host }: { host: HostAdapter }) {
       >
         {control.options.map((o) => (
           <option key={o.value} value={o.value} disabled={o.disabled}>
-            {o.label}
+            {control.id === state.pick?.id && !o.value ? "从可用模型中选择…" : o.label}
           </option>
         ))}
       </Select>
@@ -53,7 +54,19 @@ export function ConnectionRuntime({ host }: { host: HostAdapter }) {
         {row(
           "模型",
           <div className="wb-connection-pick">
-            {state.model ? (
+            {state.model && state.pick ? (
+              <div className="wb-connection-models">
+                {/* A typed ID that is not listed leaves the list on its prompt, so any listed model can be chosen. */}
+                {field(
+                  {
+                    ...state.pick,
+                    value: state.pick.options.some((o) => o.value && o.value === typed) ? typed : "",
+                  },
+                  "可用模型",
+                )}
+                {field(state.model, "运行模型")}
+              </div>
+            ) : state.model ? (
               field(state.model, "运行模型")
             ) : (
               <input aria-label="运行模型" value="由后端选择，可在下方配置" readOnly />

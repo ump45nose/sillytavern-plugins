@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BookMarked,
   Activity,
@@ -13,7 +13,9 @@ import {
 } from "./icons";
 import { createPortal } from "react-dom";
 import type { HostSnapshot, Item, Panel, Resource } from "../host/types";
-import { Empty, IconButton } from "./common";
+import { Empty, IconButton, SearchBox } from "./common";
+import { groupItems, ungroupedLabel, unarchived } from "../host/organize";
+import { GroupCheck } from "./ResourcePicker";
 import { resourceLabels } from "../host/labels";
 import { usePresence } from "./Motion";
 const pillIcons = { connection: Plug, preset: SlidersHorizontal, world: BookMarked, persona: UserRound };
@@ -36,6 +38,57 @@ function rowDetail(kind: Resource, item: Item, bound: string) {
   if (kind === "world") return item.id === bound ? "角色绑定" : "";
   return item.detail;
 }
+interface ChooserSection {
+  key: string;
+  /** Group caption; none for a single list or the character's own book. */
+  caption?: string;
+  items: Item[];
+  /** World groups switch as a whole from their caption. */
+  toggle?: boolean;
+}
+/** Chooser rows: archived items left out; books and profiles in their list groups, the character's book first. */
+function chooserSections(kind: Resource, items: Item[], bound: string, query = ""): ChooserSection[] {
+  const q = query.trim().toLowerCase();
+  const visible = unarchived(items).filter(
+    (x) => !q || `${x.name} ${x.group ?? ""}`.toLowerCase().includes(q),
+  );
+  if (kind !== "world" && kind !== "connection")
+    return visible.length ? [{ key: "all", items: visible }] : [];
+  const own = kind === "world" ? visible.filter((x) => x.id === bound) : [];
+  const groups = groupItems(visible.filter((x) => !own.includes(x)));
+  const captioned = groups.length > 1 || !!groups[0]?.name;
+  return [
+    ...(own.length ? [{ key: "bound", items: own }] : []),
+    ...groups.map((g) => ({
+      key: "group:" + g.name,
+      caption: captioned ? g.name || ungroupedLabel : undefined,
+      items: g.items,
+      toggle: kind === "world" && captioned,
+    })),
+  ];
+}
+/** A world group caption's checkbox in the choosers: enabled books are the selection. */
+function GroupToggle({
+  section,
+  disabled,
+  select,
+}: {
+  section: ChooserSection;
+  disabled: boolean;
+  select: (kind: Resource, id: string | string[], enabled: boolean) => void;
+}) {
+  return (
+    <GroupCheck
+      rows={section.items}
+      selected={section.items.filter((x) => x.active).map((x) => x.id)}
+      disabled={disabled}
+      title={section.caption ?? ""}
+      toggle={(ids, on) => select("world", ids, on)}
+    />
+  );
+}
+/** Long lists get a search box in their chooser. */
+const searchFrom = 9;
 export function Header({
   snap,
   panel,
@@ -54,7 +107,8 @@ export function Header({
   chooser: Resource | null;
   setChooser: (value: Resource | null) => void;
   goPanel: (panel: Panel, id?: string) => void;
-  select: (kind: Resource, id: string, enabled: boolean) => void;
+  /** Books take a list of names to switch a whole group at once. */
+  select: (kind: Resource, id: string | string[], enabled: boolean) => void;
   model: string;
   focus: () => void;
   focused: boolean;
@@ -126,18 +180,20 @@ function ResourcePills({
   "snap" | "panel" | "chooser" | "setChooser" | "goPanel" | "select" | "model"
 >) {
   const presence = usePresence(chooser);
-  const last = useRef<Resource | null>(null);
+  const last = useRef<Resource | null>(null),
+    [query, setQuery] = useState("");
   // Keyboard users land on the current choice; closing returns them to the pill they came from.
   useEffect(() => {
     const previous = last.current;
     last.current = chooser;
+    setQuery("");
     if (chooser) {
       requestAnimationFrame(() =>
-        document
-          .querySelector<HTMLInputElement>(
-            `#wb-choices-${chooser} input:checked, #wb-choices-${chooser} input`,
-          )
-          ?.focus({ preventScroll: true }),
+        (
+          document.querySelector<HTMLInputElement>(
+            `#wb-choices-${chooser} .wb-pill-pop-list input:checked`,
+          ) ?? document.querySelector<HTMLInputElement>(`#wb-choices-${chooser} input`)
+        )?.focus({ preventScroll: true }),
       );
     } else if (
       previous &&
@@ -160,11 +216,10 @@ function ResourcePills({
       {(Object.keys(resourceLabels) as Resource[]).map((kind) => {
         const bound = String(snap.character?.data?.data?.extensions?.world ?? "");
         // The character's own book leads the list, as it does in the world panel.
-        const items =
-            kind === "world" && bound
-              ? [...snap.resources.world].sort((a, b) => Number(b.id === bound) - Number(a.id === bound))
-              : snap.resources[kind],
-          selected = items.find((x) => x.id === snap.current[kind]);
+        const all = snap.resources[kind],
+          items = unarchived(all),
+          selected = all.find((x) => x.id === snap.current[kind]),
+          sections = chooserSections(kind, all, bound, chooser === kind ? query : "");
         const Icon = pillIcons[kind];
         const value = selected?.name || (kind === "connection" ? model || "未连接" : "未选择");
         const active = items.filter((x) => x.active);
@@ -218,37 +273,54 @@ function ResourcePills({
                     {kind === "world" ? `已启用 ${count} · 共 ${items.length} 本` : `${items.length} 个`}
                   </small>
                 </div>
+                {items.length >= searchFrom && (
+                  <SearchBox value={query} onChange={setQuery} placeholder={`搜索${resourceLabels[kind]}`} />
+                )}
                 <ul className="wb-pill-pop-list">
-                  {items.map((item) => {
-                    const on = kind === "world" ? !!item.active : item.id === snap.current[kind];
-                    const detail = rowDetail(kind, item, bound);
-                    return (
-                      <li key={item.id} className={on ? "is-on" : ""}>
-                        <label>
-                          <input
-                            type={kind === "world" ? "checkbox" : "radio"}
-                            name={`wb-pill-${kind}`}
-                            aria-label={`${kind === "world" ? "启用" : "选择"} ${item.name}`}
-                            checked={on}
-                            disabled={snap.busy}
-                            onChange={(e) => select(kind, item.id, e.target.checked)}
-                          />
-                          <span
-                            className={`wb-pill-mark ${kind === "world" ? "is-check" : ""}`}
-                            aria-hidden="true"
-                          >
-                            <Check size={12} strokeWidth={3} />
-                          </span>
-                          <span className="wb-pill-pop-copy">
-                            <strong>{item.name}</strong>
-                            {detail && <small>{detail}</small>}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
+                  {sections.map((section) => (
+                    <React.Fragment key={section.key}>
+                      {section.caption && (
+                        <li className="wb-pill-pop-group">
+                          {section.toggle && (
+                            <GroupToggle section={section} disabled={snap.busy} select={select} />
+                          )}
+                          <span>{section.caption}</span>
+                          <small>{section.items.length}</small>
+                        </li>
+                      )}
+                      {section.items.map((item) => {
+                        const on = kind === "world" ? !!item.active : item.id === snap.current[kind];
+                        const detail = rowDetail(kind, item, bound);
+                        return (
+                          <li key={item.id} className={on ? "is-on" : ""}>
+                            <label>
+                              <input
+                                type={kind === "world" ? "checkbox" : "radio"}
+                                name={`wb-pill-${kind}`}
+                                aria-label={`${kind === "world" ? "启用" : "选择"} ${item.name}`}
+                                checked={on}
+                                disabled={snap.busy}
+                                onChange={(e) => select(kind, item.id, e.target.checked)}
+                              />
+                              <span
+                                className={`wb-pill-mark ${kind === "world" ? "is-check" : ""}`}
+                                aria-hidden="true"
+                              >
+                                <Check size={12} strokeWidth={3} />
+                              </span>
+                              <span className="wb-pill-pop-copy">
+                                <strong>{item.name}</strong>
+                                {detail && <small>{detail}</small>}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
                 </ul>
                 {!items.length && <Empty>暂无配置</Empty>}
+                {!!items.length && !sections.length && <Empty>没有符合条件的{resourceLabels[kind]}</Empty>}
                 <div className="wb-pill-pop-foot">
                   {footHints[kind] && <small>{footHints[kind]}</small>}
                   <button onClick={() => goPanel(kind)}>
@@ -301,8 +373,9 @@ export function ResourceControls({
   return (
     <div className="wb-contexts" ref={row}>
       {(Object.keys(resourceLabels) as Resource[]).map((kind) => {
-        const items = snap.resources[kind],
-          selected = items.find((x) => x.id === snap.current[kind]);
+        const all = snap.resources[kind],
+          items = unarchived(all),
+          selected = all.find((x) => x.id === snap.current[kind]);
         const value = selected?.name || (kind === "connection" ? model : "未选择");
         const count = kind === "world" ? items.filter((x) => x.active).length : 0;
         return (
@@ -348,26 +421,42 @@ export function ResourceControls({
                         <X size={18} />
                       </button>
                     </div>
-                    {items.map((item) => (
-                      <div
-                        className={`wb-quick-row ${(kind === "world" ? item.active : item.id === snap.current[kind]) ? "is-active" : ""}`}
-                        key={item.id}
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={`${kind === "world" ? "启用" : "选择"} ${item.name}`}
-                          checked={kind === "world" ? !!item.active : item.id === snap.current[kind]}
-                          disabled={snap.busy}
-                          onChange={(e) => select(kind, item.id, e.target.checked)}
-                        />
-                        <button onClick={() => goPanel(kind, item.id)}>
-                          <strong>{item.name}</strong>
-                          {item.detail && <small>{item.detail}</small>}
-                        </button>
-                        <IconButton title={`查看 ${item.name} 详情`} onClick={() => goPanel(kind, item.id)}>
-                          <ChevronRight size={15} />
-                        </IconButton>
-                      </div>
+                    {chooserSections(kind, all, "").map((section) => (
+                      <React.Fragment key={section.key}>
+                        {section.caption && (
+                          <div className="wb-quick-group">
+                            {section.toggle && (
+                              <GroupToggle section={section} disabled={snap.busy} select={select} />
+                            )}
+                            <span>{section.caption}</span>
+                            <small>{section.items.length}</small>
+                          </div>
+                        )}
+                        {section.items.map((item) => (
+                          <div
+                            className={`wb-quick-row ${(kind === "world" ? item.active : item.id === snap.current[kind]) ? "is-active" : ""}`}
+                            key={item.id}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`${kind === "world" ? "启用" : "选择"} ${item.name}`}
+                              checked={kind === "world" ? !!item.active : item.id === snap.current[kind]}
+                              disabled={snap.busy}
+                              onChange={(e) => select(kind, item.id, e.target.checked)}
+                            />
+                            <button onClick={() => goPanel(kind, item.id)}>
+                              <strong>{item.name}</strong>
+                              {item.detail && <small>{item.detail}</small>}
+                            </button>
+                            <IconButton
+                              title={`查看 ${item.name} 详情`}
+                              onClick={() => goPanel(kind, item.id)}
+                            >
+                              <ChevronRight size={15} />
+                            </IconButton>
+                          </div>
+                        ))}
+                      </React.Fragment>
                     ))}
                     {!items.length && <Empty>暂无配置</Empty>}
                     <button className="wb-link" onClick={() => goPanel(kind)}>

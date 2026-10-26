@@ -1,8 +1,9 @@
 import { Select } from "../ui/Select";
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Search, X, Braces, BookMarked } from "../ui/icons";
+import { Plus, Trash2, Search, X, Braces, BookMarked, ChevronLeft } from "../ui/icons";
 import { SaveBar } from "../ui/ResourceControls";
-import { useTokenCounts } from "../ui/tokens";
+import { useTokenTally } from "../ui/tokens";
+import { useWindow, WINDOW_FROM } from "../ui/useWindow";
 import { activation, sameData, setActivation, validateBook } from "../host/model";
 import type { Data } from "../host/types";
 import type { HostAdapter } from "../host/adapter";
@@ -20,6 +21,7 @@ import { ResourcePicker } from "../ui/ResourcePicker";
 import { EntryPortraits } from "../ui/EntryPortraits";
 import { MdField } from "../ui/md/MdField";
 import { isPathSafe } from "../host/cast";
+import { unarchived } from "../host/organize";
 const positions = [
   "角色定义之前",
   "角色定义之后",
@@ -31,6 +33,26 @@ const positions = [
   "Outlet",
 ];
 const modeName: Record<string, string> = { keyword: "关键词", constant: "常驻", vector: "向量化" };
+/** Row heights the windowed entry lists are laid out with (CSS keeps rows exactly this tall). */
+const PANEL_ROW = 42,
+  TABLE_ROW = 46;
+/**
+ * Lower-cased search text per entry. Entries are copy-on-write, so an unchanged entry keeps its object
+ * and its cached text; a render filters a large book without rebuilding every entry's string.
+ */
+const titleText = new WeakMap<Data, string>(),
+  fullText = new WeakMap<Data, string>();
+const searchTitle = (e: Data) => {
+  let text = titleText.get(e);
+  if (text === undefined) titleText.set(e, (text = `${e.comment} ${e.key?.join(" ")}`.toLowerCase()));
+  return text;
+};
+const searchFull = (e: Data) => {
+  let text = fullText.get(e);
+  if (text === undefined)
+    fullText.set(e, (text = `${e.comment} ${e.key?.join(" ")} ${e.content}`.toLowerCase()));
+  return text;
+};
 /** Copy-on-write: only the book, its entry map and the one entry are new objects. */
 const withEntry = (book: Data, id: string, entry: Data) => ({
   ...book,
@@ -81,6 +103,7 @@ export default function World({
   useLeaveGuard(dirty);
   /** The book version base was read at; a clean editor rereads only when the book has changed since. */
   const loaded = useRef<{ name: string; version: number } | null>(null);
+  const workspace = useRef<HTMLElement>(null);
   useEffect(() => {
     if (dirty) return;
     const version = host.resourceVersions.world;
@@ -99,9 +122,19 @@ export default function World({
               Object.entries<Data>(data.entries ?? {}).find(
                 ([, e]) => String(e.comment ?? "").trim() === target,
               )?.[0];
+            // Where the detail covers the table (phones, a narrow workspace) a book opens on its list.
+            const covered =
+              deep &&
+              (document.body.classList.contains("wb-mobile") ||
+                (workspace.current?.clientWidth ?? 1e4) <= 520);
             setEntry(
               (previous) =>
-                wanted || (data.entries?.[previous] ? previous : (Object.keys(data.entries ?? {})[0] ?? "")),
+                wanted ||
+                (data.entries?.[previous]
+                  ? previous
+                  : covered
+                    ? ""
+                    : (Object.keys(data.entries ?? {})[0] ?? "")),
             );
             if (target) {
               setTarget(undefined);
@@ -168,11 +201,51 @@ export default function World({
     [draft?.entries],
   );
   const selected = draft?.entries[entry];
+  const needle = query.toLowerCase();
+  /** The side panel searches titles and keywords; the table also searches text and filters by mode. */
+  const panelShown = useMemo(
+    () => (deep ? [] : entries.filter(([, e]) => searchTitle(e).includes(needle))),
+    [deep, entries, needle],
+  );
+  const shown = useMemo(
+    () =>
+      deep
+        ? entries.filter(
+            ([, e]) => (filter === "all" || activation(e) === filter) && searchFull(e).includes(needle),
+          )
+        : [],
+    [deep, entries, filter, needle],
+  );
+  const counts = useMemo(
+    () =>
+      entries.reduce<Record<string, number>>((n, [, e]) => {
+        n[activation(e)] = (n[activation(e)] ?? 0) + 1;
+        return n;
+      }, {}),
+    [entries],
+  );
+  const panelWindow = useWindow<HTMLUListElement>(panelShown.length, PANEL_ROW),
+    tableWindow = useWindow<HTMLDivElement>(shown.length, TABLE_ROW);
   const tokenItems = useMemo(
     () => (deep ? entries.map(([id, e]) => [id, String(e.content ?? "")] as [string, string]) : []),
     [deep, entries],
   );
-  const entryTokens = useTokenCounts(host, tokenItems, 500);
+  // A long book counts the rows on screen and the open entry; its total waits for 统计 to count the rest.
+  const [countAll, setCountAll] = useState(false);
+  const counted = useMemo(
+    () =>
+      countAll || entries.length <= WINDOW_FROM
+        ? null
+        : [...shown.slice(tableWindow.first, tableWindow.last).map(([id]) => id), entry],
+    [countAll, entries.length, shown, tableWindow.first, tableWindow.last, entry],
+  );
+  const { counts: entryTokens, complete: tokensComplete } = useTokenTally(host, tokenItems, 500, counted);
+  // The open entry stays in view when it is opened from elsewhere (a portrait link, a new entry).
+  const { reveal } = deep ? tableWindow : panelWindow,
+    list = deep ? shown : panelShown;
+  useEffect(() => {
+    if (entry) reveal(list.findIndex(([id]) => id === entry));
+  }, [entry, reveal]);
   const switchTab = (t: string) => {
     if (tab === "json") {
       try {
@@ -227,6 +300,12 @@ export default function World({
                   ),
               }}
               extras={{
+                grouped: true,
+                groupToggle: (ids, on) =>
+                  task.run(() =>
+                    scope === "global" ? host.toggleBooks(ids, on) : host.toggleCharacterBooks(ids, on),
+                  ),
+                restore: (id) => task.run(() => host.archiveResources("world", [id], false)),
                 top: (
                   <div className="wb-rail-segment" role="group" aria-label="世界书启用范围">
                     {[
@@ -245,7 +324,7 @@ export default function World({
                     ))}
                   </div>
                 ),
-                caption: `已启用 ${enabledBooks.length} · 共 ${snap.resources.world.length} 本`,
+                caption: `已启用 ${enabledBooks.length} · 共 ${unarchived(snap.resources.world).length} 本`,
                 create: {
                   label: "新建世界书",
                   run: () => {
@@ -274,21 +353,21 @@ export default function World({
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
-        <ul className="wb-entries" aria-label="条目">
-          {entries
-            .filter(([, e]) => `${e.comment} ${e.key?.join(" ")}`.toLowerCase().includes(query.toLowerCase()))
-            .map(([id, e]) => (
-              <EntryItem
-                key={id}
-                id={id}
-                entry={e}
-                selected={entry === id}
-                locked={tab === "json"}
-                onToggle={toggleEntry}
-                onMode={modeChange}
-                onOpen={setEntry}
-              />
-            ))}
+        <ul className="wb-entries" aria-label="条目" ref={panelWindow.ref}>
+          {panelWindow.before > 0 && <li className="wb-entries-gap" style={{ height: panelWindow.before }} />}
+          {panelShown.slice(panelWindow.first, panelWindow.last).map(([id, e]) => (
+            <EntryItem
+              key={id}
+              id={id}
+              entry={e}
+              selected={entry === id}
+              locked={tab === "json"}
+              onToggle={toggleEntry}
+              onMode={modeChange}
+              onOpen={setEntry}
+            />
+          ))}
+          {panelWindow.after > 0 && <li className="wb-entries-gap" style={{ height: panelWindow.after }} />}
           {!entries.length && (
             <li className="wb-entries-empty">{name ? "这本世界书还没有条目" : "选择或新建一本世界书"}</li>
           )}
@@ -456,18 +535,23 @@ export default function World({
       </fieldset>
     );
   }
-  const counts = entries.reduce<Record<string, number>>((n, [, e]) => {
-    n[activation(e)] = (n[activation(e)] ?? 0) + 1;
-    return n;
-  }, {});
-  const shown = entries.filter(
-    ([, e]) =>
-      (filter === "all" || activation(e) === filter) &&
-      `${e.comment} ${e.key?.join(" ")} ${e.content}`.toLowerCase().includes(query.toLowerCase()),
-  );
   const book = snap.resources.world.find((x) => x.id === name),
     bound = host.characterBooks().includes(name),
-    totalTokens = Object.values(entryTokens).reduce((n, x) => n + x, 0);
+    totalTokens = tokensComplete ? Object.values(entryTokens).reduce((n, x) => n + x, 0) : 0;
+  const closeDetail = () => setEntry("");
+  /** Up and down move the open entry through the shown rows while focus is in the table. */
+  const tableKey = (event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if ((event.target as HTMLElement).closest("input, textarea, select, [contenteditable]")) return;
+    const at = shown.findIndex(([id]) => id === entry),
+      next = Math.min(shown.length - 1, Math.max(0, at < 0 ? 0 : at + (event.key === "ArrowDown" ? 1 : -1)));
+    if (!shown[next]) return;
+    event.preventDefault();
+    setEntry(shown[next][0]);
+    // The focused row may leave the rendered window; the table keeps the keys.
+    (event.currentTarget as HTMLElement).focus({ preventScroll: true });
+    tableWindow.reveal(next);
+  };
   const params = selected && (
     <aside className="wb-wt-params" aria-label="注入参数">
       <h4>注入参数</h4>
@@ -533,9 +617,17 @@ export default function World({
     </aside>
   );
   const editor = selected && (
-    <div className="wb-wt-editor">
+    <aside className="wb-wt-detail" aria-label={`条目详情：${selected.comment || entry}`}>
       <div className="wb-wt-editor-main">
         <header>
+          <button
+            className="wb-wt-icon wb-wt-back"
+            aria-label="返回条目列表"
+            title="返回条目列表"
+            onClick={closeDetail}
+          >
+            <ChevronLeft size={16} />
+          </button>
           <input
             className="wb-wt-name"
             aria-label="条目名称"
@@ -554,8 +646,21 @@ export default function World({
               </button>
             ))}
           </div>
-          <button className="wb-wt-icon" aria-label="删除条目" title="删除条目" onClick={removeEntry}>
+          <button
+            className="wb-wt-icon is-danger"
+            aria-label="删除条目"
+            title="删除条目"
+            onClick={removeEntry}
+          >
             <Trash2 size={15} />
+          </button>
+          <button
+            className="wb-wt-icon wb-wt-close"
+            aria-label="收起条目详情"
+            title="收起详情"
+            onClick={closeDetail}
+          >
+            <X size={15} />
           </button>
         </header>
         {tab === "portraits" ? (
@@ -599,7 +704,7 @@ export default function World({
         )}
       </div>
       {tab !== "portraits" && params}
-    </div>
+    </aside>
   );
   return (
     <fieldset disabled={task.busy} className={`wb-world is-deep ${managed ? "is-managed" : ""}`}>
@@ -622,7 +727,7 @@ export default function World({
             </div>
           ))}
       </section>
-      <section className="wb-wt">
+      <section className="wb-wt" ref={workspace}>
         <header className="wb-wt-head">
           <h2>{name || "世界书"}</h2>
           {(book?.active || bound) && <span className="wb-wt-status">已启用</span>}
@@ -631,6 +736,16 @@ export default function World({
               .concat(totalTokens ? [`${totalTokens.toLocaleString()} tokens`] : [])
               .join(" · ")}
           </small>
+          {!tokensComplete && entries.length > WINDOW_FROM && (
+            <button
+              className="wb-wt-count"
+              disabled={countAll}
+              title="逐条统计整本世界书的 tokens"
+              onClick={() => setCountAll(true)}
+            >
+              {countAll ? `统计中 ${Object.keys(entryTokens).length} / ${entries.length}` : "统计 tokens"}
+            </button>
+          )}
           <span className="wb-grow" />
           <button
             className={`wb-wt-text ${tab === "json" ? "is-on" : ""}`}
@@ -673,56 +788,65 @@ export default function World({
                 新增条目
               </button>
             </div>
-            <div className="wb-wt-table" role="table" aria-label="条目">
-              <div className="wb-wt-row is-head" role="row">
-                <span role="columnheader" aria-label="启用" />
-                <span role="columnheader">条目</span>
-                <span role="columnheader">触发关键词</span>
-                <span role="columnheader">位置</span>
-                <span role="columnheader">深度</span>
-                <span role="columnheader">顺序</span>
-                <span role="columnheader">Tokens</span>
-              </div>
-              {shown.map(([id, e]) => (
-                <React.Fragment key={id}>
-                  <EntryRow
-                    id={id}
-                    entry={e}
-                    open={entry === id}
-                    tokens={entryTokens[id]}
-                    onToggle={toggleEntry}
-                    onOpen={setEntry}
-                  />
-                  {entry === id && editor}
-                </React.Fragment>
-              ))}
-              {!entries.length &&
-                (name ? (
+            <div className={`wb-wt-body ${selected ? "has-detail" : ""}`}>
+              <div className="wb-wt-table" role="table" aria-label="条目" tabIndex={-1} onKeyDown={tableKey}>
+                <div className="wb-wt-row is-head" role="row">
+                  <span role="columnheader" aria-label="启用" />
+                  <span role="columnheader">条目</span>
+                  <span role="columnheader">触发关键词</span>
+                  <span role="columnheader">位置</span>
+                  <span role="columnheader">深度</span>
+                  <span role="columnheader">顺序</span>
+                  <span role="columnheader">Tokens</span>
+                </div>
+                <div role="rowgroup" ref={tableWindow.ref}>
+                  {tableWindow.before > 0 && (
+                    <div className="wb-wt-gap" style={{ height: tableWindow.before }} />
+                  )}
+                  {shown.slice(tableWindow.first, tableWindow.last).map(([id, e]) => (
+                    <EntryRow
+                      key={id}
+                      id={id}
+                      entry={e}
+                      open={entry === id}
+                      tokens={entryTokens[id]}
+                      onToggle={toggleEntry}
+                      onOpen={setEntry}
+                    />
+                  ))}
+                  {tableWindow.after > 0 && (
+                    <div className="wb-wt-gap" style={{ height: tableWindow.after }} />
+                  )}
+                </div>
+                {!entries.length &&
+                  (name ? (
+                    <Empty
+                      icon={<BookMarked size={18} />}
+                      title="这本世界书还没有条目"
+                      action={{ label: "新增条目", onClick: addEntry }}
+                    >
+                      条目在关键词出现时注入上下文，常驻条目每次都会带上。
+                    </Empty>
+                  ) : (
+                    <Empty>选择世界书，开始整理条目</Empty>
+                  ))}
+                {!!entries.length && !shown.length && (
                   <Empty
-                    icon={<BookMarked size={18} />}
-                    title="这本世界书还没有条目"
-                    action={{ label: "新增条目", onClick: addEntry }}
+                    icon={<Search size={18} />}
+                    title="没有符合条件的条目"
+                    action={{
+                      label: "清除筛选",
+                      onClick: () => {
+                        setQuery("");
+                        setFilter("all");
+                      },
+                    }}
                   >
-                    条目在关键词出现时注入上下文，常驻条目每次都会带上。
+                    换个关键词，或清除筛选。
                   </Empty>
-                ) : (
-                  <Empty>选择世界书，开始整理条目</Empty>
-                ))}
-              {!!entries.length && !shown.length && (
-                <Empty
-                  icon={<Search size={18} />}
-                  title="没有符合条件的条目"
-                  action={{
-                    label: "清除筛选",
-                    onClick: () => {
-                      setQuery("");
-                      setFilter("all");
-                    },
-                  }}
-                >
-                  换个关键词，或清除筛选。
-                </Empty>
-              )}
+                )}
+              </div>
+              {editor}
             </div>
           </>
         )}

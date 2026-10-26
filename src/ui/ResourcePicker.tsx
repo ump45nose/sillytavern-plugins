@@ -1,10 +1,11 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, Search } from "./icons";
+import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search } from "./icons";
 import type { Item } from "../host/types";
 import { Empty, SearchBox } from "./common";
 import { Select } from "./Select";
 import { usePresence } from "./Motion";
+import { groupItems, ungroupedLabel } from "../host/organize";
 
 export const ResourceRailContext = createContext<{
   open: boolean;
@@ -17,8 +18,12 @@ export interface RailExtras {
   top?: React.ReactNode;
   /** A quiet count under the search box. */
   caption?: string;
-  /** Group rows under their detail line (connection profiles). */
+  /** Group rows by `item.group` under folding headers (connection profiles, world books). */
   grouped?: boolean;
+  /** A group header's checkbox switches every unarchived book in it (multi-select lists only). */
+  groupToggle?: (ids: string[], on: boolean) => void;
+  /** Archived items fold under 已归档 at the foot of the list, each with this restore action. */
+  restore?: (id: string) => void;
   /** Hide each row's detail line. */
   plain?: boolean;
   /** Show each item's image or initial (personas). */
@@ -97,9 +102,13 @@ export function ResourcePicker({
     setOpen(false);
     button.current?.focus();
   };
-  const list = items
-    .filter((x) => `${x.name} ${x.detail}`.toLowerCase().includes(query.toLowerCase()))
+  const matches = items
+    .filter((x) => `${x.name} ${x.detail} ${x.group ?? ""}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => (sortable ? a.name.localeCompare(b.name, "zh") * (sort === "name" ? 1 : -1) : 0));
+  // Archived items never show as choices; the rail lists them in a fold of their own.
+  const list = matches.filter((x) => !x.archived),
+    archived = matches.filter((x) => x.archived);
+  const sections = extras?.grouped ? groupItems(list) : [{ name: "", items: list }];
   return (
     <div className="wb-resource-picker">
       {rail ? (
@@ -143,6 +152,7 @@ export function ResourcePicker({
             railId={popupId}
             label={label}
             items={list}
+            archived={archived}
             id={id}
             active={active}
             choose={choose}
@@ -186,49 +196,61 @@ export function ResourcePicker({
               <p className="wb-caption">{scopeLabel || "启用世界书"} · 可多选，点击名称浏览条目</p>
             )}
             <div className="wb-picker-list">
-              {list.map((x, i) => (
-                <React.Fragment key={x.id}>
-                  {!sortable &&
-                    x.detail &&
-                    (i === 0 || list[i - 1].detail !== x.detail) &&
-                    label === "连接" && <p className="wb-caption">{x.detail}</p>}
-                  <div className={`wb-resource-choice ${id === x.id ? "is-active" : ""}`}>
-                    {x.image && <img src={x.image} alt="" />}
-                    {multiple ? (
-                      <input
-                        type="checkbox"
-                        aria-label={`启用世界书 ${x.name}`}
-                        checked={multiple.selected.includes(x.id)}
-                        disabled={disabled}
-                        onChange={(e) => multiple.toggle(x.id, e.target.checked)}
-                      />
-                    ) : (
+              {sections.map((section) => (
+                <React.Fragment key={section.name || "all"}>
+                  {extras?.grouped && (sections.length > 1 || section.name) && (
+                    <p className="wb-caption wb-picker-group">
+                      {multiple && extras.groupToggle && (
+                        <GroupCheck
+                          rows={section.items}
+                          selected={multiple.selected}
+                          disabled={disabled}
+                          title={section.name || ungroupedLabel}
+                          toggle={extras.groupToggle}
+                        />
+                      )}
+                      {section.name || ungroupedLabel}
+                    </p>
+                  )}
+                  {section.items.map((x) => (
+                    <div key={x.id} className={`wb-resource-choice ${id === x.id ? "is-active" : ""}`}>
+                      {x.image && <img src={x.image} alt="" />}
+                      {multiple ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`启用世界书 ${x.name}`}
+                          checked={multiple.selected.includes(x.id)}
+                          disabled={disabled}
+                          onChange={(e) => multiple.toggle(x.id, e.target.checked)}
+                        />
+                      ) : (
+                        <button
+                          className="wb-picker-apply"
+                          title={`使用 ${x.name}`}
+                          aria-label={`使用 ${x.name}`}
+                          disabled={disabled}
+                          onClick={() => {
+                            use(x.id);
+                            close();
+                          }}
+                        >
+                          <span className={`wb-choice-state ${active === x.id ? "is-current" : ""}`} />
+                        </button>
+                      )}
                       <button
-                        className="wb-picker-apply"
-                        title={`使用 ${x.name}`}
-                        aria-label={`使用 ${x.name}`}
-                        disabled={disabled}
+                        className="wb-picker-copy"
+                        title={x.name}
                         onClick={() => {
-                          use(x.id);
+                          choose(x.id);
                           close();
                         }}
                       >
-                        <span className={`wb-choice-state ${active === x.id ? "is-current" : ""}`} />
+                        <strong>{x.name}</strong>
+                        {x.detail && <small>{x.detail}</small>}
                       </button>
-                    )}
-                    <button
-                      className="wb-picker-copy"
-                      title={x.name}
-                      onClick={() => {
-                        choose(x.id);
-                        close();
-                      }}
-                    >
-                      <strong>{x.name}</strong>
-                      {x.detail && <small>{x.detail}</small>}
-                    </button>
-                    <ChevronRight size={13} />
-                  </div>
+                      <ChevronRight size={13} />
+                    </div>
+                  ))}
                 </React.Fragment>
               ))}
               {!list.length && <Empty>没有符合条件的{label}</Empty>}
@@ -245,6 +267,7 @@ function ResourceRail({
   railId,
   label,
   items,
+  archived,
   id,
   active,
   choose,
@@ -258,6 +281,7 @@ function ResourceRail({
   railId: string;
   label: string;
   items: Item[];
+  archived: Item[];
   id: string;
   active: string;
   choose: (id: string) => void;
@@ -303,15 +327,47 @@ function ResourceRail({
       </li>
     );
   };
-  const groups = extras.grouped
-    ? items.reduce<[string, Item[]][]>((all, x) => {
-        const key = x.detail || "";
-        const last = all[all.length - 1];
-        if (last && last[0] === key) last[1].push(x);
-        else all.push([key, [x]]);
-        return all;
-      }, [])
-    : [["", items] as [string, Item[]]];
+  const [folded, setFolded] = useState<Set<string>>(() => new Set()),
+    [showArchived, setShowArchived] = useState(false);
+  const sections = extras.grouped ? groupItems(items) : [{ name: "", items }];
+  // A search shows every match: folds and the archived fold open while a query is typed.
+  const searching = !!query.trim(),
+    archivedOpen = showArchived || (searching && !!archived.length);
+  const fold = (name: string) =>
+    setFolded((all) => {
+      const next = new Set(all);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  const header = (name: string, rows: Item[]) => {
+    const open = searching || !folded.has(name),
+      title = name || ungroupedLabel;
+    const on = multiple ? rows.filter((x) => multiple.selected.includes(x.id)).length : 0;
+    return (
+      <div className="wb-rail-group">
+        {multiple && extras.groupToggle && (
+          <GroupCheck
+            rows={rows}
+            selected={multiple.selected}
+            disabled={disabled}
+            title={title}
+            toggle={extras.groupToggle}
+          />
+        )}
+        <button
+          className="wb-rail-group-fold"
+          aria-expanded={open}
+          aria-label={`${open ? "收起" : "展开"}分组 ${title}`}
+          disabled={searching}
+          onClick={() => fold(name)}
+        >
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <span>{title}</span>
+          <small>{multiple ? `${on}/${rows.length}` : rows.length}</small>
+        </button>
+      </div>
+    );
+  };
   return (
     <nav
       id={railId}
@@ -332,13 +388,51 @@ function ResourceRail({
       </label>
       {extras.caption && <p className="wb-rail-caption">{extras.caption}</p>}
       <div className="wb-rail-scroll">
-        {groups.map(([group, rows]) => (
-          <React.Fragment key={group || "all"}>
-            {group && <p className="wb-rail-group">{group}</p>}
-            <ul className="wb-rail-list">{rows.map(row)}</ul>
+        {sections.map(({ name, items: rows }) => (
+          <React.Fragment key={name || "all"}>
+            {extras.grouped && (sections.length > 1 || name) && header(name, rows)}
+            {(!extras.grouped || searching || !folded.has(name)) && (
+              <ul className="wb-rail-list">{rows.map(row)}</ul>
+            )}
           </React.Fragment>
         ))}
         {!items.length && <p className="wb-rail-empty">没有符合条件的{label}</p>}
+        {extras.restore && !!archived.length && (
+          <div className="wb-rail-archived">
+            <button
+              className="wb-rail-group-fold"
+              aria-expanded={archivedOpen}
+              disabled={searching}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {archivedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <span>已归档</span>
+              <small>{archived.length}</small>
+            </button>
+            {archivedOpen && (
+              <ul className="wb-rail-list" aria-label={`已归档${label}`}>
+                {archived.map((x) => (
+                  <li key={x.id} className={`wb-rail-row is-archived ${id === x.id ? "is-viewing" : ""}`}>
+                    <button className="wb-rail-open" title={x.name} onClick={() => choose(x.id)}>
+                      <span className="wb-rail-copy">
+                        <span className="wb-rail-name">{x.name}</span>
+                      </span>
+                    </button>
+                    <button
+                      className="wb-rail-restore"
+                      aria-label={`恢复 ${x.name}`}
+                      title="取消归档"
+                      disabled={disabled}
+                      onClick={() => extras.restore!(x.id)}
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
       {extras.create && (
         <button className="wb-rail-new" disabled={disabled} onClick={extras.create.run}>
@@ -347,5 +441,41 @@ function ResourceRail({
         </button>
       )}
     </nav>
+  );
+}
+
+/** A group's checkbox: checked when every row is enabled, mixed when some are; switches them all. */
+export function GroupCheck({
+  rows,
+  selected,
+  disabled,
+  title,
+  toggle,
+}: {
+  rows: Item[];
+  selected: string[];
+  disabled: boolean;
+  title: string;
+  toggle: (ids: string[], on: boolean) => void;
+}) {
+  const on = rows.filter((x) => selected.includes(x.id)).length,
+    all = on === rows.length;
+  return (
+    <input
+      type="checkbox"
+      aria-label={`整组启用 ${title}`}
+      title={all ? "整组停用" : "整组启用"}
+      checked={all}
+      ref={(node) => {
+        if (node) node.indeterminate = on > 0 && !all;
+      }}
+      disabled={disabled}
+      onChange={(e) =>
+        toggle(
+          rows.map((x) => x.id),
+          e.target.checked,
+        )
+      }
+    />
   );
 }

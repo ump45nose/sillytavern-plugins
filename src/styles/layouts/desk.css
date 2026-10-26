@@ -892,6 +892,13 @@
     font-size: var(--wb-text-xs);
     font-variant-numeric: tabular-nums;
   }
+  /* Context limit: floors a generation no longer sends fade; a dashed edge marks where sending starts. */
+  .wb-nav-row.is-unsent {
+    opacity: 0.45;
+  }
+  .wb-nav-row.is-first-sent {
+    box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--wb-accent) 60%, transparent);
+  }
   .wb-nav-empty {
     margin: 2px 0 6px;
     padding: 0 var(--wb-space-2);

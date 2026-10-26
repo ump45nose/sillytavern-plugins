@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import { SyncError } from "../../../src/sync";
 import { Hub, type Reply } from "./hub";
 import { NotFound, Refused } from "./space";
-import { st, type Directories } from "./st";
+import { st, stRouters, type Directories } from "./st";
+import { install, ResponseCache } from "./cache";
 
 /**
  * SillyTavern server plug-in: SillyTavern's data as readable files for an IDE. Routes live under
@@ -40,6 +41,18 @@ interface Router {
 }
 
 const hubs = new Map<string, Hub>();
+const cache = new ResponseCache();
+let uncache: (() => void) | null = null;
+/** Files this plug-in writes feed the cached boot responses, so the user's entries go before and after. */
+async function writing<T>(req: Request, fn: () => Promise<T>) {
+  const handle = req.user?.profile.handle;
+  if (handle) cache.invalidate(handle);
+  try {
+    return await fn();
+  } finally {
+    if (handle) cache.invalidate(handle);
+  }
+}
 function hubOf(req: Request) {
   if (!req.user) throw new Refused("需要先登录酒馆。", 401);
   const handle = req.user.profile.handle;
@@ -88,6 +101,16 @@ function route(handler: (req: Request, res: Response) => Promise<unknown>, ide =
 }
 
 export async function init(router: Router) {
+  try {
+    uncache = install(cache, await stRouters());
+    console.log(
+      uncache
+        ? "workbench-sync: response cache on for /api/settings/get and /api/characters/all"
+        : "workbench-sync: response cache off (SillyTavern routers not recognised)",
+    );
+  } catch (error) {
+    console.warn("workbench-sync: response cache off:", error);
+  }
   router.get(
     "/info",
     route(async (req) => {
@@ -98,6 +121,7 @@ export async function init(router: Router) {
         version: VERSION,
         user: req.user!.profile.handle,
         token: !!getConfigValue("workbenchSync.token", ""),
+        cache: { on: !!uncache, ...cache.counts },
         ...hub.status(),
       };
     }, false),
@@ -118,16 +142,16 @@ export async function init(router: Router) {
     "/file",
     route(async (req) => {
       if (typeof req.body?.text !== "string") throw new Refused("缺少 text。");
-      return hubOf(req).write(pathOf(req.body.path), req.body.text, text(req.body.base));
+      return writing(req, () => hubOf(req).write(pathOf(req.body.path), req.body.text, text(req.body.base)));
     }),
   );
   router.post(
     "/delete",
-    route(async (req) => hubOf(req).remove(pathOf(req.body?.path), text(req.body?.base))),
+    route(async (req) => writing(req, () => hubOf(req).remove(pathOf(req.body?.path), text(req.body?.base)))),
   );
   router.post(
     "/rename",
-    route(async (req) => hubOf(req).rename(pathOf(req.body?.from), pathOf(req.body?.to))),
+    route(async (req) => writing(req, () => hubOf(req).rename(pathOf(req.body?.from), pathOf(req.body?.to)))),
   );
   router.post(
     "/relay",
@@ -194,6 +218,8 @@ export async function init(router: Router) {
 }
 
 export async function exit() {
+  uncache?.();
+  uncache = null;
   hubs.forEach((hub) => hub.dispose());
   hubs.clear();
 }

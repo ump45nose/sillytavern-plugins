@@ -79,7 +79,7 @@ export function MobileShell({
   settings: (page: SettingsPage, group?: string) => void;
   open: (popup: ComposerPopup) => void;
   activate: (id: string, anchor: HTMLElement) => void;
-  select: (kind: Resource, id: string, on: boolean) => void;
+  select: (kind: Resource, id: string | string[], on: boolean) => void;
   /** Focus mode: Noval keeps only the reading and the composer; RP hides every pane. */
   focus: boolean;
   toggleFocus: () => void;
