@@ -9,7 +9,7 @@
 | 官方基线 | http://192.168.31.201:32011 | 官方运行时与性能对照 |
 | 工作台验证版 | http://192.168.31.201:32012 | Novel / RP 桌面和手机工作台、酒馆助手与合成测试数据 |
 
-使用现有测试账号；凭据保存在项目 `.env`，不纳入 Git。原生产实例 `32001` 未部署本次工作台。验证实例内不要保存需要保留的真实聊天，测试会修改明确命名的合成角色、世界书、预设等数据。
+使用现有测试账号；凭据保存在项目 `.env`，不纳入 Git。生产实例 `32001` 的部署见下方「部署到生产」。验证实例内不要保存需要保留的真实聊天，测试会修改明确命名的合成角色、世界书、预设等数据。
 
 默认挂载工作台：1024px 及以上使用桌面布局，更窄窗口使用已确认的 PWA 布局。桌面右上控件、手机顶栏三点菜单可切换 Novel / RP / 原生；原生页面保留工作台切换入口。检测到 `storyWorkspace` 时停止挂载，避免两个布局插件同时接管页面。移动操作见 [PWA 使用说明](docs/workbench-pwa.md)。
 
@@ -60,7 +60,7 @@ npm run start
 
 官方 release、镜像 digest 和酒馆助手资产快照由 `baseline.lock.json` 固定。准备脚本检查版本，不初始化覆盖现有数据；需要本机已有锁定镜像，可按 lock 中的 reference 获取。`WB_HELPER_SOURCE` 可指定另一台机器上的同版本酒馆助手资产。
 
-验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支。本仓库是开发与本地调试环境，不直接对外安装。发布产物在三个独立仓库，由 GitHub Actions 每 4 小时自动跟随本仓库 `workbench` 分支构建（也可在发布仓手动运行 publish）：
+验证实例继续使用 `third-party/workbench-probe` 扩展目录标识，将原探针升级为工作台，避免重复加载。部署文件是 `extension/` 整个目录，修改 `src/` 后必须重新 `npm run build`。`extension/dist` 不进入工作分支。本仓库是开发与本地调试环境，不直接对外安装。发布产物在三个独立仓库，由 GitHub Actions 每 4 小时自动跟随本仓库 `main` 分支构建（也可在发布仓手动运行 publish）：
 
 - 前端扩展 [ump45nose/noval-workbench](https://github.com/ump45nose/noval-workbench)：酒馆「扩展 → 安装扩展」直接填该地址。
 - 性能扩展 [ump45nose/wb-perf](https://github.com/ump45nose/wb-perf)：同样按地址安装，来自 `perf-extension/`，无构建步骤；替代 cocktail，二者不要同时启用。

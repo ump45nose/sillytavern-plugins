@@ -1,6 +1,6 @@
 {
   "name": "sillytavern-workbench",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,6 @@
     "benchmark": "node scripts/benchmark.mjs",
     "check": "npm run typecheck && tsc --noEmit -p server/workbench-sync && tsc --noEmit -p ide/vscode && node --check extension/trace.js && node --check extension/startup.js && for f in perf-extension/*.js perf-extension/*/*.js; do node --check \"$f\" || exit 1; done && node --check fixtures/mock-model.mjs",
     "build": "node scripts/build.mjs && node scripts/build-sync.mjs",
-    "release": "node scripts/release.mjs",
     "typecheck": "tsc --noEmit",
     "verify:workbench": "node scripts/verify-workbench.mjs",
     "verify:compat": "node scripts/verify-workbench-compat.mjs",
