@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:resource-center": "node scripts/build-resource-center.mjs",
+    "deploy:resource-center": "node scripts/deploy-resource-center.mjs",
     "prepare:baseline": "python3 scripts/prepare.py",
     "start": "docker compose up -d --wait",
     "stop": "docker compose down",

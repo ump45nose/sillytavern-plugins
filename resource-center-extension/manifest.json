@@ -1,0 +1,1 @@
+{"display_name":"AI 资源中心联动","loading_order":1101,"requires":[],"optional":[],"js":"index.js","css":"style.css","author":"ump45nose","version":"2.0.0","minimum_client_version":"1.19.0","auto_update":false,"generate_interceptor":"resourceCenterLinkGuard"}

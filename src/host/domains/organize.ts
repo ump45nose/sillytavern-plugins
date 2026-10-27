@@ -26,6 +26,12 @@ export const organizeMethods = {
   },
   /** Archives or restores; items in use stay unarchived and come back as errors. */
   async archiveResources(this: HostAdapter, kind: Organized, ids: string[], on: boolean) {
+    if (kind === "connection") {
+      const detail: { ids: string[]; on: boolean; promise: Promise<{ done: string[]; errors: { id: string; message: string }[] }> | null } = { ids, on, promise: null };
+      const event = new CustomEvent("workbench:connection-archive-request", { cancelable: true, detail });
+      window.dispatchEvent(event);
+      if (event.defaultPrevented && detail.promise) return detail.promise;
+    }
     const done: string[] = [],
       errors: { id: string; message: string }[] = [];
     for (const id of ids) {

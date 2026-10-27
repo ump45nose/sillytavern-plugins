@@ -51,6 +51,16 @@
 
 ## 构建与运行
 
+资源中心联动是独立扩展：`resource-center-extension/` 安装到酒馆扩展目录，
+`server/resource-center-link/` 安装到 `plugins/resource-center-link/`，开启服务端插件后重启。
+支持酒馆 1.19.0 和 Node.js 22 以上，不依赖工作台。
+`npm run build:resource-center` 生成独立安装包；`npm run deploy:resource-center -- --dry` 查看本机部署目标。
+扩展设置使用中心 `/api/v2/access` 签发的两种凭据：`rp`（`rpRegistration=true`）与
+`connector`（`target=sillytavern`），两者绑定同一 `sourceId/rpInstanceId/rpUserId`。
+配置及待发事件保存在酒馆用户数据目录的加密日志，保存同步不访问模型上游。
+关闭页面时只补交已有事件，中心下发等待开页应用；真实调用仅上传元数据。
+工作台安装时支持归档原因联动；恢复显示不会恢复连接可用性。
+
 ```bash
 npm ci
 npm run build
