@@ -18,6 +18,7 @@
 @import "./legacy/addon-shell.css";
 @import "./legacy/mobile.css";
 @import "./components/feedback.css";
+@import "./components/popover.css";
 @import "./layouts/desk.css";
 @import "./layouts/panel.css";
 @import "./components/check.css";
@@ -28,6 +29,7 @@
 @import "./components/world-workspace.css";
 @import "./components/portraits.css";
 @import "./components/preset-desk.css";
+@import "./components/entry-editor.css";
 @import "./components/persona-desk.css";
 @import "./components/extensions.css";
 @import "./components/addon.css";
@@ -41,3 +43,5 @@
 @import "./layouts/settings.css";
 @import "./layouts/pwa.css";
 @import "./native-bridge.css";
+@import "./components/message-actions.css";
+@import "./components/image-insertion.css";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PencilLine, Plus, Search, Upload, SquareArrowOutUpRight, X } from "../ui/icons";
-import { groupItems, organized, ungroupedLabel } from "../host/organize";
+import { grouped, groupItems, organized, ungroupedLabel } from "../host/organize";
 import type { HostAdapter } from "../host/adapter";
 import type { Item } from "../host/types";
 import { Dialog, Empty, Notice, useTask, useHostSlices, withoutChat } from "../ui/common";
@@ -38,8 +38,10 @@ export default function ResourceManager({
     [message, setMessage] = useState("");
   // Books and profiles split into the working list and the archived shelf; selection follows the shelf shown.
   const org = organized(kind) ? kind : null,
+    groupKind = grouped(kind) ? kind : null,
     archivedCount = org ? items.filter((i) => i.archived).length : 0,
-    shown = org ? items.filter((i) => !!i.archived === (shelf === "archived")) : items;
+    shown = org ? items.filter((i) => !!i.archived === (shelf === "archived")) : items,
+    filtered = shown.filter((i) => `${i.name} ${i.group ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const all = useRef<HTMLInputElement>(null),
     valid = selection.filter((s) => shown.some((i) => i.id === s));
   useEffect(() => {
@@ -182,7 +184,7 @@ export default function ResourceManager({
               已选 {valid.length} / {shown.length}
             </small>
             <div className="wb-batch-actions">
-              {org && shelf === "list" && (
+              {groupKind && shelf === "list" && (
                 <button disabled={!valid.length || task.busy} onClick={() => setGrouping("")}>
                   分组
                 </button>
@@ -249,54 +251,53 @@ export default function ResourceManager({
             </div>
           )}
           <div className="wb-manager-list">
-            {(org && shelf === "list"
-              ? groupItems(shown.filter((i) => i.name.toLowerCase().includes(query.toLowerCase())))
-              : [{ name: "", items: shown.filter((i) => i.name.toLowerCase().includes(query.toLowerCase())) }]
-            ).map((group, _, groups) => (
-              <div className="wb-manager-section" key={group.name || "all"}>
-                {org && shelf === "list" && (groups.length > 1 || group.name) && (
-                  <GroupHeader
-                    host={host}
-                    kind={org}
-                    name={group.name}
-                    ids={group.items.map((i) => i.id)}
-                    selection={valid}
-                    disabled={task.busy}
-                    onSelection={onSelection}
-                    run={task.run}
-                  />
-                )}
-                {group.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`wb-manager-row ${id === item.id ? "is-editing" : ""} ${valid.includes(item.id) ? "is-selected" : ""}`}
-                  >
-                    <label>
-                      <input
-                        type="checkbox"
-                        aria-label={`选择 ${item.name}`}
-                        checked={valid.includes(item.id)}
-                        disabled={task.busy}
-                        onChange={(e) =>
-                          onSelection(
-                            e.target.checked ? [...valid, item.id] : valid.filter((s) => s !== item.id),
-                          )
-                        }
-                      />
-                    </label>
-                    <button
-                      aria-label={`编辑 ${item.name}`}
-                      aria-pressed={id === item.id}
+            {(groupKind && shelf === "list" ? groupItems(filtered) : [{ name: "", items: filtered }]).map(
+              (group, _, groups) => (
+                <div className="wb-manager-section" key={group.name || "all"}>
+                  {groupKind && shelf === "list" && (groups.length > 1 || group.name) && (
+                    <GroupHeader
+                      host={host}
+                      kind={groupKind}
+                      name={group.name}
+                      ids={group.items.map((i) => i.id)}
+                      selection={valid}
                       disabled={task.busy}
-                      onClick={() => browse(item.id)}
+                      onSelection={onSelection}
+                      run={task.run}
+                    />
+                  )}
+                  {group.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`wb-manager-row ${id === item.id ? "is-editing" : ""} ${valid.includes(item.id) ? "is-selected" : ""}`}
                     >
-                      <strong>{item.name}</strong>
-                      <small>{item.archived ? "已归档" : rowDetail(item)}</small>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))}
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label={`选择 ${item.name}`}
+                          checked={valid.includes(item.id)}
+                          disabled={task.busy}
+                          onChange={(e) =>
+                            onSelection(
+                              e.target.checked ? [...valid, item.id] : valid.filter((s) => s !== item.id),
+                            )
+                          }
+                        />
+                      </label>
+                      <button
+                        aria-label={`编辑 ${item.name}`}
+                        aria-pressed={id === item.id}
+                        disabled={task.busy}
+                        onClick={() => browse(item.id)}
+                      >
+                        <strong>{item.name}</strong>
+                        <small>{item.archived ? "已归档" : rowDetail(item)}</small>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ),
+            )}
             {!items.length && <Empty>还没有{label}</Empty>}
           </div>
           <button className="wb-editor-slot" disabled>
@@ -322,7 +323,7 @@ export default function ResourceManager({
           )}
         </div>
       </div>
-      {grouping !== null && org && (
+      {grouping !== null && groupKind && (
         <Dialog title={`将所选 ${valid.length} 个${label}移入分组`} onClose={() => setGrouping(null)}>
           <form
             className="wb-confirm-body wb-group-form"
@@ -331,7 +332,7 @@ export default function ResourceManager({
               if (!grouping.trim()) return;
               setGrouping(null);
               task.run(async () => {
-                await host.setResourceGroup(org, valid, grouping);
+                await host.setResourceGroup(groupKind, valid, grouping);
                 setMessage(`已移入分组「${grouping.trim()}」`);
               });
             }}
@@ -357,7 +358,7 @@ export default function ResourceManager({
                 onClick={() => {
                   setGrouping(null);
                   task.run(async () => {
-                    await host.setResourceGroup(org, valid, "");
+                    await host.setResourceGroup(groupKind, valid, "");
                     setMessage("已移出分组");
                   });
                 }}
@@ -414,7 +415,7 @@ function GroupHeader({
   run,
 }: {
   host: HostAdapter;
-  kind: "connection" | "world";
+  kind: Kind;
   name: string;
   ids: string[];
   selection: string[];
@@ -467,9 +468,7 @@ function GroupHeader({
           title="解散分组"
           disabled={disabled}
           onClick={() => {
-            if (
-              confirm(`解散分组「${title}」，其中的${kind === "connection" ? "连接" : "世界书"}变为未分组？`)
-            )
+            if (confirm(`解散分组「${title}」，其中的${resourceLabels[kind]}变为未分组？`))
               run(() => host.setResourceGroup(kind, ids, ""));
           }}
         >

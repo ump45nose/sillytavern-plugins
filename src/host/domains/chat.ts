@@ -190,7 +190,7 @@ export const chatMethods = {
       name.replace(/\.jsonl$/, "") + ".jsonl",
     );
   },
-  exportSnapshot(this: HostAdapter) {
+  exportSnapshot(this: HostAdapter, presentation: "raw" | "reading" = "raw") {
     const c = ctx();
     return {
       key: `${c.groupId || this.snapshot().character?.id || ""}:${c.getCurrentChatId() || ""}`,
@@ -198,10 +198,11 @@ export const chatMethods = {
       messages: c.chat.map((message: Data, id: number) => ({
         id,
         name: String(message.name || ""),
-        // Cast tags (名字|表情:) export as the reader sees them: the speaker's name.
-        text: message.is_user
-          ? String(message.mes || "")
-          : castTagsAsNames(stripOptions(String(message.mes || ""))),
+        // Full exports keep every byte; scene consumers opt into the text shown to the reader.
+        text:
+          presentation === "raw" || message.is_user
+            ? String(message.mes || "")
+            : castTagsAsNames(stripOptions(String(message.mes || ""))),
         role: message.is_system
           ? ("system" as const)
           : message.is_user

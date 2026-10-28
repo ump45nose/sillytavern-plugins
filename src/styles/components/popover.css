@@ -1,0 +1,43 @@
+/* Shared paper overlays keep the same elevation and a readable, reachable heading. */
+@layer wb.components {
+  .wb-ui.wb-popover {
+    border-color: var(--wb-line-1);
+    border-radius: var(--wb-radius-lg);
+    box-shadow: var(--wb-shadow-3);
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wb-line-2) transparent;
+  }
+  .wb-popover > header {
+    gap: var(--wb-space-2);
+    padding: var(--wb-space-2) var(--wb-space-3);
+    background: var(--wb-surface-1);
+  }
+  .wb-popover > header strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-strong);
+    line-height: var(--wb-leading-ui);
+  }
+  .wb-popover > header .wb-icon {
+    flex: none;
+    width: var(--wb-control-md);
+    height: var(--wb-control-md);
+    min-height: var(--wb-control-md);
+    padding: 0;
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: transparent;
+    color: var(--wb-ink-3);
+  }
+  .wb-popover > header .wb-icon:is(:hover, :focus-visible) {
+    color: var(--wb-ink-1);
+    background: var(--wb-hover);
+  }
+  body.wb-mobile .wb-popover > header .wb-icon {
+    width: var(--wb-control-touch);
+    height: var(--wb-control-touch);
+    min-height: var(--wb-control-touch);
+  }
+}

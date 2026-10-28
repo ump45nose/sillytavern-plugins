@@ -177,8 +177,7 @@ export class HostAdapter extends HostCore {
       if (this.resourceAction) return false;
       if (preserveDrafts || !this.dirtyDraftKeys().length) return true;
       if (!confirm("有未保存的资源草稿，放弃这些修改？")) return false;
-      this.drafts.clear();
-      return true;
+      return () => this.drafts.clear();
     };
     // Cached drafts outlive the editors that made them, so the host keeps its own unload hold.
     this.cleanup.push(

@@ -1,29 +1,13 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronRight,
-  Copy,
-  Eye,
-  FileText,
-  Flag,
-  GitBranch,
-  Languages,
-  Lightbulb,
-  Paintbrush,
-  Paperclip,
-  PencilLine,
-  Type,
-  Trash2,
-  Volume2,
-  X,
-} from "./icons";
+import { ChevronRight, Type } from "./icons";
 import type { HostAdapter } from "../host/adapter";
 import { useHostSlices } from "./common";
 import { Popover } from "./Popover";
 import { usePresence } from "./Motion";
+import { MessageActions } from "./MessageActions";
+import { useMessageEditing } from "./useMessageEditing";
+import { messageActions } from "./message-actions";
 /** `row` renders a labelled list row (the phone's session menu) instead of the toolbar icon. */
 export function ReadingSettings({ host, row = false }: { host: HostAdapter; row?: boolean }) {
   // Subscribed for the re-render: the preferences below are read from the host on each render.
@@ -139,26 +123,6 @@ export function ReadingSettings({ host, row = false }: { host: HostAdapter; row?
     </>
   );
 }
-const iconMap: Record<string, any> = {
-  mes_edit: PencilLine,
-  mes_copy: Copy,
-  mes_translate: Languages,
-  mes_narrate: Volume2,
-  mes_prompt: FileText,
-  mes_hide: Eye,
-  mes_embed: Paperclip,
-  mes_create_bookmark: Flag,
-  mes_create_branch: GitBranch,
-  // Image generation's own message action (Stable Diffusion extension).
-  sd_message_gen: Paintbrush,
-  mes_edit_done: Check,
-  mes_edit_copy: Copy,
-  mes_edit_add_reasoning: Lightbulb,
-  mes_edit_delete: Trash2,
-  mes_edit_up: ArrowUp,
-  mes_edit_down: ArrowDown,
-  mes_edit_cancel: X,
-};
 /** Only add siblings and presentation classes; native text/media/iframe nodes remain owned by ST. */
 /** Memoised: it follows its own host slices, so a parent re-render (a drawer opening) has nothing to add. */
 export const ReadingPresentation = React.memo(function ReadingPresentation({
@@ -168,6 +132,7 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
   host: HostAdapter;
   chatStyle?: boolean;
 }) {
+  useMessageEditing(host);
   const folds = useRef(new Map<HTMLElement, boolean>()),
     animations = useRef(new Map<HTMLElement, Animation>());
   const controls = useRef(
@@ -218,6 +183,7 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
       });
       controls.current.clear();
       chat.querySelectorAll(".wb-user-heading").forEach((n) => n.remove());
+      chat.querySelectorAll(".wb-message-toolbar").forEach((n) => n.remove());
       chat.querySelectorAll(".wb-reading-icon").forEach((n) => n.classList.remove("wb-reading-icon"));
       chat.querySelectorAll(".wb-user-collapsed").forEach((n) => n.classList.remove("wb-user-collapsed"));
       chat
@@ -323,6 +289,22 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
       block = node.querySelector<HTMLElement>(".mes_block");
     if (!block) continue;
     const open = chatStyle || (expanded.get(node) ?? prefs.userCollapsed === false) || editing;
+    const header = node.querySelector<HTMLElement>(".ch_name");
+    if (header) {
+      let toolbar = header.querySelector<HTMLElement>(":scope>.wb-message-toolbar");
+      if (!toolbar) {
+        toolbar = document.createElement("div");
+        toolbar.className = "wb-message-toolbar";
+        header.append(toolbar);
+      }
+      output.push(
+        createPortal(
+          <MessageActions host={host} node={node} editing={editing} busy={snap.busy} />,
+          toolbar,
+          "actions-" + id,
+        ),
+      );
+    }
     if (user) {
       let heading = block.querySelector<HTMLElement>(":scope>.wb-user-heading");
       if (!heading) {
@@ -361,28 +343,32 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
         createPortal(
           <span className="wb-reading-meta">
             {!user && m?.name && <b>{m.name}</b>}
-            {id + 1} 层{timestamp && <span className="wb-reading-time">{timestamp}</span>}
+            <span>
+              {!user && m?.name ? "· " : ""}第 {id + 1} 层
+            </span>
+            {timestamp && <span className="wb-reading-time">{timestamp}</span>}
           </span>,
           meta,
           "meta-" + id,
         ),
       );
-    for (const [name, Icon] of Object.entries(iconMap))
-      for (const control of node.querySelectorAll<HTMLElement>("." + name)) {
-        if (!controls.current.has(control)) {
-          controls.current.set(control, {
-            role: control.getAttribute("role"),
-            tab: control.getAttribute("tabindex"),
-            label: control.getAttribute("aria-label"),
-          });
-          control.setAttribute("role", "button");
-          control.tabIndex = 0;
-          control.setAttribute("aria-label", control.title || name.replace(/^mes_edit_/, ""));
+    if (chatStyle && !document.body.classList.contains("wb-mobile"))
+      for (const [name, [Icon, label]] of Object.entries(messageActions))
+        for (const control of node.querySelectorAll<HTMLElement>("." + name)) {
+          if (!controls.current.has(control)) {
+            controls.current.set(control, {
+              role: control.getAttribute("role"),
+              tab: control.getAttribute("tabindex"),
+              label: control.getAttribute("aria-label"),
+            });
+            control.setAttribute("role", "button");
+            control.tabIndex = 0;
+            control.setAttribute("aria-label", label);
+          }
+          // Render runs often; an unconditional add still writes the attribute and wakes SillyTavern's observer.
+          if (!control.classList.contains("wb-reading-icon")) control.classList.add("wb-reading-icon");
+          output.push(createPortal(<Icon size={17} aria-hidden="true" />, control, id + ":" + name));
         }
-        // Render runs often; an unconditional add still writes the attribute and wakes SillyTavern's observer.
-        if (!control.classList.contains("wb-reading-icon")) control.classList.add("wb-reading-icon");
-        output.push(createPortal(<Icon size={17} aria-hidden="true" />, control, id + ":" + name));
-      }
   }
   return <>{output}</>;
 });

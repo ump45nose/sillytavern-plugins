@@ -11,6 +11,9 @@ export function Fold({
   toolbar,
   icon,
   hint,
+  open: controlledOpen,
+  onOpenChange,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
@@ -19,15 +22,22 @@ export function Fold({
   icon?: React.ReactNode;
   /** A quiet summary at the row's end, e.g. what the fold currently holds. */
   hint?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
 }) {
-  const [open, setOpen] = useState(initial);
+  const [localOpen, setLocalOpen] = useState(initial);
+  const open = controlledOpen ?? localOpen;
   const toggle = (
     <button
       className={`wb-fold-head ${icon ? "is-icon" : ""}`}
       title={title}
       aria-label={title}
       aria-expanded={open}
-      onClick={() => setOpen(!open)}
+      onClick={() => {
+        setLocalOpen(!open);
+        onOpenChange?.(!open);
+      }}
     >
       {icon || (
         <>
@@ -39,7 +49,7 @@ export function Fold({
     </button>
   );
   return (
-    <section className="wb-fold">
+    <section className={`wb-fold ${className}`}>
       {toolbar ? (
         <div className="wb-fold-tools">
           {toolbar}
@@ -141,7 +151,7 @@ export function SaveBar({
   const live = useRef({ busy, save });
   live.current = { busy, save };
   useEffect(() => {
-    const scope = ref.current?.parentElement;
+    const scope = ref.current?.closest<HTMLElement>(".wb-entry-editor") ?? ref.current?.parentElement;
     if (!dirty || !scope) return;
     const key = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "s") return;

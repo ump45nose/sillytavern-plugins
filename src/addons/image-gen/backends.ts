@@ -120,6 +120,13 @@ export async function generateImage(
     response: Response;
   if (config.provider === "comfyui") {
     const base = baseURL(config.url);
+    const comfyFetch: typeof fetch = (input, init) => {
+      const requestHeaders = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      );
+      if (config.key) requestHeaders.set("Authorization", `Bearer ${config.key}`);
+      return fetch(input, { ...init, headers: requestHeaders });
+    };
     if (
       images.length &&
       config.workflow.trim() &&
@@ -131,7 +138,7 @@ export async function generateImage(
       const upload = new FormData();
       upload.set("image", images[0].blob, "wb-ref-" + randomId() + "." + images[0].mime.split("/")[1]);
       upload.set("type", "input");
-      const uploaded = await fetch(base + "/upload/image", {
+      const uploaded = await comfyFetch(base + "/upload/image", {
         method: "POST",
         body: upload,
         headers: config.key ? { Authorization: `Bearer ${config.key}` } : {},
@@ -182,6 +189,7 @@ export async function generateImage(
         baseUrl: base,
         tryJobsCancel: true,
         allowLegacyInterrupt: false,
+        fetchImpl: comfyFetch,
       }).catch(() => {});
     };
     signal.addEventListener("abort", cancel, { once: true });
@@ -190,9 +198,10 @@ export async function generateImage(
         baseUrl: base,
         signal,
         timeoutMs: config.timeout * 1000,
+        fetchImpl: comfyFetch,
       });
       requestUrl = buildComfyViewUrl(base, result.images[0]);
-      response = await fetch(requestUrl, { signal, redirect: "error" });
+      response = await comfyFetch(requestUrl, { signal, redirect: "error" });
       if (!response.ok) throw new Error("ComfyUI 图片读取失败。");
       return await imageResponseToDataUrl(response);
     } finally {

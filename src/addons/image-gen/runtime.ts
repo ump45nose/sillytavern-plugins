@@ -1,7 +1,7 @@
 import { randomId } from "../../host/ids";
 import type { AddonRuntime, MessageTarget, StoryReply, TaskHost, TaskState } from "../types";
 import { configuration, generateImage } from "./backends";
-import { normalizeReferences, type ImageReference } from "./reference-files";
+import { normalizeReferences, readImage, type ImageReference } from "./reference-files";
 import { cleanPrompts, sceneSource } from "./prompts";
 export interface ImageResult {
   id: string;
@@ -11,6 +11,8 @@ export interface ImageResult {
   target: MessageTarget;
   attached: boolean;
   created: number;
+  name?: string;
+  origin?: "upload";
 }
 export function createRuntime(host: TaskHost): AddonRuntime {
   const metadata = host.metadata(),
@@ -27,7 +29,7 @@ export function createRuntime(host: TaskHost): AddonRuntime {
     positive: "",
     negative: "",
     source: "",
-    results: (Array.isArray(metadata.results) ? metadata.results : []) as ImageResult[],
+    results: (Array.isArray(metadata.results) ? metadata.results.slice(0, 40) : []) as ImageResult[],
     auto: { enabled: false, every: 3, delivery: "insert", ...(metadata.auto || {}) },
     count: 0,
   };
@@ -45,10 +47,65 @@ export function createRuntime(host: TaskHost): AddonRuntime {
   };
   const persist = async () => {
     if (disposed || host.snapshot().chatKey !== key) return;
-    await host.saveMetadata({ version: 1, auto: data.auto, results: data.results.slice(-40) }, key);
+    await host.saveMetadata({ version: 1, auto: data.auto, results: data.results.slice(0, 40) }, key);
   };
   const source = (selected: MessageTarget) =>
     sceneSource(host.exportSnapshot().messages, selected.id, configuration(host.config()).before);
+  async function importImages(files: File[], selected: MessageTarget) {
+    if (!files.length) return;
+    if (task.status === "running") throw new Error("已有生图任务，请等待或取消。");
+    if (!host.validTarget(selected)) throw new Error("目标楼层已改变，请重新选择插入位置。");
+    controller = new AbortController();
+    const signal = controller.signal;
+    task = { status: "running", label: "正在读取图片" };
+    emit();
+    try {
+      const images = await Promise.all(files.map((file) => readImage(file)));
+      let attached = 0;
+      for (const image of images) {
+        if (signal.aborted || disposed || host.snapshot().chatKey !== key) return;
+        task = { status: "running", label: "正在保存并插入图片" };
+        emit();
+        const url = await host.saveImage(image.dataUrl, signal);
+        if (signal.aborted || disposed || host.snapshot().chatKey !== key) return;
+        const result: ImageResult = {
+          id: randomId(),
+          url,
+          positive: "",
+          negative: "",
+          target: selected,
+          attached: false,
+          created: Date.now(),
+          name: image.name,
+          origin: "upload",
+        };
+        data.results = [result, ...data.results].slice(0, 40);
+        await persist();
+        if (!signal.aborted && !disposed && host.validTarget(selected)) {
+          result.attached = await host.attach(selected, url);
+          if (result.attached) attached++;
+          await persist();
+        }
+        emit();
+      }
+      if (signal.aborted || disposed) return;
+      task = {
+        status: "idle",
+        label: attached === images.length ? `已插入 ${attached} 张图片` : "楼层已改变，图片已存入待选区",
+      };
+      emit();
+    } catch (error) {
+      if (!disposed && !signal.aborted) {
+        task = {
+          status: "error",
+          label: "插入图片失败",
+          error: error instanceof Error ? error.message : String(error),
+        };
+        emit();
+        throw error;
+      }
+    }
+  }
   async function execute(kind: string, options: any = {}) {
     if (data.referencesReading && kind !== "rewrite") throw new Error("参考图正在读取，请稍候。");
     if (task.status === "running") throw new Error("已有生图任务，请等待或取消。");
@@ -96,7 +153,7 @@ export function createRuntime(host: TaskHost): AddonRuntime {
         attached: false,
         created: Date.now(),
       };
-      data.results = [result, ...data.results];
+      data.results = [result, ...data.results].slice(0, 40);
       await persist(); // Keep the result in pending before attempting attachment.
       if (options.insert !== false && host.validTarget(captured)) {
         result.attached = await host.attach(captured, url, options.replace);
@@ -190,14 +247,18 @@ export function createRuntime(host: TaskHost): AddonRuntime {
     }
     if (name === "insert") {
       const result = data.results.find((r) => r.id === args[0]);
-      if (!result) return;
+      if (!result) throw new Error("图片已不在当前聊天的结果区。");
       const selected = args[1] || result.target;
-      result.attached = await host.attach(selected, result.url);
-      if (result.attached) result.target = selected;
+      if (!host.validTarget(selected) || !(await host.attach(selected, result.url)))
+        throw new Error("目标楼层已改变，请重新选择插入位置。");
+      result.attached = true;
+      result.target = selected;
       await persist();
+      if (task.status !== "running") task = { status: "idle", label: "图片已插入目标楼层" };
       emit();
       return;
     }
+    if (name === "import") return importImages(args[0], args[1]);
     if (name === "remove") {
       const result = data.results.find((r) => r.id === args[0]);
       if (!result) return;
@@ -213,6 +274,7 @@ export function createRuntime(host: TaskHost): AddonRuntime {
     if (name === "regenerate") {
       const result = data.results.find((r) => r.id === args[0]);
       if (result) {
+        if (result.origin === "upload") throw new Error("本地图片没有生图提示词，请先填写提示词再生成。");
         data.positive = result.positive;
         data.negative = result.negative;
         await execute("generate", {

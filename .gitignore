@@ -10,3 +10,4 @@ extension/dist/
 server/workbench-sync/dist/
 ide/vscode/dist/
 outputs/
+.ui-review-*/

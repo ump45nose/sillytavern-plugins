@@ -94,6 +94,7 @@ export class AddonBridge {
     };
     document.getElementById("send_textarea")?.addEventListener("input", input);
     this.cleanup.push(() => document.getElementById("send_textarea")?.removeEventListener("input", input));
+    this.cleanup.push(bus.on("composer-input", () => this.inputs.forEach((fn) => fn())));
   }
   onChatChange = (fn: () => void) => {
     this.chatChanges.add(fn);
@@ -189,8 +190,7 @@ export class AddonBridge {
       throw new Error("请先退出手动生图输入，再运行自动写作。");
     if (this.writing || this.host.snapshot().busy) throw new Error("请等待当前生成完成。");
     const input = document.getElementById("send_textarea") as HTMLTextAreaElement;
-    if (text !== null && input.value.trim() && !allowDraft)
-      throw new Error("输入框有未发送内容，自动写作已暂停。");
+    if (input.value.trim() && !allowDraft) throw new Error("输入框有未发送内容，自动写作已暂停。");
     this.writing = true;
     try {
       return await new Promise<StoryReply>((resolve, reject) => {
@@ -258,7 +258,7 @@ export class AddonBridge {
         chatName: host.snapshot().chatName,
         busy: host.snapshot().busy,
       }),
-      exportSnapshot: () => host.exportSnapshot(),
+      exportSnapshot: () => host.exportSnapshot(id === "record-export" ? "raw" : "reading"),
       download: (blob: Blob, filename: string) => host.download(blob, filename),
       jump: (n: number) => host.jump(n),
       exportChat: (name: string) => host.exportChat(name),
@@ -406,7 +406,7 @@ export class AddonBridge {
       if (!Array.isArray(extra.media))
         extra.media = extra.image ? [{ type: "image", url: extra.image, title: extra.title || "" }] : [];
       extra.media = extra.media.filter(
-        (m: Data) => !(m.wb_addon === "image-gen" && (m.url === replace || (remove && m.url === url))),
+        (m: Data) => !(m.wb_addon === "image-gen" && (m.url === replace || m.url === url)),
       );
       if (!remove) extra.media.push({ type: "image", url, title: "工作台生图", wb_addon: "image-gen" });
       extra.inline_image = true;

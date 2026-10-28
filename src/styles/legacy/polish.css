@@ -151,9 +151,7 @@
     margin-top: 0;
   }
   /* One clay boundary per selected surface, without changing its dimensions. */
-  .wb-ui {
-    --wb-selection-line: color-mix(in srgb, var(--wb-accent) 65%, var(--wb-line));
-  }
+
   .wb-ui :is(.wb-selector.is-active, .wb-settings-nav > button[aria-pressed="true"]) {
     border-color: var(--wb-selection-line);
   }

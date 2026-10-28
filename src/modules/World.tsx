@@ -2,6 +2,7 @@ import { Select } from "../ui/Select";
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Search, X, Braces, BookMarked, ChevronLeft } from "../ui/icons";
 import { SaveBar } from "../ui/ResourceControls";
+import { EntryEditor, useMobileLayout } from "../ui/EntryEditor";
 import { useTokenTally } from "../ui/tokens";
 import { useWindow, WINDOW_FROM } from "../ui/useWindow";
 import { activation, sameData, setActivation, validateBook } from "../host/model";
@@ -74,6 +75,7 @@ export default function World({
   managed?: boolean;
   onSelection?: (name: string) => void;
 }) {
+  const mobile = useMobileLayout();
   const snap = useHostSlices(host, withoutChat),
     task = useTask();
   const [name, setName] = useState(initial || snap.current.world || snap.resources.world[0]?.id || "");
@@ -89,7 +91,8 @@ export default function World({
     [scope, setScope] = useState("global"),
     [newKey, setNewKey] = useState<string | null>(null),
     [filter, setFilter] = useState("all"),
-    [target, setTarget] = useState(entryTitle);
+    [target, setTarget] = useState(entryTitle),
+    [entryOpen, setEntryOpen] = useState(false);
   useEffect(() => {
     onSelection?.(name);
   }, [name]);
@@ -155,6 +158,7 @@ export default function World({
     if (dirty && !confirm("切换世界书将放弃未保存修改，继续？")) return;
     host.drafts.delete("world:" + name);
     setTab("content");
+    setEntryOpen(false);
     setBase(null);
     setDraft(null);
     setName(next);
@@ -268,6 +272,7 @@ export default function World({
         item = await host.createEntry(name, next);
       setDraft(next);
       setEntry(String(item.uid));
+      setEntryOpen(true);
     });
   const removeEntry = () => {
     if (!confirm("删除此条目？")) return;
@@ -279,6 +284,20 @@ export default function World({
     scope === "global"
       ? snap.resources.world.filter((x) => x.active).map((x) => x.id)
       : host.characterBooks();
+  const saveBar = (
+    <SaveBar
+      dirty={dirty}
+      busy={task.busy}
+      message={saved}
+      reset={() => {
+        if (!base) return;
+        setDraft(base);
+        setJson(JSON.stringify(base, null, 2));
+        setSaved("");
+      }}
+      save={save}
+    />
+  );
   if (!deep) {
     const book = snap.resources.world.find((x) => x.id === name);
     return (
@@ -364,7 +383,10 @@ export default function World({
               locked={tab === "json"}
               onToggle={toggleEntry}
               onMode={modeChange}
-              onOpen={setEntry}
+              onOpen={(id) => {
+                setEntry(id);
+                setEntryOpen(true);
+              }}
             />
           ))}
           {panelWindow.after > 0 && <li className="wb-entries-gap" style={{ height: panelWindow.after }} />}
@@ -373,165 +395,172 @@ export default function World({
           )}
         </ul>
         {selected && (
-          <article className="wb-entry-card" aria-label={`编辑条目：${selected.comment || entry}`}>
-            <div className="wb-entry-card-head">
-              <div className="wb-entry-tabs" role="tablist" aria-label="条目内容">
-                {["content", "trigger", "portraits", "json"].map((t) => (
-                  <button key={t} role="tab" aria-selected={tab === t} onClick={() => switchTab(t)}>
-                    {t === "content"
-                      ? "正文"
-                      : t === "trigger"
-                        ? "触发条件"
-                        : t === "portraits"
-                          ? "立绘"
-                          : "完整 JSON"}
-                  </button>
-                ))}
-              </div>
-              <button
-                className="wb-entry-delete"
-                aria-label="删除条目"
-                title="删除条目"
-                disabled={tab === "json"}
-                onClick={removeEntry}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-            {tab === "portraits" ? (
-              <EntryPortraits
-                host={host}
-                book={name}
-                title={String(base?.entries?.[entry]?.comment ?? "").trim()}
-                draftTitle={String(selected.comment ?? "")}
-              />
-            ) : tab === "json" ? (
-              <textarea
-                className="wb-entry-text is-code"
-                aria-label="世界书 JSON"
-                value={json}
-                onChange={(e) => setJson(e.target.value)}
-              />
-            ) : tab === "trigger" ? (
-              <div className="wb-entry-trigger">
-                <label>
-                  <span>条目名称</span>
-                  <input
-                    value={selected.comment ?? ""}
-                    onChange={(e) => update({ comment: e.target.value })}
-                  />
-                </label>
-                <label>
-                  <span>辅助关键词（每行一个）</span>
-                  <textarea
-                    value={(selected.keysecondary ?? []).join("\n")}
-                    onChange={(e) => update({ keysecondary: e.target.value.split("\n").filter(Boolean) })}
-                  />
-                </label>
-                <label className="wb-entry-check">
-                  <input
-                    type="checkbox"
-                    checked={!!selected.selective}
-                    onChange={(e) => update({ selective: e.target.checked })}
-                  />
-                  使用辅助关键词
-                </label>
-              </div>
-            ) : (
-              <>
-                <MdField
-                  className="wb-entry-text"
-                  label="世界书正文"
-                  value={selected.content ?? ""}
-                  onChange={(content) => update({ content })}
-                />
-                <div className="wb-entry-keys">
-                  <span>关键词</span>
-                  {(selected.key ?? []).map((k: string, i: number) => (
-                    <span className="wb-key" key={k + i}>
-                      {k}
-                      <button
-                        aria-label={`移除关键词 ${k}`}
-                        onClick={() =>
-                          update({ key: (selected.key ?? []).filter((_: string, j: number) => j !== i) })
-                        }
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ))}
-                  {newKey === null ? (
-                    <button className="wb-key-add" onClick={() => setNewKey("")}>
-                      + 添加
+          <EntryEditor
+            open={!mobile || entryOpen}
+            title={`世界书条目：${selected.comment || entry}`}
+            onClose={() => {
+              setEntryOpen(false);
+              if (!mobile) setEntry("");
+            }}
+            busy={task.busy}
+            footer={
+              mobile ? (
+                <>
+                  <Notice error={task.error} />
+                  {saveBar}
+                </>
+              ) : undefined
+            }
+          >
+            <article className="wb-entry-card" aria-label={`编辑条目：${selected.comment || entry}`}>
+              <div className="wb-entry-card-head">
+                <div className="wb-entry-tabs" role="tablist" aria-label="条目内容">
+                  {["content", "trigger", "portraits", "json"].map((t) => (
+                    <button key={t} role="tab" aria-selected={tab === t} onClick={() => switchTab(t)}>
+                      {t === "content"
+                        ? "正文"
+                        : t === "trigger"
+                          ? "触发条件"
+                          : t === "portraits"
+                            ? "立绘"
+                            : "完整 JSON"}
                     </button>
-                  ) : (
-                    <input
-                      className="wb-key-input"
-                      aria-label="新关键词"
-                      autoFocus
-                      value={newKey}
-                      onChange={(e) => setNewKey(e.target.value)}
-                      onBlur={() => setNewKey(null)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") setNewKey(null);
-                        if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-                        e.preventDefault();
-                        const value = newKey.trim();
-                        if (value) update({ key: [...(selected.key ?? []), value] });
-                        setNewKey("");
-                      }}
-                    />
-                  )}
+                  ))}
                 </div>
-              </>
-            )}
-            {(tab === "content" || tab === "trigger") && (
-              <div className="wb-entry-params">
-                <label>
-                  注入位置
-                  <Select
-                    value={selected.position ?? 0}
-                    onChange={(e) => update({ position: Number(e.target.value) })}
-                  >
-                    {positions.map((v, i) => (
-                      <option key={v} value={i}>
-                        {v}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                {[
-                  ["depth", "深度"],
-                  ["order", "顺序"],
-                  ["probability", "触发概率 %"],
-                ].map(([key, label]) => (
-                  <label key={key}>
-                    {label}
+                <button
+                  className="wb-entry-delete"
+                  aria-label="删除条目"
+                  title="删除条目"
+                  disabled={tab === "json"}
+                  onClick={removeEntry}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+              {tab === "portraits" ? (
+                <EntryPortraits
+                  host={host}
+                  book={name}
+                  title={String(base?.entries?.[entry]?.comment ?? "").trim()}
+                  draftTitle={String(selected.comment ?? "")}
+                />
+              ) : tab === "json" ? (
+                <textarea
+                  className="wb-entry-text is-code"
+                  aria-label="世界书 JSON"
+                  value={json}
+                  onChange={(e) => setJson(e.target.value)}
+                />
+              ) : tab === "trigger" ? (
+                <div className="wb-entry-trigger">
+                  <label>
+                    <span>条目名称</span>
                     <input
-                      type="number"
-                      min={0}
-                      max={key === "probability" ? 100 : undefined}
-                      value={selected[key] ?? 0}
-                      onChange={(e) => update({ [key]: Number(e.target.value) })}
+                      value={selected.comment ?? ""}
+                      onChange={(e) => update({ comment: e.target.value })}
                     />
                   </label>
-                ))}
-              </div>
-            )}
-          </article>
+                  <label>
+                    <span>辅助关键词（每行一个）</span>
+                    <textarea
+                      value={(selected.keysecondary ?? []).join("\n")}
+                      onChange={(e) => update({ keysecondary: e.target.value.split("\n").filter(Boolean) })}
+                    />
+                  </label>
+                  <label className="wb-entry-check">
+                    <input
+                      type="checkbox"
+                      checked={!!selected.selective}
+                      onChange={(e) => update({ selective: e.target.checked })}
+                    />
+                    使用辅助关键词
+                  </label>
+                </div>
+              ) : (
+                <>
+                  <MdField
+                    className="wb-entry-text"
+                    label="世界书正文"
+                    value={selected.content ?? ""}
+                    onChange={(content) => update({ content })}
+                  />
+                  <div className="wb-entry-keys">
+                    <span>关键词</span>
+                    {(selected.key ?? []).map((k: string, i: number) => (
+                      <span className="wb-key" key={k + i}>
+                        {k}
+                        <button
+                          aria-label={`移除关键词 ${k}`}
+                          onClick={() =>
+                            update({ key: (selected.key ?? []).filter((_: string, j: number) => j !== i) })
+                          }
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                    {newKey === null ? (
+                      <button className="wb-key-add" onClick={() => setNewKey("")}>
+                        + 添加
+                      </button>
+                    ) : (
+                      <input
+                        className="wb-key-input"
+                        aria-label="新关键词"
+                        autoFocus
+                        value={newKey}
+                        onChange={(e) => setNewKey(e.target.value)}
+                        onBlur={() => setNewKey(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setNewKey(null);
+                          if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                          e.preventDefault();
+                          const value = newKey.trim();
+                          if (value) update({ key: [...(selected.key ?? []), value] });
+                          setNewKey("");
+                        }}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+              {(tab === "content" || tab === "trigger") && (
+                <div className="wb-entry-params">
+                  <label>
+                    注入位置
+                    <Select
+                      value={selected.position ?? 0}
+                      onChange={(e) => update({ position: Number(e.target.value) })}
+                    >
+                      {positions.map((v, i) => (
+                        <option key={v} value={i}>
+                          {v}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  {[
+                    ["depth", "深度"],
+                    ["order", "顺序"],
+                    ["probability", "触发概率 %"],
+                  ].map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        type="number"
+                        min={0}
+                        max={key === "probability" ? 100 : undefined}
+                        value={selected[key] ?? 0}
+                        onChange={(e) => update({ [key]: Number(e.target.value) })}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </article>
+          </EntryEditor>
         )}
-        <SaveBar
-          dirty={dirty}
-          busy={task.busy}
-          message={saved}
-          reset={() => {
-            if (!base) return;
-            setDraft(base);
-            setJson(JSON.stringify(base, null, 2));
-            setSaved("");
-          }}
-          save={save}
-        />
+        {(!mobile || !entryOpen) && saveBar}
       </fieldset>
     );
   }
@@ -616,7 +645,7 @@ export default function World({
       </div>
     </aside>
   );
-  const editor = selected && (
+  const editorContent = selected && (
     <aside className="wb-wt-detail" aria-label={`条目详情：${selected.comment || entry}`}>
       <div className="wb-wt-editor-main">
         <header>
@@ -706,6 +735,25 @@ export default function World({
       {tab !== "portraits" && params}
     </aside>
   );
+  const editor =
+    mobile && selected ? (
+      <EntryEditor
+        open={!!entry}
+        title={`世界书条目：${selected.comment || entry}`}
+        onClose={closeDetail}
+        busy={task.busy}
+        footer={
+          <>
+            <Notice error={task.error} />
+            {saveBar}
+          </>
+        }
+      >
+        {editorContent}
+      </EntryEditor>
+    ) : (
+      editorContent
+    );
   return (
     <fieldset disabled={task.busy} className={`wb-world is-deep ${managed ? "is-managed" : ""}`}>
       {/* In the settings workspace its list column picks books, so this column stays hidden there. */}
@@ -788,7 +836,7 @@ export default function World({
                 新增条目
               </button>
             </div>
-            <div className={`wb-wt-body ${selected ? "has-detail" : ""}`}>
+            <div className={`wb-wt-body ${selected && !mobile ? "has-detail" : ""}`}>
               <div className="wb-wt-table" role="table" aria-label="条目" tabIndex={-1} onKeyDown={tableKey}>
                 <div className="wb-wt-row is-head" role="row">
                   <span role="columnheader" aria-label="启用" />
@@ -850,18 +898,7 @@ export default function World({
             </div>
           </>
         )}
-        <SaveBar
-          dirty={dirty}
-          busy={task.busy}
-          message={saved}
-          reset={() => {
-            if (!base) return;
-            setDraft(base);
-            setJson(JSON.stringify(base, null, 2));
-            setSaved("");
-          }}
-          save={save}
-        />
+        {(!mobile || !selected || tab === "json") && saveBar}
       </section>
     </fieldset>
   );

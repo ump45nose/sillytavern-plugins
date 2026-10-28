@@ -8,6 +8,7 @@ import { addonEnabled } from "../addons/catalog";
 import { addonManager } from "../addons/runtime";
 import { useHostSlices, withoutChat } from "./common";
 import { bus } from "../host/bus";
+import { beginImageInsert, clipboardImages, ImageInsertion, insertImageFiles } from "./ImageInsertion";
 const References = lazyChunk(() => import("../addons/image-gen/References"));
 /** Persistent task controls live above the content, independently of either sidebar. */
 export function AddonTasks({ host }: { host: HostAdapter }) {
@@ -67,6 +68,7 @@ export function MessageImageControls({ host }: { host: HostAdapter }) {
     [slots, setSlots] = useState<
       {
         slot: HTMLElement;
+        gap: HTMLElement;
         id: number;
       }[]
     >([]);
@@ -79,8 +81,9 @@ export function MessageImageControls({ host }: { host: HostAdapter }) {
       owned = new Set<HTMLElement>();
     const scan = () => {
       const next = [...chat.querySelectorAll<HTMLElement>(".mes")].flatMap((message) => {
-        const pencil = message.querySelector(".mes_edit");
-        if (!pencil?.parentElement) return [];
+        const pencil = message.querySelector(".mes_edit"),
+          block = message.querySelector(".mes_block");
+        if (!pencil?.parentElement || !block) return [];
         let slot = pencil.parentElement.querySelector<HTMLElement>(":scope > .wb-image-slot");
         if (!slot) {
           slot = document.createElement("span");
@@ -88,10 +91,18 @@ export function MessageImageControls({ host }: { host: HostAdapter }) {
           pencil.after(slot);
           owned.add(slot);
         }
-        return [{ slot, id: Number(message.getAttribute("mesid")) }];
+        let gap = block.querySelector<HTMLElement>(":scope > .wb-image-insert-slot");
+        if (!gap) {
+          gap = document.createElement("div");
+          gap.className = "wb-image-insert-slot";
+          block.append(gap);
+          owned.add(gap);
+        }
+        return [{ slot, gap, id: Number(message.getAttribute("mesid")) }];
       });
       setSlots((prev) =>
-        prev.length === next.length && prev.every((s, i) => s.slot === next[i].slot && s.id === next[i].id)
+        prev.length === next.length &&
+        prev.every((s, i) => s.slot === next[i].slot && s.gap === next[i].gap && s.id === next[i].id)
           ? prev
           : next,
       );
@@ -101,37 +112,69 @@ export function MessageImageControls({ host }: { host: HostAdapter }) {
     const off = host.chatObserver.subscribe((change) => {
       if (change.nodes || change.editing) scan();
     });
+    let hovered: Element | null = null;
+    const clearHover = () => {
+      hovered?.classList.remove("wb-image-drop-target");
+      hovered = null;
+    };
+    const messageAt = (event: Event) => {
+      const element = event.target instanceof Element ? event.target : null;
+      return element?.closest("textarea,input,[contenteditable=true],.cm-editor")
+        ? null
+        : element?.closest(".mes");
+    };
     const over = (e: DragEvent) => {
+      const message = messageAt(e);
       if (
-        e.dataTransfer?.types.includes("application/x-wb-image") &&
-        (e.target as Element)?.closest(".mes")
+        message &&
+        e.dataTransfer?.types.some((type) => ["Files", "application/x-wb-image"].includes(type))
       ) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
+        if (hovered !== message) {
+          clearHover();
+          hovered = message;
+          hovered.classList.add("wb-image-drop-target");
+        }
       }
     };
-    const drop = (e: DragEvent) => {
-      const message = (e.target as Element)?.closest(".mes");
-      if (!message || !e.dataTransfer?.types.includes("application/x-wb-image")) return;
+    const receive = (e: DragEvent | ClipboardEvent) => {
+      clearHover();
+      const message = messageAt(e),
+        transfer = e.type === "paste" ? (e as ClipboardEvent).clipboardData : (e as DragEvent).dataTransfer,
+        files = clipboardImages(transfer),
+        result = transfer?.getData("application/x-wb-image");
+      if (!message || (!files.length && !result)) return;
       e.preventDefault();
+      e.stopPropagation();
       try {
-        const result = JSON.parse(e.dataTransfer.getData("application/x-wb-image")),
-          manager = addonManager(host),
+        if (host.snapshot().busy) throw new Error("请等待当前回复完成后插入图片。");
+        const manager = addonManager(host),
           target = manager.bridge.target(Number(message.getAttribute("mesid")));
-        void manager
-          .ensure("image-gen")
-          .then((runtime) => runtime.action("insert", result.id, target))
-          .catch((error) => host.report(error));
+        const pending = files.length
+          ? insertImageFiles(host, target, files)
+          : manager
+              .ensure("image-gen")
+              .then((runtime) => runtime.action("insert", JSON.parse(result!).id, target));
+        void pending.catch((error) => host.report(error));
       } catch (error) {
         host.report(error);
       }
     };
+    const leave = (event: DragEvent) => {
+      if (!(event.relatedTarget instanceof Node) || !hovered?.contains(event.relatedTarget)) clearHover();
+    };
     chat.addEventListener("dragover", over);
-    chat.addEventListener("drop", drop);
+    chat.addEventListener("dragleave", leave);
+    chat.addEventListener("drop", receive);
+    chat.addEventListener("paste", receive);
     return () => {
       off();
+      clearHover();
       chat.removeEventListener("dragover", over);
-      chat.removeEventListener("drop", drop);
+      chat.removeEventListener("dragleave", leave);
+      chat.removeEventListener("drop", receive);
+      chat.removeEventListener("paste", receive);
       owned.forEach((slot) => slot.remove());
     };
   }, [enabled, host]);
@@ -153,6 +196,24 @@ export function MessageImageControls({ host }: { host: HostAdapter }) {
             slot,
           ),
         )}
+      {enabled &&
+        slots.map(({ gap, id }) =>
+          createPortal(
+            <button
+              type="button"
+              className="wb-image-insert-button"
+              aria-label={`在第 ${id + 1} 层后插入图片`}
+              title="粘贴、上传或选择已有图片，也可拖到这里"
+              disabled={snap.busy}
+              onClick={(event) => beginImageInsert(host, id, event.currentTarget)}
+            >
+              <ImagePlus size={15} />
+              <span>插入图片</span>
+            </button>,
+            gap,
+          ),
+        )}
+      {enabled && <ImageInsertion host={host} />}
     </>
   );
 }

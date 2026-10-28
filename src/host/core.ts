@@ -294,6 +294,7 @@ export class HostCore {
       prefs = this.slice("prefs"),
       groups = prefs.groups,
       worldGroups = prefs.worldGroups ?? {},
+      presetGroups = prefs.presetGroups?.[manager?.apiId ?? c.mainApi] ?? {},
       archivedConnections = new Set(prefs.archived?.connection),
       archivedBooks = new Set(prefs.archived?.world),
       personas = c.powerUserSettings.personas ?? {};
@@ -315,6 +316,7 @@ export class HostCore {
         id: name,
         name,
         detail: c.mainApi,
+        group: presetGroups[name] || "",
       })),
       world: c.getWorldInfoNames().map((name: string) => ({
         id: name,

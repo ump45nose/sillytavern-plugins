@@ -291,7 +291,7 @@
   body.wb-mobile .wb-mobile-tool-config .wb-selector {
     min-width: 0;
     max-width: none;
-    height: 36px;
+
     padding: 0;
     border: 0;
     border-radius: 9px;
@@ -528,15 +528,14 @@
     gap: 0;
   }
   body.wb-mobile-rp .wb-rp-tool {
-    width: 36px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
     border-radius: 18px;
     color: var(--wb-rp-ink-2);
   }
   body.wb-mobile-rp .wb-rp-head .wb-rp-tool {
-    height: 34px;
-    min-height: 34px;
     color: var(--wb-rp-ink-1);
   }
   body.wb-mobile-rp .wb-rp-tools-rule {
@@ -581,9 +580,8 @@
   body.wb-mobile-rp .wb-rp-reply {
     flex: none;
     margin-left: auto;
-    height: 36px;
-    min-height: 36px;
-    margin-left: auto;
+    height: 44px;
+    min-height: 44px;
     padding: 0 14px 0 11px;
     border-radius: 18px;
     background: var(--wb-rp-field);
@@ -591,9 +589,6 @@
   }
   /* Narrow phones: the quick menu closes up so it and the reply key share one line. */
   @media (max-width: 374px) {
-    body.wb-mobile-rp .wb-rp-foot .wb-rp-tool {
-      width: 31px;
-    }
     body.wb-mobile-rp .wb-rp-tools-rule {
       display: none;
     }
@@ -682,8 +677,7 @@
     background: var(--wb-m-paper);
     animation: wb-mobile-fade-in 180ms ease both;
   }
-  /* Character page: one scrolling page — the card, its fields and the actions on equal footing, then
-     every character as a touch list ending in 新建. Import, groups and the library live in settings. */
+  /* The character picker stays in reach while the card scrolls. */
   body.wb-mobile .wb-right .wb-character-panel {
     display: block;
     height: 100%;
@@ -692,14 +686,25 @@
     padding-bottom: max(16px, var(--wb-safe-bottom));
   }
   body.wb-mobile .wb-right .wb-character-hero {
-    height: 196px;
     margin: 4px 0 0;
-    border-radius: 18px;
+  }
+  body.wb-mobile .wb-right .wb-character-profile.has-portrait .wb-character-hero {
+    height: 270px;
+  }
+  body.wb-mobile .wb-right .wb-character-hero-art img {
+    width: 305px;
+  }
+  body.wb-mobile .wb-right .wb-character-hero-copy {
+    margin-right: 4px;
+    margin-left: 4px;
+  }
+  body.wb-mobile .wb-right .wb-character-atmosphere {
+    top: 155px;
   }
   body.wb-mobile .wb-right .wb-character-hero-tool {
-    width: 36px;
-    height: 36px;
-    min-height: 36px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
     border-radius: 10px;
   }
   body.wb-mobile .wb-right .wb-character-fields {
@@ -753,12 +758,37 @@
     margin-left: 0;
   }
   body.wb-mobile .wb-right .wb-character-nav.is-inline {
-    width: auto;
-    height: auto;
-    max-height: none;
-    margin-top: 22px;
-    padding: 0;
+    display: none;
+  }
+  body.wb-mobile .wb-right .wb-character-switcher {
+    position: sticky;
+    top: 0;
+    z-index: var(--wb-z-sticky);
+    display: flex;
+    align-items: center;
     gap: 8px;
+    margin: 0 -4px;
+    padding: 8px 4px;
+    background: var(--wb-m-paper);
+  }
+  body.wb-mobile .wb-character-switcher .wb-character-picker-trigger {
+    flex: 1;
+    min-width: 0;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 15px;
+    text-align: left;
+  }
+  body.wb-mobile .wb-character-switcher .wb-character-picker-trigger span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.wb-mobile .wb-character-switcher > button {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 12px;
+    background: var(--wb-surface-2);
   }
   body.wb-mobile .wb-right .wb-character-nav .wb-rail-search {
     height: 44px;

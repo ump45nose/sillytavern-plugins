@@ -1,15 +1,13 @@
 /* Legacy style styles (0.4.0), layered. Shrinks as screens move to wb.components. */
 @layer wb.legacy {
   body.wb-active .wb-composer-tools {
-    position: relative;
-    display: flex;
     align-items: center;
     gap: 2px;
     padding: 0 0 0 73px;
     margin-top: -40px;
     min-height: 40px;
     margin-right: 54px;
-    pointer-events: auto;
+
     z-index: 2;
   }
   body.wb-active .wb-composer-tools button {
@@ -55,15 +53,11 @@
     border-radius: 8px;
     padding: 8px 12px;
     cursor: pointer;
-    transition:
-      background 0.15s,
-      color 0.15s;
+
     line-height: 1.4;
     min-height: 34px;
   }
-  .wb-ui button:hover {
-    background: var(--wb-soft);
-  }
+
   .wb-ui button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
@@ -88,8 +82,7 @@
   }
   .wb-ui input[type="checkbox"] {
     accent-color: var(--wb-accent);
-    width: 16px;
-    height: 16px;
+
     margin: 0;
     flex-shrink: 0;
     cursor: pointer;
@@ -184,13 +177,11 @@
   .wb-top {
     position: absolute;
     inset: 0 0 auto;
-    height: 70px;
-    display: flex;
+
     align-items: center;
-    gap: 14px;
-    padding: 0 22px;
+
     border-bottom: 1px solid var(--wb-line);
-    background: var(--wb-paper);
+
     z-index: 20;
   }
   .wb-avatar-fallback {
@@ -207,7 +198,7 @@
   }
   .wb-contexts {
     display: flex;
-    gap: 8px;
+
     min-width: 0;
     flex: 1;
   }
@@ -215,11 +206,10 @@
     position: relative;
     display: flex;
     border: 1px solid var(--wb-line);
-    border-radius: 10px;
+
     min-width: 0;
-    max-width: 230px;
+
     flex: 1;
-    background: var(--wb-surface);
   }
   .wb-selector > button:first-child {
     border: 0;
@@ -238,13 +228,10 @@
   .wb-selector > .wb-icon {
     border-left: 1px solid var(--wb-line);
     border-radius: 0 9px 9px 0;
-    height: 38px;
-    width: 27px;
+
     padding: 4px;
   }
   .wb-dot {
-    height: 7px;
-    width: 7px;
     background: #aaa;
     display: inline-block;
     border-radius: 50%;
@@ -255,7 +242,7 @@
   }
   .wb-pop-dismiss {
     position: fixed;
-    inset: 70px 0 0;
+
     background: transparent !important;
     border: 0 !important;
     z-index: 21;
@@ -264,16 +251,15 @@
   }
   .wb-popover {
     position: absolute;
-    top: 48px;
+
     left: 0;
-    width: 320px;
+
     max-height: 65vh;
     overflow: auto;
     background: var(--wb-surface);
     border: 1px solid var(--wb-line);
     border-radius: 12px;
-    box-shadow: 0 15px 55px #30201020;
-    padding: 12px;
+
     z-index: 22;
   }
   .wb-quick-row {
@@ -289,7 +275,6 @@
     background: none;
     align-items: flex-start;
     flex-direction: column;
-    padding: 10px;
   }
   .wb-quick-row strong {
     white-space: normal;
@@ -298,12 +283,10 @@
   }
   .wb-left {
     position: absolute;
-    top: 70px;
+
     left: 0;
     bottom: 0;
-    width: 220px;
-    padding: 26px 20px 16px;
-    background: var(--wb-paper);
+
     border-right: 1px solid var(--wb-line);
     display: flex;
     flex-direction: column;
@@ -358,35 +341,27 @@
   .wb-right {
     position: absolute;
     right: 0;
-    top: 70px;
+
     bottom: 0;
-    width: 450px;
-    background: var(--wb-surface);
+
     border-left: 1px solid var(--wb-line);
     display: flex;
     flex-direction: column;
     min-height: 0;
-    box-shadow: -5px 0 30px #30201003;
   }
   .wb-panel-tabs {
-    height: 52px;
-    display: flex;
     align-items: center;
-    padding: 0 16px;
-    gap: 8px;
+
     border-bottom: 1px solid var(--wb-line);
     flex-shrink: 0;
   }
   .wb-panel-tabs > button:not(.wb-icon) {
     border: 0;
     background: none;
-    font-size: 13px;
+
     color: var(--wb-muted);
   }
-  .wb-panel-tabs .is-active {
-    color: var(--wb-accent) !important;
-    background: var(--wb-selected) !important;
-  }
+
   .wb-panel-tabs strong {
     font-size: 12px;
     margin-left: 12px;
@@ -640,9 +615,7 @@
     background: none;
   }
   .wb-characters.is-management {
-    display: grid;
     grid-template-columns: 205px minmax(0, 1fr);
-    padding: 0;
   }
   .wb-batch {
     display: flex;

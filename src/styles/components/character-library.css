@@ -147,7 +147,7 @@
     font-size: 13px;
   }
   .wb-character-bulk.is-active .wb-check {
-    color: var(--wb-accent);
+    color: var(--wb-accent-text);
     font-weight: 600;
   }
   .wb-ui .wb-character-bulk > button {
@@ -310,7 +310,7 @@
     border-radius: var(--wb-radius-pill);
     background: color-mix(in srgb, var(--wb-surface-1) 90%, transparent);
     box-shadow: 0 1px 3px rgb(30 22 14 / 14%);
-    color: var(--wb-accent);
+    color: var(--wb-accent-text);
     font-size: 11px;
     font-style: normal;
     font-weight: 600;
@@ -376,14 +376,27 @@
   }
 
   /* Select and star float on the portrait; both appear on hover, and stay once in use. */
-  .wb-ui .wb-character-card > input[type="checkbox"] {
+  .wb-ui .wb-character-card > input[type="checkbox"],
+  .wb-ui .wb-character-select {
     position: absolute;
     top: 10px;
     left: 10px;
     margin: 0;
-    box-shadow: 0 1px 3px rgb(30 22 14 / 22%);
     opacity: 0;
     transition: opacity var(--wb-duration-fast);
+  }
+  .wb-ui .wb-character-card > input[type="checkbox"],
+  .wb-ui .wb-character-select > input {
+    box-shadow: var(--wb-shadow-1);
+  }
+  .wb-ui .wb-character-select {
+    top: 0;
+    left: 0;
+    display: grid;
+    place-items: center;
+    width: 35px;
+    height: 35px;
+    cursor: pointer;
   }
   .wb-ui .wb-character-star {
     position: absolute;
@@ -414,9 +427,31 @@
     background: var(--wb-surface-1);
     color: #c08a2c;
   }
-  .wb-ui .wb-character-card:is(:hover, :focus-within) > :is(input[type="checkbox"], .wb-character-star),
-  .wb-ui .wb-card-grid.has-selection .wb-character-card > input[type="checkbox"] {
+  .wb-ui
+    .wb-character-card:is(:hover, :focus-within)
+    > :is(input[type="checkbox"], .wb-character-select, .wb-character-star),
+  .wb-ui .wb-card-grid.has-selection .wb-character-card > :is(input[type="checkbox"], .wb-character-select) {
     opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    .wb-ui .wb-character-card > :is(input[type="checkbox"], .wb-character-select, .wb-character-star) {
+      opacity: 1;
+    }
+    .wb-ui .wb-character-select,
+    .wb-ui .wb-character-star {
+      width: var(--wb-control-touch);
+      height: var(--wb-control-touch);
+      min-height: var(--wb-control-touch);
+    }
+    .wb-ui .wb-character-star {
+      top: var(--wb-space-1);
+      right: var(--wb-space-1);
+    }
+    .wb-character-card:is(:hover, :focus-within),
+    .wb-character-card:hover .wb-portrait img {
+      transform: none;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -428,5 +463,99 @@
     .wb-character-card:hover .wb-portrait img {
       transform: none;
     }
+  }
+}
+
+@layer wb.layouts {
+  body.wb-mobile .wb-settings-body > .wb-characters.is-management {
+    padding: var(--wb-space-2) 0 var(--wb-space-4);
+  }
+  body.wb-mobile .wb-library-head {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--wb-space-2);
+  }
+  body.wb-mobile .wb-library-head > small {
+    min-width: 0;
+    text-align: right;
+  }
+  body.wb-mobile .wb-library-head > .wb-grow {
+    display: none;
+  }
+  body.wb-mobile .wb-library-head > :is(.wb-library-import, .wb-library-create) {
+    justify-content: center;
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-character-search-row.is-management {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: var(--wb-space-2);
+  }
+  body.wb-mobile .wb-character-search-row > .wb-search {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-character-search-row > .wb-search input {
+    font-size: var(--wb-text-lg);
+  }
+  body.wb-mobile .wb-character-search-row > .wb-select {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+  }
+  body.wb-mobile .wb-character-search-row > .wb-select .wb-select-trigger {
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-library-chips {
+    grid-column: 1 / -1;
+    padding: var(--wb-space-1) 0;
+  }
+  body.wb-mobile .wb-ui .wb-library-chips > button {
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-character-bulk {
+    flex-wrap: wrap;
+    padding: 0 var(--wb-space-2);
+  }
+  body.wb-mobile .wb-character-bulk .wb-check {
+    flex: 1 0 100%;
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-character-bulk > .wb-grow,
+  body.wb-mobile .wb-character-bulk:not(.is-active) > button {
+    display: none;
+  }
+  body.wb-mobile .wb-ui .wb-character-bulk > button {
+    flex: 1;
+    min-height: var(--wb-control-touch);
+    padding-inline: var(--wb-space-2);
+  }
+  body.wb-mobile .wb-character-card-body {
+    padding: var(--wb-space-3);
+  }
+  body.wb-mobile .wb-character-card-title {
+    flex-wrap: wrap;
+    gap: var(--wb-space-1);
+  }
+  body.wb-mobile .wb-character-card-title strong {
+    flex-basis: 100%;
+  }
+  body.wb-mobile
+    .wb-ui
+    .wb-character-card
+    > :is(input[type="checkbox"], .wb-character-select, .wb-character-star) {
+    opacity: 1;
+  }
+  body.wb-mobile .wb-ui .wb-character-select,
+  body.wb-mobile .wb-ui .wb-character-star {
+    width: var(--wb-control-touch);
+    height: var(--wb-control-touch);
+    min-height: var(--wb-control-touch);
+  }
+  body.wb-mobile .wb-ui .wb-character-star {
+    top: var(--wb-space-1);
+    right: var(--wb-space-1);
   }
 }

@@ -284,7 +284,7 @@ export function Workspace({ host, runtime, editor }: AddonViewProps) {
               <article key={result.id} className={result.attached ? "is-attached" : ""}>
                 <img
                   src={result.url}
-                  alt={result.positive.slice(0, 100)}
+                  alt={result.name || result.positive.slice(0, 100)}
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.setData(
@@ -295,6 +295,7 @@ export function Workspace({ host, runtime, editor }: AddonViewProps) {
                   }}
                 />
                 <small className="wb-image-result-state">
+                  {result.origin === "upload" ? "本地图片 · " : ""}
                   {result.attached ? "已插入" : "待选"} · {result.target.id + 1} 层
                 </small>
                 <footer>
@@ -308,7 +309,7 @@ export function Workspace({ host, runtime, editor }: AddonViewProps) {
                   <button
                     title="重新生成并替换"
                     aria-label="重新生成图片"
-                    disabled={task.status === "running"}
+                    disabled={task.status === "running" || result.origin === "upload"}
                     onClick={() => run("regenerate", result.id)}
                   >
                     <RotateCcw size={13} />

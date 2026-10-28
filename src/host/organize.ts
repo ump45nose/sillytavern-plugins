@@ -3,6 +3,8 @@ import type { Item, Preferences } from "./types";
 /** Resources the workbench can group and archive. Connections were grouped before archiving came. */
 export type Organized = "connection" | "world";
 export const organized = (kind: string): kind is Organized => kind === "connection" || kind === "world";
+export type Grouped = Organized | "preset";
+export const grouped = (kind: string): kind is Grouped => organized(kind) || kind === "preset";
 
 /** Shown for books without a group; groups may not take this name. */
 export const ungroupedLabel = "未分组";
@@ -54,6 +56,32 @@ export function withGroup(
     if (group) next[id] = group;
     else delete next[id];
   return { [key]: next };
+}
+
+/** Preset names are local to an API; grouping one API must leave the other APIs alone. */
+export function withPresetGroup(
+  prefs: Preferences,
+  api: string,
+  ids: string[],
+  group: string,
+): Partial<Preferences> {
+  const next = { ...prefs.presetGroups?.[api] };
+  for (const id of ids)
+    if (group) next[id] = group;
+    else delete next[id];
+  return { presetGroups: { ...prefs.presetGroups, [api]: next } };
+}
+
+export function withoutStalePresetGroups(
+  prefs: Preferences,
+  api: string,
+  live: string[] | undefined,
+): Partial<Preferences> | null {
+  if (!live) return null;
+  const groups = prefs.presetGroups?.[api] ?? {},
+    exists = new Set(live);
+  const stale = Object.keys(groups).filter((id) => !exists.has(id));
+  return stale.length ? withPresetGroup(prefs, api, stale, "") : null;
 }
 
 export function withArchived(

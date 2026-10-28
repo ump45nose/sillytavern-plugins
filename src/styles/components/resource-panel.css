@@ -4,6 +4,28 @@
  * one action, then the editor. Rows are selected by a lifted white chip, not by outlines.
  */
 @layer wb.components {
+  .wb-character-switcher {
+    display: none;
+  }
+  .wb-character-picker .wb-character-nav.is-inline {
+    width: auto;
+    height: auto;
+    max-height: min(60dvh, 480px);
+    padding: 8px;
+  }
+  .wb-character-picker .wb-rail-search {
+    height: 44px;
+  }
+  .wb-character-picker .wb-rail-search input {
+    font-size: 16px;
+  }
+  .wb-character-picker .wb-rail-open {
+    min-height: 48px;
+  }
+  .wb-character-picker .wb-rail-tool,
+  .wb-character-picker .wb-rail-new {
+    min-height: 44px;
+  }
   /* ── Rail ── */
   .wb-right .wb-resource-rail {
     background: color-mix(in srgb, var(--wb-surface-2) 70%, var(--wb-surface-1));
@@ -1142,6 +1164,12 @@
     font-size: 12.5px;
     line-height: 1.65;
   }
+  .wb-prompt-card :is(.wb-editor-heading > input, textarea):focus-visible {
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--wb-ring),
+      var(--wb-shadow-ring);
+  }
 
   /* ── Save bars: a draft (paper, accent dot) or a running change not yet in the file (amber) ── */
   .wb-savebar {
@@ -1698,7 +1726,7 @@
 }
 
 @layer wb.components {
-  /* ── Character (board "PanelCharacter"): a portrait banner, field tabs, a reading well, actions ── */
+  /* Character: an upper-body portrait fading into its lower-body backdrop, fields and actions. */
   .wb-character-panel {
     display: flex;
     flex-direction: column;
@@ -1711,30 +1739,63 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    position: relative;
+    isolation: isolate;
+    overflow: auto;
+    overflow-x: hidden;
+  }
+  .wb-character-profile > :not(.wb-character-atmosphere) {
+    position: relative;
+    z-index: 1;
+  }
+  .wb-character-atmosphere {
+    position: absolute;
+    z-index: 0;
+    inset: 170px 0 0;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 46%, transparent 96%);
+    mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 46%, transparent 96%);
+  }
+  .wb-character-atmosphere img {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: min(100%, 480px);
+    max-width: none;
+    height: auto;
+    opacity: 0.25;
+    filter: blur(28px);
+    transform: translate(-50%, -40%);
   }
   .wb-character-hero {
     flex: none;
-    position: relative;
-    height: 176px;
+    height: 48px;
     margin: 12px 12px 0;
-    overflow: hidden;
-    border-radius: 14px;
-    background: linear-gradient(160deg, #f3e3da, #e9dccb);
   }
-  .wb-character-hero > img {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 62%;
+  .wb-character-profile.has-portrait .wb-character-hero {
+    height: 300px;
+  }
+  .wb-character-hero-art {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     height: 100%;
-    object-fit: cover;
-    object-position: center 18%;
-    mask-image: linear-gradient(90deg, transparent, #000 38%);
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 54%, rgb(0 0 0 / 75%) 73%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 54%, rgb(0 0 0 / 75%) 73%, transparent 100%);
+  }
+  .wb-character-hero-art img {
+    flex: none;
+    display: block;
+    width: 330px;
+    max-width: 100%;
+    height: auto;
   }
   .wb-character-hero-tools {
     position: absolute;
     top: 14px;
-    left: 18px;
+    right: 6px;
     display: flex;
     gap: 6px;
   }
@@ -1759,44 +1820,55 @@
     background: #fffefa;
   }
   .wb-character-hero-copy {
-    position: absolute;
-    right: 18px;
-    bottom: 16px;
-    left: 18px;
-    color: #2f2c27;
+    flex: none;
+    margin: 0 18px;
+    color: var(--wb-ink-1);
+  }
+  .wb-character-profile.has-portrait .wb-character-hero-copy {
+    margin-top: -15px;
   }
   .wb-character-hero-copy h2 {
-    max-width: 60%;
     margin: 0;
-    overflow: hidden;
+    overflow-wrap: anywhere;
     font-family: var(--wb-font-reading);
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
-    line-height: 1.3;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    line-height: 1.4;
   }
   .wb-character-hero-copy p {
-    margin: 2px 0 0;
-    color: #5f574b;
+    margin: 4px 0 0;
+    color: var(--wb-ink-3);
     font-size: 12.5px;
   }
   .wb-character-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    max-width: 70%;
     margin-top: 10px;
   }
   .wb-character-tags span {
     display: inline-flex;
     align-items: center;
-    height: 22px;
-    padding: 0 9px;
-    border-radius: var(--wb-radius-pill);
-    background: rgb(255 254 250 / 78%);
-    color: #5f574b;
+    min-height: 22px;
+    padding: 3px 9px;
+    overflow-wrap: anywhere;
+    border-radius: var(--wb-radius-md);
+    background: color-mix(in srgb, var(--wb-surface-2) 88%, transparent);
+    color: var(--wb-ink-2);
     font-size: var(--wb-text-xs);
+  }
+  .wb-character-original {
+    display: flex;
+    justify-content: center;
+    overflow: auto;
+  }
+  .wb-character-original img {
+    display: block;
+    max-width: 100%;
+    max-height: 75dvh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
   }
   .wb-character-fields {
     flex: none;
@@ -1963,9 +2035,8 @@
 }
 
 @layer wb.components {
-  /* The banner keeps its own warm ink by day; at night it dims with the desk. */
-  :root[data-wb-theme="dark"] .wb-character-hero {
-    background: linear-gradient(160deg, #3a2d25, #2b2823);
+  :root[data-wb-theme="dark"] .wb-character-atmosphere img {
+    opacity: 0.17;
   }
   :root[data-wb-theme="dark"] :is(.wb-character-hero-copy, .wb-character-hero-copy p) {
     color: var(--wb-ink-1);

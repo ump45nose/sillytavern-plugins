@@ -1,0 +1,43 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Novel 消息编辑与角色卡": {
+      "versions": [
+        {
+          "path": "previous.html",
+          "createdAt": "2026-10-27T13:54:55.150Z",
+          "status": "approved",
+          "subtitle": "第一版：原位编辑与上半身角色卡",
+          "viewport": {
+            "width": 1440,
+            "height": 1060
+          }
+        },
+        {
+          "path": "revision-02.html",
+          "createdAt": "2026-10-27T15:50:22.013Z",
+          "status": "changes-requested",
+          "subtitle": "第二版：全部展开（保留对照）",
+          "viewport": {
+            "width": 1440,
+            "height": 1060
+          }
+        },
+        {
+          "path": "index.html",
+          "createdAt": "2026-10-27T16:03:51.389Z",
+          "status": "needs-review",
+          "subtitle": "第三版：常用图标与楼层信息等高、同行对齐",
+          "viewport": {
+            "width": 1440,
+            "height": 1060
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-10-27T13:54:55.159Z",
+  "updatedAt": "2026-10-27T16:10:42.243Z"
+}

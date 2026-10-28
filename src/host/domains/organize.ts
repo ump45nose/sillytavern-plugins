@@ -1,9 +1,18 @@
 import type { HostAdapter } from "../adapter";
 import type { Data, Preferences } from "../types";
 import { ctx } from "../internals";
-import { groupName, withArchived, withGroup, withoutStale, type Organized } from "../organize";
+import {
+  groupName,
+  withArchived,
+  withGroup,
+  withPresetGroup,
+  withoutStale,
+  withoutStalePresetGroups,
+  type Organized,
+  type Grouped,
+} from "../organize";
 
-/** Grouping and archiving of world books and connection profiles; both live in workbench preferences. */
+/** Resource groups and world/connection archives live in workbench preferences. */
 export const organizeMethods = {
   /** Where a book or profile is in use; archiving is refused while this is not empty. */
   resourceUsage(this: HostAdapter, kind: Organized, id: string): string[] {
@@ -27,7 +36,11 @@ export const organizeMethods = {
   /** Archives or restores; items in use stay unarchived and come back as errors. */
   async archiveResources(this: HostAdapter, kind: Organized, ids: string[], on: boolean) {
     if (kind === "connection") {
-      const detail: { ids: string[]; on: boolean; promise: Promise<{ done: string[]; errors: { id: string; message: string }[] }> | null } = { ids, on, promise: null };
+      const detail: {
+        ids: string[];
+        on: boolean;
+        promise: Promise<{ done: string[]; errors: { id: string; message: string }[] }> | null;
+      } = { ids, on, promise: null };
       const event = new CustomEvent("workbench:connection-archive-request", { cancelable: true, detail });
       window.dispatchEvent(event);
       if (event.defaultPrevented && detail.promise) return detail.promise;
@@ -43,11 +56,16 @@ export const organizeMethods = {
     return { done, errors };
   },
   /** Moves items into `group`; "" takes them out of any group. */
-  async setResourceGroup(this: HostAdapter, kind: Organized, ids: string[], group: string) {
-    await this.savePreference(withGroup(this.prefs(), kind, ids, groupName(group)));
+  async setResourceGroup(this: HostAdapter, kind: Grouped, ids: string[], group: string) {
+    const name = groupName(group);
+    await this.savePreference(
+      kind === "preset"
+        ? withPresetGroup(this.prefs(), ctx().getPresetManager().apiId, ids, name)
+        : withGroup(this.prefs(), kind, ids, name),
+    );
   },
   /** Renames a group: moves every item in it to the new name. */
-  async renameResourceGroup(this: HostAdapter, kind: Organized, from: string, to: string) {
+  async renameResourceGroup(this: HostAdapter, kind: Grouped, from: string, to: string) {
     const ids = this.snapshot()
       .resources[kind].filter((x) => (x.group ?? "") === from)
       .map((x) => x.id);
@@ -70,7 +88,7 @@ export const organizeMethods = {
       throw error;
     }
   },
-  /** Forgets groups and archive marks of books and profiles that no longer exist. */
+  /** Forgets removed resources' groups and archive marks, retaining other APIs' preset groups. */
   pruneOrganization(this: HostAdapter) {
     const c = ctx(),
       books: string[] = c.getWorldInfoNames(),
@@ -80,6 +98,11 @@ export const organizeMethods = {
       world: books.length ? books : undefined,
       connection: profiles?.map((p) => p.id),
     });
-    if (patch) this.preference(patch);
+    const manager = c.getPresetManager(),
+      presets: string[] | undefined = manager?.getAllPresets(),
+      presetPatch = manager
+        ? withoutStalePresetGroups(this.prefs(), manager.apiId, presets?.length ? presets : undefined)
+        : null;
+    if (patch || presetPatch) this.preference({ ...patch, ...presetPatch });
   },
 };

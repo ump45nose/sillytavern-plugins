@@ -14,6 +14,7 @@
 import { Compartment, EditorSelection, Prec } from "@codemirror/state";
 import { EditorView, placeholder } from "@codemirror/view";
 import { createMdEditor } from "./editor";
+import { bus } from "../../host/bus";
 
 const valueOf = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!;
 const selectRange = HTMLTextAreaElement.prototype.setSelectionRange;
@@ -66,6 +67,7 @@ export function bindComposer(input: HTMLTextAreaElement): () => void {
       selectRange.call(input, range.from, range.to);
       if (command(value)) toNative(box.contains(document.activeElement));
       input.dispatchEvent(new Event("input", { bubbles: true }));
+      bus.emit("composer-input");
     },
     // An ordinary line's Enter is SillyTavern's (send on Enter) or the image mode's to take.
     onEnter: () =>

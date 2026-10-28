@@ -3,6 +3,7 @@ import { createRoot, Root } from "react-dom/client";
 import { HostAdapter, nativeNodes } from "./host/adapter";
 import { ctx, internal } from "./host/internals";
 import { trimContext } from "./host/context-limit";
+import { suspendThemeCss } from "./host/theme-css";
 import { disposeAddons } from "./addons/runtime";
 import App, { beforeClose } from "./App";
 import { LayoutSwitcher, type LayoutMode } from "./ui/LayoutSwitcher";
@@ -37,7 +38,8 @@ let mounted = false,
   disposed = false;
 let layoutRoot: Root | undefined,
   layoutContainer: HTMLElement | undefined,
-  unsubscribeLayout: (() => void) | undefined;
+  unsubscribeLayout: (() => void) | undefined,
+  restoreThemeCss: (() => void) | undefined;
 const launcher = document.createElement("button");
 launcher.id = "wb-launcher";
 launcher.textContent = "创作工作台";
@@ -92,6 +94,7 @@ async function mount() {
       host.destroy();
       return;
     }
+    restoreThemeCss = suspendThemeCss();
     trace = createTrace(context, window, () => host?.traceComposition());
     container = document.createElement("div");
     container.id = "wb-root";
@@ -170,6 +173,8 @@ function unmount() {
     "wb-edge-hover",
     "wb-rp-overlay-open",
   );
+  restoreThemeCss?.();
+  restoreThemeCss = undefined;
   mounted = false;
   launcher.hidden = !!layoutRoot;
   updateLayoutSwitcher();

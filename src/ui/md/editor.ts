@@ -7,6 +7,7 @@
  */
 import {
   Annotation,
+  Compartment,
   EditorSelection,
   EditorState,
   Prec,
@@ -45,6 +46,7 @@ export interface MdHandle {
   view: EditorView;
   /** Replaces the text from outside, optionally with a selection; does not call onChange. */
   set: (text: string, selection?: { anchor: number; head: number }) => void;
+  setDisabled: (disabled: boolean) => void;
   focus: (caret?: number) => void;
   destroy: () => void;
 }
@@ -393,6 +395,13 @@ const theme = EditorView.theme({
 });
 
 export function createMdEditor(parent: HTMLElement, options: MdOptions): MdHandle {
+  const access = new Compartment();
+  let disabled = false;
+  const permissions = (blocked: boolean) => [
+    EditorState.readOnly.of(blocked),
+    EditorView.editable.of(!blocked),
+    EditorView.contentAttributes.of({ "aria-disabled": String(blocked), tabindex: blocked ? "-1" : "0" }),
+  ];
   const listeners: Extension[] = [
     EditorView.updateListener.of((update) => {
       if (update.docChanged && !update.transactions.some((t) => t.annotation(externalAnnotation)))
@@ -405,6 +414,14 @@ export function createMdEditor(parent: HTMLElement, options: MdOptions): MdHandl
     state: EditorState.create({
       doc: options.doc,
       extensions: [
+        access.of(permissions(false)),
+        EditorState.transactionFilter.of((transaction) =>
+          transaction.startState.readOnly &&
+          transaction.docChanged &&
+          !transaction.annotation(externalAnnotation)
+            ? []
+            : transaction,
+        ),
         history(),
         EditorView.lineWrapping,
         markdown,
@@ -451,6 +468,11 @@ export function createMdEditor(parent: HTMLElement, options: MdOptions): MdHandl
   });
   return {
     view,
+    setDisabled(value) {
+      if (value === disabled) return;
+      disabled = value;
+      view.dispatch({ effects: access.reconfigure(permissions(value)) });
+    },
     set(text, selection) {
       const clamp = (n: number) => Math.max(0, Math.min(n, text.length));
       const range = selection

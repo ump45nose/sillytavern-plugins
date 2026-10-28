@@ -91,11 +91,29 @@ export function MdField({
   disabled?: boolean;
 }) {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
-  const live = useMdLive() && !disabled;
+  const live = useMdLive();
   const { handle, failed } = useMdEditor(live ? node : null, value, () => ({ label, placeholder, onChange }));
   useLayoutEffect(() => {
     handle?.set(value);
   }, [handle, value]);
+  // Contenteditable does not inherit fieldset.disabled. Follow the same disabled state as a
+  // native textarea, including nested fieldsets, before the user can edit during a save.
+  useLayoutEffect(() => {
+    if (!handle || !node) return;
+    const probe = document.createElement("input");
+    probe.type = "hidden";
+    node.append(probe);
+    const sync = () => handle.setDisabled(!!disabled || probe.matches(":disabled"));
+    sync();
+    const observer = new MutationObserver(sync);
+    for (let parent = node.parentElement; parent; parent = parent.parentElement)
+      if (parent instanceof HTMLFieldSetElement)
+        observer.observe(parent, { attributes: true, attributeFilter: ["disabled"] });
+    return () => {
+      observer.disconnect();
+      probe.remove();
+    };
+  }, [handle, node, disabled]);
   if (live && !failed)
     return (
       <div

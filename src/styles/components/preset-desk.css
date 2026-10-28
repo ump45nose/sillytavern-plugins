@@ -1,5 +1,68 @@
 /* Preset settings page (board WsPreset): sampling parameters and prompt order as two cards side by side. */
 @layer wb.components {
+  .wb-preset-sections {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 12px 12px;
+    scrollbar-width: thin;
+  }
+  .wb-preset-sections > .wb-fold {
+    margin-bottom: 8px;
+  }
+  .wb-preset-sections .wb-preset-card {
+    padding: 0;
+  }
+  .wb-preset-sections .wb-prompts {
+    flex: none;
+    min-height: 100px;
+    max-height: min(36dvh, 340px);
+    padding: 0;
+  }
+  .wb-preset-prompts-fold > .wb-fold-tools > .wb-fold-head {
+    order: -1;
+  }
+  .wb-prompts-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .wb-prompts-actions .wb-select {
+    max-width: 100px;
+  }
+  .wb-preset-upload {
+    display: none;
+  }
+  .wb-preset-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 180px;
+  }
+  .wb-preset-actions button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
+  }
+  .wb-preset-actions button:hover {
+    background: var(--wb-hover);
+  }
+  .wb-preset-actions .is-danger {
+    color: var(--wb-danger);
+  }
+  .wb-preset-action-error {
+    max-width: 180px;
+    color: var(--wb-danger);
+    font-size: 12px;
+  }
   .wb-preset-editor.is-desk {
     display: flex;
     flex-direction: column;
@@ -158,6 +221,7 @@
 
   /* Prompts tab: the order list beside the open prompt; the prompt text takes the remaining height. */
   .wb-preset-editor.is-studio {
+    container: wb-preset-studio / inline-size;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -204,6 +268,10 @@
   .wb-prompt-studio-editor {
     gap: 12px;
     padding: 14px 18px 12px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wb-line-2) transparent;
   }
   .wb-prompt-studio-editor .wb-editor-heading {
     display: flex;
@@ -319,7 +387,7 @@
     color: var(--wb-accent-text);
   }
 
-  @media (max-width: 1100px) {
+  @container wb-preset-studio (max-width: 760px) {
     .wb-prompt-studio {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: minmax(200px, 40%) minmax(0, 1fr);

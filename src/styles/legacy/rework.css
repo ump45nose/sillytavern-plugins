@@ -8,7 +8,7 @@
     width: 180px;
     border-left: 1px solid var(--wb-line);
     border-right: 1px solid var(--wb-line);
-    background: var(--wb-surface);
+
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -75,14 +75,11 @@
     flex: 1;
   }
   .wb-resource-menu.is-rail .wb-resource-choice {
-    padding: 5px;
     gap: 6px;
     min-height: 49px;
   }
   .wb-resource-menu.is-rail .wb-picker-copy strong {
     font-size: 12px;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
   }
   .wb-resource-menu.is-rail .wb-picker-copy small {
     font-size: 10px;

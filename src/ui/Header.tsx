@@ -14,7 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import type { HostSnapshot, Item, Panel, Resource } from "../host/types";
 import { Empty, IconButton, SearchBox } from "./common";
-import { groupItems, ungroupedLabel, unarchived } from "../host/organize";
+import { grouped, groupItems, ungroupedLabel, unarchived } from "../host/organize";
 import { GroupCheck } from "./ResourcePicker";
 import { resourceLabels } from "../host/labels";
 import { usePresence } from "./Motion";
@@ -52,8 +52,7 @@ function chooserSections(kind: Resource, items: Item[], bound: string, query = "
   const visible = unarchived(items).filter(
     (x) => !q || `${x.name} ${x.group ?? ""}`.toLowerCase().includes(q),
   );
-  if (kind !== "world" && kind !== "connection")
-    return visible.length ? [{ key: "all", items: visible }] : [];
+  if (!grouped(kind)) return visible.length ? [{ key: "all", items: visible }] : [];
   const own = kind === "world" ? visible.filter((x) => x.id === bound) : [];
   const groups = groupItems(visible.filter((x) => !own.includes(x)));
   const captioned = groups.length > 1 || !!groups[0]?.name;

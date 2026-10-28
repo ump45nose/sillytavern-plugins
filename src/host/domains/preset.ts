@@ -2,6 +2,8 @@ import type { HostAdapter } from "../adapter";
 import type { Data } from "../types";
 import { clone, mergeEdits, sameData, validatePreset } from "../model";
 import { ctx } from "../internals";
+import { emptyPreset } from "../empty-preset";
+import { withPresetGroup } from "../organize";
 
 /** Presets, preset bindings to connections/models, and prompt token composition. */
 export const presetMethods = {
@@ -42,6 +44,8 @@ export const presetMethods = {
     const manager = ctx().getPresetManager();
     name = name.trim();
     if (!name || manager.getAllPresets().includes(name)) throw new Error("预设名称不能为空或重复");
+    if (/[<>:"/\\|?*\x00-\x1f]/.test(name) || /[. ]$/.test(name))
+      throw new Error("预设名称不能包含文件路径或特殊文件名字符。");
     if (data) validatePreset(data);
     await manager.savePreset(name, data);
     this.invalidate("resources", "session");
@@ -51,33 +55,65 @@ export const presetMethods = {
     try {
       await this.removePreset(name);
     } finally {
+      this.resourceVersions.preset++;
       this.invalidate("resources", "session");
     }
   },
   /** deletePreset without invalidating, for callers that delete several and invalidate once. */
   async removePreset(this: HostAdapter, name: string) {
-    const manager = ctx().getPresetManager(),
+    const c = ctx(),
+      manager = c.getPresetManager(),
       { presets, preset_names } = manager.getPresetList();
+    const value = manager.findPreset(name);
+    if (value === undefined || value === null) throw new Error("预设已不存在，请刷新列表。");
+    if (value === "gui") throw new Error("GUI 是酒馆内置的运行设置，请新建空白预设后使用。");
     const wasActive = manager.getSelectedPresetName() === name;
-    const previousPresets = clone(presets),
-      previousNames = clone(preset_names),
-      previousSelection = manager.getSelectedPreset();
-    const select = window.jQuery(manager.select),
-      previousOptions = select.html();
+    const last = c.mainApi === "openai" && manager.getAllPresets().length === 1;
+    const previous = last ? this.livePreset(name) : null;
+    // Create the replacement first, so failure cannot leave the last chat preset unselected.
+    if (last) {
+      await manager.savePreset(name === "Default" ? "空白预设" : "Default", emptyPreset());
+    }
     try {
-      if (!(await manager.deletePreset(name))) throw new Error("删除失败，已保留预设。");
+      const response = await fetch("/api/presets/delete", {
+        method: "POST",
+        headers: c.getRequestHeaders(),
+        body: JSON.stringify({ name, apiId: manager.apiId }),
+      });
+      // A stale Default can still be in the browser after its file has already been removed.
+      if (!response.ok && response.status !== 404)
+        throw new Error(`删除失败（HTTP ${response.status}），已保留原预设。`);
     } catch (error) {
-      presets.splice(0, presets.length, ...previousPresets);
-      if (Array.isArray(preset_names)) preset_names.splice(0, preset_names.length, ...previousNames);
-      else {
-        for (const key of Object.keys(preset_names)) delete preset_names[key];
-        Object.assign(preset_names, previousNames);
+      if (last && wasActive) {
+        await manager.selectPreset(value);
+        if (previous) this.applyPreset(previous);
       }
-      select.html(previousOptions);
-      await manager.selectPreset(previousSelection);
       throw error;
     }
-    if (wasActive && manager.getAllPresets().length) await manager.selectPreset(manager.getSelectedPreset());
+    window
+      .jQuery(manager.select)
+      .find("option")
+      .filter((_: number, option: HTMLOptionElement) => option.text === name)
+      .remove();
+    if (Array.isArray(preset_names)) {
+      const index = preset_names.indexOf(name);
+      if (index >= 0) {
+        preset_names.splice(index, 1);
+        presets.splice(index, 1);
+      }
+    } else delete preset_names[name];
+    const next = manager.getAllPresets()[0];
+    if (wasActive && next) await manager.selectPreset(manager.findPreset(next));
+    this.drafts.delete("preset:" + name);
+    const bindings = { ...this.prefs().bindings };
+    for (const key of Object.keys(bindings)) if (bindings[key] === name) delete bindings[key];
+    const groupPatch = this.prefs().presetGroups?.[manager.apiId]?.[name]
+      ? withPresetGroup(this.prefs(), manager.apiId, [name], "")
+      : {};
+    this.preference({ bindings, ...groupPatch });
+    if (c.eventTypes.PRESET_DELETED)
+      await c.eventSource.emit(c.eventTypes.PRESET_DELETED, { apiId: manager.apiId, name });
+    c.saveSettingsDebounced();
   },
   /**
    * The running chat-completion settings in the shape of preset `name`, or null when `name` is not

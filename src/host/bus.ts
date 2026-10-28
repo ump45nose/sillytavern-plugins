@@ -9,6 +9,8 @@ export interface BusEvents {
   "addon-open": { id: AddonId; view: "workspace" | "editor" };
   /** Enter manual image input for a floor. */
   "image-input": MessageTarget;
+  /** Choose an existing or local image for the gap after a floor. */
+  "image-insert": { target: MessageTarget; anchor: HTMLElement };
   /** Manual image input began or ended (RP and PWA adjust their chrome). */
   "image-compose": undefined;
   "image-compose-end": undefined;
@@ -28,6 +30,8 @@ export interface BusEvents {
   "story-options": undefined;
   /** A story option filled the input: the RP band turns into it. */
   "rp-reply": undefined;
+  /** A user edited the Markdown composer; native input events are observed separately. */
+  "composer-input": undefined;
 }
 type Name = keyof BusEvents;
 type Handler<K extends Name> = (payload: BusEvents[K]) => void;
@@ -58,7 +62,7 @@ export interface LeaveOptions {
   preserveDrafts?: boolean;
 }
 /** Returns false to keep the user where they are (it may ask first). */
-export type Guard = (options: LeaveOptions) => boolean;
+export type Guard = (options: LeaveOptions) => boolean | (() => void);
 
 /** "May the user leave?" checks, run in registration order until one says no. */
 class Guards {
@@ -86,7 +90,13 @@ class Guards {
   }
   /** True when every guard allows leaving. */
   check(options: LeaveOptions = {}) {
-    for (const fn of [...this.list]) if (!fn(options)) return false;
+    const commits: (() => void)[] = [];
+    for (const fn of [...this.list]) {
+      const result = fn(options);
+      if (!result) return false;
+      if (typeof result === "function") commits.push(result);
+    }
+    commits.forEach((commit) => commit());
     return true;
   }
 }

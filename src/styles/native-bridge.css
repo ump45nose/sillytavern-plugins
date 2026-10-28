@@ -46,7 +46,7 @@ body.wb-active #bg_custom {
 }
 body.wb-active #sheld {
   position: fixed !important;
-  inset: 70px calc(var(--wb-right) + var(--wb-lane-right)) 0 calc(var(--wb-left) + var(--wb-lane-left)) !important;
+
   width: auto !important;
   max-width: none !important;
   height: auto !important;
@@ -72,32 +72,27 @@ body.wb-active #chat {
   max-height: none !important;
   background: transparent !important;
   border: 0 !important;
-  padding: 28px max(24px, calc((100% - 820px) / 2)) 24px !important;
+
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--wb-line) transparent;
 }
 body.wb-active #chat .mes {
-  max-width: 820px;
   margin: 0 auto 18px;
   border: 0 !important;
   border-bottom: 1px solid var(--wb-line) !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  padding: 12px 0 24px !important;
 }
 body.wb-active #chat .mes_text {
   font-family: var(--wb-theme-reading-font, "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif);
-  font-size: 17px !important;
-  line-height: 2 !important;
+
   color: var(--wb-ink);
   text-shadow: none;
   overflow-wrap: anywhere;
 }
-body.wb-active #chat .mes_text p {
-  margin: 0 0 1em;
-}
+
 body.wb-active #chat .mes .avatar {
   width: 28px !important;
   height: 28px !important;
@@ -114,19 +109,11 @@ body.wb-active #chat .mes .ch_name {
   margin-bottom: 12px;
   gap: 8px;
 }
-body.wb-active #chat .mes_block {
-  padding-left: 16px !important;
-  min-width: 0;
-}
+
 body.wb-active #chat .mes_buttons {
   font-size: 13px;
-  opacity: 0.6;
 }
-body.wb-active #chat .mes[is_user="true"] {
-  background: color-mix(in srgb, var(--wb-selected) 35%, transparent) !important;
-  padding: 16px !important;
-  border-radius: 8px !important;
-}
+
 body.wb-active #chat .mes_text pre {
   white-space: pre-wrap;
   background: var(--wb-soft);
@@ -135,38 +122,35 @@ body.wb-active #chat .mes_text pre {
 }
 body.wb-active #form_sheld {
   flex: none;
-  padding: 0 24px 20px !important;
+
   margin: 0 auto;
   width: 100%;
-  max-width: 900px;
+
   z-index: 3;
 }
 body.wb-active #send_form {
   display: flex !important;
   flex-direction: column;
   border: 1px solid var(--wb-line) !important;
-  border-radius: 16px !important;
+
   background: var(--wb-surface) !important;
   box-shadow: 0 6px 28px #34291e05 !important;
-  padding: 12px 16px 8px !important;
+
   margin: 0 !important;
-  min-height: 150px;
+
   backdrop-filter: none !important;
 }
 body.wb-active #nonQRFormItems {
   display: grid !important;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  grid-template-rows: minmax(66px, auto) 40px;
+
   gap: 4px;
-  align-items: end;
 }
 body.wb-active #send_textarea {
   grid-column: 1/-1;
   grid-row: 1;
   width: 100% !important;
   min-height: 66px;
-  max-height: 35vh !important;
-  padding: 6px !important;
+
   margin: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -183,16 +167,11 @@ body.wb-active #leftSendForm {
   grid-row: 2;
   display: flex !important;
   align-items: center;
-  gap: 4px;
-  width: auto !important;
-  height: 40px;
 }
 body.wb-active #rightSendForm {
-  grid-column: 3;
-  grid-row: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
+
   width: auto !important;
   margin: 0;
 }
@@ -200,19 +179,14 @@ body.wb-active #options_button,
 body.wb-active #extensionsMenuButton {
   font-size: 17px !important;
   color: var(--wb-muted);
-  width: 32px;
-  height: 36px;
+
   margin: 0;
   align-items: center;
   justify-content: center;
 }
 body.wb-active #send_but {
   font-size: 18px;
-  width: 40px !important;
-  height: 36px !important;
-  line-height: 36px !important;
-  border-radius: 10px;
-  background: var(--wb-accent);
+
   color: #fff;
   margin: 0 !important;
   text-align: center;
@@ -254,15 +228,11 @@ body.wb-active #extensionsMenu {
   border-radius: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
+
   line-height: 1.4;
   min-height: 34px;
 }
-.wb-ui button:hover {
-  background: var(--wb-soft);
-}
+
 .wb-ui button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -287,8 +257,7 @@ body.wb-active #extensionsMenu {
 }
 .wb-ui input[type="checkbox"] {
   accent-color: var(--wb-accent);
-  width: 16px;
-  height: 16px;
+
   margin: 0;
   flex-shrink: 0;
   cursor: pointer;
@@ -345,12 +314,9 @@ body.wb-active #send_form {
   flex-wrap: nowrap !important;
   align-items: stretch !important;
 }
-body.wb-active #nonQRFormItems {
-  grid-template-columns: 76px minmax(0, 1fr) auto;
-}
+
 body.wb-active #leftSendForm {
   flex-wrap: nowrap !important;
-  width: 76px !important;
 }
 body.wb-active #send_textarea {
   text-align: left !important;
@@ -364,7 +330,6 @@ body.wb-active #top-bar {
 }
 body.wb-active #send_textarea::placeholder {
   text-align: left;
-  color: var(--wb-muted);
 }
 body.wb-active #chat .mes_text blockquote {
   background: var(--wb-soft);
@@ -401,7 +366,6 @@ body.wb-active #chat {
 }
 body.wb-active #chat .mes {
   max-width: none;
-  padding: 10px 0 24px !important;
 }
 body.wb-active #chat .mes_block {
   padding-left: 12px !important;
@@ -428,10 +392,7 @@ body.wb-active #send_form {
     border-color 160ms,
     box-shadow 160ms;
 }
-body.wb-active #send_form:focus-within {
-  border-color: color-mix(in srgb, var(--wb-accent) 42%, var(--wb-line)) !important;
-  box-shadow: 0 4px 18px #34291e08 !important;
-}
+
 body.wb-active #nonQRFormItems {
   flex: 1;
   min-height: 0;
@@ -594,31 +555,10 @@ body.wb-active #send_but .wb-native-icon,
 body.wb-active #send_but .wb-native-icon * {
   color: white !important;
 }
-.wb-ui button {
-  transition:
-    background 120ms,
-    color 120ms,
-    border-color 160ms,
-    box-shadow 160ms;
-}
-.wb-ui button:hover {
-  background: color-mix(in srgb, var(--wb-soft) 65%, transparent);
-}
-.wb-ui button:active {
-  background: var(--wb-selected);
-}
+
 .wb-ui input[type="checkbox"] {
-  appearance: none;
   width: 15px;
   height: 15px;
-  border: 1.5px solid #b9b0a0;
-  border-radius: 50%;
-  background: transparent;
-  box-shadow: none;
-  transition:
-    background-color 160ms,
-    border-color 160ms,
-    box-shadow 160ms;
 }
 .wb-ui input[type="checkbox"]:checked {
   background: var(--wb-entry-tone, var(--wb-accent));
@@ -929,7 +869,6 @@ body.wb-active #extensionsMenuButton[aria-expanded="true"] svg {
 }
 /* Novel reading changes presentation only. Native messages and embeds are retained. */
 body.wb-active #chat .mes {
-  padding: 6px 0 25px !important;
   margin-bottom: 14px;
   transition: background-color 180ms;
 }
@@ -944,8 +883,6 @@ body.wb-active #chat .mes_block {
   width: 100%;
 }
 body.wb-active #chat .ch_name {
-  height: 28px;
-  min-height: 28px;
   align-items: center;
   padding: 0;
 }
@@ -998,7 +935,6 @@ body.wb-active #chat .mes_text em {
 body.wb-active #chat .mes[is_user="true"] {
   border-radius: 8px !important;
   background: color-mix(in srgb, var(--wb-soft) 42%, var(--wb-paper)) !important;
-  padding: 10px 14px 15px !important;
 }
 body.wb-active #chat .mes[is_user="true"].wb-user-collapsed {
   padding: 7px 12px !important;
@@ -1011,7 +947,7 @@ body.wb-active #chat .wb-user-heading button {
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 8px;
+
   color: var(--wb-muted);
   border: 0;
   background: transparent;
@@ -1139,6 +1075,12 @@ body.wb-active #chat .mes_edit_buttons {
   display: none;
   gap: 4px;
   align-items: center;
+  filter: none;
+  text-shadow: none;
+}
+body.wb-active #chat .mes_edit_buttons .menu_button {
+  opacity: 1;
+  filter: none;
 }
 body.wb-active #chat .mes_edit_buttons .mes_edit_done {
   color: #628671 !important;
@@ -1437,9 +1379,7 @@ body.wb-active #chat .wb-user-heading {
   padding-right: 65px;
 }
 body.wb-active #chat .wb-user-heading button {
-  min-height: 27px;
   font-size: 12px;
-  gap: 9px;
 }
 body.wb-active #chat .wb-user-heading button[aria-expanded="true"] {
   color: var(--wb-accent);
@@ -1451,12 +1391,7 @@ body.wb-active #chat .wb-user-heading svg {
 body.wb-active #chat .wb-user-heading svg.is-open {
   transform: rotate(90deg);
 }
-body.wb-active
-  #chat
-  .mes[is_user="true"]
-  :is(.mes_text, .mes_img_container, .mes_file_container, .mes_reasoning_details) {
-  overflow: clip;
-}
+
 body.wb-active #chat .mes[is_user="true"] .ch_name {
   position: absolute;
   inset: 6px 10px auto auto;
@@ -1486,7 +1421,6 @@ body.wb-active .wb-ui input[type="range"] {
   background: transparent !important;
 }
 body.wb-active .wb-ui input[type="range"]::-webkit-slider-runnable-track {
-  background: #e4dacc !important;
   height: 4px !important;
   border: 0 !important;
   border-radius: 3px;
@@ -1796,12 +1730,12 @@ body.wb-active .wb-component-settings .wb-native-settings-slot #advanced-ai-conf
 }
 .wb-component-settings #bg_tabs {
   position: static;
-  display: flex;
+
   align-items: center;
   min-height: 36px;
   margin: 0 0 10px;
   padding: 0;
-  background: transparent;
+
   border-bottom: 1px solid var(--wb-line);
 }
 .wb-component-settings #bg_tabs .bg_tab_button {
@@ -1931,11 +1865,11 @@ body.wb-active .wb-component-settings .wb-native-settings-slot #advanced-ai-conf
   width: auto;
   height: auto;
   padding: 4px;
-  gap: 3px;
+
   background: var(--wb-surface);
   border: 1px solid var(--wb-line);
   border-radius: 7px;
-  box-shadow: 0 3px 12px #34291e13;
+
   z-index: 5;
 }
 .wb-component-settings .bg_example.mobile-menu-open .jg-menu {
@@ -2016,16 +1950,13 @@ body.wb-active .wb-component-settings .wb-native-settings-slot .title_restorable
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 3px;
 }
 .wb-component-settings #bg_tabs .bg_tab_button {
   border: 0;
-  margin: 0 6px 0 0;
 }
 .wb-component-settings #bg_tabs .bg_tab_button a {
   color: var(--wb-muted);
   font-size: 12px;
-  padding: 8px 10px;
 }
 .wb-component-settings #bg_tabs .bg_tab_button.ui-tabs-active {
   background: var(--wb-selected);
@@ -2120,9 +2051,6 @@ body.wb-active .wb-component-settings .wb-native-settings-slot .title_restorable
 }
 .wb-component-settings #qr--set-qrList .qr--content {
   display: grid;
-  grid-template-columns: 20px 145px 24px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 6px;
 }
 .wb-component-settings #qr--set-qrList .qr--content > .qr--actions {
   display: flex;
@@ -2171,9 +2099,7 @@ body.wb-active .wb-component-settings .wb-native-settings-slot .redWarningBG {
   .wb-component-settings #tavern_helper .TH-fieldset > div.flex.flex-col {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .wb-component-settings #qr--set-qrList .qr--content {
-    grid-template-columns: 20px 120px 24px minmax(0, 1fr);
-  }
+
   .wb-component-settings #qr--set-qrList .qr--content > .qr--actions {
     grid-column: 2/-1;
     justify-self: end;
@@ -3669,9 +3595,7 @@ body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"] {
   border-radius: 12px !important;
   background: var(--wb-surface-2) !important;
 }
-body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"].wb-user-collapsed {
-  padding: 8px 14px !important;
-}
+
 body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"] .mes_text {
   font-size: calc(var(--wb-reading-size, 17px) - 2px) !important;
   line-height: 1.75 !important;
@@ -3696,19 +3620,8 @@ body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat {
 }
 /* No hover on a phone: a message's tools float over its corner after a tap (MobileShell). */
 body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name {
-  position: absolute !important;
-  inset: -46px 0 auto auto !important;
   z-index: 2;
-  display: none !important;
-  height: auto !important;
-  min-height: 0;
-  margin: 0 !important;
-  padding: 2px 4px !important;
-  border-radius: 12px;
-  background: var(--wb-surface-1);
-  box-shadow:
-    var(--wb-shadow-2),
-    0 0 0 1px var(--wb-line-1);
+
   pointer-events: auto !important;
 }
 body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes:is(.wb-mobile-actions, :has(.edit_textarea)) .ch_name {
@@ -3716,7 +3629,7 @@ body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes:is(.wb-mobile-actions, :h
 }
 body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes:has(.edit_textarea) .ch_name {
   position: static !important;
-  align-self: flex-end;
+
   margin-bottom: 8px !important;
 }
 body.wb-active.wb-mobile:not(.wb-mobile-rp)

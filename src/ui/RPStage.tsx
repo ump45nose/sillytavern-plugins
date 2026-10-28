@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
   CloudSun,
@@ -16,8 +15,8 @@ import {
   Play,
   RotateCcw,
   Square,
-  X,
   ImagePlus,
+  Images,
   Lightbulb,
 } from "./icons";
 import type { HostAdapter } from "../host/adapter";
@@ -26,12 +25,15 @@ import { matchSpeaker, pickSprite } from "../host/cast";
 import { useHostSlices } from "./common";
 import { ReadingPresentation } from "./Reading";
 import { beginImage } from "./AddonControls";
+import { beginImageInsert } from "./ImageInsertion";
 import { addonEnabled } from "../addons/catalog";
 import { RPAppearance } from "./RPAppearance";
 import { OptionsPopover, useRPChoices } from "./StoryOptions";
 import { motionAllowed } from "./Motion";
 import { bus } from "../host/bus";
 import { actionLabels } from "../host/labels";
+import { MessageActionButton } from "./MessageActionButton";
+import { RPToolMenu } from "./RPToolMenu";
 
 type Message = {
   node: HTMLElement;
@@ -543,12 +545,6 @@ export function RPStage({
       body.style.removeProperty("--wb-rp-pull");
     };
   }, [mobile, compose, history, current?.editing]);
-  const nativeAction = (selector: string) =>
-    run(() => {
-      const button = current?.node.querySelector<HTMLElement>(selector);
-      if (!button) throw new Error("当前消息没有此操作。");
-      button.click();
-    });
   const enterCompose = () => {
     if (current?.editing) return;
     live.current = true;
@@ -697,76 +693,105 @@ export function RPStage({
         </>
       ) : current?.editing ? (
         <>
-          <button
+          <MessageActionButton
+            node={current?.node}
+            action="mes_edit_cancel"
             className="wb-rp-tool is-labelled"
             aria-label="取消对白编辑"
-            title="取消对白编辑"
-            onClick={() => nativeAction(".mes_edit_cancel")}
+            size={16}
           >
-            <X size={16} />
             取消
-          </button>
-          <button
+          </MessageActionButton>
+          <MessageActionButton
+            node={current?.node}
+            action="mes_edit_done"
             className="wb-rp-tool is-labelled is-primary"
             aria-label="保存对白编辑"
-            title="保存对白编辑"
-            onClick={() => nativeAction(".mes_edit_done")}
+            size={16}
           >
-            <Check size={16} />
             保存
-          </button>
+          </MessageActionButton>
         </>
       ) : (
         <>
-          <button
-            className="wb-rp-tool"
-            aria-label={auto ? "停止自动播放" : "自动播放"}
-            title={auto ? "停止自动播放" : "自动播放"}
-            aria-pressed={auto}
-            disabled={!auto && atEnd}
-            onClick={() => setAuto(!auto)}
-          >
-            {auto ? <Pause size={16} /> : <Play size={16} />}
-          </button>
-          <button
-            className="wb-rp-tool"
-            aria-label="快进到最新对白"
-            title="快进到最新对白"
-            disabled={atEnd}
-            onClick={skip}
-          >
-            <FastForward size={16} />
-          </button>
-          <span className="wb-rp-tools-rule" aria-hidden="true" />
-          <button
-            className="wb-rp-tool"
-            aria-label={`${actionLabels.regenerate}当前回复`}
-            title={`${actionLabels.regenerate}当前回复`}
-            disabled={snap.busy || !current || current.user || current.id !== snap.messages.length - 1}
-            onClick={() => run(() => host.click("#option_regenerate"))}
-          >
-            <RotateCcw size={16} />
-          </button>
-          <button
-            className="wb-rp-tool"
-            aria-label="编辑当前对白"
-            title="编辑当前对白"
-            disabled={snap.busy || !current}
-            onClick={() => nativeAction(".mes_edit")}
-          >
-            <PencilLine size={16} />
-          </button>
-          {addonEnabled(prefs, "image-gen") && !!snap.chatName && (
+          <RPToolMenu mobile={mobile}>
             <button
               className="wb-rp-tool"
-              aria-label="为当前对白生图"
-              title="为当前对白生图"
-              disabled={snap.busy || !current}
-              onClick={() => beginImage(host, current!.id)}
+              aria-label={auto ? "停止自动播放" : "自动播放"}
+              title={auto ? "停止自动播放" : "自动播放"}
+              aria-pressed={auto}
+              disabled={!auto && atEnd}
+              onClick={() => setAuto(!auto)}
             >
-              <ImagePlus size={16} />
+              {auto ? <Pause size={16} /> : <Play size={16} />}
             </button>
-          )}
+            <button
+              className="wb-rp-tool"
+              aria-label="快进到最新对白"
+              title="快进到最新对白"
+              disabled={atEnd}
+              onClick={skip}
+            >
+              <FastForward size={16} />
+            </button>
+            <span className="wb-rp-tools-rule" aria-hidden="true" />
+            <button
+              className="wb-rp-tool"
+              aria-label={`${actionLabels.regenerate}当前回复`}
+              title={`${actionLabels.regenerate}当前回复`}
+              disabled={snap.busy || !current || current.user || current.id !== snap.messages.length - 1}
+              onClick={() => run(() => host.click("#option_regenerate"))}
+            >
+              <RotateCcw size={16} />
+            </button>
+            <MessageActionButton
+              node={current?.node}
+              action="mes_edit"
+              busy={snap.busy}
+              className="wb-rp-tool"
+              iconOnly={!mobile}
+              aria-label="编辑当前对白"
+              title="编辑当前对白"
+              size={16}
+            />
+            {addonEnabled(prefs, "image-gen") && !!snap.chatName && (
+              <button
+                className="wb-rp-tool"
+                aria-label="在当前对白后插入图片"
+                title="在当前对白后插入图片"
+                disabled={snap.busy || !current}
+                onClick={(event) =>
+                  beginImageInsert(
+                    host,
+                    current!.id,
+                    document.querySelector<HTMLElement>('.wb-rp-tools [aria-label="更多对白操作"]') ||
+                      event.currentTarget,
+                  )
+                }
+              >
+                <Images size={16} />
+              </button>
+            )}
+            {addonEnabled(prefs, "image-gen") && !!snap.chatName && (
+              <button
+                className="wb-rp-tool"
+                aria-label="为当前对白生图"
+                title="为当前对白生图"
+                disabled={snap.busy || !current}
+                onClick={() => beginImage(host, current!.id)}
+              >
+                <ImagePlus size={16} />
+              </button>
+            )}
+            <button
+              className="wb-rp-tool"
+              aria-label="切换阅读布局"
+              title="切换阅读布局"
+              onClick={readingLayout}
+            >
+              <PanelBottom size={16} />
+            </button>
+          </RPToolMenu>
           <span className="wb-rp-tools-rule" aria-hidden="true" />
           <button
             className="wb-rp-tool"
@@ -778,14 +803,6 @@ export function RPStage({
             <Lightbulb size={16} />
           </button>
           <RPAppearance host={host} openPortraits={openPortraits} />
-          <button
-            className="wb-rp-tool"
-            aria-label="切换阅读布局"
-            title="切换阅读布局"
-            onClick={readingLayout}
-          >
-            <PanelBottom size={16} />
-          </button>
         </>
       )}
     </div>

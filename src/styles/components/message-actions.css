@@ -1,0 +1,301 @@
+/* Novel controls share the floor header; native nodes remain available to ST. */
+body.wb-active #chat .wb-message-toolbar {
+  display: none;
+}
+body.wb-active:not(.wb-rp) #chat .wb-message-toolbar {
+  display: block;
+  flex: none;
+  min-width: 0;
+  pointer-events: auto;
+}
+body.wb-active:not(.wb-rp) #chat .ch_name > .mes_buttons,
+body.wb-active:not(.wb-rp) #chat .wb-image-insert-slot {
+  display: none !important;
+}
+/* ST hotkeys and reasoning edits use jQuery :visible, so keep these boxes out of flow. */
+body.wb-active:not(.wb-rp) #chat .ch_name > .mes_edit_buttons {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  visibility: hidden;
+  pointer-events: none;
+}
+body.wb-active:not(.wb-rp) #chat .mes .mes_block {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+}
+body.wb-active:not(.wb-rp) #chat .mes .mes_block > .ch_name {
+  order: 0;
+}
+body.wb-active:not(.wb-rp) #chat .mes .wb-user-heading {
+  order: 1;
+}
+body.wb-active:not(.wb-rp) #chat .mes[is_user="true"] .wb-user-heading small {
+  opacity: 1;
+}
+body.wb-active:not(.wb-rp) #chat .mes .mes_block > :not(.ch_name, .wb-user-heading) {
+  order: 2;
+}
+body.wb-active:not(.wb-rp) #chat .mes .ch_name {
+  position: static !important;
+  inset: auto !important;
+  display: flex !important;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  height: auto !important;
+  min-height: 28px;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body.wb-active:not(.wb-rp) #chat .mes .ch_name > .flex1 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+body.wb-active:not(.wb-rp):not(.wb-mobile) #chat .mes:not([is_user="true"]) {
+  padding-top: 8px !important;
+}
+body.wb-active:not(.wb-rp) #chat .mes .wb-reading-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  max-width: 100%;
+  font: 11px/16px var(--wb-font-ui);
+  color: var(--wb-ink-3);
+  white-space: nowrap;
+}
+body.wb-active:not(.wb-rp) #chat .wb-reading-meta > b {
+  overflow: hidden;
+  max-width: 12em;
+  text-overflow: ellipsis;
+  color: var(--wb-ink-2);
+  font-weight: 500;
+}
+body.wb-active:not(.wb-rp) #chat .wb-reading-time {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.wb-active #chat .wb-message-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+body.wb-active #chat .wb-message-actions button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--wb-ink-3);
+  box-shadow: none;
+  filter: none;
+  text-shadow: none;
+  cursor: pointer;
+}
+body.wb-active #chat .wb-message-actions button svg {
+  flex: none;
+  stroke-width: 1.65;
+}
+body.wb-active #chat .wb-message-actions button:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: var(--wb-selected-bg);
+  color: var(--wb-accent);
+}
+body.wb-active #chat .wb-message-actions button:focus-visible {
+  outline: 2px solid var(--wb-ring);
+  outline-offset: 2px;
+}
+body.wb-active #chat .wb-message-actions button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+body.wb-active #chat .wb-message-actions.is-editing {
+  justify-content: flex-start;
+  padding: 4px;
+}
+body.wb-active #chat .wb-message-actions.is-editing button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+body.wb-active #chat .wb-message-actions .wb-message-save {
+  background: var(--wb-accent);
+  color: var(--wb-accent-ink);
+}
+body.wb-active #chat .wb-message-edit-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: auto;
+  padding-left: 5px;
+  color: var(--wb-accent);
+  font: 11px/1.5 var(--wb-font-ui);
+}
+body.wb-active #chat .wb-message-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 5px;
+  background: var(--wb-line);
+}
+body.wb-active:not(.wb-rp) #chat .mes:has(.edit_textarea) .ch_name {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+body.wb-active:not(.wb-rp) #chat .mes:has(.edit_textarea) .wb-message-toolbar {
+  width: 100%;
+  border-radius: 9px;
+  background: var(--wb-surface-2);
+}
+body.wb-active:not(.wb-rp) #chat .mes:has(.edit_textarea) .wb-reading-meta {
+  opacity: 1;
+}
+body.wb-active:not(.wb-rp) #chat .mes .edit_textarea {
+  box-sizing: border-box;
+  field-sizing: fixed;
+  width: 100% !important;
+  height: clamp(160px, 43dvh, 420px) !important;
+  min-height: min(160px, 43dvh);
+  max-height: 55dvh;
+  margin: 8px 0 !important;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wb-line-2) transparent;
+  resize: none;
+}
+@media (pointer: coarse) {
+  body.wb-active #chat .wb-message-actions button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  body.wb-active:not(.wb-rp) #chat .mes .ch_name {
+    flex-wrap: wrap;
+  }
+  body.wb-active:not(.wb-rp) #chat .mes .ch_name > .flex1 {
+    min-width: 90px;
+  }
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .mes_block {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name {
+  flex-wrap: wrap;
+  gap: 0;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name > .flex1 {
+  flex: 1 0 100%;
+  min-height: 25px;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .wb-message-toolbar {
+  width: 100%;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .ch_name .wb-reading-meta {
+  display: inline-flex !important;
+  opacity: 1;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .wb-reading-time {
+  display: none;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp)[data-wb-meta="never"] #chat .mes .wb-reading-meta {
+  display: none !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .wb-message-actions button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes[is_user="true"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp)
+  #chat
+  .mes[is_user="true"]
+  :is(.wb-user-heading, .mes_text, .wb-reading-meta) {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .mes .edit_textarea {
+  height: clamp(120px, calc(var(--wb-mobile-height, 100dvh) * 0.4), 360px) !important;
+  min-height: 120px;
+  max-height: calc(var(--wb-mobile-height, 100dvh) * 0.55);
+}
+@media (max-width: 360px) {
+  body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+  body.wb-active.wb-mobile:not(.wb-mobile-rp) #chat .wb-message-actions {
+    gap: 0;
+  }
+}
+@layer wb.components {
+  body.wb-active .wb-ui.wb-message-menu {
+    width: 250px;
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    overflow: auto;
+    padding: 8px;
+  }
+  body.wb-active .wb-message-menu-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  body.wb-active .wb-message-menu-rows button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--wb-ink-2);
+    box-shadow: none;
+    font: 13px/1.5 var(--wb-font-ui);
+    text-align: left;
+  }
+  body.wb-active .wb-message-menu-rows button:is(:hover, :focus-visible) {
+    background: var(--wb-surface-2);
+  }
+  body.wb-active .wb-message-menu-rows button.is-danger {
+    color: var(--wb-danger);
+  }
+  body.wb-active .wb-message-menu-rows button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  body.wb-active .wb-message-menu-rows p {
+    padding: 12px;
+    font-size: 13px;
+    color: var(--wb-ink-3);
+  }
+  body.wb-active.wb-mobile .wb-message-menu-rows button {
+    min-height: 44px;
+  }
+}

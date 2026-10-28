@@ -1,0 +1,190 @@
+/* The insertion gap belongs to its native floor; media keep SillyTavern's rendering. */
+body.wb-active #chat .wb-image-insert-slot {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 0;
+  break-inside: avoid;
+}
+body.wb-active #chat .wb-image-insert-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--wb-ink-3);
+  font: 11px/1.4 var(--wb-font-ui);
+  cursor: pointer;
+}
+body.wb-active #chat .wb-image-insert-button::before,
+body.wb-active #chat .wb-image-insert-button::after {
+  content: "";
+  flex: 1;
+  max-width: 100px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.15;
+}
+body.wb-active #chat .wb-image-insert-button:is(:hover, :focus-visible),
+body.wb-active #chat .wb-image-drop-target .wb-image-insert-button {
+  color: var(--wb-accent);
+  background: var(--wb-hover);
+}
+body.wb-active #chat .wb-image-insert-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+body.wb-active #chat .mes:has(.edit_textarea) .wb-image-insert-slot,
+body.wb-active:is(.wb-rp, .wb-mobile-rp):not([data-wb-rp-history]) #chat .wb-image-insert-slot {
+  display: none;
+}
+@layer wb.components {
+  body.wb-active .wb-ui.wb-image-insert-menu {
+    width: 360px;
+    max-width: calc(100vw - 20px);
+    z-index: var(--wb-z-toast);
+  }
+  .wb-image-insert-body {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wb-line-2) transparent;
+  }
+  .wb-image-insert-actions {
+    display: flex;
+    gap: var(--wb-space-2);
+    padding: var(--wb-space-3);
+  }
+  .wb-image-insert-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: var(--wb-space-1_5);
+    min-height: var(--wb-control-lg);
+    border: 0;
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-1);
+    font: inherit;
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-medium);
+    cursor: pointer;
+  }
+  .wb-image-insert-actions button:first-child {
+    background: var(--wb-selected-bg);
+    color: var(--wb-accent-text);
+  }
+  .wb-image-insert-actions button:not(:disabled):is(:hover, :focus-visible) {
+    background: var(--wb-hover);
+  }
+  .wb-image-paste-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--wb-space-1_5);
+    margin: 0 var(--wb-space-3) var(--wb-space-4);
+    padding: var(--wb-space-5) var(--wb-space-3);
+    border: 1px dashed var(--wb-line-2);
+    border-radius: var(--wb-radius-lg);
+    background: var(--wb-surface-2);
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+    line-height: var(--wb-leading-ui);
+    text-align: center;
+    cursor: pointer;
+  }
+  .wb-image-paste-area > svg {
+    margin-bottom: var(--wb-space-1);
+    color: var(--wb-ink-3);
+  }
+  .wb-image-paste-area:is(:focus-within, .is-dragging) {
+    border-color: var(--wb-accent);
+    background: var(--wb-surface-3);
+  }
+  .wb-image-paste-area:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 2px;
+  }
+  .wb-image-paste-area small {
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
+  }
+  .wb-image-paste-shortcut {
+    font-family: var(--wb-font-mono);
+  }
+  .wb-image-insert-library h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--wb-space-2);
+    margin: 0;
+    padding: 0 var(--wb-space-3) var(--wb-space-2);
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-xs);
+    font-weight: var(--wb-weight-medium);
+  }
+  .wb-image-insert-library h3 span {
+    color: var(--wb-ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .wb-image-insert-results {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--wb-space-2);
+    padding: var(--wb-space-1) var(--wb-space-3) var(--wb-space-3);
+  }
+  .wb-image-insert-results button {
+    min-width: 0;
+    aspect-ratio: 1;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-md);
+    background: var(--wb-surface-2);
+    cursor: pointer;
+  }
+  .wb-image-insert-results button:not(:disabled):is(:hover, :focus-visible) {
+    border-color: var(--wb-accent);
+    box-shadow: var(--wb-shadow-ring);
+  }
+  .wb-image-insert-results button:focus-visible {
+    outline: 2px solid var(--wb-ring);
+    outline-offset: 2px;
+  }
+  .wb-image-insert-results img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .wb-image-insert-menu button:disabled,
+  .wb-image-paste-area[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .wb-image-insert-error,
+  .wb-image-insert-status {
+    margin: 0;
+    padding: 0 var(--wb-space-3) var(--wb-space-3);
+    color: var(--wb-ink-2);
+    font-size: var(--wb-text-sm);
+    overflow-wrap: anywhere;
+  }
+  .wb-image-insert-error {
+    color: var(--wb-danger);
+  }
+  body.wb-mobile .wb-image-insert-actions button {
+    min-height: var(--wb-control-touch);
+    font-size: var(--wb-text-md);
+  }
+}
+body.wb-mobile #chat .wb-image-insert-button {
+  min-height: 36px;
+}

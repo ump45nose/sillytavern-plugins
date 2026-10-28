@@ -183,7 +183,7 @@
     gap: 9px;
     font-size: 12px;
     text-align: left;
-    border: 0;
+
     border-radius: 6px;
     background: transparent;
   }
@@ -194,9 +194,7 @@
   .wb-ui.wb-select-menu > button.is-highlighted {
     background: color-mix(in srgb, var(--wb-selected) 45%, var(--wb-surface));
   }
-  .wb-ui.wb-select-menu > button.is-selected {
-    background: var(--wb-selected);
-  }
+
   .wb-option-state {
     flex: none;
     width: 11px;

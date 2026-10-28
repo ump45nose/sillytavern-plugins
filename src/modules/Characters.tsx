@@ -16,6 +16,8 @@ import {
   ImagePlus,
   X,
   Search,
+  Expand,
+  ChevronDown,
 } from "../ui/icons";
 import type { HostAdapter } from "../host/adapter";
 import type { Data, Item } from "../host/types";
@@ -29,6 +31,7 @@ import {
   useHostSlices,
   useLeaveGuard,
   withoutChat,
+  Dialog,
 } from "../ui/common";
 import { ResourceRailContext } from "../ui/ResourcePicker";
 import { SaveBar } from "../ui/ResourceControls";
@@ -36,6 +39,7 @@ import { useTokenCounts } from "../ui/tokens";
 import { guards } from "../host/bus";
 import { MdField } from "../ui/md/MdField";
 import { SpeakerColor } from "../ui/SpeakerColor";
+import { Popover } from "../ui/Popover";
 
 export default function Characters(props: {
   host: HostAdapter;
@@ -63,9 +67,12 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
   const [query, setQuery] = useState(""),
     [viewing, setViewing] = useState(snap.character?.id || ""),
     [field, setField] = useState<(typeof fieldTabs)[number][0]>("description"),
-    [editing, setEditing] = useState<string | null>(null);
+    [editing, setEditing] = useState<string | null>(null),
+    [preview, setPreview] = useState(false),
+    [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
   const item = snap.characters.find((x) => x.id === viewing) ?? snap.character ?? snap.characters[0];
   const data = item?.data?.data ?? item?.data ?? {};
+  const portrait = item?.image ? `/characters/${encodeURIComponent(item.id)}` : undefined;
   const list = snap.characters
     .filter((x) =>
       `${x.name} ${x.detail} ${(x.data?.data?.tags || []).join(" ")}`
@@ -74,6 +81,7 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
     )
     .sort((a, b) => Number(favorite(b)) - Number(favorite(a)) || a.name.localeCompare(b.name, "zh"));
   const create = () => {
+    setPickerAnchor(null);
     const name = prompt("角色名称");
     if (name) task.run(async () => setEditing(await host.createCharacter(name)));
   };
@@ -114,6 +122,7 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
                   if (editing && !guards.check()) return;
                   setEditing(null);
                   setViewing(x.id);
+                  setPickerAnchor(null);
                 }}
               >
                 <span className="wb-rail-avatar" aria-hidden="true">
@@ -133,7 +142,7 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
         {!list.length && <p className="wb-rail-empty">没有符合条件的角色</p>}
       </div>
       <div className="wb-rail-foot">
-        <button className="wb-rail-new" disabled={task.busy} onClick={create}>
+        <button className="wb-rail-new" disabled={task.busy || !!editing} onClick={create}>
           <Plus size={15} />
           新建
         </button>
@@ -172,6 +181,40 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
   const text = plain(data[field]);
   return (
     <div className="wb-characters wb-character-panel">
+      <div className="wb-character-switcher">
+        <button
+          className="wb-character-picker-trigger"
+          aria-label="浏览角色"
+          aria-haspopup="dialog"
+          aria-expanded={!!pickerAnchor}
+          onClick={(event) => setPickerAnchor(pickerAnchor ? null : event.currentTarget)}
+        >
+          <span>
+            {snap.characters.find((character) => character.id === editing)?.name || item?.name || "选择角色"}
+            {!editing && item?.active ? " · 当前角色" : ""}
+          </span>
+          <ChevronDown size={16} />
+        </button>
+        <button
+          className="wb-icon"
+          aria-label="新建角色"
+          title="新建角色"
+          disabled={task.busy || !!editing}
+          onClick={create}
+        >
+          <Plus size={19} />
+        </button>
+      </div>
+      {pickerAnchor && (
+        <Popover
+          anchor={pickerAnchor}
+          title="浏览角色"
+          className="wb-character-picker"
+          onClose={() => setPickerAnchor(null)}
+        >
+          {listNav}
+        </Popover>
+      )}
       <Notice error={task.error} />
       {editing ? (
         <div className="wb-character-detail-wrap">
@@ -186,14 +229,33 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
           <CharacterEditor key={editing} id={editing} host={host} />
         </div>
       ) : item ? (
-        <article className="wb-character-profile" aria-label={`角色 ${item.name}`}>
+        <article
+          className={`wb-character-profile ${portrait ? "has-portrait" : ""}`}
+          aria-label={`角色 ${item.name}`}
+        >
+          {portrait && (
+            <div className="wb-character-atmosphere" aria-hidden="true">
+              <img src={portrait} alt="" />
+            </div>
+          )}
           <header className="wb-character-hero">
-            {item.image && (
-              // The hero is too large for the native thumbnail (a small flattened JPEG); show the card image itself.
-              <img src={`/characters/${encodeURIComponent(item.id)}`} alt="" />
+            {portrait && (
+              <div className="wb-character-hero-art">
+                <img src={portrait} alt={`${item.name}上半身`} />
+              </div>
             )}
             <div className="wb-character-hero-tools">
               {star(item, "wb-character-hero-tool is-star")}
+              {portrait && (
+                <button
+                  className="wb-character-hero-tool"
+                  aria-label="查看完整角色卡"
+                  title="查看完整角色卡"
+                  onClick={() => setPreview(true)}
+                >
+                  <Expand size={15} />
+                </button>
+              )}
               {rail && (
                 <button
                   className="wb-character-hero-tool"
@@ -206,18 +268,18 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
                 </button>
               )}
             </div>
-            <div className="wb-character-hero-copy">
-              <h2 title={item.name}>{item.name}</h2>
-              <p>{item.active ? "当前对话中" : item.detail || data.creator || "未分类角色"}</p>
-              {tags.length > 0 && (
-                <div className="wb-character-tags">
-                  {tags.slice(0, 4).map((t) => (
-                    <span key={t}>{t}</span>
-                  ))}
-                </div>
-              )}
-            </div>
           </header>
+          <div className="wb-character-hero-copy">
+            <h2 title={item.name}>{item.name}</h2>
+            <p>{item.active ? "当前对话中" : item.detail || data.creator || "未分类角色"}</p>
+            {tags.length > 0 && (
+              <div className="wb-character-tags">
+                {tags.slice(0, 4).map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="wb-character-fields" role="tablist" aria-label="角色字段">
             {fieldTabs.map(([key, label]) => (
               <button key={key} role="tab" aria-selected={field === key} onClick={() => setField(key)}>
@@ -253,6 +315,16 @@ function CharacterPanel({ host, onManage }: { host: HostAdapter; onManage?: (gro
               编辑角色
             </button>
           </footer>
+          {preview &&
+            portrait &&
+            createPortal(
+              <Dialog title={`${item.name} · 角色原图`} onClose={() => setPreview(false)} wide>
+                <div className="wb-character-original">
+                  <img src={portrait} alt={`${item.name}完整角色卡`} />
+                </div>
+              </Dialog>,
+              document.body,
+            )}
         </article>
       ) : (
         <Empty>还没有角色，先新建或导入一张角色卡</Empty>
@@ -480,14 +552,16 @@ function CharacterLibrary({ host }: { host: HostAdapter }) {
                       )}
                     </span>
                   </button>
-                  <input
-                    type="checkbox"
-                    aria-label={`选择 ${x.name}`}
-                    checked={on}
-                    onChange={(e) =>
-                      setSelected((v) => (e.target.checked ? [...v, x.id] : v.filter((id) => id !== x.id)))
-                    }
-                  />
+                  <label className="wb-character-select">
+                    <input
+                      type="checkbox"
+                      aria-label={`选择 ${x.name}`}
+                      checked={on}
+                      onChange={(e) =>
+                        setSelected((v) => (e.target.checked ? [...v, x.id] : v.filter((id) => id !== x.id)))
+                      }
+                    />
+                  </label>
                   <button
                     className={`wb-character-star ${favorite(x) ? "is-on" : ""}`}
                     aria-label={favorite(x) ? `取消收藏 ${x.name}` : `收藏 ${x.name}`}
@@ -582,7 +656,7 @@ function CharacterEditor({ host, id }: { host: HostAdapter; id: string }) {
   useEffect(() => {
     if (base && draft) host.drafts.set("character:" + id, { base: clone(base), draft: clone(draft) });
   }, [base, draft, id]);
-  useLeaveGuard(dirty, ({ preserveDrafts }) => preserveDrafts || confirm("角色有未保存修改，放弃这些修改？"));
+  useLeaveGuard(dirty);
   if (!draft || !base)
     return (
       <>

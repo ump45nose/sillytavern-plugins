@@ -67,6 +67,8 @@ export interface Preferences {
   placeholders?: Record<string, { name: string; vars: Record<string, string> }>;
   /** World book name → group name (one group per book). */
   worldGroups?: Record<string, string>;
+  /** Preset API id → preset name → group name. Names can repeat across APIs. */
+  presetGroups?: Record<string, Record<string, string>>;
   /** Archived connection profile ids and world book names. */
   archived?: { connection?: string[]; world?: string[] };
 }

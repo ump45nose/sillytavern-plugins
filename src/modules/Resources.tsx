@@ -17,6 +17,8 @@ import {
   MessageSquare,
   Star,
   UserRound,
+  MoreHorizontal,
+  Folder,
 } from "../ui/icons";
 import type { HostAdapter } from "../host/adapter";
 import type { Resource, Data } from "../host/types";
@@ -30,6 +32,9 @@ import { ResourcePicker, type RailExtras } from "../ui/ResourcePicker";
 import { ConnectionRuntime } from "./Connection";
 import { bus, guards } from "../host/bus";
 import { MdField } from "../ui/md/MdField";
+import { Popover } from "../ui/Popover";
+import { EntryEditor, useMobileLayout } from "../ui/EntryEditor";
+import { emptyPreset } from "../host/empty-preset";
 const safeToLeave = () => guards.check();
 export default function Resources({
   host,
@@ -94,6 +99,7 @@ export default function Resources({
   const rail: Record<typeof kind, RailExtras> = {
     preset: {
       plain: true,
+      grouped: true,
       create: {
         label: "新建预设",
         run: () => {
@@ -154,6 +160,7 @@ export default function Resources({
           {current?.detail && kind !== "preset" && <p className="wb-panel-sub">{current.detail}</p>}
         </div>
         <div className="wb-panel-heading-actions">
+          {kind === "preset" && <PresetActions host={host} id={current?.id} onSelect={setId} />}
           {current && snap.current[kind] !== id && (
             <button
               className="wb-panel-action"
@@ -227,6 +234,147 @@ export default function Resources({
         </div>
       )}
     </div>
+  );
+}
+function PresetActions({
+  host,
+  id,
+  onSelect,
+}: {
+  host: HostAdapter;
+  id?: string;
+  onSelect: (id: string) => void;
+}) {
+  const task = useTask(),
+    upload = useRef<HTMLInputElement>(null),
+    [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const data = () => {
+    if (!id) throw new Error("请先选择预设。");
+    const cached = host.drafts.get("preset:" + id);
+    if (cached?.extra?.advanced) throw new Error("JSON 无法解析，请先修正。");
+    return cached?.draft ?? host.livePreset(id) ?? host.presetData(id);
+  };
+  const run = (action: () => Promise<unknown> | unknown) => {
+    setAnchor(null);
+    task.run(action);
+  };
+  return (
+    <>
+      <input
+        ref={upload}
+        className="wb-preset-upload"
+        type="file"
+        accept=".json,application/json"
+        aria-label="导入预设文件"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          run(async () => {
+            const value = JSON.parse(await file.text());
+            validatePreset(value);
+            const name = prompt("导入为新预设（不会覆盖已有预设）", file.name.replace(/\.json$/i, ""));
+            if (name && safeToLeave()) onSelect(await host.createPreset(name, value));
+          });
+        }}
+      />
+      <button
+        className="wb-panel-icon"
+        title="导入预设"
+        aria-label="导入预设"
+        disabled={task.busy || host.isBusy()}
+        onClick={() => upload.current?.click()}
+      >
+        <Upload size={16} />
+      </button>
+      <button
+        className="wb-panel-icon"
+        title="预设管理"
+        aria-label="预设管理"
+        aria-expanded={!!anchor}
+        disabled={task.busy || host.isBusy()}
+        onClick={(event) => setAnchor(anchor ? null : event.currentTarget)}
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {anchor && (
+        <Popover anchor={anchor} title="预设管理" onClose={() => setAnchor(null)}>
+          <div className="wb-preset-actions">
+            <button
+              disabled={!id}
+              onClick={() =>
+                run(async () => {
+                  const current = host.snapshot().resources.preset.find((item) => item.id === id);
+                  const group = prompt("分组名称（留空移出分组）", current?.group || "");
+                  if (group !== null && id) await host.setResourceGroup("preset", [id], group);
+                })
+              }
+            >
+              <Folder size={16} />
+              设置分组
+            </button>
+            <button
+              onClick={() =>
+                run(async () => {
+                  const name = prompt("空白预设名称", "空白预设");
+                  if (name && safeToLeave()) onSelect(await host.createPreset(name, emptyPreset()));
+                })
+              }
+            >
+              <Plus size={16} />
+              新建空白预设
+            </button>
+            <button
+              disabled={!id}
+              onClick={() =>
+                run(async () => {
+                  const value = data(),
+                    name = prompt("副本名称", `${id} 副本`);
+                  if (name && safeToLeave()) onSelect(await host.createPreset(name, value));
+                })
+              }
+            >
+              <Copy size={16} />
+              另存为
+            </button>
+            <button
+              disabled={!id}
+              onClick={() =>
+                run(() =>
+                  host.download(
+                    new Blob([JSON.stringify(data(), null, 2)], { type: "application/json" }),
+                    `${id}.json`,
+                  ),
+                )
+              }
+            >
+              <Download size={16} />
+              导出预设
+            </button>
+            <button
+              className="is-danger"
+              disabled={!id}
+              onClick={() =>
+                run(async () => {
+                  if (id && confirm(`删除预设「${id}」？未保存的修改也会删除。`)) {
+                    await host.deletePreset(id);
+                    onSelect(host.snapshot().current.preset || host.snapshot().resources.preset[0]?.id || "");
+                  }
+                })
+              }
+            >
+              <Trash2 size={16} />
+              删除预设
+            </button>
+          </div>
+        </Popover>
+      )}
+      {task.error && (
+        <span className="wb-preset-action-error" role="alert">
+          {task.error}
+        </span>
+      )}
+    </>
   );
 }
 function ProfileEditor({ host, id }: { host: HostAdapter; id: string }) {
@@ -756,6 +904,7 @@ function PresetEditor({
   onSelect: (id: string) => void;
   view?: "prompts";
 }) {
+  const mobile = useMobileLayout();
   const task = useTask(),
     edit = useDraft(
       () => host.livePreset(id) ?? host.presetData(id),
@@ -776,7 +925,9 @@ function PresetEditor({
       studioFocus = "";
       return focus;
     }),
-    [editorOpen, setEditorOpen] = useState(false),
+    [editorOpen, setEditorOpen] = useState(!!entry),
+    [activeSection, setActiveSection] = useState("prompts"),
+    [activeMore, setActiveMore] = useState(""),
     [scope, setScope] = useState(0),
     [pinsOpen, setPinsOpen] = useState(false),
     [dragging, setDragging] = useState<number | null>(null),
@@ -886,14 +1037,9 @@ function PresetEditor({
           .map((p) => [p.identifier, String(p.content ?? "")] as [string, string])
       : [],
   );
-  const promptHead = (
-    <div className="wb-prompts-head">
-      <span>
-        提示词
-        <small>
-          {rows.filter((r) => r.enabled !== false).length} / {rows.length} 启用
-        </small>
-      </span>
+  const promptActions = (
+    <div className="wb-prompts-actions">
+      {" "}
       {scopes.length > 1 && (
         <Select aria-label="提示词作用范围" value={scope} onChange={(e) => setScope(Number(e.target.value))}>
           {scopes.map((s, i) => (
@@ -913,11 +1059,23 @@ function PresetEditor({
           apply("prompts", [...(edit.base.prompts || []), prompt], [...prompts, prompt]);
           setOrder([...order, { identifier, enabled: true }]);
           setEntry(identifier);
+          setActiveSection("prompts");
           setEditorOpen(true);
         }}
       >
         <Plus size={16} />
       </button>
+    </div>
+  );
+  const promptHead = (
+    <div className="wb-prompts-head">
+      <span>
+        提示词
+        <small>
+          {rows.filter((r) => r.enabled !== false).length} / {rows.length} 启用
+        </small>
+      </span>
+      {promptActions}
     </div>
   );
   const promptList = (
@@ -962,8 +1120,10 @@ function PresetEditor({
                 if (desk) {
                   studioFocus = item.identifier;
                   bus.emit("settings-group", { group: "提示词" });
-                } else if (studio) setEntry(item.identifier);
-                else if (active) setEditorOpen(false);
+                } else if (studio) {
+                  setEntry(item.identifier);
+                  setEditorOpen(true);
+                } else if (active) setEditorOpen(false);
                 else {
                   setEntry(item.identifier);
                   setEditorOpen(true);
@@ -991,6 +1151,7 @@ function PresetEditor({
       apply("prompts", (edit.base.prompts || []).filter(keep), prompts.filter(keep));
       setOrder(order.filter((p) => p.identifier !== selected.identifier));
       setEntry("");
+      setEditorOpen(false);
     }
   };
   const heading = selected && (
@@ -1098,18 +1259,86 @@ function PresetEditor({
       </div>
     </div>
   );
+  const saveBars = (
+    <>
+      {" "}
+      <SaveBar
+        dirty={edit.dirty || !!advanced}
+        busy={task.busy}
+        message={edit.message}
+        label={running ? "保存" : actionLabels.updatePreset}
+        reset={() => {
+          setAdvanced("");
+          edit.reset();
+        }}
+        save={() =>
+          task.run(async () => {
+            if (advanced) throw new Error("JSON 无法解析，请先修正。");
+            edit.saved(
+              running
+                ? host.applyPresetDraft(id, edit.base, draft)
+                : await host.savePreset(id, edit.base, draft),
+            );
+          })
+        }
+      />
+      {pending && (
+        <footer className="wb-savebar is-pending" aria-label="预设有未写入的修改">
+          <span className="wb-savebar-dot" aria-hidden="true" />
+          <span className="wb-savebar-copy">
+            <span role="status">预设有未写入的修改</span>
+            {pendingDetail && <small>{pendingDetail}</small>}
+          </span>
+          <button
+            className="wb-savebar-revert"
+            aria-label="还原为预设文件"
+            disabled={task.busy}
+            onClick={() => task.run(() => host.revertPreset())}
+          >
+            还原
+          </button>
+          <button
+            className="wb-savebar-save"
+            aria-label={actionLabels.updatePreset}
+            disabled={task.busy}
+            onClick={() => task.run(() => host.updatePreset(id))}
+          >
+            {actionLabels.updatePreset}
+          </button>
+        </footer>
+      )}
+    </>
+  );
+  const promptContent = selected && (
+    <section className="wb-prompt-card" aria-label="编辑提示词">
+      {heading}
+      {selected.marker ? (
+        <p className="wb-note">此项由酒馆动态组装，可在列表控制启用与顺序。</p>
+      ) : (
+        <>
+          {body}
+          <Fold title="注入与触发">{injection}</Fold>
+          <div className="wb-entry-actions">
+            <button className="wb-link is-danger" onClick={remove}>
+              <Trash2 size={14} />
+              删除提示词
+            </button>
+          </div>
+        </>
+      )}
+      <Notice error={task.error} />
+    </section>
+  );
   const promptSheet = selected ? (
-    <div className={`wb-fold-body wb-prompt-sheet ${editorOpen ? "is-open" : ""}`} inert={!editorOpen}>
-      <div>
-        <section className="wb-prompt-card" aria-label="编辑提示词">
-          <IconButton title="收起提示词编辑" onClick={() => setEditorOpen(false)}>
-            <X size={15} />
-          </IconButton>
-          {heading}
-          {selected.marker ? <p className="wb-note">此项由酒馆动态组装，可在上方控制启用与顺序。</p> : body}
-        </section>
-      </div>
-    </div>
+    <EntryEditor
+      open={editorOpen}
+      title={`提示词：${selected.name || selected.identifier}`}
+      onClose={() => setEditorOpen(false)}
+      busy={task.busy}
+      footer={mobile ? saveBars : undefined}
+    >
+      {promptContent}
+    </EntryEditor>
   ) : (
     <Empty>此类预设没有提示词子条目</Empty>
   );
@@ -1228,7 +1457,9 @@ function PresetEditor({
             {promptHead}
             {promptList}
           </section>
-          {selected ? (
+          {mobile ? (
+            promptSheet
+          ) : selected ? (
             <section className="wb-prompt-studio-editor" aria-label="编辑提示词">
               {heading}
               {selected.marker ? (
@@ -1253,55 +1484,84 @@ function PresetEditor({
         </div>
       ) : (
         <>
-          <section className="wb-preset-card" aria-label="常用参数">
-            {always.map(field)}
-            {pins.filter((k) => k in draft && !always.includes(k)).map(field)}
-          </section>
-          <button
-            className="wb-preset-pins-toggle"
-            aria-expanded={pinsOpen}
-            onClick={() => setPinsOpen(!pinsOpen)}
-          >
-            自定义常用项
-          </button>
-          <div
-            className={`wb-fold-body ${pinsOpen ? "is-open" : ""}`}
-            aria-hidden={!pinsOpen}
-            inert={!pinsOpen}
-          >
-            <div>
-              <div className="wb-preset-pins">
-                {parameters
-                  .filter((k) => !always.includes(k))
-                  .map((k) => (
-                    <Check
-                      key={k}
-                      label={parameterNames[k] || k}
-                      checked={pins.includes(k)}
-                      onChange={(v) =>
-                        host.preference({ presetPins: v ? [...pins, k] : pins.filter((p) => p !== k) })
-                      }
-                    />
-                  ))}
+          <div className="wb-preset-sections">
+            <Fold
+              title="常用选项"
+              initial
+              className="wb-preset-common-fold"
+              hint={pins
+                .filter((k) => k in draft)
+                .map((k) => `${parameterNames[k] || k} ${shown(draft[k])}`)
+                .join(" · ")}
+            >
+              <section className="wb-preset-card" aria-label="常用参数">
+                {always.map(field)}
+                {pins.filter((k) => k in draft && !always.includes(k)).map(field)}
+              </section>
+              <button
+                className="wb-preset-pins-toggle"
+                aria-expanded={pinsOpen}
+                onClick={() => setPinsOpen(!pinsOpen)}
+              >
+                自定义常用项
+              </button>
+              <div
+                className={`wb-fold-body ${pinsOpen ? "is-open" : ""}`}
+                aria-hidden={!pinsOpen}
+                inert={!pinsOpen}
+              >
+                <div>
+                  <div className="wb-preset-pins">
+                    {parameters
+                      .filter((k) => !always.includes(k))
+                      .map((k) => (
+                        <Check
+                          key={k}
+                          label={parameterNames[k] || k}
+                          checked={pins.includes(k)}
+                          onChange={(v) =>
+                            host.preference({ presetPins: v ? [...pins, k] : pins.filter((p) => p !== k) })
+                          }
+                        />
+                      ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          {promptHead}
-          {promptList}
-          <div className={`wb-preset-more ${editorOpen ? "is-editor-open" : ""}`}>
-            {promptSheet}
-            <Fold title="更多预设设置">
-              {injection && <Fold title="注入与触发">{injection}</Fold>}
-              {selected && !selected.marker && (
-                <button className="wb-link" onClick={remove}>
-                  <Trash2 size={14} />
-                  删除提示词
-                </button>
-              )}
-              <Fold title="其他生成参数">
+            </Fold>
+            <Fold
+              title="提示词"
+              hint={`${rows.filter((r) => r.enabled !== false).length} / ${rows.length} 启用`}
+              className="wb-preset-prompts-fold"
+              toolbar={promptActions}
+              open={activeSection === "prompts"}
+              onOpenChange={(open) => {
+                setActiveSection(open ? "prompts" : "");
+                if (!open) setEditorOpen(false);
+              }}
+            >
+              {promptList}
+              {promptSheet}
+            </Fold>
+            <Fold
+              title="更多预设设置"
+              open={activeSection === "more"}
+              onOpenChange={(open) => {
+                setActiveSection(open ? "more" : "");
+                setEditorOpen(false);
+              }}
+            >
+              <Fold
+                title="其他生成参数"
+                open={activeMore === "parameters"}
+                onOpenChange={(open) => setActiveMore(open ? "parameters" : "")}
+              >
                 {parameters.filter((k) => !pins.includes(k) && !always.includes(k)).map(field)}
               </Fold>
-              <Fold title="提示格式">
+              <Fold
+                title="提示格式"
+                open={activeMore === "format"}
+                onOpenChange={(open) => setActiveMore(open ? "format" : "")}
+              >
                 {[
                   ["impersonation_prompt", "AI 帮答指令"],
                   ["new_chat_prompt", "新对话提示"],
@@ -1320,67 +1580,33 @@ function PresetEditor({
                     </Field>
                   ))}
               </Fold>
-              <Fold title="模型 / 连接绑定">{bindingChecks}</Fold>
-              <Fold title="文件与高级编辑">
-                <div className="wb-persona-actions">
-                  <button
-                    onClick={() => {
-                      const name = prompt("新预设名称");
-                      if (name) task.run(async () => onSelect(await host.createPreset(name)));
-                    }}
-                  >
-                    <Plus size={15} />
-                    新建预设
-                  </button>
-                  <button
-                    onClick={() => {
-                      const name = prompt("副本名称", `${id} 副本`);
-                      if (name)
-                        task.run(async () => {
-                          const next = await host.createPreset(name, draft);
-                          edit.saved(draft);
-                          onSelect(next);
-                        });
-                    }}
-                  >
-                    <Copy size={15} />
-                    另存为
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`删除预设「${id}」？`))
-                        task.run(async () => {
-                          await host.deletePreset(id);
-                          onSelect(host.snapshot().current.preset);
-                        });
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    删除预设
-                  </button>
-                </div>
-                <button
-                  onClick={() =>
-                    host.download(
-                      new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" }),
-                      `${id}.json`,
-                    )
-                  }
-                >
-                  <Download size={15} />
-                  导出预设
-                </button>
-                <Field label="导入预设到草稿">
+              <Fold
+                title="模型 / 连接绑定"
+                open={activeMore === "bindings"}
+                onOpenChange={(open) => setActiveMore(open ? "bindings" : "")}
+              >
+                {bindingChecks}
+              </Fold>
+              <Fold
+                title="高级编辑"
+                open={activeMore === "advanced"}
+                onOpenChange={(open) => setActiveMore(open ? "advanced" : "")}
+              >
+                <Field label="从文件替换当前草稿">
                   <input
                     type="file"
                     accept=".json,application/json"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
                       if (file)
                         task.run(async () => {
                           const value = JSON.parse(await file.text());
                           validatePreset(value);
-                          edit.setDraft(value);
+                          if (confirm("用文件内容替换当前草稿？保存后才会应用。")) {
+                            edit.setDraft(value);
+                            setAdvanced("");
+                          }
                         });
                     }}
                   />
@@ -1391,51 +1617,7 @@ function PresetEditor({
           </div>
         </>
       )}
-      <SaveBar
-        dirty={edit.dirty || !!advanced}
-        busy={task.busy}
-        message={edit.message}
-        label={running ? "保存" : actionLabels.updatePreset}
-        reset={() => {
-          setAdvanced("");
-          edit.reset();
-        }}
-        save={() =>
-          task.run(async () => {
-            if (advanced) throw new Error("JSON 无法解析，请先修正。");
-            edit.saved(
-              running
-                ? host.applyPresetDraft(id, edit.base, draft)
-                : await host.savePreset(id, edit.base, draft),
-            );
-          })
-        }
-      />
-      {pending && (
-        <footer className="wb-savebar is-pending" aria-label="预设有未写入的修改">
-          <span className="wb-savebar-dot" aria-hidden="true" />
-          <span className="wb-savebar-copy">
-            <span role="status">预设有未写入的修改</span>
-            {pendingDetail && <small>{pendingDetail}</small>}
-          </span>
-          <button
-            className="wb-savebar-revert"
-            aria-label="还原为预设文件"
-            disabled={task.busy}
-            onClick={() => task.run(() => host.revertPreset())}
-          >
-            还原
-          </button>
-          <button
-            className="wb-savebar-save"
-            aria-label={actionLabels.updatePreset}
-            disabled={task.busy}
-            onClick={() => task.run(() => host.updatePreset(id))}
-          >
-            {actionLabels.updatePreset}
-          </button>
-        </footer>
-      )}
+      {(!mobile || !editorOpen || desk) && saveBars}
     </fieldset>
   );
 }

@@ -1,9 +1,7 @@
 /* Legacy workspace styles (0.4.0), layered. Shrinks as screens move to wb.components. */
 @layer wb.legacy {
   /* Approved interaction layer: quiet paper surfaces, separate scroll regions. */
-  .wb-ui {
-    --wb-hover: color-mix(in srgb, var(--wb-selected) 38%, var(--wb-surface));
-  }
+
   .wb-ui button {
     transition:
       background-color 180ms ease,
@@ -390,17 +388,15 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px 24px;
-    height: 68px;
+
     flex: none;
     border-bottom: 1px solid var(--wb-line);
-    background: var(--wb-surface);
   }
   .wb-settings-header > strong {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 18px;
+
     font-weight: 500;
   }
   .wb-settings-header > small {
@@ -413,7 +409,7 @@
   .wb-settings-layout {
     flex: 1;
     display: grid;
-    grid-template-columns: 174px minmax(0, 1fr);
+
     min-height: 0;
   }
   .wb-settings-nav {
@@ -426,12 +422,9 @@
     overflow: auto;
   }
   .wb-settings-nav > button {
-    min-height: 42px;
-    padding: 10px 12px;
     gap: 11px;
     justify-content: flex-start;
-    font-size: 12px;
-    border: 0;
+
     background: transparent;
   }
   .wb-settings-nav > button[aria-pressed="true"] {
@@ -457,23 +450,21 @@
   .wb-settings-subnav {
     display: flex;
     align-items: center;
-    gap: 20px;
+
     padding: 0 24px;
-    height: 48px;
-    min-height: 48px;
+
     border-bottom: 1px solid var(--wb-line);
     background: var(--wb-surface);
     overflow: auto;
   }
   .wb-settings-subnav > button {
-    height: 48px;
     padding: 12px 0;
     border: 0;
     border-bottom: 2px solid transparent;
     border-radius: 0;
     background: transparent;
     white-space: nowrap;
-    font-size: 12px;
+
     color: var(--wb-muted);
   }
   .wb-settings-subnav > button[aria-pressed="true"] {
@@ -499,12 +490,11 @@
     align-items: center;
     gap: 10px;
     flex: none;
-    height: 31px;
+
     border-top: 1px solid var(--wb-line);
     padding: 0 24px;
     font: 10px system-ui;
     color: var(--wb-muted);
-    background: var(--wb-surface);
   }
   .wb-resource-manager {
     height: 100%;
@@ -873,7 +863,6 @@
      compact two-column fields, 48px portraits and a single paper surface. */
   .wb-settings-header {
     background: var(--wb-soft);
-    height: 73px;
   }
   .wb-settings-header > button:first-child {
     border: 0;
@@ -899,12 +888,10 @@
   .wb-settings-nav > button {
     min-height: 40px;
     padding: 9px 12px;
-    font-size: 13px;
+
     border: 1px solid transparent;
   }
-  .wb-settings-nav > button[aria-pressed="true"] {
-    border-color: #e4d8c8;
-  }
+
   .wb-settings-nav button:is(:hover, :focus-visible) {
     background: var(--wb-hover);
   }
@@ -932,7 +919,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 22px;
+
     flex-wrap: wrap;
   }
   .wb-designed-page-head > div {
@@ -948,9 +935,7 @@
     color: var(--wb-ink);
   }
   .wb-designed-page-head small {
-    font-size: 12px;
     display: block;
-    margin-top: 3px;
   }
   .wb-designed-page-head button,
   .wb-designed-actions button {
@@ -992,8 +977,6 @@
   }
   .wb-designed-fields {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 15px 22px;
   }
   .wb-designed-fields .wb-field {
     position: relative;
@@ -1005,13 +988,8 @@
   .wb-designed-fields .wb-field > span {
     font-size: 12px;
   }
-  .wb-designed-fields .wb-field:has(textarea),
-  .wb-designed-field.is-full {
-    grid-column: 1/-1;
-  }
+
   .wb-designed-fields .wb-field :is(input:not([type="range"]):not([type="checkbox"]), textarea) {
-    min-height: 39px;
-    padding: 9px 11px;
     font-size: 13px;
   }
   .wb-designed-fields .wb-field input[type="number"] {
@@ -1106,8 +1084,6 @@
   }
   .wb-group-layout {
     display: grid;
-    grid-template-columns: 182px minmax(0, 1fr);
-    gap: 23px;
   }
   .wb-group-layout > aside {
     min-width: 0;
@@ -1204,11 +1180,7 @@
     border: 0;
     background: var(--wb-soft);
   }
-  .wb-characters.is-management {
-    display: flex;
-    height: 100%;
-    padding: 24px 29px;
-  }
+
   @media (max-width: 1100px) {
     .wb-designed-gallery {
       grid-template-columns: repeat(2, minmax(0, 1fr));

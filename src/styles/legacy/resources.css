@@ -251,29 +251,20 @@
     gap: 12px;
   }
   .wb-resource-v3 .wb-parameter-strip {
-    display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 7px 14px;
+
     margin: 6px 0;
   }
   .wb-resource-v3 .wb-parameter-strip .wb-field {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
     font-size: 11px;
   }
   .wb-resource-v3 .wb-parameter-strip .wb-field input {
-    width: 65px;
     min-height: 28px;
     padding: 4px 6px;
     font-size: 12px;
     text-align: right;
   }
-  .wb-resource-v3 .wb-parameter-strip .wb-field > span {
-    white-space: nowrap;
-  }
+
   .wb-resource-v3 .wb-preset-common .wb-fold-body.is-open > div {
     display: grid;
     grid-template-columns: 1fr 1fr;
