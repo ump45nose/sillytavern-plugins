@@ -41,71 +41,95 @@
     transform: translateX(-50%);
     z-index: var(--wb-z-toast);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--wb-space-3);
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - var(--wb-space-8));
     padding: var(--wb-space-2) var(--wb-space-2) var(--wb-space-2) var(--wb-space-4);
+    border: 1px solid var(--wb-line-1);
     background: var(--wb-surface-1);
-    border-radius: var(--wb-radius-pill);
-    box-shadow: var(--wb-shadow-2);
+    border-radius: var(--wb-radius-sm);
+    box-shadow: var(--wb-shadow-1);
     color: var(--wb-ink-2);
     font-size: var(--wb-text-sm);
-    white-space: nowrap;
+    line-height: var(--wb-leading-ui);
   }
   .wb-stale-chunk button {
     display: inline-flex;
+    flex: none;
     align-items: center;
     gap: var(--wb-space-1);
+    min-height: var(--wb-control-md);
+    margin-inline-start: auto;
     padding: var(--wb-space-1) var(--wb-space-3);
-    border-radius: var(--wb-radius-pill);
-    color: var(--wb-accent);
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-xs);
+    background: transparent;
+    color: var(--wb-accent-text);
   }
 }
 
-/* Board Feedback: an empty state with an icon in a soft circle, a title, one line and one way forward. */
+/* Empty states read like a short note on the page, with one clear way forward. */
 @layer wb.components {
   .wb-empty.is-rich {
     flex-direction: column;
-    gap: 6px;
-    padding: 40px 24px;
+    gap: var(--wb-space-2);
+    padding: var(--wb-space-10) var(--wb-space-6);
     color: var(--wb-ink-2);
     text-align: center;
   }
   .wb-empty-icon {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
-    margin-bottom: 8px;
-    border-radius: 50%;
-    background: var(--wb-surface-2);
+    width: var(--wb-control-lg);
+    height: var(--wb-control-lg);
+    margin-bottom: var(--wb-space-2);
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-xs);
+    background: transparent;
     color: var(--wb-ink-2);
   }
   .wb-empty.is-rich > strong {
     color: var(--wb-ink-1);
-    font-size: 14px;
-    font-weight: 600;
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-xl);
+    font-weight: var(--wb-weight-medium);
+    line-height: var(--wb-leading-tight);
   }
   .wb-empty.is-rich > p {
-    max-width: 280px;
+    max-width: 32ch;
     margin: 0;
     color: var(--wb-ink-2);
-    font-size: 12.5px;
+    font-size: var(--wb-text-sm);
     line-height: 1.7;
   }
   .wb-ui .wb-empty-action {
-    height: 30px;
-    min-height: 30px;
-    margin-top: 10px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: var(--wb-radius-md);
-    background: var(--wb-surface-2);
+    height: var(--wb-control-md);
+    min-height: var(--wb-control-md);
+    margin-top: var(--wb-space-3);
+    padding: 0 var(--wb-space-3);
+    border: 1px solid var(--wb-line-2);
+    border-radius: var(--wb-radius-xs);
+    background: transparent;
     box-shadow: none;
-    color: var(--wb-accent);
-    font-size: 12.5px;
-    font-weight: 600;
+    color: var(--wb-accent-text);
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-medium);
   }
   .wb-ui .wb-empty-action:is(:hover, :focus-visible) {
     background: var(--wb-selected-bg);
+    border-color: var(--wb-ring);
+  }
+  body.wb-mobile .wb-ui .wb-empty-action,
+  body.wb-mobile .wb-stale-chunk button {
+    min-height: var(--wb-control-touch);
+  }
+  @media (pointer: coarse) {
+    .wb-ui .wb-empty-action,
+    .wb-stale-chunk button {
+      min-height: var(--wb-control-touch);
+    }
   }
 }

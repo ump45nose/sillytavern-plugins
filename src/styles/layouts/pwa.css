@@ -5,29 +5,17 @@
  * native-bridge.css. Every rule is scoped to body.wb-mobile so desktop never changes.
  */
 @layer wb.layouts {
-  /* The phone is one sheet of paper, lighter than the desk (board s0 #FAF9F5 / #1B1916); drawers,
-     panels and settings inherit it. Theme hooks still tint it. The legacy aliases are computed on
-     :root, so they are declared again here to follow. */
+  /* The phone is one sheet of paper, derived from the active theme. Aliases are
+     declared here again so drawers and panels follow the mobile surface. */
   body.wb-active.wb-mobile {
-    --wb-surface-0: color-mix(in srgb, var(--wb-theme-surface, #fffefa) 74%, var(--wb-theme-paper, #eeebe3));
-    --wb-surface-2: var(--wb-theme-soft, #f2f0e9);
+    --wb-surface-0: var(--wb-mobile-paper);
     --wb-surface-3: color-mix(in srgb, var(--wb-selected-bg) 60%, var(--wb-surface-1));
     --wb-paper: var(--wb-surface-0);
     --wb-surface: var(--wb-surface-1);
     --wb-soft: var(--wb-surface-2);
     --wb-m-paper: var(--wb-surface-0);
-    --wb-m-scrim: rgb(40 30 20 / 32%);
-    --wb-m-sheet-shadow: 0 -12px 40px rgb(0 0 0 / 18%);
-  }
-  :root[data-wb-theme="dark"] body.wb-active.wb-mobile {
-    --wb-surface-0: color-mix(
-      in srgb,
-      var(--wb-theme-dark-surface, #221f1b) 45%,
-      var(--wb-theme-dark-paper, #161411)
-    );
-    --wb-surface-1: color-mix(in srgb, var(--wb-theme-dark-surface, #221f1b) 98.5%, #fff);
-    --wb-surface-2: color-mix(in srgb, var(--wb-theme-dark-soft, #2b2823) 98.5%, #fff);
-    --wb-m-scrim: rgb(0 0 0 / 50%);
+    --wb-m-scrim: var(--wb-overlay-scrim);
+    --wb-m-sheet-shadow: var(--wb-shadow-bottom-sheet);
   }
 
   /* ── Header: menu and ⋯ · title · person. The title is truly centred; pulling the header down
@@ -665,9 +653,9 @@
   body.wb-mobile .wb-left {
     width: min(84vw, 330px);
     padding-top: calc(var(--wb-safe-top) + 56px);
-    border-radius: 0 22px 22px 0;
+    border-radius: 0 var(--wb-radius-xl) var(--wb-radius-xl) 0;
     background: var(--wb-m-paper);
-    box-shadow: 12px 0 40px rgb(0 0 0 / 16%);
+    box-shadow: var(--wb-shadow-drawer);
   }
   body.wb-mobile .wb-right {
     padding-top: var(--wb-safe-top);
@@ -1074,8 +1062,8 @@
     display: flex;
     flex-direction: column;
     padding: calc(var(--wb-safe-top) + 16px) 16px 6px;
-    border-radius: 0 0 24px 24px;
-    box-shadow: 0 12px 40px rgb(0 0 0 / 18%);
+    border-radius: 0 0 var(--wb-radius-xl) var(--wb-radius-xl);
+    box-shadow: var(--wb-shadow-top-sheet);
     animation-name: wb-mobile-topsheet-in;
   }
   body.wb-mobile .wb-mobile-sheet.is-management[data-wb-exiting="true"] {

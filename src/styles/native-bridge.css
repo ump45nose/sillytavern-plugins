@@ -157,7 +157,7 @@ body.wb-active #send_textarea {
   border: 0 !important;
   border-radius: 0 !important;
   color: var(--wb-ink) !important;
-  font: 16px/1.8 system-ui !important;
+  font: 16px/1.8 var(--wb-font-ui) !important;
   resize: vertical;
   text-shadow: none !important;
   outline: none !important;
@@ -3773,8 +3773,11 @@ body.wb-active.wb-mobile #rightSendForm {
   gap: 0;
 }
 body.wb-active.wb-mobile :is(#send_but, #mes_stop) {
+  flex: none;
   width: 44px !important;
+  min-width: 44px !important;
   height: 44px !important;
+  margin: 0 !important;
   line-height: 44px !important;
   border-radius: 50% !important;
 }
@@ -3888,24 +3891,24 @@ body.wb-active.wb-mobile[data-wb-covered] #chat {
    by `bottom` to the page top), so the box rides up with the keyboard while the scene keeps the
    large viewport and nothing shrinks. ── */
 body.wb-active.wb-mobile-rp {
-  --wb-rp-ink-1: #2f2c27;
-  --wb-rp-ink-2: #5f574b;
-  --wb-rp-ink-3: #7a7266;
-  --wb-rp-line: rgb(60 45 30 / 10%);
-  --wb-rp-glass: rgb(255 253 248 / 76%);
-  --wb-rp-box: rgb(255 253 248 / 88%);
-  --wb-rp-field: rgb(60 45 30 / 6%);
-  --wb-rp-plate: #2f2c27;
-  --wb-rp-plate-ink: #fffefa;
-  --wb-rp-dot: rgb(60 45 30 / 22%);
-  --wb-rp-on-accent: #fffefa;
-  --wb-rp-tint: rgb(255 250 240 / 6%);
-  --wb-rp-scrim: rgb(250 246 238 / 50%);
-  --wb-rp-shadow: 0 8px 24px rgb(52 41 30 / 12%);
-  --wb-rp-plate-shadow: 0 1px 2px rgb(52 41 30 / 8%);
+  --wb-rp-ink-1: var(--wb-ink-1);
+  --wb-rp-ink-2: var(--wb-ink-2);
+  --wb-rp-ink-3: var(--wb-ink-3);
+  --wb-rp-line: color-mix(in srgb, var(--wb-ink-1) 10%, transparent);
+  --wb-rp-glass: color-mix(in srgb, var(--wb-surface-1) 76%, transparent);
+  --wb-rp-box: color-mix(in srgb, var(--wb-surface-1) 88%, transparent);
+  --wb-rp-field: color-mix(in srgb, var(--wb-ink-1) 6%, transparent);
+  --wb-rp-plate: var(--wb-ink-1);
+  --wb-rp-plate-ink: var(--wb-surface-1);
+  --wb-rp-dot: color-mix(in srgb, var(--wb-ink-1) 22%, transparent);
+  --wb-rp-on-accent: var(--wb-accent-ink);
+  --wb-rp-tint: color-mix(in srgb, var(--wb-surface-2) 6%, transparent);
+  --wb-rp-scrim: color-mix(in srgb, var(--wb-surface-1) 50%, transparent);
+  --wb-rp-shadow: var(--wb-shadow-2);
+  --wb-rp-plate-shadow: var(--wb-shadow-1);
   /* The dialogue band: lighter than the desktop's so more of the scene shows through. */
-  --wb-rp-band-1: rgb(251 248 242 / 84%);
-  --wb-rp-band-2: rgb(251 248 242 / 58%);
+  --wb-rp-band-1: color-mix(in srgb, var(--wb-surface-2) 84%, transparent);
+  --wb-rp-band-2: color-mix(in srgb, var(--wb-surface-2) 58%, transparent);
   --wb-rp-on-scene: #fffaf2;
   --wb-rp-on-scene-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 55%)) drop-shadow(0 0 8px rgb(0 0 0 / 28%));
   --wb-rp-on-scene-text: 0 1px 2px rgb(0 0 0 / 60%), 0 0 12px rgb(0 0 0 / 30%);
@@ -3930,32 +3933,24 @@ body.wb-active.wb-mobile-rp {
   --wb-reading-leading: 1.8;
 }
 :root[data-wb-theme="dark"] body.wb-active.wb-mobile-rp {
-  --wb-rp-ink-1: #f3eee5;
-  --wb-rp-ink-2: #d2c8b8;
-  --wb-rp-ink-3: #a89e8f;
-  --wb-rp-line: rgb(255 255 255 / 10%);
-  --wb-rp-glass: rgb(30 26 22 / 58%);
-  --wb-rp-box: rgb(26 22 19 / 76%);
-  --wb-rp-field: rgb(255 255 255 / 8%);
-  --wb-rp-plate: #f3eee5;
-  --wb-rp-plate-ink: #2a2420;
-  --wb-rp-dot: rgb(255 255 255 / 30%);
-  --wb-rp-on-accent: #1b1916;
-  --wb-rp-tint: rgb(20 14 10 / 18%);
-  --wb-rp-scrim: rgb(16 12 9 / 60%);
-  --wb-rp-shadow: 0 8px 24px rgb(0 0 0 / 24%);
-  --wb-rp-plate-shadow: 0 1px 2px rgb(0 0 0 / 30%);
-  --wb-rp-band-1: rgb(22 19 16 / 80%);
-  --wb-rp-band-2: rgb(22 19 16 / 54%);
+  --wb-rp-glass: color-mix(in srgb, var(--wb-surface-2) 58%, transparent);
+  --wb-rp-box: color-mix(in srgb, var(--wb-surface-1) 76%, transparent);
+  --wb-rp-field: color-mix(in srgb, var(--wb-ink-1) 8%, transparent);
+  --wb-rp-dot: color-mix(in srgb, var(--wb-ink-1) 30%, transparent);
+  --wb-rp-tint: color-mix(in srgb, var(--wb-surface-1) 18%, transparent);
+  --wb-rp-scrim: color-mix(in srgb, var(--wb-surface-1) 60%, transparent);
+  --wb-rp-band-1: color-mix(in srgb, var(--wb-surface-1) 80%, transparent);
+  --wb-rp-band-2: color-mix(in srgb, var(--wb-surface-1) 54%, transparent);
 }
 body.wb-active.wb-mobile-rp.no-blur {
-  --wb-rp-glass: rgb(255 253 248 / 92%);
-  --wb-rp-box: rgb(255 253 248 / 95%);
+  --wb-rp-glass: color-mix(in srgb, var(--wb-surface-1) 92%, transparent);
+  --wb-rp-box: color-mix(in srgb, var(--wb-surface-1) 95%, transparent);
 }
 :root[data-wb-theme="dark"] body.wb-active.wb-mobile-rp.no-blur {
-  --wb-rp-glass: rgb(30 26 22 / 90%);
-  --wb-rp-box: rgb(26 22 19 / 93%);
+  --wb-rp-glass: color-mix(in srgb, var(--wb-surface-2) 90%, transparent);
+  --wb-rp-box: color-mix(in srgb, var(--wb-surface-1) 93%, transparent);
 }
+
 body.wb-active.wb-mobile-rp :is(#bg1, #bg_custom) {
   opacity: 1 !important;
 }
@@ -4442,7 +4437,7 @@ body.wb-active:not(.wb-rp):not(.wb-mobile) #sheld {
     var(--wb-sheet-left) !important;
   background: var(--wb-surface-1) !important;
   border-radius: 0 0 var(--wb-radius-xl) var(--wb-radius-xl) !important;
-  box-shadow: var(--wb-shadow-2) !important;
+  box-shadow: var(--wb-shadow-sheet) !important;
   /* The reading bar carries the upper half of the shadow. */
   clip-path: inset(0 -100vw -100vh -100vw);
   transition: inset var(--wb-motion) var(--wb-ease-emphasized);
@@ -4461,7 +4456,7 @@ body.wb-active:not(.wb-rp):not(.wb-mobile) #form_sheld::before {
   background: linear-gradient(to bottom, transparent, var(--wb-surface-1));
   pointer-events: none;
 }
-/* The composer floats on the sheet as its own card. */
+/* A fine rule separates the composer from the reading paper. */
 body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form {
   width: 100%;
   max-width: 780px;
@@ -4470,16 +4465,16 @@ body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form {
   margin: 0 auto !important;
   padding: 16px 10px 10px 18px !important;
   border: 0 !important;
-  border-radius: var(--wb-radius-xl) !important;
+  border-radius: var(--wb-radius-lg) !important;
   background: var(--wb-surface-1) !important;
   box-shadow:
-    var(--wb-shadow-2),
+    var(--wb-shadow-1),
     0 0 0 1px var(--wb-line-1) !important;
 }
 body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form:focus-within {
   box-shadow:
-    var(--wb-shadow-2),
-    0 0 0 1px color-mix(in srgb, var(--wb-accent) 38%, var(--wb-line-1)) !important;
+    var(--wb-shadow-1),
+    0 0 0 1px color-mix(in srgb, var(--wb-accent) 60%, var(--wb-line-1)) !important;
 }
 /* Keyboard steps and the double-click reset glide; a drag follows the pointer directly. */
 body.wb-active:not(.wb-rp):not(.wb-mobile) #send_form {

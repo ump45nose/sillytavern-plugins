@@ -67,7 +67,7 @@
     gap: var(--wb-space-1);
     background: var(--wb-surface-1);
     border-radius: var(--wb-radius-xl) var(--wb-radius-xl) 0 0;
-    box-shadow: var(--wb-shadow-2);
+    box-shadow: var(--wb-shadow-sheet);
     /* The sheet below carries the shadow's lower half; cut ours where they meet. */
     clip-path: inset(-48px -48px 0 -48px);
     transition:
@@ -118,7 +118,7 @@
     height: 40px;
     padding: 0 12px 0 4px;
     border: 0;
-    border-radius: var(--wb-radius-pill);
+    border-radius: var(--wb-radius-sm);
     background: transparent;
     color: var(--wb-ink-1);
     font: inherit;
@@ -157,8 +157,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 15px;
-    font-weight: var(--wb-weight-strong);
+    font-family: var(--wb-font-display);
+    font-size: 17px;
+    font-weight: var(--wb-weight-medium);
   }
 
   .wb-top-pills {
@@ -182,26 +183,26 @@
     max-width: 220px;
     height: 36px;
     padding: 0 10px 0 12px;
-    border: 0;
-    border-radius: 10px;
-    background: var(--wb-surface-1);
-    box-shadow: var(--wb-shadow-1);
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-sm);
+    background: color-mix(in srgb, var(--wb-surface-1) 55%, transparent);
+    box-shadow: none;
     color: var(--wb-ink-1);
     font: inherit;
     font-size: var(--wb-text-md);
     cursor: pointer;
     transition:
-      box-shadow var(--wb-duration-fast),
+      border-color var(--wb-duration-fast),
       background var(--wb-duration-fast);
   }
   .wb-pill:hover {
-    box-shadow: var(--wb-shadow-2);
+    background: var(--wb-surface-1);
+    border-color: var(--wb-line-2);
   }
   .wb-pill[aria-expanded="true"],
   .wb-pill[aria-current="true"] {
-    box-shadow:
-      var(--wb-shadow-1),
-      0 0 0 2px color-mix(in srgb, var(--wb-accent) 22%, transparent);
+    border-color: var(--wb-accent);
+    background: var(--wb-surface-1);
   }
   .wb-pill:focus-visible {
     outline: 2px solid var(--wb-ring);
@@ -715,9 +716,10 @@
   .wb-nav-card {
     flex: none;
     padding: 12px 12px 12px 14px;
-    border-radius: var(--wb-radius-lg);
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-sm);
     background: var(--wb-surface-1);
-    box-shadow: var(--wb-shadow-1);
+    box-shadow: none;
   }
   .wb-nav-card-head {
     display: flex;
@@ -757,7 +759,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: var(--wb-font-reading);
+    font-family: var(--wb-font-display);
     font-size: 17px;
     font-weight: var(--wb-weight-strong);
     letter-spacing: 0.02em;

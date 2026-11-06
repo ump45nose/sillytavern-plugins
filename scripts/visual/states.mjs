@@ -138,7 +138,7 @@ export const states = [
   {
     name: "settings-character-select",
     viewport: desktop,
-    steps: [settings("角色管理"), click(".wb-character-card:nth-child(1) > input"), click(".wb-character-card:nth-child(3) > input")],
+    steps: [settings("角色管理"), click('.wb-character-card:nth-child(1) input[type="checkbox"]'), click('.wb-character-card:nth-child(3) input[type="checkbox"]')],
   },
   { name: "settings-character-edit", viewport: desktop, steps: [settings("角色管理"), click(".wb-character-card:nth-child(1) .wb-character-main")] },
   {

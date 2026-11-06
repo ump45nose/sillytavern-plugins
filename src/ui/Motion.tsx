@@ -1,11 +1,46 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 
 export const motionAllowed = () =>
   !matchMedia("(prefers-reduced-motion: reduce)").matches &&
   !document.body.classList.contains("reduced-motion");
+
+const motionListeners = new Set<() => void>();
+let stopMotionWatch: (() => void) | undefined;
+function subscribeMotion(listener: () => void) {
+  motionListeners.add(listener);
+  if (motionListeners.size === 1) {
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    let allowed = motionAllowed();
+    const changed = () => {
+      const next = motionAllowed();
+      if (next === allowed) return;
+      allowed = next;
+      motionListeners.forEach((notify) => notify());
+    };
+    const observer = new MutationObserver(changed);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    media.addEventListener("change", changed);
+    stopMotionWatch = () => {
+      observer.disconnect();
+      media.removeEventListener("change", changed);
+    };
+  }
+  return () => {
+    motionListeners.delete(listener);
+    if (!motionListeners.size) {
+      stopMotionWatch?.();
+      stopMotionWatch = undefined;
+    }
+  };
+}
+
+/** Follow both the system setting and the workbench preference through a shared observer. */
+export const useMotionAllowed = () => useSyncExternalStore(subscribeMotion, motionAllowed);
+
 /** Retain the real component through its exit; do not clone its native inputs or handlers. */
-export function usePresence<T>(value: T | null, duration = 180) {
-  const [retained, setRetained] = useState(value),
+export function usePresence<T>(value: T | null, duration = 200) {
+  const allowed = useMotionAllowed(),
+    [retained, setRetained] = useState(value),
     [exiting, setExiting] = useState(false);
   useLayoutEffect(() => {
     if (value !== null) {
@@ -13,7 +48,7 @@ export function usePresence<T>(value: T | null, duration = 180) {
       setExiting(false);
       return;
     }
-    if (!motionAllowed()) {
+    if (retained === null || !allowed || duration <= 0) {
       setRetained(null);
       setExiting(false);
       return;
@@ -24,7 +59,7 @@ export function usePresence<T>(value: T | null, duration = 180) {
       setExiting(false);
     }, duration);
     return () => clearTimeout(timer);
-  }, [value, duration]);
+  }, [value, retained, duration, allowed]);
   return { value: value ?? retained, exiting: value === null && exiting };
 }
 
@@ -54,46 +89,36 @@ export function ClickFeedback() {
         node.matches(":disabled,[aria-disabled=true]")
       )
         return;
-      // Keep long row labels fixed; pulse their icon or their paper surface instead.
-      const wide = node.getBoundingClientRect().width > 100,
-        surface = wide ? node.querySelector<HTMLElement>("svg") || node : node;
-      running.get(surface)?.cancel();
-      const base = getComputedStyle(surface).boxShadow;
-      const frames =
-        wide && surface === node
-          ? [
-              { boxShadow: base },
-              {
-                boxShadow: "inset 0 0 0 1px color-mix(in srgb,var(--wb-accent) 35%,transparent)",
-                offset: 0.4,
-              },
-              { boxShadow: base },
-            ]
-          : [{ scale: 0.94 }, { scale: 1.015, offset: 0.65 }, { scale: 1 }];
-      const animation = surface.animate(frames, { duration: 240, easing: "cubic-bezier(.22,.8,.3,1)" });
-      running.set(surface, animation);
-      surface.dataset.wbClickMotion = "true";
+      // Tint the existing surface without moving text, icons, or native positioning transforms.
+      running.get(node)?.cancel();
+      const base = getComputedStyle(node).boxShadow,
+        ring = "inset 0 0 0 1px color-mix(in srgb,var(--wb-accent) 28%,transparent)",
+        animation = node.animate(
+          [
+            { boxShadow: base },
+            { boxShadow: base === "none" ? ring : `${base}, ${ring}`, offset: 0.35 },
+            { boxShadow: base },
+          ],
+          { duration: 200, easing: "cubic-bezier(0.2,0,0,1)" },
+        );
+      running.set(node, animation);
+      node.dataset.wbClickMotion = "true";
       const finish = () => {
-        if (running.get(surface) === animation) {
-          running.delete(surface);
-          delete surface.dataset.wbClickMotion;
+        if (running.get(node) === animation) {
+          running.delete(node);
+          delete node.dataset.wbClickMotion;
         }
       };
       animation.onfinish = finish;
       animation.oncancel = finish;
     };
-    const media = matchMedia("(prefers-reduced-motion: reduce)"),
-      reduce = () => {
-        if (!motionAllowed()) clear();
-      };
-    const observer = new MutationObserver(reduce);
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    const unsubscribe = subscribeMotion(() => {
+      if (!motionAllowed()) clear();
+    });
     document.addEventListener("click", click, true);
-    media.addEventListener("change", reduce);
     return () => {
       document.removeEventListener("click", click, true);
-      media.removeEventListener("change", reduce);
-      observer.disconnect();
+      unsubscribe();
       clear();
     };
   }, []);

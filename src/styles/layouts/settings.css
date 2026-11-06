@@ -1,4 +1,4 @@
-/* Settings workspace (boards Settings / Workspace): the desk with a quiet nav, and the page as one raised sheet. */
+/* Settings workspace: an editorial page, a quiet contents rail, and fine rules between sections. */
 @layer wb.layouts {
   body:not(.wb-mobile) .wb-ui.wb-settings-workspace,
   body:not(.wb-mobile) .wb-settings-workspace::backdrop {
@@ -43,9 +43,10 @@
   body:not(.wb-mobile) .wb-settings-header > strong {
     gap: 8px;
     color: var(--wb-ink-1);
-    font-family: var(--wb-font-ui);
-    font-size: 15px;
-    font-weight: 600;
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-xl);
+    font-weight: var(--wb-weight-medium);
+    line-height: var(--wb-leading-tight);
   }
   body:not(.wb-mobile) .wb-settings-header > strong > svg {
     width: 17px;
@@ -75,11 +76,12 @@
     min-height: 40px;
     padding: 0 12px;
     border: 0;
-    border-radius: 10px;
+    border-left: 2px solid transparent;
+    border-radius: 0 var(--wb-radius-xs) var(--wb-radius-xs) 0;
     background: transparent;
     box-shadow: none;
     color: var(--wb-ink-2);
-    font-size: 13.5px;
+    font-size: var(--wb-text-sm);
   }
   body:not(.wb-mobile) .wb-ui .wb-settings-nav > button > svg {
     width: 16px;
@@ -91,26 +93,28 @@
     color: var(--wb-ink-1);
   }
   body:not(.wb-mobile) .wb-ui .wb-settings-nav > button[aria-pressed="true"] {
-    background: var(--wb-selected-bg);
+    border-left-color: var(--wb-accent);
+    background: color-mix(in srgb, var(--wb-selected-bg) 55%, transparent);
     box-shadow: none;
-    color: var(--wb-accent);
-    font-weight: 600;
+    color: var(--wb-accent-text);
+    font-weight: var(--wb-weight-medium);
   }
   body:not(.wb-mobile) .wb-ui .wb-settings-nav > button[aria-pressed="true"] > svg {
-    color: var(--wb-accent);
+    color: var(--wb-accent-text);
   }
   body:not(.wb-mobile) .wb-settings-nav > footer {
     padding: 16px 12px 0;
     color: var(--wb-ink-3);
-    font: 11px/1.8 var(--wb-font-ui);
+    font: var(--wb-text-xs) / 1.8 var(--wb-font-ui);
   }
 
   /* The page is one sheet; its group tabs sit on the sheet's top edge. */
   body:not(.wb-mobile) .wb-settings-layout > main {
     overflow: hidden;
-    border-radius: 16px;
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-sm);
     background: var(--wb-surface-1);
-    box-shadow: var(--wb-shadow-1);
+    box-shadow: none;
   }
   body:not(.wb-mobile) .wb-settings-subnav {
     gap: 22px;
@@ -130,7 +134,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--wb-ink-2);
-    font-size: 13.5px;
+    font-size: var(--wb-text-sm);
   }
   body:not(.wb-mobile) .wb-ui .wb-settings-subnav > button:is(:hover, :focus-visible) {
     background: transparent;
@@ -177,8 +181,9 @@
   body.wb-active .wb-manager-head h3 {
     margin: 0;
     color: var(--wb-ink-1);
-    font-size: 15px;
-    font-weight: 600;
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-lg);
+    font-weight: var(--wb-weight-medium);
   }
   body.wb-active .wb-ui .wb-manager-icon {
     display: grid;
@@ -207,7 +212,7 @@
     min-height: 36px;
     padding: 0 6px 0 10px;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--wb-radius-xs);
     background: transparent;
   }
   body.wb-active .wb-batch-toolbar.is-active {
@@ -220,7 +225,7 @@
     font-size: var(--wb-text-sm);
   }
   body.wb-active .wb-batch-toolbar.is-active .wb-check {
-    color: var(--wb-accent);
+    color: var(--wb-accent-text);
     font-weight: 600;
   }
   body.wb-active .wb-batch-toolbar > small {
@@ -272,7 +277,8 @@
     min-height: 54px;
     padding: 6px 10px;
     border: 0;
-    border-radius: 10px;
+    border-bottom: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-xs);
   }
   body.wb-active .wb-manager-row:hover {
     background: var(--wb-hover);
@@ -282,12 +288,12 @@
   }
   body.wb-active .wb-ui .wb-manager-row strong {
     color: var(--wb-ink-1);
-    font-size: 13.5px;
-    font-weight: 600;
+    font-size: var(--wb-text-sm);
+    font-weight: var(--wb-weight-medium);
   }
   body.wb-active .wb-manager-row small {
     color: var(--wb-ink-3);
-    font-size: 11.5px;
+    font-size: var(--wb-text-xs);
   }
   body.wb-active .wb-manager-resources > .wb-editor-slot {
     flex: none;
@@ -315,7 +321,7 @@
     font-size: 12px;
   }
 
-  /* ── Phone: two levels. The index lists every page's groups as cards of rows; a group opens as one
+  /* ── Phone: two levels. The index lists every page's groups as ruled rows; a group opens as one
      single-column page under a header with back, the page name above the group's. ── */
   body.wb-mobile .wb-ui.wb-settings-workspace {
     display: flex;
@@ -336,7 +342,7 @@
     gap: 4px;
     min-height: 56px;
     padding: 6px 6px 6px 8px;
-    border-bottom: 0;
+    border-bottom: 1px solid var(--wb-line-1);
     background: var(--wb-m-paper);
   }
   body.wb-mobile .wb-settings-header > button {
@@ -348,7 +354,7 @@
     min-height: 44px;
     padding: 0;
     border: 0;
-    border-radius: 12px;
+    border-radius: var(--wb-radius-sm);
     background: transparent;
     color: var(--wb-ink-1);
   }
@@ -360,15 +366,17 @@
     padding-left: 6px;
     overflow: hidden;
     color: var(--wb-ink-1);
-    font-size: 17px;
-    font-weight: 600;
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-xl);
+    font-weight: var(--wb-weight-medium);
     line-height: 1.25;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
   body.wb-mobile .wb-settings-title small {
     color: var(--wb-ink-3);
-    font-size: 12px;
+    font-family: var(--wb-font-ui);
+    font-size: var(--wb-text-xs);
     font-weight: 400;
   }
   body.wb-mobile .wb-settings-header .wb-save-state {
@@ -380,26 +388,28 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 4px 12px max(20px, var(--wb-safe-bottom));
+    padding: var(--wb-space-4) var(--wb-space-4) max(20px, var(--wb-safe-bottom));
   }
   body.wb-mobile .wb-settings-index section + section {
-    margin-top: 18px;
+    margin-top: var(--wb-space-6);
   }
   body.wb-mobile .wb-settings-index h3 {
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0 0 8px;
-    padding: 0 6px;
-    color: var(--wb-ink-3);
-    font-size: 13px;
-    font-weight: 500;
+    padding: 0 var(--wb-space-1);
+    color: var(--wb-ink-1);
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-lg);
+    font-weight: var(--wb-weight-medium);
   }
   body.wb-mobile .wb-settings-index-rows {
     overflow: hidden;
-    border-radius: 14px;
-    background: var(--wb-surface-1);
-    box-shadow: var(--wb-shadow-1);
+    border-block: 1px solid var(--wb-line-1);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
   body.wb-mobile .wb-settings-index-rows button {
     display: flex;
@@ -407,17 +417,15 @@
     gap: 10px;
     width: 100%;
     min-height: 52px;
-    padding: 0 12px 0 16px;
+    padding: 0 var(--wb-space-2);
     border: 0;
     border-radius: 0;
     background: transparent;
     color: var(--wb-ink-1);
-    font: inherit;
-    font-size: 15px;
+    font-family: var(--wb-font-ui);
+    font-size: var(--wb-text-md);
     text-align: left;
-    transition:
-      background-color 160ms,
-      scale 140ms var(--wb-ease-emphasized);
+    transition: background-color var(--wb-duration-fast);
   }
   body.wb-mobile .wb-settings-index-rows button + button {
     box-shadow: inset 0 1px 0 var(--wb-line-1);
@@ -477,8 +485,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   body.wb-mobile .wb-reading-segment button {
-    height: 34px;
-    min-height: 34px;
+    height: var(--wb-control-touch);
+    min-height: var(--wb-control-touch);
     padding: 0 6px;
     white-space: nowrap;
   }
@@ -497,10 +505,10 @@
     border-bottom: 1px solid var(--wb-line-1);
   }
   body.wb-mobile .wb-ui .wb-manager-icon {
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: var(--wb-control-touch);
+    min-width: var(--wb-control-touch);
+    height: var(--wb-control-touch);
+    min-height: var(--wb-control-touch);
   }
   body.wb-mobile .wb-manager-resources > .wb-search {
     min-height: 44px;

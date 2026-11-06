@@ -10,30 +10,31 @@
 @layer wb.tokens {
   :root {
     /* ── Color: the desk (0) under paper sheets (1), wells and quiet blocks (2), warm tint (3) ── */
-    --wb-surface-0: var(--wb-theme-paper, #eeebe3);
-    --wb-surface-1: var(--wb-theme-surface, #fffefa);
-    --wb-surface-2: var(--wb-theme-soft, #f3f1ea);
+    --wb-surface-0: var(--wb-theme-paper, #f0eee6);
+    --wb-surface-1: var(--wb-theme-surface, #faf9f5);
+    --wb-surface-2: var(--wb-theme-soft, #f3f1eb);
+    --wb-mobile-paper: color-mix(in srgb, var(--wb-surface-1) 80%, var(--wb-surface-0));
     --wb-surface-3: color-mix(in srgb, var(--wb-selected-bg) 60%, var(--wb-surface-1));
     /* Recessed track behind segmented controls, and the faint hover wash on rows */
     --wb-well: color-mix(in srgb, var(--wb-ink-1) 6%, transparent);
     --wb-hover: color-mix(in srgb, var(--wb-ink-1) 3.5%, transparent);
 
     /* Ink: primary text, control text, secondary text */
-    --wb-ink-1: var(--wb-theme-ink, #2f2c27);
-    --wb-ink-2: var(--wb-theme-control-ink, #5f574b);
-    --wb-ink-3: var(--wb-theme-muted, #7a7266);
+    --wb-ink-1: var(--wb-theme-ink, #141413);
+    --wb-ink-2: var(--wb-theme-control-ink, #504f48);
+    --wb-ink-3: var(--wb-theme-muted, #737168);
 
     /* Lines: hairline separators and stronger control borders */
-    --wb-line-1: var(--wb-theme-line, #e4e0d6);
+    --wb-line-1: var(--wb-theme-line, #dedbd2);
     --wb-line-2: color-mix(in srgb, var(--wb-ink-3) 35%, var(--wb-line-1));
 
     /* Accent and selection */
-    --wb-accent: var(--wb-theme-accent, #b76449);
+    --wb-accent: var(--wb-theme-accent, #b65d41);
     --wb-accent-strong: color-mix(in srgb, var(--wb-accent) 88%, #000);
     /* Accent used as text on paper (links, selected tab labels): darker for contrast */
     --wb-accent-text: color-mix(in srgb, var(--wb-accent) 82%, #000);
-    --wb-accent-ink: #fffefa;
-    --wb-selected-bg: var(--wb-theme-selected, #f0e6da);
+    --wb-accent-ink: #faf9f5;
+    --wb-selected-bg: var(--wb-theme-selected, #eee5db);
     --wb-ring: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-line-1));
 
     /* Semantic */
@@ -54,9 +55,12 @@
       --wb-theme-reading-font,
       "Noto Serif CJK SC",
       "Source Han Serif SC",
+      "Songti SC",
+      SimSun,
       Georgia,
       serif
     );
+    --wb-font-display: var(--wb-theme-display-font, var(--wb-font-reading));
     --wb-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --wb-text-xs: 12px; /* captions and counters only */
     --wb-text-sm: 13px;
@@ -97,18 +101,23 @@
     --wb-control-lg: 40px;
     --wb-control-touch: 44px;
 
-    /* ── Elevation: hierarchy comes from surfaces and shadow, not outlines ── */
-    --wb-shadow-1: 0 1px 2px #34291e12, 0 1px 3px #34291e0d;
-    --wb-shadow-2: 0 2px 6px #34291e0d, 0 10px 28px #34291e14;
-    --wb-shadow-3: 0 4px 12px #34291e0f, 0 18px 44px #34291e24;
+    /* ── Elevation: quiet sheets, with a distinct lift reserved for overlays ── */
+    --wb-shadow-1: 0 1px 2px #14141308;
+    --wb-shadow-2: 0 2px 6px #14141306, 0 8px 24px #1414130a;
+    --wb-shadow-3: 0 4px 12px #1414130a, 0 18px 44px #14141317;
+    --wb-shadow-sheet: 0 0 0 1px var(--wb-line-1), var(--wb-shadow-1);
+    --wb-overlay-scrim: rgb(20 20 19 / 28%);
+    --wb-shadow-drawer: 12px 0 36px rgb(20 20 19 / 12%);
+    --wb-shadow-bottom-sheet: 0 -12px 36px rgb(20 20 19 / 12%);
+    --wb-shadow-top-sheet: 0 12px 36px rgb(20 20 19 / 12%);
     --wb-shadow-ring: 0 0 0 2px color-mix(in srgb, var(--wb-accent) 18%, transparent);
 
     /* ── Motion ── */
-    --wb-duration-fast: 120ms;
-    --wb-duration-base: 180ms;
-    --wb-duration-slow: 260ms;
+    --wb-duration-fast: 140ms;
+    --wb-duration-base: 200ms;
+    --wb-duration-slow: 240ms;
     --wb-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-    --wb-ease-emphasized: cubic-bezier(0.22, 0.8, 0.3, 1);
+    --wb-ease-emphasized: var(--wb-ease-standard);
 
     /* ── Stacking: in-shell tiers stay low; overlays clear SillyTavern's own popups (~9999) ── */
     --wb-z-raised: 2;
@@ -140,7 +149,7 @@
     --wb-selected: var(--wb-selected-bg);
     --wb-control-ink: var(--wb-ink-2);
     --wb-header: var(--wb-header-size);
-    --wb-motion: 220ms;
+    --wb-motion: 240ms;
   }
 
   @media (max-width: 1400px) {
@@ -153,15 +162,16 @@
   /* Dark: the same desk-and-paper structure at night (design drafts v2). */
   :root[data-wb-theme="dark"] {
     color-scheme: dark;
-    --wb-surface-0: var(--wb-theme-dark-paper, #161411);
-    --wb-surface-1: var(--wb-theme-dark-surface, #221f1b);
-    --wb-surface-2: var(--wb-theme-dark-soft, #2b2823);
+    --wb-surface-0: var(--wb-theme-dark-paper, #191918);
+    --wb-surface-1: var(--wb-theme-dark-surface, #232321);
+    --wb-surface-2: var(--wb-theme-dark-soft, #2c2c29);
+    --wb-mobile-paper: color-mix(in srgb, var(--wb-surface-1) 45%, var(--wb-surface-0));
     --wb-well: color-mix(in srgb, #fff 5%, transparent);
     --wb-hover: color-mix(in srgb, #fff 4%, transparent);
-    --wb-ink-1: var(--wb-theme-dark-ink, #ece7dd);
-    --wb-ink-2: #c9bfae;
-    --wb-ink-3: var(--wb-theme-dark-muted, #9f9586);
-    --wb-line-1: var(--wb-theme-dark-line, #38342e);
+    --wb-ink-1: var(--wb-theme-dark-ink, #f0eee6);
+    --wb-ink-2: #c7c5bb;
+    --wb-ink-3: var(--wb-theme-dark-muted, #a09e94);
+    --wb-line-1: var(--wb-theme-dark-line, #3b3b36);
     --wb-accent: var(--wb-theme-dark-accent, #d9876a);
     --wb-accent-text: color-mix(in srgb, var(--wb-accent) 80%, #fff);
     --wb-accent-ink: #1b1916;
@@ -171,8 +181,12 @@
     --wb-danger: #e07a60;
     --wb-info: #8fb0d6;
     --wb-violet: #b4a2d9;
-    --wb-shadow-1: inset 0 1px 0 #ffffff0a, 0 1px 3px #00000073;
-    --wb-shadow-2: inset 0 1px 0 #ffffff0d, 0 10px 32px #0000006b;
-    --wb-shadow-3: inset 0 1px 0 #ffffff0d, 0 16px 44px #00000080;
+    --wb-shadow-1: 0 1px 3px #00000024;
+    --wb-shadow-2: 0 4px 16px #00000038;
+    --wb-shadow-3: 0 8px 32px #00000059;
+    --wb-overlay-scrim: rgb(0 0 0 / 48%);
+    --wb-shadow-drawer: 12px 0 36px rgb(0 0 0 / 24%);
+    --wb-shadow-bottom-sheet: 0 -12px 36px rgb(0 0 0 / 24%);
+    --wb-shadow-top-sheet: 0 12px 36px rgb(0 0 0 / 24%);
   }
 }

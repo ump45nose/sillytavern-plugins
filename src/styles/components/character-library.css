@@ -1,4 +1,4 @@
-/* Character library (board Characters): a head with import/new, chip filters, a tinted selection bar and portrait cards. */
+/* Character library: a quiet image catalogue with serif titles, text filters, and book-cover proportions. */
 @layer wb.components {
   .wb-settings-body > .wb-characters.is-management {
     display: block;
@@ -9,24 +9,27 @@
   .wb-library-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--wb-space-4);
   }
   .wb-library-head {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    min-height: 36px;
+    min-height: var(--wb-control-touch);
+    padding-bottom: var(--wb-space-4);
+    border-bottom: 1px solid var(--wb-line-1);
   }
   .wb-library-head h2 {
     margin: 0;
     color: var(--wb-ink-1);
-    font-family: var(--wb-font-ui);
-    font-size: 18px;
-    font-weight: 600;
+    font-family: var(--wb-font-display);
+    font-size: var(--wb-text-2xl);
+    font-weight: var(--wb-weight-medium);
+    line-height: var(--wb-leading-tight);
   }
   .wb-library-head > small {
     color: var(--wb-ink-3);
-    font-size: 12.5px;
+    font-size: var(--wb-text-sm);
     font-variant-numeric: tabular-nums;
   }
   .wb-library-head > :is(.wb-library-import, .wb-library-create) {
@@ -37,14 +40,12 @@
     height: 34px;
     min-height: 34px;
     padding: 0 14px;
-    border-radius: var(--wb-radius-md);
+    border-radius: var(--wb-radius-sm);
     font: inherit;
     font-size: 13px;
     white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color var(--wb-duration-fast),
-      transform var(--wb-duration-fast);
+    transition: background-color var(--wb-duration-fast);
   }
   .wb-library-import {
     border: 1px solid var(--wb-line-2);
@@ -68,11 +69,7 @@
     background: var(--wb-accent-strong);
     color: var(--wb-accent-ink);
   }
-  .wb-library-head > :is(.wb-library-import, .wb-library-create):active {
-    transform: scale(0.97);
-  }
-
-  /* Search, then chips that scroll sideways, then the sort at the far edge. */
+  /* Search, text filters that scroll sideways, then the sort at the far edge. */
   .wb-character-search-row.is-management {
     display: flex;
     align-items: center;
@@ -100,29 +97,32 @@
   }
   .wb-ui .wb-library-chips > button {
     flex: none;
-    height: 30px;
-    min-height: 30px;
-    padding: 0 13px;
+    height: var(--wb-control-md);
+    min-height: var(--wb-control-md);
+    padding: 0 var(--wb-space-3);
     border: 0;
-    border-radius: var(--wb-radius-pill);
-    background: var(--wb-surface-2);
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
     color: var(--wb-ink-2);
     font-size: 13px;
     font-weight: 400;
     white-space: nowrap;
     transition:
-      background-color var(--wb-duration-fast),
+      border-color var(--wb-duration-fast),
       color var(--wb-duration-fast);
   }
   .wb-ui .wb-library-chips > button:is(:hover, :focus-visible) {
-    background: var(--wb-hover);
+    border-bottom-color: var(--wb-line-2);
+    background: transparent;
     color: var(--wb-ink-1);
   }
   .wb-ui .wb-library-chips > button[aria-checked="true"] {
-    background: var(--wb-ink-1);
-    color: var(--wb-surface-1);
-    font-weight: 600;
+    border-bottom-color: var(--wb-accent);
+    background: transparent;
+    color: var(--wb-accent-text);
+    font-weight: var(--wb-weight-medium);
   }
 
   /* The selection bar is quiet until something is picked, then tints and shows its actions. */
@@ -132,7 +132,7 @@
     gap: 2px;
     min-height: 40px;
     padding: 0 8px 0 12px;
-    border-radius: 10px;
+    border-radius: var(--wb-radius-xs);
     background: transparent;
     transition: background-color var(--wb-duration-fast);
   }
@@ -182,7 +182,7 @@
   .wb-card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
-    gap: 14px;
+    gap: var(--wb-space-5);
     margin: 0;
   }
   .wb-character-card {
@@ -191,16 +191,15 @@
     display: flex;
     overflow: hidden;
     border: 1px solid var(--wb-line-1);
-    border-radius: 14px;
+    border-radius: var(--wb-radius-xs);
     background: var(--wb-surface-1);
     transition:
       border-color var(--wb-duration-fast),
-      box-shadow var(--wb-duration-base) var(--wb-ease-standard),
-      transform var(--wb-duration-base) var(--wb-ease-standard);
+      background-color var(--wb-duration-fast);
   }
   .wb-character-card:is(:hover, :focus-within) {
-    box-shadow: var(--wb-shadow-2);
-    transform: translateY(-1px);
+    border-color: var(--wb-line-2);
+    background: var(--wb-surface-2);
   }
   .wb-character-card.is-selected {
     border-color: var(--wb-accent);
@@ -230,7 +229,7 @@
   .wb-ui .wb-character-main:focus-visible {
     outline: 2px solid var(--wb-ring);
     outline-offset: -2px;
-    border-radius: 14px;
+    border-radius: var(--wb-radius-xs);
   }
   .wb-character-card .wb-portrait {
     position: relative;
@@ -238,7 +237,7 @@
     place-items: center;
     width: 100%;
     height: auto;
-    aspect-ratio: 10 / 11;
+    aspect-ratio: 4 / 5;
     overflow: hidden;
     border: 0;
     border-radius: 0;
@@ -251,67 +250,44 @@
     border-radius: 0;
     object-fit: cover;
     object-position: 50% 12%;
-    transition: transform var(--wb-duration-slow) var(--wb-ease-standard);
-  }
-  .wb-character-card:hover .wb-portrait img {
-    transform: scale(1.025);
   }
   .wb-character-card .wb-portrait.is-initial b {
     color: color-mix(in srgb, var(--wb-ink-1) 34%, transparent);
-    font: 400 64px/1 var(--wb-font-reading);
+    font: 400 64px/1 var(--wb-font-display);
   }
-  .wb-portrait.is-initial[data-tint="0"] {
+  .wb-character-card .wb-portrait.is-initial {
+    --wb-cover-tone: var(--wb-accent);
     background: linear-gradient(
       160deg,
-      color-mix(in srgb, #d49a8a 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #d49a8a 44%, var(--wb-surface-2))
+      color-mix(in srgb, var(--wb-cover-tone) 9%, var(--wb-surface-2)),
+      color-mix(in srgb, var(--wb-cover-tone) 20%, var(--wb-surface-2))
     );
   }
-  .wb-portrait.is-initial[data-tint="1"] {
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, #8fa3bb 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #8fa3bb 44%, var(--wb-surface-2))
-    );
+  .wb-character-card .wb-portrait.is-initial[data-tint="1"] {
+    --wb-cover-tone: var(--wb-info);
   }
-  .wb-portrait.is-initial[data-tint="2"] {
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, #9fb08c 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #9fb08c 44%, var(--wb-surface-2))
-    );
+  .wb-character-card .wb-portrait.is-initial[data-tint="2"] {
+    --wb-cover-tone: var(--wb-success);
   }
-  .wb-portrait.is-initial[data-tint="3"] {
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, #c9b088 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #c9b088 44%, var(--wb-surface-2))
-    );
+  .wb-character-card .wb-portrait.is-initial[data-tint="3"] {
+    --wb-cover-tone: var(--wb-warning);
   }
-  .wb-portrait.is-initial[data-tint="4"] {
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, #ab97be 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #ab97be 44%, var(--wb-surface-2))
-    );
+  .wb-character-card .wb-portrait.is-initial[data-tint="4"] {
+    --wb-cover-tone: var(--wb-violet);
   }
-  .wb-portrait.is-initial[data-tint="5"] {
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, #d8a47c 30%, var(--wb-surface-2)),
-      color-mix(in srgb, #d8a47c 44%, var(--wb-surface-2))
-    );
+  .wb-character-card .wb-portrait.is-initial[data-tint="5"] {
+    --wb-cover-tone: var(--wb-ink-3);
   }
   .wb-character-card .wb-portrait > em {
     position: absolute;
     right: 10px;
     bottom: 10px;
     padding: 2px 9px;
-    border-radius: var(--wb-radius-pill);
+    border: 1px solid var(--wb-line-1);
+    border-radius: var(--wb-radius-xs);
     background: color-mix(in srgb, var(--wb-surface-1) 90%, transparent);
-    box-shadow: 0 1px 3px rgb(30 22 14 / 14%);
     color: var(--wb-accent-text);
-    font-size: 11px;
+    font-size: var(--wb-text-xs);
     font-style: normal;
     font-weight: 600;
     backdrop-filter: blur(6px);
@@ -321,8 +297,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 11px 13px 13px;
+    gap: var(--wb-space-2);
+    padding: var(--wb-space-3) var(--wb-space-3) var(--wb-space-4);
   }
   .wb-character-card-title {
     display: flex;
@@ -334,22 +310,22 @@
     min-width: 0;
     overflow: hidden;
     color: var(--wb-ink-1);
-    font: 500 15.5px/1.35 var(--wb-font-reading);
+    font: var(--wb-weight-medium) var(--wb-text-lg) / var(--wb-leading-tight) var(--wb-font-display);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .wb-character-card-title time {
     flex: none;
     color: var(--wb-ink-3);
-    font-size: 11.5px;
+    font-size: var(--wb-text-xs);
     font-variant-numeric: tabular-nums;
   }
   .wb-character-card-desc {
     display: -webkit-box;
-    min-height: calc(12.5px * 1.65 * 2);
+    min-height: calc(var(--wb-text-sm) * 1.65 * 2);
     overflow: hidden;
     color: var(--wb-ink-2);
-    font-size: 12.5px;
+    font-size: var(--wb-text-sm);
     line-height: 1.65;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -357,18 +333,17 @@
   .wb-character-card-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: var(--wb-space-1) var(--wb-space-2);
     margin-top: auto;
-    padding-top: 2px;
+    padding-top: var(--wb-space-2);
+    border-top: 1px solid var(--wb-line-1);
   }
   .wb-character-card-tags i {
     max-width: 100%;
     overflow: hidden;
-    padding: 1px 7px;
-    border-radius: 5px;
-    background: var(--wb-surface-2);
-    color: var(--wb-ink-2);
-    font-size: 11px;
+    padding: 0;
+    color: var(--wb-ink-3);
+    font-size: var(--wb-text-xs);
     font-style: normal;
     line-height: 1.6;
     text-overflow: ellipsis;
@@ -411,7 +386,7 @@
     border: 0;
     border-radius: 50%;
     background: color-mix(in srgb, var(--wb-surface-1) 82%, transparent);
-    box-shadow: 0 1px 3px rgb(30 22 14 / 16%);
+    box-shadow: inset 0 0 0 1px var(--wb-line-1);
     color: var(--wb-ink-2);
     opacity: 0;
     backdrop-filter: blur(6px);
@@ -420,12 +395,12 @@
       color var(--wb-duration-fast);
   }
   .wb-ui .wb-character-star.is-on {
-    color: #c08a2c;
+    color: var(--wb-warning);
     opacity: 1;
   }
   .wb-ui .wb-character-star:is(:hover, :focus-visible) {
     background: var(--wb-surface-1);
-    color: #c08a2c;
+    color: var(--wb-warning);
   }
   .wb-ui
     .wb-character-card:is(:hover, :focus-within)
@@ -448,20 +423,11 @@
       top: var(--wb-space-1);
       right: var(--wb-space-1);
     }
-    .wb-character-card:is(:hover, :focus-within),
-    .wb-character-card:hover .wb-portrait img {
-      transform: none;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .wb-character-card,
-    .wb-character-card .wb-portrait img {
+    .wb-character-card {
       transition: none;
-    }
-    .wb-character-card:is(:hover, :focus-within),
-    .wb-character-card:hover .wb-portrait img {
-      transform: none;
     }
   }
 }

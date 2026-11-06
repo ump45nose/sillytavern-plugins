@@ -1,0 +1,146 @@
+/* Shared surfaces fade without replacing positioning transforms or gesture-driven translation. */
+@layer wb.modes {
+  body.wb-active
+    :is(
+      .wb-popover,
+      .wb-select-menu,
+      .wb-resource-menu,
+      .wb-pill-pop,
+      .wb-dialog[open],
+      .wb-settings-workspace[open],
+      .wb-mobile-sheet,
+      .wb-mobile-sheet-shade
+    ) {
+    animation: wb-surface-in var(--wb-duration-base, 200ms) var(--wb-ease-standard) both;
+  }
+  body.wb-active
+    :is(
+      .wb-popover,
+      .wb-select-menu,
+      .wb-resource-menu,
+      .wb-pill-pop,
+      .wb-dialog,
+      .wb-settings-workspace,
+      .wb-mobile-sheet,
+      .wb-mobile-sheet-shade
+    )[data-wb-exiting="true"] {
+    animation: wb-surface-out var(--wb-duration-base, 200ms) var(--wb-ease-standard) both;
+    pointer-events: none;
+  }
+  @keyframes wb-surface-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes wb-surface-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  body.wb-active :is(.wb-fold-body, .wb-prompt-collapse, .wb-panel-tabs-fold) {
+    transition:
+      grid-template-rows var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      opacity var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      visibility var(--wb-duration-base, 200ms);
+  }
+  body.wb-active .wb-right .wb-resource-v3 .wb-preset-scroll {
+    transition:
+      max-height var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      padding-top var(--wb-duration-base, 200ms) var(--wb-ease-standard);
+  }
+  body.wb-active.wb-mobile .wb-mobile-sheet:not([data-wb-drag]) {
+    transition: translate var(--wb-duration-slow, 240ms) var(--wb-ease-standard);
+  }
+
+  /* Press feedback stays on the control's paper surface, without shrinking its label. */
+  body.wb-active
+    :is(
+      .wb-mobile-header button,
+      .wb-mobile-management,
+      .wb-mobile-plus,
+      .wb-mobile-config button,
+      .wb-mobile-focus-exit,
+      .wb-mobile-drawer-close,
+      .wb-mobile-sheet button,
+      .wb-left button,
+      .wb-right .wb-panel-tabs button,
+      .wb-rp-deck button,
+      .wb-settings-index-rows button,
+      .wb-icon,
+      .wb-panel-icon,
+      .wb-fold-head
+    ) {
+    transition:
+      background-color var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      border-color var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      color var(--wb-duration-base, 200ms) var(--wb-ease-standard),
+      box-shadow var(--wb-duration-base, 200ms) var(--wb-ease-standard);
+  }
+  body.wb-active :is(.wb-ui button, #send_but, .wb-rp-deck button):active:not(:disabled) {
+    scale: none;
+  }
+  body.wb-active
+    :is(
+      .wb-library-head > .wb-library-import,
+      .wb-library-head > .wb-library-create,
+      .wb-addon-heading button,
+      .wb-addon-actions button
+    ):active:not(:disabled) {
+    transform: none;
+  }
+  body.wb-active .wb-ui input:is([type="checkbox"], [type="radio"]):checked {
+    animation: none;
+  }
+
+  /* Include portal roots and backdrops: the older descendant-only rules miss these surfaces. */
+  @media (prefers-reduced-motion: reduce) {
+    body.wb-active
+      :is(
+        .wb-ui,
+        .wb-ui *,
+        .wb-dialog,
+        .wb-dialog *,
+        .wb-settings-workspace,
+        .wb-settings-workspace *,
+        .wb-mobile-sheet-shade
+      ),
+    body.wb-active :is(.wb-dialog, .wb-settings-workspace, .wb-entry-editor)::backdrop {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+    body.wb-active .wb-ui::before,
+    body.wb-active .wb-ui::after,
+    body.wb-active .wb-ui *::before,
+    body.wb-active .wb-ui *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+  body.wb-active.reduced-motion
+    :is(
+      .wb-ui,
+      .wb-ui *,
+      .wb-dialog,
+      .wb-dialog *,
+      .wb-settings-workspace,
+      .wb-settings-workspace *,
+      .wb-mobile-sheet-shade
+    ),
+  body.wb-active.reduced-motion :is(.wb-dialog, .wb-settings-workspace, .wb-entry-editor)::backdrop {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  body.wb-active.reduced-motion .wb-ui::before,
+  body.wb-active.reduced-motion .wb-ui::after,
+  body.wb-active.reduced-motion .wb-ui *::before,
+  body.wb-active.reduced-motion .wb-ui *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

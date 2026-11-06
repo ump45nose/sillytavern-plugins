@@ -4,7 +4,7 @@ import { ChevronRight, Type } from "./icons";
 import type { HostAdapter } from "../host/adapter";
 import { useHostSlices } from "./common";
 import { Popover } from "./Popover";
-import { usePresence } from "./Motion";
+import { useMotionAllowed, usePresence } from "./Motion";
 import { MessageActions } from "./MessageActions";
 import { useMessageEditing } from "./useMessageEditing";
 import { messageActions } from "./message-actions";
@@ -133,7 +133,8 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
   chatStyle?: boolean;
 }) {
   useMessageEditing(host);
-  const folds = useRef(new Map<HTMLElement, boolean>()),
+  const motion = useMotionAllowed(),
+    folds = useRef(new Map<HTMLElement, boolean>()),
     animations = useRef(new Map<HTMLElement, Animation>());
   const controls = useRef(
     new Map<HTMLElement, { role: string | null; tab: string | null; label: string | null }>(),
@@ -199,6 +200,10 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
     };
   }, [host]);
   useLayoutEffect(() => {
+    if (!motion) {
+      animations.current.forEach((animation) => animation.cancel());
+      animations.current.clear();
+    }
     for (const node of nodes) {
       if (node.getAttribute("is_user") !== "true") continue;
       const open =
@@ -227,9 +232,6 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
           animations.current.delete(n);
         });
       node.classList.toggle("wb-user-collapsed", !open);
-      const motion =
-        !matchMedia("(prefers-reduced-motion: reduce)").matches &&
-        !document.body.classList.contains("reduced-motion");
       bodies.forEach((body, i) => {
         body.inert = !open;
         if (changed && wasOpen !== open && motion) {
@@ -249,18 +251,20 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
                 visibility: "visible",
               },
             ],
-            { duration: 260, easing: "cubic-bezier(.22,.8,.3,1)" },
+            { duration: 200, easing: "cubic-bezier(.2,0,0,1)" },
           );
           animations.current.set(body, animation);
-          animation.onfinish = () => {
+          const finish = () => {
             if (animations.current.get(body) === animation) animations.current.delete(body);
           };
+          animation.onfinish = finish;
+          animation.oncancel = finish;
         }
       });
       folds.current.set(node, open);
     }
     for (const node of folds.current.keys()) if (!nodes.includes(node)) folds.current.delete(node);
-  }, [nodes, expanded, prefs.userCollapsed, chatStyle]);
+  }, [nodes, expanded, prefs.userCollapsed, chatStyle, motion]);
   useEffect(() => {
     setExpanded(new Map());
   }, [snap.chatName, prefs.userCollapsed]);
@@ -268,9 +272,7 @@ export const ReadingPresentation = React.memo(function ReadingPresentation({
     document.body.dataset.wbMeta = prefs.messageMeta || "hover";
     document.body.style.setProperty(
       "--wb-reading-font",
-      prefs.readingFont === "sans"
-        ? "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        : "'Noto Serif CJK SC','Source Han Serif SC','Songti SC',SimSun,serif",
+      prefs.readingFont === "sans" ? "var(--wb-font-ui)" : "var(--wb-font-reading)",
     );
     document.body.style.setProperty("--wb-reading-size", (prefs.readingSize ?? 17) + "px");
     document.body.style.setProperty("--wb-reading-leading", String(prefs.readingLeading ?? 2));
