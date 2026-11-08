@@ -12,7 +12,7 @@ if (args.some((arg, i) => !['--dry-run', '--latest-tag'].includes(arg) && !(tagI
 }
 const gh = (...params) => execFileSync('gh', params, { encoding: 'utf8' });
 const lock = JSON.parse(readFileSync(new URL('../baseline.lock.json', import.meta.url), 'utf8'));
-const repo = process.env.GITHUB_REPOSITORY || 'ump45nose/SillyTavern';
+const repo = process.env.GITHUB_REPOSITORY || 'ump45nose/sillytavern-plugins';
 const latest = tagIndex === -1
   ? JSON.parse(gh('api', 'repos/SillyTavern/SillyTavern/releases/latest'))
   : { tag_name: args[tagIndex + 1], html_url: `https://github.com/SillyTavern/SillyTavern/releases/tag/${encodeURIComponent(args[tagIndex + 1])}` };
