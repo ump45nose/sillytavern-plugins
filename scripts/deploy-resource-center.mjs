@@ -1,10 +1,11 @@
+// 本脚本在 Docker 宿主机操作本地文件；MacPro 构建后须先传输产物，不能当作 SSH 发布入口。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dry = process.argv.includes("--dry"),
-  target = process.env.ARC_TAVERN_ROOT || "/vol2/1000/Docker/sillytavern";
+  target = process.env.ARC_TAVERN_ROOT || "/var/lib/compose/sillytavern";
 const stamp = new Date().toISOString().replace(/[:.]/g, "-"),
   backup = process.env.ARC_DEPLOY_BACKUP || path.join(root, "outputs", `resource-center-deployment-${stamp}`);
 const steps = [
@@ -17,6 +18,14 @@ if (dry) {
   console.log(JSON.stringify({ target, backup, copy: steps, restart: "sillytavern" }, null, 2));
   process.exit(0);
 }
+if (process.platform !== "linux" || !path.isAbsolute(target) || !fs.existsSync(path.join(target, "data")))
+  throw new Error("请在 NAS Docker 宿主机执行，并用 ARC_TAVERN_ROOT 指定其本地 SillyTavern 目录；本脚本不执行远程发布");
+const dockerEndpoint = process.env.DOCKER_HOST || execFileSync(
+  "docker", ["context", "inspect", "--format", '{{(index .Endpoints "docker").Host}}'],
+  { encoding: "utf8", cwd: root },
+).trim();
+if (!dockerEndpoint.startsWith("unix://"))
+  throw new Error("资源中心安装要求本地 Docker socket，不能混用远程 Docker 与本地文件");
 for (;;) {
   const sockets = execFileSync(
     "docker",

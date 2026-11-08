@@ -11,14 +11,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const flags = new Set(process.argv.slice(2));
 const dry = flags.has("--dry");
 const SSH = process.env.WB_DEPLOY_SSH ?? "nas";
-const REMOTE_ROOT = process.env.WB_DEPLOY_ROOT ?? "/vol2/1000/Docker/sillytavern";
+const REMOTE_ROOT = process.env.WB_DEPLOY_ROOT ?? "/var/lib/compose/sillytavern";
 const CONTAINER = process.env.WB_DEPLOY_CONTAINER ?? "sillytavern";
 const BASE_URL = process.env.WB_DEPLOY_URL ?? "http://192.168.31.201:32001";
 
 const run = (cmd, args, opts = {}) => {
   console.log(`$ ${cmd} ${args.join(" ")}`);
   if (dry) return { status: 0, stdout: "" };
-  return spawnSync(cmd, args, { stdio: opts.inherit ? "inherit" : "pipe", encoding: "utf8", ...opts });
+  return spawnSync(cmd, args, { stdio: opts.inherit ? "inherit" : "pipe", encoding: "utf8", cwd: root, ...opts });
 };
 const ssh = (cmd, opts) => run("ssh", ["-o", "BatchMode=yes", SSH, cmd], opts);
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -41,7 +41,7 @@ if (perf.status !== 0) throw new Error("性能扩展同步失败");
 
 // 2) 服务端插件：内容有变化才更新并重启容器
 const pluginLocal = path.join(root, "server/workbench-sync/dist/index.mjs");
-const localSha = sha256(fs.readFileSync(pluginLocal));
+const localSha = dry ? "dry-run" : sha256(fs.readFileSync(pluginLocal));
 const remote = ssh(`sha256sum ${REMOTE_ROOT}/plugins/workbench-sync/index.mjs 2>/dev/null | cut -d' ' -f1`);
 const remoteSha = (remote.stdout || "").trim();
 let restarted = false;
@@ -85,4 +85,4 @@ if (!dry) {
   console.log(`✓ 容器: ${(c.stdout || "").trim() || "未运行!"}`);
   if (!a || !p || !b) throw new Error("探活未通过");
 }
-console.log(restarted ? "部署完成（容器已重启，刷新页面生效）" : "部署完成（刷新页面生效）");
+console.log(dry ? "部署预览完成（未执行命令）" : restarted ? "部署完成（容器已重启，刷新页面生效）" : "部署完成（刷新页面生效）");
