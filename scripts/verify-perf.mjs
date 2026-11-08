@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { chromium } from 'playwright';
 import { launch, session as baseSession, ready, urls, createCharacter, root } from './browser.mjs';
 
 // verify:perf — the wb-perf extension (perf-extension/) on the local validation instance:
@@ -11,11 +11,10 @@ import { launch, session as baseSession, ready, urls, createCharacter, root } fr
 const dir = 'artifacts/perf'; fs.mkdirSync(dir, { recursive: true });
 const checks = [], pass = (name, details) => { checks.push({ name, passed: true, details }); console.log('PASS', name, JSON.stringify(details ?? {})); };
 const BOOK = 'WbPerfFixture';
-// gzip skips loopback hosts, so the gzip checks open the instance through this machine's LAN address.
-// Private ranges only: VPN/tunnel interfaces often carry addresses the instance cannot be reached on.
-const lan = process.env.WB_LAN_HOST ?? Object.values(os.networkInterfaces()).flat()
-    .find(i => i?.family === 'IPv4' && !i.internal && /^(192\.168|10)\.|^172\.(1[6-9]|2\d|3[01])\./.test(i.address))?.address;
-const lanUrl = lan && urls.validation.replace(/\/\/[^:]+:/, `//${lan}:`);
+// gzip skips loopback hosts, so the gzip checks open the instance under a reserved name that only this browser
+// resolves, to the instance's own address: they hold whether the instance listens on the LAN or on loopback only.
+const lanName = 'wb-perf.test';
+const lanUrl = urls.validation.replace(/\/\/[^:/]+:/, `//${lanName}:`);
 
 // Shared instances link wb-perf to whichever checkout prepared them; serve this checkout's copy.
 const perfDir = path.join(root, 'perf-extension');
@@ -79,13 +78,15 @@ async function extensionListeners(page) {
     return found;
 }
 
+// browser.mjs's launch() plus the switch that maps the name.
+const launchChromium = chromium.launch.bind(chromium);
+chromium.launch = options => launchChromium({ ...options, args: [...(options?.args ?? []), `--host-resolver-rules=MAP ${lanName} ${new URL(urls.validation).hostname}`] });
 const browser = await launch();
+chromium.launch = launchChromium;
 let page, errors = [], passed = false;
 const pages = [];
 try {
-    assert(lanUrl, 'no LAN IPv4 address for the gzip checks');
-
-    // ---------- A: defaults, workbench mounted, LAN address ----------
+    // ---------- A: defaults, workbench mounted, non-loopback name ----------
     ({ page, errors } = await session(browser)); pages.push(page);
     await watchSplash(page);
     const startupA = watchStartup(page);

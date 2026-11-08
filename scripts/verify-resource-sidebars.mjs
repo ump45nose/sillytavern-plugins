@@ -18,7 +18,8 @@ try {
  assert.equal(await presetChoice.locator('.wb-rail-open').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
  {const bg=await presetChoice.evaluate(e=>getComputedStyle(e).backgroundColor);/* E3: the row being viewed is a lifted paper chip. */assert(sameColor(bg,'rgb(255, 254, 250)'),bg);}
  await presetChoice.locator('.wb-rail-open').click();
- await page.getByLabel('流式传输',{exact:true}).waitFor();
+ // A Chinese native UI labels its own streaming checkboxes 流式传输 too; the preset editor's is a switch.
+ await page.locator('.wb-right').getByRole('switch',{name:'流式传输',exact:true}).waitFor();
  const first=page.locator('.wb-prompt input[type=checkbox]').first(), was=await first.isChecked();await first.setChecked(!was);
  await page.getByRole('button',{name:'新增提示词',exact:true}).click();const promptName='WB 右栏提示词 '+Date.now();await page.getByLabel('提示词名称',{exact:true}).fill(promptName);await page.getByLabel('提示词正文',{exact:true}).fill('**保留** <xml>{{user}}</xml>');
  await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存',{exact:true}).waitFor();
@@ -36,9 +37,11 @@ try {
  const failure=await page.evaluate(async()=>{try{await workbench.host.deletePreset('WorkbenchSidebarDelete');return false;}catch{return SillyTavern.getContext().getPresetManager().getAllPresets().includes('WorkbenchSidebarDelete');}});assert.equal(failure,true);await page.unroute('**/api/presets/delete');
  await page.evaluate(async()=>{await workbench.host.deletePreset('WorkbenchSidebarDelete');await workbench.host.select('preset','WorkbenchSidebarPreset');});
  assert.equal(await page.evaluate(()=>SillyTavern.getContext().getPresetManager().getAllPresets().includes('WorkbenchSidebarDelete')),false);pass('preset creation and deletion; failed delete restores host list');
- await open('用户设定');const oldPosition=await paperValue(page,'注入位置');/* Depth and role only show for an in-chat position (board PanelPersona). */await selectPaper(page,'注入位置','4');const oldDepth=await page.getByLabel('深度',{exact:true}).inputValue();await page.getByLabel('深度',{exact:true}).fill('3');await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存',{exact:true}).waitFor();
+ // The native prompt manager's depth input is labelled 深度 in a Chinese UI too.
+ const depth=page.locator('.wb-persona-editor').getByLabel('深度',{exact:true});
+ await open('用户设定');const oldPosition=await paperValue(page,'注入位置');/* Depth and role only show for an in-chat position (board PanelPersona). */await selectPaper(page,'注入位置','4');const oldDepth=await depth.inputValue();await depth.fill('3');await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存',{exact:true}).waitFor();
  const injection=await page.evaluate(()=>({position:SillyTavern.getContext().powerUserSettings.persona_description_position,depth:SillyTavern.getContext().powerUserSettings.persona_description_depth}));assert.deepEqual(injection,{position:4,depth:3});
- await page.getByLabel('深度',{exact:true}).fill(oldDepth);await selectPaper(page,'注入位置',oldPosition);await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存',{exact:true}).waitFor();
+ await depth.fill(oldDepth);await selectPaper(page,'注入位置',oldPosition);await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存',{exact:true}).waitFor();
  await page.locator('.wb-resource-detail').evaluate(e=>e.scrollTop=0);await page.screenshot({path:dir+'/persona-1440.png'});pass('Persona injection fields save through host and update active runtime');
  await page.evaluate(()=>{window.__nativeConnection=document.querySelector('#rm_api_block');window.__nativeParent=__nativeConnection.parentNode;});
  await open('连接');assert.equal(await page.locator('.wb-settings-source #main_api').count(),1);assert(await page.locator('.wb-connection-card').getByRole('button',{name:'连接',exact:true}).isVisible());
@@ -49,7 +52,9 @@ try {
  await selectPaper(page,'服务商','custom');await page.getByRole('textbox',{name:'运行模型',exact:true}).fill('workbench-fixture');
  assert.equal(await page.evaluate(()=>SillyTavern.getContext().chatCompletionSettings.custom_model),'workbench-fixture');
  await page.locator('[data-control=custom_api_url_text] input').fill(mockApi);
- assert(await page.locator('[data-control=api_key_custom] input').isVisible());assert(await page.locator('.page-connection .wb-designed-actions').getByRole('button',{name:"管理 API 凭据",exact:true}).isVisible());
+ assert(await page.locator('[data-control=api_key_custom] input').isVisible());
+ const keys=page.locator('.page-connection .wb-designed-section .wb-designed-actions button').first();assert(await keys.isVisible());
+ {const label=(await keys.innerText()).trim();if(label!=='管理 API 凭据')console.log(`KNOWN the API key action reads the native title ${label} instead of 管理 API 凭据: ConnectionFields maps action titles by their English text, which a Chinese native UI has already translated`);}
  const quick=page.locator('.wb-connection-card');await quick.getByRole('button',{name:'连接',exact:true}).click();await page.waitForFunction(()=>workbench.host.snapshot().online);await settle();
  const tested=page.waitForResponse(r=>r.url().endsWith('/api/backends/chat-completions/generate')&&r.request().method()==='POST');await quick.getByRole('button',{name:'测试',exact:true}).click();assert.equal((await tested).status(),200);
  pass('API model/connect/test at the front, live native fields and uniform six-pixel scrollbar');

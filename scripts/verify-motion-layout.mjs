@@ -26,7 +26,8 @@ try {
  assert(frames.samples.some(x=>x.height>1&&x.height<frames.after.height-1&&x.opacity>0&&x.opacity<1),'height and opacity must actually interpolate');
  assert(frames.samples.filter(x=>x.elapsed<180&&x.elapsed>70).every(x=>x.sameAnimation),'host scans must not cancel an in-progress fold');
  assert(frames.samples.every(x=>Math.abs(x.labelY-frames.before.labelY)<1&&Math.abs(x.labelX-frames.before.labelX)<1),'heading must stay in place throughout expansion');
- assert(frames.samples.every(x=>Math.abs(x.metaY-x.headingY)<1),'metadata and title must share a fixed vertical baseline');
+ // The floor header (name, floor, actions) is its own row above the user line; neither moves while the input unfolds.
+ assert(frames.samples.every(x=>x.metaY<x.headingY&&Math.abs(x.metaY-frames.before.metaY)<1&&Math.abs(x.headingY-frames.before.headingY)<1),'the floor header must stay fixed above the heading');
  assert(Math.abs(frames.after.bodyX-frames.after.labelX)<1,'paragraph must align with heading text');
  assert.equal(frames.after.animations,0);pass('actual input animation frames, fixed heading and paragraph alignment',frames);
  await page.screenshot({path:dir+'/reading-expanded-1496.png'});

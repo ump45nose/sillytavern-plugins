@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { launch, session, ready, urls, createCharacter, connect, withReducedMotion, openResource, chooseLayout, seedCast, selectPaper } from "./browser.mjs";
 
 const dir = "artifacts/rp-runtime"; fs.mkdirSync(dir, { recursive: true });
 const checks = [], pass = (name, details = {}) => { checks.push({ name, details }); console.log("PASS", name); };
 const browser = await launch();
 let page, original;
+// workbench-sync keeps a page whose event stream is cut off while still opening: unmount, reload or close only once it is open.
+const synced = () => page.waitForFunction(() => ["online", "absent"].includes(workbench.host?.sync.state.status), null, { timeout: 10_000 });
 try {
   ({ page } = await session(browser));
   const errors = [], expectedNativeErrors = []; let stopping = false;
@@ -15,7 +18,7 @@ try {
   });
   await ready(page, urls.validation, { probe: true });
   original = await page.evaluate(() => structuredClone(SillyTavern.getContext().extensionSettings.workbench));
-  await page.evaluate(async () => { workbench.unmount(); const settings = SillyTavern.getContext().extensionSettings.workbench; settings.layout = "novel"; settings.rpTopAuto = false; await workbench.mount(); });
+  await synced(); await page.evaluate(async () => { workbench.unmount(); const settings = SillyTavern.getContext().extensionSettings.workbench; settings.layout = "novel"; settings.rpTopAuto = false; await workbench.mount(); });
   await createCharacter(page); await page.evaluate(() => workbench.host.newChat()); await connect(page);
   await page.setViewportSize({ width: 1496, height: 817 });
   await page.evaluate(() => { window.__rpNative = { chat: document.getElementById("chat"), input: document.getElementById("send_textarea"), form: document.getElementById("send_form"), background: document.getElementById("bg1") }; });
@@ -39,6 +42,8 @@ try {
   pass("native background is retained and live expression image updates reach the stage");
 
   const eye = await role("隐藏界面").boundingBox(); await role("隐藏界面").click(); await settle();
+  // The key rides the chrome's transition, which can still be ending; it has to come to rest where it was.
+  for (let i = 0; i < 20 && !isDeepStrictEqual(await role("显示界面").boundingBox(), eye); i++) await page.waitForTimeout(100);
   assert.deepEqual(await role("显示界面").boundingBox(), eye); assert.equal(await page.locator("#sheld").evaluate(n => n.inert), true);
   await role("显示界面").click(); await settle(); assert.equal(await page.locator("#sheld").evaluate(n => n.inert), false);
   pass("same eye control hides and restores the interface, including focus isolation");
@@ -297,8 +302,10 @@ try {
   assert.equal(sent.some(m => m.role === "assistant" && JSON.stringify(m.content).includes("<options")), false, "earlier replies reach the model without their options");
   assert.equal(sent.some(m => m.role === "assistant" && JSON.stringify(m.content).includes("工作台验证回复")), true);
   assert.equal(sent.some(m => m.role === "system" && String(m.content).includes("[剧情选项]") && String(m.content).includes("<options>") && !String(m.content).includes("{{user}}")), true, "the instruction keeps its example and its macros are filled");
-  const exported = await page.evaluate(() => workbench.host.exportSnapshot().messages.map(m => m.text).join("\n"));
-  assert.equal(exported.includes("<options"), false, "the record export reads as the reader sees it"); assert.equal(exported.includes("工作台验证回复"), true);
+  // The record export keeps every byte (its tag rules can drop the block); scene consumers read the reading text.
+  const [reading, raw] = await page.evaluate(() => ["reading", "raw"].map(p => workbench.host.exportSnapshot(p).messages.map(m => m.text).join("\n")));
+  assert.equal(reading.includes("<options"), false, "scene consumers read the reply as the reader sees it"); assert.equal(reading.includes("工作台验证回复"), true);
+  assert.equal(raw.includes("<options"), true, "the record export keeps the options block");
   // Set to fill, the next reply's choice (picked by its number key) fills the input and opens it.
   await role("剧情选项").click(); await optionsPanel().waitFor(); await choiceAfter("RP", "填入输入框").click();
   await page.waitForFunction(() => SillyTavern.getContext().chatMetadata.workbenchOptions?.rp === "fill"); await closeOptions();
@@ -356,15 +363,17 @@ try {
   await page.setViewportSize({ width:1496, height:817 });
   await chooseLayout(page,'RP'); await settle(); await page.evaluate(async () => { workbench.unmount(); await workbench.mount(); }); await settle();
   assert.equal(await has("wb-rp"), true); assert.equal(await has("wb-left-open"), false); assert.equal(await has("wb-right-open"), false);
-  await page.evaluate(() => workbench.unmount()); assert.equal(await page.evaluate(() => !document.body.classList.contains("wb-rp") && !document.querySelector(".wb-rp-stage") && !document.getElementById("sheld").inert && __rpNative.input.isConnected), true);
+  await synced(); await page.evaluate(() => workbench.unmount()); assert.equal(await page.evaluate(() => !document.body.classList.contains("wb-rp") && !document.querySelector(".wb-rp-stage") && !document.getElementById("sheld").inert && __rpNative.input.isConnected), true);
   pass("reading/RP switching, RP remount defaults and native fallback clean up all presentation state");
-  await page.evaluate(async () => { await workbench.mount(); await workbench.host.persistSettings(); }); await page.reload();
+  await page.evaluate(async () => { await workbench.mount(); await workbench.host.persistSettings(); }); await synced(); await page.reload();
   await page.waitForFunction(() => document.body.classList.contains("wb-rp")); await settle();
   assert.equal(await has("wb-left-open"), false); assert.equal(await has("wb-right-open"), false); assert.equal(await page.evaluate(() => workbench.host.prefs().rpDialogWidth), 94);
   pass("RP mode and appearance persist after a real reload while both panels start closed");
   assert.deepEqual(errors, []);
   fs.writeFileSync(`${dir}/verification.json`, JSON.stringify({ checkedAt:new Date().toISOString(), passed:true, url:urls.validation, checks, errors, expectedNativeErrors }, null, 2));
 } finally {
+  if (page) await synced().catch(() => {});
   if (page && original) await page.evaluate(async original => { document.querySelector("#mes_stop")?.click(); workbench.unmount(); SillyTavern.getContext().extensionSettings.workbench = original; await (await import("/script.js")).saveSettings(); await workbench.mount(); }, original).catch(() => {});
+  if (page) await synced().catch(() => {});
   await browser.close();
 }
