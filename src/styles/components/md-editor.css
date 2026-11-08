@@ -13,7 +13,7 @@
     cursor: text;
   }
   .wb-md[hidden] {
-    display: none !important;
+    display: none;
   }
 
   /* The composer: the editor lies on the textarea's box (placed by composer.ts), whose own text is
@@ -26,16 +26,17 @@
     background: transparent;
   }
   #send_textarea[data-wb-md] {
-    -webkit-text-fill-color: transparent !important;
+    -webkit-text-fill-color: transparent;
+    /* Over the accent caret native-bridge.css gives the RP desktop's textarea. */
     caret-color: transparent !important;
   }
   #send_textarea[data-wb-md]::placeholder {
-    -webkit-text-fill-color: transparent !important;
+    -webkit-text-fill-color: transparent;
   }
   #send_textarea[data-wb-md]::selection {
-    background: transparent !important;
+    background: transparent;
   }
-  /* Placeholders follow the textarea's per mode. */
+  /* Placeholders follow the textarea's per mode, over the editor theme's unlayered colour. */
   .wb-composer-md .cm-placeholder {
     color: var(--wb-muted) !important;
   }

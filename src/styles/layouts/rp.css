@@ -328,8 +328,8 @@
     order: -1;
     /* SillyTavern sizes every block in this row as one icon. */
     width: auto !important;
-    min-width: 0 !important;
     height: auto !important;
+    min-width: 0;
     margin: 0 6px 0 0;
     opacity: 1;
   }
@@ -458,7 +458,7 @@
   }
   /* Over the backlog's wash the corner keys and edge arrows take the band's ink. */
   body.wb-rp[data-wb-rp-history]:not(.wb-mobile) :is(.wb-rp-corner, .wb-rp-visibility, .wb-edge-arrow) {
-    color: var(--wb-rp-ink-2) !important;
+    color: var(--wb-rp-ink-2);
     filter: none;
   }
   body.wb-rp[data-wb-rp-history]:not(.wb-mobile)
@@ -551,7 +551,7 @@
     display: grid;
     place-items: center;
     background: transparent;
-    color: var(--wb-rp-on-scene) !important;
+    color: var(--wb-rp-on-scene);
     opacity: 0.7;
     filter: var(--wb-rp-on-scene-shadow);
     transition: opacity var(--wb-duration-fast);

@@ -85,12 +85,33 @@ npm run verify:styles                         # 构建、采样到 artifacts/vis
 ### 对原定验收标准的调整
 
 - **`!important` 总数**：从 675 降到 741。增加的部分来自分类不确定、两边各放一份的规则。原定「≤ 50 且只出现在 bridge」做不到零变化：实测把分层内的 230 处全部去掉后，30 个状态全都出现差异，说明它们在解决旧规则之间的冲突，要逐屏重写才能去掉。调整后的标准：
-  - 新的 `wb.base`、`wb.components`、`wb.layouts`、`wb.modes` 层里禁止出现 `!important`；
+  - 新的 `wb.base`、`wb.components`、`wb.layouts`、`wb.modes` 层里禁止出现 `!important`，现存例外见下文「新层里保留的 `!important`」；
   - 不分层的只有原生桥接规则，共三处：`native-bridge.css`，以及 `components/message-actions.css`、`components/image-insertion.css` 中 `@layer` 块之外的 `#chat` 楼层规则（它们要和原生的不分层样式竞争，随功能留在各自文件里）；除 `legacy` 存量外，`!important` 只允许出现在这些不分层规则里；
   - `legacy` 和 `native-bridge.css` 冻结成存量，在 E 阶段逐屏迁移时清零或收缩；
   - 每次迁移都报告数量变化。
 - **体积**：gzip 后 38.1 KB → 40.6 KB，主要来自 `native-defaults.css` 和两边各放一份的规则。旧样式会随 E 阶段的迁移整块删除，体积在那时下降。
 - **CSS 按需加载（B4）**：推迟到 E 阶段（C5 时重新评估后决定）。RP、PWA 的样式目前都在 `wb.legacy` 层里，同层规则在权重相同时按出现顺序决胜；改成按需注入会改变它们和其余旧规则的先后，无法保证计算样式一致。这些旧样式在 E 阶段逐屏重写时整块替换，届时新样式按组件分文件，再按模式拆包，不再受顺序影响。
+
+### 新层里保留的 `!important`
+
+2026-11-06 清理了新层里的 13 处 `!important`（`components/md-editor.css` 8 处，`layouts/rp.css` 5 处），计算样式不变。数量：`md-editor.css` 8 → 4，`layouts/rp.css` 5 → 2，新层合计 13 → 6。
+
+去掉的 7 处：它们的对手在同层或更低层，或者没有对手。
+
+- `.wb-md[hidden]` 的 `display`：对手只有同层零权重的 `:where(.wb-md)`。
+- `#send_textarea[data-wb-md]` 及其 `::placeholder` 的 `-webkit-text-fill-color`、`::selection` 的 `background`：没有其他规则设置这些属性。
+- `#rightSendForm > .wb-rp-tools` 的 `min-width`：原生规则不设它。
+- RP 桌面边缘箭头的 `color`，以及打开历史面板时角落按钮和边缘箭头的 `color`：这两条只在彼此之间竞争，其余对手在 `wb.legacy` 层，或者是已被隔离规则还原的不分层规则；历史面板那条权重更高，去掉 `!important` 后照样胜出。
+
+保留的 6 处：对手都是不分层的样式，分层规则不加 `!important` 赢不了。
+
+| 规则 | 属性 | 对手 | 去掉的办法 |
+| --- | --- | --- | --- |
+| `#send_textarea[data-wb-md]` | `caret-color` | `native-bridge.css` 给 RP 桌面输入框的强调色光标：`body.wb-rp:not(.wb-mobile) #send_textarea` | 把这条光标声明从 bridge 删掉，改写进 `layouts/rp.css`，选择器加上 `:not([data-wb-md])` |
+| `.wb-composer-md .cm-placeholder`，以及手机、RP 各一条 | `color` | 编辑器运行时注入的不分层主题：`.ͼ1 .cm-placeholder`（基础主题）、`.ͼo .cm-placeholder`（`src/ui/md/editor.ts`） | 让编辑器主题从一个 CSS 变量取占位符颜色，由 `md-editor.css` 按模式设置这个变量；要改组件 |
+| `#rightSendForm > .wb-rp-tools` | `width`、`height` | 酒馆 `style.css` 的 `#rightSendForm>div:not(.mes_stop)`，它把这一行的每个 `div` 都设成一个图标大小 | RP 工具栏挂进这一行时不用 `div` 作容器；要改组件，而且同一条里被原生规则压住的 `margin`、`opacity` 也会随之生效，外观会变，要先定设计 |
+
+这几处都不挪进 `native-bridge.css`：bridge 已冻结，只能删规则、不能加规则；在各自文件里另开不分层的块，又会突破上文「不分层的只有三处」的约定。占位符那三条的对手是插件自己的编辑器，不是酒馆原生样式，本来也不属于 bridge。
 
 ### 留给 D/E 阶段
 
