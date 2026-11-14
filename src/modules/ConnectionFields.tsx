@@ -26,10 +26,13 @@ const titles: Record<string, string> = {
   openai_reverse_proxy_name: "代理名称",
   openai_proxy_password: "代理凭据",
   server_urls_text: "服务地址",
+  vertexai_auth_mode: "认证方式",
+  vertexai_service_account_json: "服务账号 JSON",
 };
 const actionTitles: Record<string, string> = {
   "Manage API keys": "管理 API 凭据",
   "Additional Parameters": "附加请求参数",
+  "Validate JSON": "验证并保存 JSON",
   "Update current template": "更新模板",
   "Rename current template": "重命名模板",
   "Save template as": "另存模板",
@@ -95,7 +98,12 @@ function applicable(n: HTMLElement, root: HTMLElement) {
   }
   return true;
 }
-const credentials = /url|api_key|access_token|auth_token|password|region|project|tenant|deployment/;
+const credentials =
+  /url|api_key|access_token|auth_token|password|region|project|tenant|deployment|vertexai_auth_mode|vertexai_service_account_json/;
+const isCredentialControl = (n: FormControl) =>
+  credentials.test(n.id) || (n.id === "openai_reverse_proxy" && Boolean(n.value));
+const isCredentialAction = (n: HTMLElement) =>
+  n.classList.contains("manage-api-keys") || n.id === "vertexai_validate_service_account";
 /** The connection fields the runtime card does not mirror, without displaying the original page container. */
 export default function ConnectionFields({ host }: { host: HostAdapter }) {
   const ref = useRef<HTMLDivElement>(null),
@@ -239,19 +247,15 @@ export default function ConnectionFields({ host }: { host: HostAdapter }) {
       </header>
       <section className="wb-designed-section">
         <h3>地址与凭据</h3>
-        <div className="wb-designed-fields">
-          {controls.filter((n) => credentials.test(n.id)).map(renderControl)}
-        </div>
-        <div className="wb-designed-actions">
-          {actions.filter((n) => n.classList.contains("manage-api-keys")).map(renderAction)}
-        </div>
+        <div className="wb-designed-fields">{controls.filter(isCredentialControl).map(renderControl)}</div>
+        <div className="wb-designed-actions">{actions.filter(isCredentialAction).map(renderAction)}</div>
       </section>
       <Fold title="请求与高级参数">
         <div className="wb-designed-fields">
-          {controls.filter((n) => !credentials.test(n.id)).map(renderControl)}
+          {controls.filter((n) => !isCredentialControl(n)).map(renderControl)}
         </div>
         <div className="wb-designed-actions">
-          {actions.filter((n) => !n.classList.contains("manage-api-keys")).map(renderAction)}
+          {actions.filter((n) => !isCredentialAction(n)).map(renderAction)}
         </div>
       </Fold>
       {!controls.length && !actions.length && <p className="wb-note">当前没有可用配置。</p>}
