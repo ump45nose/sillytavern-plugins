@@ -689,17 +689,11 @@
     margin: 4px 0 0;
   }
   body.wb-mobile .wb-right .wb-character-profile.has-portrait .wb-character-hero {
-    height: 270px;
+    height: 300px;
   }
-  body.wb-mobile .wb-right .wb-character-hero-art img {
-    width: 305px;
-  }
-  body.wb-mobile .wb-right .wb-character-hero-copy {
+  body.wb-mobile .wb-right .wb-character-tags {
     margin-right: 4px;
     margin-left: 4px;
-  }
-  body.wb-mobile .wb-right .wb-character-atmosphere {
-    top: 155px;
   }
   body.wb-mobile .wb-right .wb-character-hero-tool {
     width: 44px;

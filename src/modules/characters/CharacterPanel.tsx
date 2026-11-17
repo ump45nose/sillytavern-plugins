@@ -210,11 +210,6 @@ export function CharacterPanel({
           className={`wb-character-profile ${portrait ? "has-portrait" : ""}`}
           aria-label={`角色 ${item.name}`}
         >
-          {portrait && (
-            <div className="wb-character-atmosphere" aria-hidden="true">
-              <img src={portrait} alt="" />
-            </div>
-          )}
           <header className="wb-character-hero">
             {portrait && (
               <div className="wb-character-hero-art">
@@ -245,18 +240,18 @@ export function CharacterPanel({
                 </button>
               )}
             </div>
+            <div className="wb-character-hero-copy">
+              <h2 title={item.name}>{item.name}</h2>
+              <p>{item.active ? "当前对话中" : item.detail || data.creator || "未分类角色"}</p>
+            </div>
           </header>
-          <div className="wb-character-hero-copy">
-            <h2 title={item.name}>{item.name}</h2>
-            <p>{item.active ? "当前对话中" : item.detail || data.creator || "未分类角色"}</p>
-            {tags.length > 0 && (
-              <div className="wb-character-tags">
-                {tags.slice(0, 4).map((t) => (
-                  <span key={t}>{t}</span>
-                ))}
-              </div>
-            )}
-          </div>
+          {tags.length > 0 && (
+            <div className="wb-character-tags">
+              {tags.slice(0, 4).map((t) => (
+                <span key={t}>{t}</span>
+              ))}
+            </div>
+          )}
           <div className="wb-character-fields" role="tablist" aria-label="角色字段">
             {fieldTabs.map(([key, label]) => (
               <button key={key} role="tab" aria-selected={field === key} onClick={() => setField(key)}>
