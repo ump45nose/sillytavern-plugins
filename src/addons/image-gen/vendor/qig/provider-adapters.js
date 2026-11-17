@@ -248,16 +248,17 @@ function extractImageValue(candidate, defaultMime) {
             continue;
         }
         if (typeof value !== 'object') continue;
-        if (typeof value.image_url === 'string') return value.image_url;
-        if (value.image_url?.url) return value.image_url.url;
-        if (value.url) return value.url;
-        if (value.fileData?.fileUri) return value.fileData.fileUri;
-        if (value.file_data?.file_uri) return value.file_data.file_uri;
+        // Inline data first: a relay may return both, and its URL can be a host the browser must not fetch.
         if (value.b64_json) return `data:${defaultMime};base64,${value.b64_json}`;
         if (value.base64) return `data:${defaultMime};base64,${value.base64}`;
         if (value.source?.data) return `data:${value.source.media_type || defaultMime};base64,${value.source.data}`;
         if (value.inline_data?.data) return `data:${value.inline_data.mime_type || defaultMime};base64,${value.inline_data.data}`;
         if (value.inlineData?.data) return `data:${value.inlineData.mimeType || defaultMime};base64,${value.inlineData.data}`;
+        if (typeof value.image_url === 'string') return value.image_url;
+        if (value.image_url?.url) return value.image_url.url;
+        if (value.url) return value.url;
+        if (value.fileData?.fileUri) return value.fileData.fileUri;
+        if (value.file_data?.file_uri) return value.file_data.file_uri;
         if (depth >= MAX_DEPTH) continue;
         stack.push({ values: [value.content, value.text, value.image], index: 0, depth: depth + 1 });
     }
