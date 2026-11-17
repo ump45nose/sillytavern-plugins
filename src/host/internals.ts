@@ -23,6 +23,8 @@ const modules = {
       "doNewChat",
       "replaceCurrentChat",
       "importCharacterChat",
+      "setActiveCharacter",
+      "setActiveGroup",
     ],
   ],
   world: [

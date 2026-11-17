@@ -1,7 +1,7 @@
 import type { HostAdapter } from "../adapter";
 import type { Data, Item } from "../types";
 import { clone, deepMerge, mergeEdits, sameData } from "../model";
-import { ctx } from "../internals";
+import { ctx, internal } from "../internals";
 
 /** Characters: selection, creation/import, card data and bulk actions. */
 export const characterMethods = {
@@ -10,6 +10,12 @@ export const characterMethods = {
     const index = ctx().characters.findIndex((x: Data) => x.avatar === id);
     if (index < 0) throw new Error("角色已不存在。");
     await ctx().selectCharacterById(index);
+    // SillyTavern only remembers the auto-load character from its own list clicks; record it so the
+    // next page load reopens this character instead of the last one picked natively.
+    const script = await internal("script");
+    script.setActiveCharacter(id);
+    script.setActiveGroup(null);
+    ctx().saveSettingsDebounced();
   },
   async createCharacter(this: HostAdapter, name: string) {
     const form = new FormData();

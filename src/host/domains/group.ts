@@ -62,6 +62,11 @@ export const groupMethods = {
   async openGroup(this: HostAdapter, id: string) {
     if (this.isBusy()) throw new Error("生成完成后再切换群组。");
     await (await internal("groupChats")).openGroupById(id);
+    // Same as selectCharacter: remember the group for the next page load.
+    const script = await internal("script");
+    script.setActiveCharacter(null);
+    script.setActiveGroup(id);
+    ctx().saveSettingsDebounced();
   },
   async saveGroup(this: HostAdapter, base: Data | null, draft: Data) {
     const module = await internal("groupChats");
